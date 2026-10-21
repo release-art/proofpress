@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
+Includes everything since 0.1.0; v0.2.0 was tagged without a changelog section.
+
 ### Added
 
+- A calibration run over the Altona Test Suite 2.0 (`bin/suites/fetch.sh`, `tests/fixtures/suites/`): the files cannot be
+  redistributed, so they are fetched and checked against `expected.toml`, skipping when absent. The Ghent suite is not covered yet.
 - `releaseart/lualatex-python`: Python, LuaLaTeX, Ghostscript and veraPDF without `proof-pdf`, a base for images that `pip install`
   it. `releaseart/full` is now built on it. Published with the other images.
 - `--require-bleed` (opt-in, `artwork-bleed`): artwork that reaches the trim edge must run on to the bleed edge. The shared
@@ -69,5 +75,6 @@ First release.
 - Weekly Docker image builds, with `:latest`, `:tl2025` and a `:<version>` tag per release. Each image records its
   commit, and `proof-pdf --version` shows it.
 
-[Unreleased]: https://github.com/release-art/proofpress/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/release-art/proofpress/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/release-art/proofpress/releases/tag/v0.1.0
