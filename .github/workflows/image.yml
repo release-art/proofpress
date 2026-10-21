@@ -1,0 +1,91 @@
+name: Image
+
+# PRs: build both images for the runner's arch and smoke them (no push).
+# Weekly (Mon 04:00 UTC) and manual runs: smoke, then push amd64+arm64 as :latest and :tl2025.
+# A v* tag: smoke, then push the same images as :<version>, :latest and :tl2025.
+#   So :latest is always the most recent build, weekly or release.
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker/**
+      - bin/docker/**
+      - pyproject.toml
+      - pdm.lock
+      - src/**
+      - .github/workflows/image.yml
+  schedule:
+    - cron: "0 4 * * 1"
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  TL_TAG: tl2025 # keep in step with TL_REPO in the Dockerfile
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # tags, for bin/docker/version.sh
+      - uses: docker/setup-buildx-action@v3
+      - run: bin/docker/build.sh # logs the base-image digests first
+      - run: bin/docker/smoke.sh
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: smoke
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [lualatex, full]
+    env:
+      IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - run: bin/docker/version.sh >> "$GITHUB_ENV" # PKG_VERSION, REVISION
+      - run: bin/docker/base-digests.sh
+      # ponytail: arm64 is built under qemu (slow TeX Live install); native arm runners if the weekly gets too long.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: releaseart/${{ matrix.target }}
+          tags: |
+            type=semver,pattern={{version}},enable=${{ env.IS_TAG }}
+            type=raw,value=latest
+            type=raw,value=${{ env.TL_TAG }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ env.PKG_VERSION }}
+            REVISION=${{ env.REVISION }}
+            PKG_VERSION=${{ env.PKG_VERSION }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+      - name: Sync the Docker Hub description
+        # Needs a token with write access to the repo's metadata; if this 403s, raise the token to Read/Write/Delete.
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: releaseart/${{ matrix.target }}
+          short-description: "${{ matrix.target == 'full' && 'lualatex + Ghostscript + veraPDF + proof-pdf: check print PDFs against PDF/X-4 and PDF/A' || 'TeX Live 2025 with LuaLaTeX on Debian, multi-arch, no Java or Python' }}"
+          readme-filepath: docker/hub-${{ matrix.target }}.md

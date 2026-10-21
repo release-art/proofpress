@@ -1,0 +1,19 @@
+proof-pdf
+Copyright 2026 Ilja Orlovs. Licensed under the Apache License, Version 2.0.
+
+Python dependencies (installed by pip)
+  pikepdf   MPL-2.0   (bundles qpdf, Apache-2.0)
+  Pillow    MIT-CMU
+  Typer     MIT
+
+External programs, run as separate processes and never linked or bundled in the
+Python package. Install them yourself, or use the project's Docker image.
+  veraPDF      GPL-3.0-or-later OR MPL-2.0 (used here under MPL-2.0)  https://verapdf.org
+  Ghostscript  AGPL-3.0 (commercial licence available from Artifex)   https://ghostscript.com
+               The Docker image redistributes Ghostscript; its source is available
+               from the Debian package (apt-get source ghostscript).
+
+Docker images (releaseart/lualatex, releaseart/full) additionally contain
+  TeX Live 2025   mixed free licences (LuaTeX GPL-2.0-or-later; most packages LPPL-1.3c)  https://tug.org/texlive
+  OpenJDK 21 JRE  GPL-2.0 with Classpath Exception (full only, for veraPDF)
+  Debian          GPL, LGPL, MIT and others; sources via `apt-get source <package>`
