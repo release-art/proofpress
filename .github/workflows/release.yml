@@ -26,6 +26,11 @@ jobs:
         run: |
           export PDM_BUILD_SCM_VERSION="${GITHUB_REF_NAME#v}"
           pdm build
+      # The Sigstore action pip-installs its own tooling into whatever `python` is on PATH; its dependency pydantic-core
+      # has no 3.15 wheels yet and fails to build from source. The wheel we ship is already built, so sign under 3.13.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
       - name: Sign artifacts with Sigstore
         uses: sigstore/gh-action-sigstore-python@v3.0.1
         with:
