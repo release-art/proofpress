@@ -53,6 +53,12 @@ so nothing blocks the event loop.
 As a library the API is async: `await proof_pdf.core.verify_file(path, profile)` returns a `FileReport` of `Finding`s, and
 `await proof_pdf.core.verify_files(paths, profile, jobs=4)` returns one report per path in order. See `proof_pdf.models.Profile`.
 
+A job's config file works from Python too. `proof_pdf.load_profile(path=None, *, profile=None)` reads it like the CLI does (the nearest
+`proof-pdf.toml`, `PROOF_PDF_CONFIG`, `PROOF_PDF_PROFILE`) and returns a `LoadedConfig`: the `Profile`, the `exclude` globs, the `exempt`
+map, and `jobs`, `timeout` and the tool names. A file the CLI would reject raises `proof_pdf.ConfigError`. Pass those to
+`core.expand_targets` and `core.verify_files`, so the CLI and your code share one definition. `core.missing_tools(profile)` names the
+tools the profile needs (veraPDF for PDF/A, Ghostscript for colour) that are not on `PATH`, so a caller can fail early with one message.
+
 ### Proofing
 
 Beyond the standards, `verify` can hold a PDF to the rules a print job usually has. Missing glyphs and fonts are checked by
