@@ -1,6 +1,7 @@
 # Two images from one file:
 #   lualatex  TeX Live 2025 (lualatex + a general package set) on Debian. No Java, no Python.
-#   full      lualatex's TeX tree + Ghostscript + veraPDF + the proof-pdf CLI.
+#   lualatex-python  Python + lualatex's TeX tree + Ghostscript + veraPDF: everything proof-pdf needs, a base for pip-installing it.
+#   full      lualatex-python + the proof-pdf CLI.
 #
 #   docker build --target lualatex -t releaseart/lualatex .
 #   docker build --target full     -t releaseart/full .
@@ -67,27 +68,35 @@ ENV PATH=/opt/texlive/bin/current:$PATH HOME=/tmp
 WORKDIR /work
 CMD ["lualatex", "--version"]
 
-# ---- full -------------------------------------------------------------------------
-FROM ${PYTHON_IMAGE} AS full
+# ---- lualatex-python ----------------------------------------------------------------
+# Everything proof-pdf needs except proof-pdf: Python, LuaLaTeX, Ghostscript (AGPL; source via `apt-get source ghostscript`)
+# and veraPDF with its JRE. A base for images that pip-install proof-pdf (or their own packages); `full` is this plus the CLI.
+FROM ${PYTHON_IMAGE} AS lualatex-python
 ARG VERSION=dev
 ARG REVISION=unknown
-LABEL org.opencontainers.image.title="releaseart/full" \
+LABEL org.opencontainers.image.title="releaseart/lualatex-python" \
       org.opencontainers.image.source="https://github.com/release-art/proofpress" \
-      org.opencontainers.image.licenses="Apache-2.0 AND AGPL-3.0-or-later AND LPPL-1.3c AND GPL-2.0-or-later" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later AND LPPL-1.3c AND GPL-2.0-or-later" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
 ENV PROOFPRESS_VERSION=${VERSION} PROOFPRESS_REVISION=${REVISION}
-# Ghostscript (AGPL; source via `apt-get source ghostscript`) and Java for veraPDF.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ghostscript openjdk-21-jre-headless perl fontconfig \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=tex /opt/texlive /opt/texlive
 COPY --from=verapdf /opt/verapdf /opt/verapdf
 RUN ln -s /opt/verapdf/verapdf /usr/local/bin/verapdf
+ENV PATH=/opt/texlive/bin/current:$PATH HOME=/tmp
+WORKDIR /work
+CMD ["lualatex", "--version"]
+
+# ---- full -------------------------------------------------------------------------
+FROM lualatex-python AS full
+LABEL org.opencontainers.image.title="releaseart/full" \
+      org.opencontainers.image.licenses="Apache-2.0 AND AGPL-3.0-or-later AND LPPL-1.3c AND GPL-2.0-or-later"
 COPY --from=app /app/.venv /app/.venv
 COPY LICENSE NOTICE /usr/share/doc/proof-pdf/
-ENV PATH=/app/.venv/bin:/opt/texlive/bin/current:$PATH HOME=/tmp PYTHONUNBUFFERED=1
-WORKDIR /work
+ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1
 ENTRYPOINT ["proof-pdf"]
 CMD ["--help"]
 

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `releaseart/lualatex-python`: Python, LuaLaTeX, Ghostscript and veraPDF without `proof-pdf`, a base for images that `pip install`
+  it. `releaseart/full` is now built on it. Published with the other images.
 - `--require-bleed` (opt-in, `artwork-bleed`): artwork that reaches the trim edge must run on to the bleed edge. The shared
   walk now tracks clipping (`W`/`W*`, scoped by `q`/`Q` and forms) and each `Paint` has a `visible` extent beside `bbox`.
 - `--exempt GLOB=reason`: declare files out of scope. They are listed with the reason, counted separately and never fail

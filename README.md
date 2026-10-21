@@ -10,6 +10,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 |---|---|
 | [`proof-pdf`](#proof-pdf) | CLI and library that hold a print PDF to PDF/X-4 and PDF/A. |
 | [`releaseart/lualatex`](#docker-images) | TeX Live 2025 with LuaLaTeX. |
+| [`releaseart/lualatex-python`](#docker-images) | Python, `lualatex`, Ghostscript and veraPDF: everything `proof-pdf` needs, without it. A base to `pip install` it on. |
 | [`releaseart/full`](#docker-images) | `lualatex` plus Ghostscript, veraPDF and `proof-pdf`. |
 
 ## proof-pdf
@@ -138,9 +139,10 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/work releaseart/lualatex l
 
 `releaseart/lualatex` is TeX Live 2025 (the `collection-latex`, `luatex`, `latexrecommended` and `fontsrecommended` sets plus a few common
 packages) on Debian, with no Java or Python. Add your own packages in a derived image with `tlmgr install`.
-`releaseart/full` adds Ghostscript, veraPDF (with a JRE) and `proof-pdf`.
+`releaseart/lualatex-python` adds Python (the official `python` image), Ghostscript and veraPDF (with a JRE): everything `proof-pdf` needs
+except `proof-pdf`, for use as a `FROM` base. `releaseart/full` is that plus the CLI.
 
-Both are published for `linux/amd64` and `linux/arm64`. `:latest` is the most recent build: the weekly one of `main`
+All three are published for `linux/amd64` and `linux/arm64`. `:latest` is the most recent build: the weekly one of `main`
 (Mondays, which also picks up base-image updates) or a tagged release, whichever is newer. `:1.2.3` comes from a git tag
 and `:tl2025` tracks the TeX Live year. Each image reports its commit in `PROOFPRESS_REVISION` and the OCI `revision` label.
 

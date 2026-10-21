@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [lualatex, full]
+        target: [lualatex, lualatex-python, full]
         arch: [amd64, arm64]
         include:
           - { arch: amd64, runner: ubuntu-latest }
@@ -99,7 +99,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [lualatex, full]
+        target: [lualatex, lualatex-python, full]
     env:
       IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
@@ -135,5 +135,5 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: releaseart/${{ matrix.target }}
-          short-description: "${{ matrix.target == 'full' && 'lualatex + Ghostscript + veraPDF + proof-pdf: check print PDFs against PDF/X-4 and PDF/A' || 'TeX Live 2025 with LuaLaTeX on Debian, multi-arch, no Java or Python' }}"
+          short-description: "${{ matrix.target == 'full' && 'lualatex + Ghostscript + veraPDF + proof-pdf: check print PDFs against PDF/X-4 and PDF/A' || matrix.target == 'lualatex-python' && 'Python + LuaLaTeX + Ghostscript + veraPDF: everything proof-pdf needs, a base to pip install it on' || 'TeX Live 2025 with LuaLaTeX on Debian, multi-arch, no Java or Python' }}"
           readme-filepath: docker/hub-${{ matrix.target }}.md
