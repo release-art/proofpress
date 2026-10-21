@@ -1,6 +1,6 @@
 name: Image
 
-# PRs: build both images for the runner's arch and smoke them (no push).
+# PRs: build the images for the runner's arch and smoke them (no push).
 # Weekly (Mon 04:00 UTC) and manual runs: smoke, then push amd64+arm64 as :latest and :tl2025.
 # A v* tag: smoke, then push the same images as :<version>, :latest and :tl2025.
 #   So :latest is always the most recent build, weekly or release.
@@ -39,7 +39,8 @@ jobs:
       - run: bin/docker/smoke.sh
       - run: bin/docker/test.sh # the whole suite in the image, with real veraPDF and Ghostscript
 
-  # One native build per target x arch (no qemu), pushed by digest; `merge` stitches the manifest lists.
+  # One native job per arch (no qemu). It builds lualatex, lualatex-python, then full in turn on the same builder, so the
+  # slow TeX Live stage is built once and reused; each image is pushed by digest and `merge` stitches the manifest lists.
   build:
     if: github.event_name != 'pull_request'
     needs: smoke
@@ -47,8 +48,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [lualatex, lualatex-python, full]
-        arch: [amd64, arm64]
         include:
           - { arch: amd64, runner: ubuntu-latest }
           - { arch: arm64, runner: ubuntu-24.04-arm }
@@ -58,37 +57,62 @@ jobs:
           fetch-depth: 0
       - run: bin/docker/version.sh >> "$GITHUB_ENV" # PKG_VERSION, REVISION
       - run: bin/docker/base-digests.sh
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: releaseart/${{ matrix.target }}
-      - id: build
-        uses: docker/build-push-action@v7
+      - id: lualatex
+        uses: docker/build-push-action@v6
         with:
           context: .
-          target: ${{ matrix.target }}
+          target: lualatex
           platforms: linux/${{ matrix.arch }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=releaseart/${{ matrix.target }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=releaseart/lualatex,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             VERSION=${{ env.PKG_VERSION }}
             REVISION=${{ env.REVISION }}
             PKG_VERSION=${{ env.PKG_VERSION }}
-          cache-from: type=gha,scope=${{ matrix.target }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+      - id: lualatex-python
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: lualatex-python
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=releaseart/lualatex-python,push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            VERSION=${{ env.PKG_VERSION }}
+            REVISION=${{ env.REVISION }}
+            PKG_VERSION=${{ env.PKG_VERSION }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+      - id: full
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: full
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=releaseart/full,push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            VERSION=${{ env.PKG_VERSION }}
+            REVISION=${{ env.REVISION }}
+            PKG_VERSION=${{ env.PKG_VERSION }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
       - run: |
           mkdir -p /tmp/digests
-          touch "/tmp/digests/${DIGEST#sha256:}"
+          touch "/tmp/digests/lualatex-${LUALATEX#sha256:}" \
+                "/tmp/digests/lualatex-python-${PYTHON#sha256:}" \
+                "/tmp/digests/full-${FULL#sha256:}"
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-      - uses: actions/upload-artifact@v7
+          LUALATEX: ${{ steps.lualatex.outputs.digest }}
+          PYTHON: ${{ steps.lualatex-python.outputs.digest }}
+          FULL: ${{ steps.full.outputs.digest }}
+      - uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.target }}-${{ matrix.arch }}
+          name: digests-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -107,7 +131,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
-          pattern: digests-${{ matrix.target }}-*
+          pattern: digests-*
           merge-multiple: true
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -127,7 +151,7 @@ jobs:
         run: >
           docker buildx imagetools create
           $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
-          $(printf 'releaseart/${{ matrix.target }}@sha256:%s ' *)
+          $(for h in $(ls | sed -n 's/^${{ matrix.target }}-\([0-9a-f]\{64\}\)$/\1/p'); do echo releaseart/${{ matrix.target }}@sha256:$h; done)
       - name: Sync the Docker Hub description
         # Needs a token with write access to the repo's metadata; if this 403s, raise the token to Read/Write/Delete.
         uses: peter-evans/dockerhub-description@v5
