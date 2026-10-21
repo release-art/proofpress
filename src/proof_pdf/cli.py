@@ -228,30 +228,7 @@ def verify_cmd(
         typer.echo("no PDFs to verify", err=True)
         raise typer.Exit(1)
 
-    profile = Profile(
-        flavour=flavour,
-        pdfa=pdfa,
-        pdfx=pdfx,
-        colour=colour,
-        geometry=_page_geometry(trim_mm, bleed_mm, tolerance_mm) if trim_mm else None,
-        max_tac=max_tac,
-        small_text_pt=small_text_pt,
-        min_dpi=min_dpi,
-        strict_cmyk=strict_cmyk,
-        k_only_text=k_only_text,
-        missing_glyphs=missing_glyphs,
-        min_text_pt=min_text_pt,
-        min_stroke_pt=min_stroke_pt,
-        safe_mm=safe_mm,
-        min_delta_l=min_delta_l,
-        proof_profile=proof_profile,
-        fonts=fonts,
-        allow_spots=tuple(allow_spot) if allow_spot else None,
-        output_condition=output_condition,
-        require_bleed=require_bleed,
-        uniform_pages=uniform_pages,
-        pages_multiple_of=pages_multiple_of,
-    )
+    profile = build_profile(locals())
     reports = asyncio.run(
         core.verify_files(
             targets,
@@ -400,6 +377,35 @@ def _parse_exemptions(specs: list[str]) -> dict[str, str]:
             raise typer.BadParameter(f"--exempt must look like GLOB=reason, got {spec!r}")
         exemptions[glob.strip()] = reason.strip()
     return exemptions
+
+
+def build_profile(options: typing.Mapping[str, typing.Any]) -> Profile:
+    """The :class:`Profile` the ``verify`` options (by parameter name) describe; also used by ``load_profile``."""
+    o = options
+    return Profile(
+        flavour=o["flavour"],
+        pdfa=o["pdfa"],
+        pdfx=o["pdfx"],
+        colour=o["colour"],
+        geometry=_page_geometry(o["trim_mm"], o["bleed_mm"], o["tolerance_mm"]) if o["trim_mm"] else None,
+        max_tac=o["max_tac"],
+        small_text_pt=o["small_text_pt"],
+        min_dpi=o["min_dpi"],
+        strict_cmyk=o["strict_cmyk"],
+        k_only_text=o["k_only_text"],
+        missing_glyphs=o["missing_glyphs"],
+        min_text_pt=o["min_text_pt"],
+        min_stroke_pt=o["min_stroke_pt"],
+        safe_mm=o["safe_mm"],
+        min_delta_l=o["min_delta_l"],
+        proof_profile=o["proof_profile"],
+        fonts=o["fonts"],
+        allow_spots=tuple(o["allow_spot"]) if o["allow_spot"] else None,
+        output_condition=o["output_condition"],
+        require_bleed=o["require_bleed"],
+        uniform_pages=o["uniform_pages"],
+        pages_multiple_of=o["pages_multiple_of"],
+    )
 
 
 def _page_geometry(trim_mm: str, bleed_mm: float, tolerance_mm: float) -> PageGeometry:
