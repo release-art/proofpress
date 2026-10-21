@@ -12,3 +12,8 @@ Python package. Install them yourself, or use the project's Docker image.
   Ghostscript  AGPL-3.0 (commercial licence available from Artifex)   https://ghostscript.com
                The Docker image redistributes Ghostscript; its source is available
                from the Debian package (apt-get source ghostscript).
+
+Docker images (releaseart/lualatex, releaseart/full) additionally contain
+  TeX Live 2025   mixed free licences (LuaTeX GPL-2.0-or-later; most packages LPPL-1.3c)  https://tug.org/texlive
+  OpenJDK 21 JRE  GPL-2.0 with Classpath Exception (full only, for veraPDF)
+  Debian          GPL, LGPL, MIT and others; sources via `apt-get source <package>`

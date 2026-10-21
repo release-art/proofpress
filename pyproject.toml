@@ -6,12 +6,28 @@ authors = [{name = "Ilja Orlovs", email = "ilja@release.art"}]
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 readme = "README.md"
+keywords = ["pdf", "pdf/x-4", "pdf/a", "verapdf", "prepress", "print", "preflight", "ghostscript", "lualatex"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Printing",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "pikepdf>=10.17.0",
     "pillow>=12.3.0",
     "typer>=0.27.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/release-art/proofpress"
+Repository = "https://github.com/release-art/proofpress"
+Issues = "https://github.com/release-art/proofpress/issues"
+Changelog = "https://github.com/release-art/proofpress/blob/main/CHANGELOG.md"
 
 [project.scripts]
 proof-pdf = "proof_pdf.cli:pdf_app"
