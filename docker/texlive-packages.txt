@@ -11,3 +11,4 @@ pgf
 fontspec
 geometry
 xcolor
+latexmk
