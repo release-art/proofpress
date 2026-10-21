@@ -1,4 +1,4 @@
-# Added to scheme-infraonly. Downstream images add their own with `tlmgr install`.
+# Added to scheme-infraonly. Downstream images add their own with `tlmgr install` (the images carry curl and xz-utils for that; check `tlmgr info --only-installed` afterwards).
 collection-basic
 collection-latex
 collection-luatex

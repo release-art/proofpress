@@ -259,3 +259,18 @@ class TestFileReport:
     )
     def test_finding_label(self, page, expected):
         assert Finding("x", Severity.ERROR, "hello", page).label() == expected
+
+
+class TestMissingTools:
+    def test_names_only_what_the_profile_needs_and_cannot_find(self, mocker):
+        mocker.patch.object(verapdf, "available", return_value=False)
+        mocker.patch.object(colour, "gs_available", return_value=False)
+        assert core.missing_tools(Profile(), verapdf_bin="vera", gs_bin="ghost") == ["vera", "ghost"]
+        assert core.missing_tools(Profile(pdfa=False)) == ["gs"]
+        assert core.missing_tools(Profile(colour=False)) == ["verapdf"]
+        assert core.missing_tools(Profile(pdfa=False, colour=False)) == []
+
+    def test_a_tool_that_is_there_is_not_reported(self, mocker):
+        mocker.patch.object(verapdf, "available", return_value=True)
+        mocker.patch.object(colour, "gs_available", return_value=True)
+        assert core.missing_tools(Profile()) == []

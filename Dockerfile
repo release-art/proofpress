@@ -64,7 +64,9 @@ LABEL org.opencontainers.image.title="releaseart/lualatex" \
       org.opencontainers.image.revision="${REVISION}"
 ENV PROOFPRESS_VERSION=${VERSION} PROOFPRESS_REVISION=${REVISION}
 # fontconfig for luaotfload; perl because several TeX Live scripts (tlmgr, latexmk) need it.
-RUN apt-get update && apt-get install -y --no-install-recommends perl fontconfig ca-certificates \
+# curl and xz-utils: tlmgr downloads .tar.xz archives with them, and without them `tlmgr install` fails every download
+# yet still exits 0 -- so a derived image that adds packages would build fine and miss them at typeset time.
+RUN apt-get update && apt-get install -y --no-install-recommends perl fontconfig ca-certificates curl xz-utils \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=tex /opt/texlive /opt/texlive
 # Read-only-root friendly: HOME=/tmp takes the luaotfload cache to the scratch volume.
@@ -85,7 +87,7 @@ LABEL org.opencontainers.image.title="releaseart/lualatex-python" \
       org.opencontainers.image.revision="${REVISION}"
 ENV PROOFPRESS_VERSION=${VERSION} PROOFPRESS_REVISION=${REVISION}
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ghostscript openjdk-21-jre-headless perl fontconfig \
+    ghostscript openjdk-21-jre-headless perl fontconfig curl xz-utils \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=tex /opt/texlive /opt/texlive
 COPY --from=verapdf /opt/verapdf /opt/verapdf

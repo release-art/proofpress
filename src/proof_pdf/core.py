@@ -56,6 +56,16 @@ async def verify_file(
     return report
 
 
+def missing_tools(profile: Profile, *, verapdf_bin: str = "verapdf", gs_bin: str = "gs") -> list[str]:
+    """The external tools *profile* needs that cannot be found, by the executable names given (empty if all are there).
+
+    veraPDF is needed for the PDF/A layer and Ghostscript for the colour layer (total ink). :func:`verify_file` reports
+    a missing tool as a failing finding; this lets a caller stop before a long run with one message of its own.
+    """
+    needed = ((verapdf_bin, profile.pdfa, verapdf.available), (gs_bin, profile.colour, colour.gs_available))
+    return [binary for binary, wanted, found in needed if wanted and not found(binary)]
+
+
 def exemption(path: pathlib.PurePath, exemptions: collections.abc.Mapping[str, str]) -> str | None:
     """The reason *path* was declared exempt, or ``None``.
 

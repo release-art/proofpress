@@ -4,7 +4,7 @@ import pkgutil
 
 import proof_pdf
 
-PUBLIC = {"cli", "core", "inventory", "models", "preview", "texlog"}
+PUBLIC = {"cli", "config", "core", "inventory", "models", "preview", "texlog"}
 
 
 def test_only_the_public_modules_sit_at_the_top_level():

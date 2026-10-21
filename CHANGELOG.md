@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-21
+
+v0.3.1 and v0.3.2 were tagged without changelog sections.
+
+### Added
+
+- `proof_pdf.load_profile()` (public `proof_pdf.config`): the CLI's config-file reading for library callers, returning the `Profile`,
+  `exclude` globs, `exempt` map and the tool settings (`LoadedConfig`); errors are `proof_pdf.ConfigError`.
+- `core.missing_tools(profile)`: which of veraPDF and Ghostscript the profile needs and cannot find.
+
+### Fixed
+
+- `releaseart/lualatex` and `releaseart/lualatex-python` (and so `full`) now include `curl` and `xz-utils`. Without them
+  `tlmgr install` failed every download yet exited 0, so a derived image missed its packages until typeset time.
+- The image build retries the TeX Live and veraPDF downloads, which fail now and then from CI runners.
+
 ## [0.3.0] - 2026-10-21
 
 Includes everything since 0.1.0; v0.2.0 was tagged without a changelog section.
@@ -75,6 +91,7 @@ First release.
 - Weekly Docker image builds, with `:latest`, `:tl2025` and a `:<version>` tag per release. Each image records its
   commit, and `proof-pdf --version` shows it.
 
-[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/release-art/proofpress/compare/v0.3.2...v0.3.3
 [0.3.0]: https://github.com/release-art/proofpress/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/release-art/proofpress/releases/tag/v0.1.0
