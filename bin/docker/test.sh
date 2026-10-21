@@ -3,5 +3,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 eval "$(bin/docker/version.sh)" # PKG_VERSION
-docker buildx build --target test --load --build-arg PKG_VERSION="$PKG_VERSION" -t releaseart/test:local .
+source bin/docker/cache.sh
+docker buildx build --target test --load ${CACHE[@]+"${CACHE[@]}"} --build-arg PKG_VERSION="$PKG_VERSION" -t releaseart/test:local .
 docker run --rm releaseart/test:local "${@:--q}" -p no:cacheprovider

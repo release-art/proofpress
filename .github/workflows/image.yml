@@ -34,6 +34,7 @@ jobs:
         with:
           fetch-depth: 0 # tags, for bin/docker/version.sh
       - uses: docker/setup-buildx-action@v4
+      - uses: crazy-max/ghaction-github-runtime@v4 # exposes the Actions cache token to the scripts below
       - run: bin/docker/build.sh # logs the base-image digests first
       - run: bin/docker/smoke.sh
       - run: bin/docker/test.sh # the whole suite in the image, with real veraPDF and Ghostscript
