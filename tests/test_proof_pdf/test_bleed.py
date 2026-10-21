@@ -5,7 +5,7 @@ import pathlib
 import pikepdf
 import pytest
 
-from proof_pdf import paint, structure
+from proof_pdf._internal import paint, structure
 from proof_pdf.models import Severity
 
 from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W

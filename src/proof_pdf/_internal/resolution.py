@@ -17,8 +17,8 @@ import logging
 
 import pikepdf
 
+from ..models import PT_PER_IN, Finding, Severity
 from . import content
-from .models import PT_PER_IN, Finding, Severity
 
 logger = logging.getLogger(__name__)
 

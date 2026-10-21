@@ -3,7 +3,7 @@
 import pikepdf
 import pytest
 
-from proof_pdf import resolution
+from proof_pdf._internal import resolution
 from proof_pdf.models import Severity
 
 

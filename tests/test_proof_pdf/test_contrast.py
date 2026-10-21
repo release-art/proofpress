@@ -9,9 +9,9 @@ import pikepdf
 import pytest
 from PIL import ImageCms
 
-from proof_pdf import contrast
+from proof_pdf._internal import contrast
+from proof_pdf._internal.paint import Fill
 from proof_pdf.models import Severity
-from proof_pdf.paint import Fill
 
 
 def _page(tmp_path: pathlib.Path, stream: bytes, *, xobjects=None) -> pikepdf.Pdf:

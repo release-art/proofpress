@@ -7,7 +7,7 @@ import pikepdf
 import pytest
 from PIL import Image
 
-from proof_pdf import colour, proc
+from proof_pdf._internal import colour, proc
 from proof_pdf.models import Severity
 
 

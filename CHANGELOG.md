@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The public API is now the top-level modules (`core`, `models`, `inventory`, `preview`, `texlog`, `cli`). The check modules,
+  the content and paint walks, the tool wrappers and the config reader moved to `proof_pdf._internal` and are private:
+  `proof_pdf.colour`, `.verapdf`, `.structure` and the rest no longer import from their old paths.
 - `preview --safe` no longer defaults to 3 mm; a safe-area guide is drawn only when an inset is given.
 - Overprint is judged by what is painted under it: overprinting 100% K text passes, and overprint that paints nothing is
   silent. Overprint on any other content is still flagged.

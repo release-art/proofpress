@@ -6,7 +6,7 @@ import typing
 import pikepdf
 import pytest
 
-from proof_pdf import fonts, paint
+from proof_pdf._internal import fonts, paint
 
 Pt = pytest.approx
 

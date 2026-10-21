@@ -11,8 +11,8 @@ import logging
 import re
 import shutil
 
+from ..models import Finding, Severity
 from . import proc
-from .models import Finding, Severity
 
 logger = logging.getLogger(__name__)
 

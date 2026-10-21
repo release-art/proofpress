@@ -2,7 +2,7 @@
 
 import pytest
 
-from proof_pdf import proc, verapdf
+from proof_pdf._internal import proc, verapdf
 from proof_pdf.models import Severity
 
 RULE = {

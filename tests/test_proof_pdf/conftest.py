@@ -15,7 +15,7 @@ from typing import Any, cast
 import pikepdf
 import pytest
 
-from proof_pdf import proc
+from proof_pdf._internal import proc
 from proof_pdf.models import PageGeometry
 
 # An A6 card (105x148 mm) centred inside a 3 mm bleed: the "correct" baseline.

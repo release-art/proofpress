@@ -7,7 +7,8 @@ import pikepdf
 import pytest
 from PIL import Image
 
-from proof_pdf import preview, proc
+from proof_pdf import preview
+from proof_pdf._internal import proc
 
 from .conftest import BLEED, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W
 

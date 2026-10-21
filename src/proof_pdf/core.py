@@ -17,7 +17,7 @@ import pathlib
 
 import pikepdf
 
-from . import colour, contrast, resolution, structure, text, verapdf
+from ._internal import colour, contrast, resolution, structure, text, verapdf
 from .models import FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)

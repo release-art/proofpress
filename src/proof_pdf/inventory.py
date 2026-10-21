@@ -12,10 +12,10 @@ import pathlib
 
 import pikepdf
 
-from . import contrast, fonts, structure
+from ._internal import contrast, fonts, structure
+from ._internal.paint import Paint, Walker
+from ._internal.spaces import classify_colour_space
 from .models import PT_PER_IN, pt_to_mm
-from .paint import Paint, Walker
-from .spaces import classify_colour_space
 
 
 @dataclasses.dataclass(frozen=True)

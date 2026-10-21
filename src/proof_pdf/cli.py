@@ -22,12 +22,9 @@ import typing
 import pikepdf
 import typer
 
-from . import (
+from . import core, inventory, preview, texlog
+from ._internal import (
     config as config_file,
-    core,
-    inventory,
-    preview,
-    texlog,
     verapdf,
 )
 from .models import (

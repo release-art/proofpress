@@ -3,7 +3,7 @@
 import pikepdf
 import pytest
 
-from proof_pdf import content
+from proof_pdf._internal import content
 
 
 def _ops(path, **kwargs) -> list[content.Operation]:

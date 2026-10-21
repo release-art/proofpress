@@ -5,7 +5,7 @@ import pathlib
 import pikepdf
 import pytest
 
-from proof_pdf import text
+from proof_pdf._internal import text
 from proof_pdf.models import Severity
 
 # A6 trim at (8.5, 8.5)-(306, 428) inside a 3 mm bleed, like the conftest cards.

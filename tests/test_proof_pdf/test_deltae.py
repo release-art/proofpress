@@ -2,7 +2,7 @@
 
 import pytest
 
-from proof_pdf.deltae import ciede2000
+from proof_pdf._internal.deltae import ciede2000
 
 # Sharma, Wu & Dalal (2005), Color Research & Application 30(1): the published test pairs.
 SHARMA = [

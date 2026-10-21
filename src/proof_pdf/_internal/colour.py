@@ -34,8 +34,8 @@ import tempfile
 import pikepdf
 from PIL import Image, ImageMath
 
+from ..models import Finding, Severity
 from . import content, proc
-from .models import Finding, Severity
 from .paint import Fill, Walker, paint_events
 from .spaces import CMYK, GRAY, RGB, classify_colour_space, intent_family
 

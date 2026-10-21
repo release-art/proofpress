@@ -19,8 +19,8 @@ import pathlib
 import pikepdf
 from PIL import Image, ImageDraw, ImageFont
 
-from . import proc, structure
-from .colour import GhostscriptError, gs_available
+from ._internal import proc, structure
+from ._internal.colour import GhostscriptError, gs_available
 from .models import MM_PER_IN, PT_PER_IN
 
 logger = logging.getLogger(__name__)

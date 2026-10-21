@@ -15,7 +15,7 @@ import io
 import pikepdf
 from PIL import ImageCms
 
-from .models import Finding, PageGeometry, Severity, mm_to_pt, pt_to_mm
+from ..models import Finding, PageGeometry, Severity, mm_to_pt, pt_to_mm
 from .paint import paint_events
 
 # A box that should sit inside another may exceed it by this many points before

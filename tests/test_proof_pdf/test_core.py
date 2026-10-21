@@ -5,7 +5,8 @@ import pathlib
 
 import pytest
 
-from proof_pdf import colour, core, verapdf
+from proof_pdf import core
+from proof_pdf._internal import colour, verapdf
 from proof_pdf.models import FileReport, Finding, PageGeometry, Profile, Severity
 
 from .conftest import A6

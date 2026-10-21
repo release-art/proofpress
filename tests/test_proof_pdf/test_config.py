@@ -4,7 +4,7 @@ import pathlib
 
 import pytest
 
-from proof_pdf import config
+from proof_pdf._internal import config
 
 
 class _Param:

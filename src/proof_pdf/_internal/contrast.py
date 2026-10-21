@@ -18,8 +18,8 @@ import pathlib
 import pikepdf
 from PIL import Image, ImageCms
 
+from ..models import Finding, Severity
 from . import deltae
-from .models import Finding, Severity
 from .paint import Fill, Rect, paint_events
 from .spaces import CMYK, GRAY, RGB
 

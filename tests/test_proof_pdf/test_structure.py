@@ -5,7 +5,7 @@ import dataclasses
 import pikepdf
 import pytest
 
-from proof_pdf import structure
+from proof_pdf._internal import structure
 from proof_pdf.models import PageGeometry, Severity
 
 from .conftest import A6, BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W, xmp_bytes

@@ -10,6 +10,9 @@ bin/test.sh                           # pytest with coverage
 ```
 
 - Code is formatted and linted with ruff, type-checked with pyright (0 errors), and runs on Python 3.15.
+- Public API is the top-level modules of `src/proof_pdf`; everything else lives in `proof_pdf/_internal/` and may change
+  freely. A new module goes in `_internal` unless it is meant to be imported by users (then add it to `PUBLIC` in
+  `tests/test_proof_pdf/test_public_api.py` and document it).
 - New behaviour comes with a test. The suite builds small real PDFs with pikepdf and stubs the external tools
   (`verapdf`, `gs`) at the subprocess boundary.
 - Add a line under `## [Unreleased]` in `CHANGELOG.md` for anything user-visible.

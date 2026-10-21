@@ -11,8 +11,8 @@ so it is found here; pdfTeX drops the character, which leaves no trace in the PD
 
 import pikepdf
 
+from ..models import MM_PER_IN, PT_PER_IN, Finding, Severity
 from . import fonts, structure
-from .models import MM_PER_IN, PT_PER_IN, Finding, Severity
 from .paint import Paint, paint_events
 
 # A glyph box rounds off at about a thousandth of a point; anything inside this is not "outside".

@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from proof_pdf import proc
+from proof_pdf._internal import proc
 
 
 async def test_captures_output_and_exit_code():
