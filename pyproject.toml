@@ -1,0 +1,71 @@
+[project]
+name = "proof-pdf"
+version = "0.0.0dev0"
+description = "Hold print PDFs to PDF/X-4 and PDF/A: veraPDF, page boxes, geometry, ink and image resolution."
+authors = [{name = "Ilja Orlovs", email = "ilja@release.art"}]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "pikepdf>=10.17.0",
+    "pillow>=12.3.0",
+    "typer>=0.27.3",
+]
+
+[project.scripts]
+proof-pdf = "proof_pdf.cli:pdf_app"
+
+[tool.ruff]
+target-version = "py314"
+lint.select = ["A", "B", "C", "E", "F", "I", "W", "N", "C4", "T20", "PTH"]
+lint.ignore = ["N802"]
+line-length = 120
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]
+"cli.py" = ["B008"] # typer.Option() as default arg
+
+[tool.ruff.lint.isort]
+order-by-type = true
+combine-as-imports = true
+force-wrap-aliases = true
+known-first-party = ["proof_pdf"]
+forced-separate = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.14"
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.build]
+package-dir = "src"
+includes = ["src/proof_pdf"]
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pytest.ini_options]
+addopts = "-v -l --color=yes --cov=proof_pdf --cov-report term-missing --no-cov-on-fail"
+pythonpath = ["src"]
+testpaths = ["tests"]
+timeout = 15
+markers = [
+    "container: needs real veraPDF and Ghostscript (skipped without them, run in the image)",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.16.0",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.17.1",
+    "pyright>=1.1.414",
+]
