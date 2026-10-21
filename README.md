@@ -22,8 +22,8 @@ Licence: Apache-2.0. See `NOTICE` for third-party terms.
 ## Images
 
 `releaseart/lualatex` (TeX Live 2025) and `releaseart/full` (adds Ghostscript, veraPDF and `proof-pdf`) on Docker Hub.
-`:latest` is the weekly build of `main` (Monday, with fresh base images); `:1.2.3` tags come from a git tag and never move
-`:latest`. Build locally with `bin/docker/build.sh`, check with `bin/docker/smoke.sh`.
+`:latest` is the most recent build: the weekly one of `main` (Monday, with fresh base images) or a tagged release,
+whichever is newer; `:1.2.3` comes from a git tag. Build locally with `bin/docker/build.sh`, check with `bin/docker/smoke.sh`.
 
 ## Releasing
 
