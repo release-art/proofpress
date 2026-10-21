@@ -90,3 +90,22 @@ ENV PATH=/app/.venv/bin:/opt/texlive/bin/current:$PATH HOME=/tmp PYTHONUNBUFFERE
 WORKDIR /work
 ENTRYPOINT ["proof-pdf"]
 CMD ["--help"]
+
+# ---- test (never published) ---------------------------------------------------------
+# The suite inside the real image: the dev dependencies on top of `full`, with real veraPDF and Ghostscript, so the
+# integration tests run instead of skipping. bin/docker/test.sh builds and runs it.
+FROM ${PYTHON_IMAGE} AS test-venv
+ARG PKG_VERSION=0.0.0
+ENV PDM_BUILD_SCM_VERSION=${PKG_VERSION}
+RUN pip install --no-cache-dir pdm
+WORKDIR /app
+COPY pyproject.toml pdm.lock README.md LICENSE NOTICE /app/
+COPY src /app/src
+RUN pdm install --frozen-lockfile --dev
+
+FROM full AS test
+COPY --from=test-venv /app /app
+COPY tests /app/tests
+WORKDIR /app
+ENTRYPOINT ["pytest"]
+CMD ["-q", "-p", "no:cacheprovider"]

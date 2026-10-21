@@ -44,6 +44,7 @@ line-ending = "lf"
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "E402"]
 "cli.py" = ["B008"] # typer.Option() as default arg
+"tests/fixtures/*.py" = ["T201"] # the fixture builder is a script
 
 [tool.ruff.lint.isort]
 order-by-type = true

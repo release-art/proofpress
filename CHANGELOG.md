@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--k-only-text` (opt-in): text painted with any ink but K is an error.
 - A hint on veraPDF's "device colour used without an output intent" failures (clause 6.2.4.3).
 
+### Fixed
+
+- A veraPDF failure on a file it cannot open now reads as one sentence ("... doesn't appear to be a valid PDF.") instead
+  of arriving buried under the JVM's reflection warnings and veraPDF's log header.
+
 ### Changed
 
 - Overprint is judged by what is painted under it: overprinting 100% K text passes, and overprint that paints nothing is

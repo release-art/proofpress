@@ -72,8 +72,9 @@ Python 3.15 and [PDM](https://pdm-project.org).
 git config core.hooksPath .githooks   # ruff + pyright before each commit
 pdm install
 bin/autoformat.sh                     # ruff format + fix, pyright
-bin/test.sh                           # pytest
+bin/test.sh                           # pytest (integration tests skip without veraPDF and gs)
 bin/docker/build.sh && bin/docker/smoke.sh
+bin/docker/test.sh                    # the whole suite inside the full image, integration tests included
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). To release, add the version to [CHANGELOG.md](CHANGELOG.md) and push a tag:

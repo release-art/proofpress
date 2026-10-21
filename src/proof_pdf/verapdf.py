@@ -8,6 +8,7 @@ silent pass: the point of the tool is to *confirm* conformance.
 
 import json
 import logging
+import re
 import shutil
 
 from . import proc
@@ -38,10 +39,24 @@ async def run(binary: str, flavour: str, path: str, *, timeout: float | None = N
     except proc.ProcTimeoutError as exc:
         raise VeraPdfError(f"veraPDF timed out after {timeout:.0f}s") from exc
     if result.returncode not in _VALIDATION_EXITS:
-        message = result.stderr.strip() or f"veraPDF exited {result.returncode}"
+        message = _useful(result.stderr) or f"veraPDF exited {result.returncode}"
         logger.error(f"verapdf failed (rc={result.returncode}): {message}")
         raise VeraPdfError(message)
     return result.stdout
+
+
+# What a Java 24+ runtime and veraPDF's own logger print around the one line that matters. On a file veraPDF cannot
+# open, the message buried under them is "<path> doesn't appear to be a valid PDF."
+_JVM_NOISE = re.compile(
+    r"^(WARNING: (Final field|Use --enable-final-field-mutation|Mutating final fields)"
+    r"|[A-Z][a-z]{2} \d{1,2}, \d{4} .+ org\.verapdf\.)"
+)
+
+
+def _useful(stderr: str) -> str:
+    """*stderr* without the JVM and logger boilerplate, so the failure reads as one sentence."""
+    lines = (line.strip() for line in stderr.splitlines())
+    return " ".join(line.removeprefix("WARNING: ") for line in lines if line and not _JVM_NOISE.match(line))
 
 
 def parse(stdout: str, flavour: str) -> list[Finding]:
