@@ -108,6 +108,8 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
             if profile.geometry is not None:
                 findings += structure.check_geometry(pdf, profile.geometry)
             findings += _structure_rules(pdf, profile)
+            if profile.require_bleed:
+                findings += structure.check_artwork_bleed(pdf)
             if profile.k_only_text:
                 findings += colour.check_k_only_text(pdf)
             findings += _text_checks(pdf, profile)

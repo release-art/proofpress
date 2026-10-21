@@ -16,6 +16,7 @@ import pikepdf
 from PIL import ImageCms
 
 from .models import Finding, PageGeometry, Severity, mm_to_pt, pt_to_mm
+from .paint import paint_events
 
 # A box that should sit inside another may exceed it by this many points before
 # it is a real error -- guards against rounding in the millipoint box values.
@@ -224,6 +225,107 @@ def _check_bleed(obj: pikepdf.Object, trim: Rect, geometry: PageGeometry, page: 
             page,
         )
     ]
+
+
+def check_artwork_bleed(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Artwork that reaches the trim edge must run on to the bleed edge, or cutting leaves a sliver of paper.
+
+    Judged per side, per page, on what is visible after clipping: filled paths, images and shadings (white fills
+    included; text and strokes are not backgrounds). An object inset from the trim is ignored. The bleed edge is the
+    BleedBox, else the MediaBox. Pages with no TrimBox or no bleed zone are skipped (other checks report those). A
+    rotated page is reported as not checked rather than guessed at. Limits: this is geometry, not the printed result,
+    so transparency and soft masks are taken as opaque; a non-rectangular clip counts as its bounding extent; a
+    Form XObject's own /BBox clip is not applied; and an object is judged alone, so a trim-sized panel over a
+    full-bleed background is still flagged.
+    """
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        trim = own_box(page.obj, "TrimBox")
+        bleed = own_box(page.obj, "BleedBox") or media_box(page.obj)
+        if trim is None or bleed is None:
+            continue
+        # Per side (left, bottom, right, top): the bleed zone's width, or 0 when there is none to fill.
+        zones = [
+            max(trim[0] - bleed[0], 0),
+            max(trim[1] - bleed[1], 0),
+            max(bleed[2] - trim[2], 0),
+            max(bleed[3] - trim[3], 0),
+        ]
+        if all(z <= _BOX_TOLERANCE for z in zones):
+            continue
+        if int(page.obj.get("/Rotate", 0)) % 360:
+            findings.append(
+                Finding(
+                    "artwork-bleed", Severity.WARN, "bleed coverage not checked: the page is rotated with /Rotate", i
+                )
+            )
+            continue
+        short = _short_sides(page, trim, zones)
+        if any(short):
+            parts = [
+                f"{_SIDES[s]}: {len(objs)} object(s) reach the trim but extend only "
+                f"{pt_to_mm(min(objs.values())):.1f} mm of the {pt_to_mm(zones[s]):.1f} mm bleed"
+                for s, objs in enumerate(short)
+                if objs
+            ]
+            total = len({n for objs in short for n in objs})
+            findings.append(
+                Finding(
+                    "artwork-bleed",
+                    Severity.ERROR,
+                    f"{total} object(s) stop short of the bleed edge ({'; '.join(parts)}) -- "
+                    "artwork must run to the bleed edge",
+                    i,
+                )
+            )
+    return findings
+
+
+_SIDES = ("left", "bottom", "right", "top")
+
+
+def _short_sides(page: pikepdf.Page, trim: Rect, zones: list[float]) -> list[dict[int, float]]:
+    """Per side, the objects that reach the trim but stop inside the bleed zone: object -> points into the zone."""
+    fills = [
+        (n, p.visible)
+        for n, p in enumerate(paint_events(page))
+        if p.visible is not None and (p.kind in ("image", "shading") or p.filled)
+    ]
+    return [_short_on_side(fills, trim, side, zone) for side, zone in enumerate(zones)]
+
+
+def _short_on_side(fills: list[tuple[int, Rect]], trim: Rect, side: int, zone: float) -> dict[int, float]:
+    """One side (0 left, 1 bottom, 2 right, 3 top) of :func:`_short_sides`.
+
+    An object that stops short is excused where other artwork covers the bleed strip beside it: a white panel at the
+    trim over a full-bleed background leaves no sliver. Covering objects run from the bleed edge at least to the trim.
+    """
+    if zone <= _BOX_TOLERANCE:
+        return {}
+    lo = 1 if side in (0, 2) else 0  # the axis along this edge
+    out = lambda v: (trim[0] - v[0], trim[1] - v[1], v[2] - trim[2], v[3] - trim[3])[side]  # noqa: E731
+    inward = lambda v: (v[2] - trim[0], v[3] - trim[1], trim[2] - v[0], trim[3] - v[1])[side]  # noqa: E731
+    covers = sorted(
+        (v[lo], v[lo + 2]) for _, v in fills if out(v) >= zone - _BOX_TOLERANCE and inward(v) >= -_BOX_TOLERANCE
+    )
+    short: dict[int, float] = {}
+    for n, v in fills:
+        touches = all(v[i + 2] > trim[i] + _BOX_TOLERANCE and v[i] < trim[i + 2] - _BOX_TOLERANCE for i in (0, 1))
+        if not touches or not -_BOX_TOLERANCE <= out(v) < zone - _BOX_TOLERANCE:
+            continue
+        if not _spanned((max(v[lo], trim[lo]), min(v[lo + 2], trim[lo + 2])), covers):
+            short[n] = max(out(v), 0.0)
+    return short
+
+
+def _spanned(span: tuple[float, float], covers: list[tuple[float, float]]) -> bool:
+    """Whether the sorted *covers* intervals leave no gap in *span*."""
+    reached = span[0]
+    for start, end in covers:
+        if start > reached + _BOX_TOLERANCE:
+            break
+        reached = max(reached, end)
+    return reached >= span[1] - _BOX_TOLERANCE
 
 
 def _check_centring(media: Rect, trim: Rect, tolerance_mm: float, page: int) -> list[Finding]:

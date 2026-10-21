@@ -85,7 +85,8 @@ class Profile:
     no default, because a size floor or a safe margin is a house rule and not something to infer.
     *fonts* flags unembedded and Type 3 fonts; *allow_spots* (exact names) turns on the spot-ink allowlist;
     *output_condition* names the printing condition the output intent must carry; *uniform_pages* and
-    *pages_multiple_of* are page-set rules.
+    *pages_multiple_of* are page-set rules. *require_bleed* turns on the artwork-bleed check: artwork that reaches the
+    trim edge must run on to the bleed edge.
     *min_delta_l* turns on the contrast check (an L* difference floor), measured through *proof_profile* or the PDF's
     own output intent.
     """
@@ -111,6 +112,7 @@ class Profile:
     output_condition: str | None = None
     uniform_pages: bool = False
     pages_multiple_of: int | None = None
+    require_bleed: bool = False
 
 
 @dataclasses.dataclass

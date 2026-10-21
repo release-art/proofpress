@@ -193,6 +193,15 @@ class TestColourSpaces:
         space = pikepdf.Array([pikepdf.Name("/ICCBased"), pdf.make_indirect(icc)])
         assert colour.classify_colour_space(space, None) == expected
 
+    @pytest.mark.parametrize(("signature", "expected"), [(b"RGB ", "rgb"), (b"Lab ", "other"), (b"CMYK", "cmyk")])
+    def test_icc_based_trusts_the_profile_header_over_the_component_count(self, signature, expected):
+        """A Lab profile has three components too (the Altona suite has them); it is not RGB."""
+        pdf = pikepdf.new()
+        icc = pdf.make_stream(bytes(16) + signature + bytes(8))
+        icc["/N"] = 4 if signature == b"CMYK" else 3
+        space = pikepdf.Array([pikepdf.Name("/ICCBased"), pdf.make_indirect(icc)])
+        assert colour.classify_colour_space(space, None) == expected
+
     def test_separation_alternate_is_not_the_artwork_space(self):
         """A spot colour whose alternate is RGB is a correct print construct.
 

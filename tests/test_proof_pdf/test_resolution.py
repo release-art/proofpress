@@ -34,6 +34,15 @@ def placed_image(tmp_path, make_image):
 
 
 class TestEffectiveDpi:
+    def test_float_rounding_at_the_minimum_is_not_a_shortfall(self, placed_image):
+        """74 px over 17.76 pt measures 299.99999999999994 dpi in floats; it was prepared for exactly 300."""
+        with pikepdf.open(placed_image(pixels=74, points=17.76)) as pdf:
+            assert resolution.check_image_dpi(pdf, 300.0) == []
+
+    def test_a_real_shortfall_still_counts(self, placed_image):
+        with pikepdf.open(placed_image(pixels=424, points=102.0)) as pdf:  # 299.6 dpi
+            assert resolution.check_image_dpi(pdf, 300.0)
+
     @pytest.mark.parametrize(
         ("pixels", "points", "expected_dpi"),
         [

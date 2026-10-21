@@ -380,6 +380,27 @@ class TestPrintReadiness:
         assert (code, record["findings"]) == (0, [])
 
 
+class TestArtworkBleed:
+    def test_a_background_stopping_at_the_trim_fails_only_this_check(self, runner):
+        code, [record] = _verify(runner, PDFS / "no-bleed.pdf", "--require-bleed")
+        assert code == 1 and _checks(record, severity="error") == {"artwork-bleed"}
+
+    def test_it_is_opt_in(self, runner):
+        code, [record] = _verify(runner, PDFS / "no-bleed.pdf")
+        assert code == 0 and "artwork-bleed" not in _checks(record)
+
+    def test_the_full_page_card_passes(self, runner):
+        code, [record] = _verify(runner, PDFS / "good.pdf", *A6, "--require-bleed")
+        assert (code, record["findings"]) == (0, [])
+
+    def test_a_config_file_turns_it_on(self, runner, tmp_path, monkeypatch):
+        shutil.copy(PDFS / "no-bleed.pdf", tmp_path / "no-bleed.pdf")
+        (tmp_path / "proof-pdf.toml").write_text("[verify]\nrequire-bleed = true\n")
+        monkeypatch.chdir(tmp_path)
+        code, [record] = _verify(runner, tmp_path / "no-bleed.pdf")
+        assert code == 1 and "artwork-bleed" in _checks(record)
+
+
 class TestPrinterProfileEndToEnd:
     """One config file carries a printer's numbers; the real CLI applies them to real files."""
 

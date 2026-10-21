@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--require-bleed` (opt-in, `artwork-bleed`): artwork that reaches the trim edge must run on to the bleed edge. The shared
+  walk now tracks clipping (`W`/`W*`, scoped by `q`/`Q` and forms) and each `Paint` has a `visible` extent beside `bbox`.
 - `--exempt GLOB=reason`: declare files out of scope. They are listed with the reason, counted separately and never fail
   (`FileReport.exempt`, `core.verify_files(..., exemptions=...)`).
 - `--k-only-text` (opt-in): text painted with any ink but K is an error.
@@ -30,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An image placed at exactly the minimum resolution no longer fails on float rounding ("300 dpi, below the 300 dpi minimum").
+- An ICC profile is classified by its own colour space, not just its component count: a Lab profile (three components) is no
+  longer read as RGB, which gave `inspect` and the contrast check nonsense colours.
 - A veraPDF failure on a file it cannot open now reads as one sentence ("... doesn't appear to be a valid PDF.") instead
   of arriving buried under the JVM's reflection warnings and veraPDF's log header.
 

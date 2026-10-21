@@ -3,7 +3,8 @@
 The overprint, colour, K-only, text and contrast checks, and ``inspect``, are all filters over :class:`Paint` events.
 The walk keeps the part of the graphics state they read (fill, font, line width, overprint, text spacing) correct
 across ``q``/``Q`` and Form XObject scope, and tracks the text matrices so every text run has a real page-space box.
-Clipping, transparency and dash patterns are not modelled: a box is where the painting operator puts its geometry.
+A clip (``W``/``W*``) narrows :attr:`Paint.visible` but never :attr:`Paint.bbox`, so checks that want where the geometry
+is keep it and checks that want what survives the clip can have that. Transparency and dash patterns are not modelled.
 """
 
 import collections.abc
@@ -66,6 +67,7 @@ class State:
     h_scale: float = 1.0
     rise: float = 0.0
     leading: float = 0.0
+    clip: Rect | None = None  # page-space extent of the clip in force; None until a clip is set (then it only narrows)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -77,6 +79,7 @@ class Paint:
     overprint: bool
     size: float = 0.0  # effective point size; text only
     bbox: Rect | None = None  # page space; None when the extent is unknown (a shading, an empty path)
+    visible: Rect | None = None  # bbox cut to the clip; None when bbox is unknown or the clip leaves nothing
     font: fonts.Font | None = None
     glyphs: int = 0
     notdef: int = 0
@@ -103,6 +106,17 @@ def _aabb(m: content.Matrix, points: collections.abc.Iterable[tuple[float, float
         return None
     xs, ys = [p[0] for p in mapped], [p[1] for p in mapped]
     return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _intersect(a: Rect | None, b: Rect) -> Rect:
+    """*b* cut to *a* (None is unbounded). An empty result keeps inverted corners, which stay empty when cut again."""
+    if a is None:
+        return b
+    return (max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]))
+
+
+def _non_empty(rect: Rect | None) -> Rect | None:
+    return rect if rect is not None and rect[0] <= rect[2] and rect[1] <= rect[3] else None
 
 
 def _scale(m: content.Matrix) -> float:
@@ -139,6 +153,7 @@ class Walker:
         self.text_matrix: content.Matrix = content.IDENTITY
         self.line_matrix: content.Matrix = content.IDENTITY
         self.path: list[tuple[float, float]] = []
+        self.clip_pending = False  # a W/W* has been seen; the path-ending operator that follows applies it
         self.spots: set[str] = set()
         self.transparency: set[str] = set()  # why the page needs a blend space: opacity, blend mode, soft mask
         self._fonts: dict[tuple[int, int] | int, fonts.Font] = {}
@@ -174,22 +189,39 @@ class Walker:
             return self._paint_path(op, filled=True, stroked=True)
         state = self.state
         if name == "sh":
-            return Paint("shading", state.fill, state.overprint)
+            # A shading fills the whole clip; unclipped, its extent is unknown (it covers the page).
+            return Paint("shading", state.fill, state.overprint, visible=_non_empty(state.clip))
         if name == "Do":
             xobject = content.lookup_xobject(op.resources, op.operands)
             if xobject is not None and str(xobject.get("/Subtype")) == "/Image":
                 if xobject.get("/SMask") is not None:
                     self.transparency.add("soft mask")
                 bbox = _aabb(op.ctm, [(0, 0), (1, 0), (0, 1), (1, 1)])
-                return Paint("image", state.fill, state.overprint, bbox=bbox, xobject=xobject, name=str(op.operands[0]))
+                return Paint(
+                    "image",
+                    state.fill,
+                    state.overprint,
+                    bbox=bbox,
+                    visible=self._visible(bbox),
+                    xobject=xobject,
+                    name=str(op.operands[0]),
+                )
         return None
 
     def _paint_path(self, op: content.Operation, *, filled: bool, stroked: bool) -> Paint:
         state = self.state
         bbox = _aabb(op.ctm, self.path)
-        self.path = []
-        width = state.line_width * _scale(op.ctm) if stroked else None
-        return Paint("path", state.fill, state.overprint, bbox=bbox, stroke_width=width, filled=filled)
+        paint = Paint(
+            "path",
+            state.fill,
+            state.overprint,
+            bbox=bbox,
+            visible=self._visible(bbox),
+            stroke_width=state.line_width * _scale(op.ctm) if stroked else None,
+            filled=filled,
+        )
+        self._end_path(op, bbox)
+        return paint
 
     def _show_text(self, op: content.Operation) -> Paint:
         name, args, state = op.operator, op.operands, self.state
@@ -222,6 +254,7 @@ class Walker:
             state.overprint,
             size=size * content.vertical_scale(trm),
             bbox=bbox,
+            visible=self._visible(bbox),
             font=font,
             glyphs=glyphs,
             notdef=notdef,
@@ -335,7 +368,19 @@ class Walker:
         x, y, w, h = (number(op.operands, i) for i in range(4))
         self.path += [(x, y), (x + w, y + h)]
 
-    def _end_path(self, op: content.Operation) -> None:
+    def _visible(self, bbox: Rect | None) -> Rect | None:
+        return None if bbox is None else _non_empty(_intersect(self.state.clip, bbox))
+
+    def _clip_next(self, op: content.Operation) -> None:
+        self.clip_pending = True
+
+    def _end_path(self, op: content.Operation, bbox: Rect | None = None) -> None:
+        """Finish the path; a pending clip takes its page-space extent (exact for a rectangle, else its bounds)."""
+        if self.clip_pending:
+            self.clip_pending = False
+            bbox = bbox or _aabb(op.ctm, self.path)
+            if bbox is not None:  # an empty path leaves the clip alone rather than hiding everything after it
+                self._set(clip=_intersect(self.state.clip, bbox))
         self.path = []
 
     _UPDATES: typing.ClassVar[dict[str, collections.abc.Callable[["Walker", content.Operation], None]]] = {
@@ -367,6 +412,8 @@ class Walker:
         "y": _points,
         "re": _rect,
         "n": _end_path,
+        "W": _clip_next,
+        "W*": _clip_next,
     }
 
 

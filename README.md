@@ -68,6 +68,7 @@ floor, a safe margin or a printing condition is a house rule, not something to i
 | `--min-delta-l N` | text and its background differ by less than N in L* |
 | `--allow-spot NAME` (repeatable) | a spot ink not on the list is used; names match exactly, and `All` (the registration colour) must be named |
 | `--output-condition TEXT` | no output intent names this printing condition (e.g. `FOGRA51`; matched against its identifier and its ICC profile's description) |
+| `--require-bleed` | artwork that reaches the trim edge stops short of the bleed edge (see below) |
 | `--uniform-pages` | a page's finished size differs from the first page's (a rotated page is a warning) |
 | `--pages-multiple-of N` | the page count is not a multiple of N (booklets) |
 
@@ -76,6 +77,14 @@ output intent, or `--proof-profile`) to L*a*b*, the paper is the page's white, a
 CIEDE2000 beside it. The background of a text run is the last filled shape painted under it, else the paper; text over an
 image or shading is reported as *not measured*, never as a pass. Clipping and transparency are not modelled, so treat it as
 the design's intent. CMYK ink needs a CMYK profile to be measured through; without one the check says so and fails.
+
+`--require-bleed` catches the white sliver after cutting: for each side of a page that has a bleed zone (BleedBox, else MediaBox, larger
+than the TrimBox), a filled path, image or shading that reaches the trim edge must run to the bleed edge, within half a point. White fills count;
+text and strokes do not; objects inset from the trim are ignored. Clips (`W`/`W*`) are followed, so art clipped back to the trim fails and art
+clipped to the bleed box passes. It judges geometry, not the printed result, and its limits are: transparency and soft masks are taken as opaque;
+a non-rectangular clip counts as its bounding extent; a Form XObject's own `/BBox` is not applied. An object that stops short is excused wherever other artwork covers the bleed strip
+beside it, whatever the paint order, so a panel at the trim over a full-bleed background passes. Pages without a TrimBox or bleed zone are skipped (the page-box checks report them) and a
+rotated page gets a warning that it was not checked.
 
 ### Printer profiles
 

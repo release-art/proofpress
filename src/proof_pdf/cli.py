@@ -190,6 +190,12 @@ def verify_cmd(
             "--output-condition", help="Fail unless an output intent names this printing condition, e.g. FOGRA51."
         ),
     ] = None,
+    require_bleed: typing.Annotated[
+        bool,
+        typer.Option(
+            "--require-bleed", help="Fail artwork that reaches the trim edge but stops short of the bleed edge."
+        ),
+    ] = False,
     uniform_pages: typing.Annotated[
         bool, typer.Option("--uniform-pages", help="Fail pages whose finished size differs from the first page's.")
     ] = False,
@@ -245,6 +251,7 @@ def verify_cmd(
         fonts=fonts,
         allow_spots=tuple(allow_spot) if allow_spot else None,
         output_condition=output_condition,
+        require_bleed=require_bleed,
         uniform_pages=uniform_pages,
         pages_multiple_of=pages_multiple_of,
     )
@@ -521,6 +528,7 @@ def _print_summary(reports: list[FileReport], profile: Profile) -> None:
             ("fonts", profile.fonts),
             ("spot inks", profile.allow_spots is not None),
             ("output condition", profile.output_condition is not None),
+            ("artwork bleed", profile.require_bleed),
             ("page set", profile.uniform_pages or bool(profile.pages_multiple_of)),
         )
         if on

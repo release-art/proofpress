@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 # produces a nonsense dpi.
 _MIN_PLACED_PT = 1.0
 
+# Placement matrices are written with a few decimals and computed in floats, so an image prepared for exactly the
+# minimum resolution measures a hair under it (299.99999999999994 dpi). A shortfall this small is rounding.
+_DPI_ROUNDING = 1e-3
+
 
 def check_image_dpi(pdf: pikepdf.Pdf, min_dpi: float) -> list[Finding]:
     """Flag placed images whose effective resolution falls below *min_dpi*.
@@ -48,7 +52,7 @@ def check_image_dpi(pdf: pikepdf.Pdf, min_dpi: float) -> list[Finding]:
             if dpi < worst.get(name, float("inf")):
                 worst[name] = dpi
         for name, dpi in sorted(worst.items()):
-            if dpi < min_dpi:
+            if dpi < min_dpi * (1 - _DPI_ROUNDING):
                 findings.append(
                     Finding(
                         "image-dpi",

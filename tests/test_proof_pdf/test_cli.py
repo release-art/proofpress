@@ -180,6 +180,11 @@ class TestExemptAndKOnly:
         runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--k-only-text"])
         assert seen[0][1].k_only_text is True
 
+    def test_require_bleed_flag_reaches_the_profile(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--require-bleed"])
+        assert seen[0][1].require_bleed is True
+
     def test_k_only_text_is_off_by_default(self, runner, tmp_path, stub_verify):
         seen = stub_verify({})
         runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf"))])

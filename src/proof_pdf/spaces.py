@@ -24,6 +24,8 @@ _DEVICE_FAMILIES = {
 }
 _SPOT_FAMILIES = ("/Separation", "/DeviceN")
 _ICC_COMPONENTS = {1: GRAY, 3: RGB, 4: CMYK}
+# The profile header's data colour space (bytes 16-20). /N alone cannot tell an RGB profile from a Lab one.
+_ICC_SIGNATURES = {b"GRAY": GRAY, b"RGB ": RGB, b"CMYK": CMYK}
 
 
 def lookup_resource(resources: pikepdf.Object | None, category: str, operands: list) -> pikepdf.Object | None:
@@ -77,12 +79,16 @@ def _classify_array(space, resources: pikepdf.Object | None, depth: int) -> str:
 
 
 def _classify_icc(space) -> str:
-    """An ``[/ICCBased stream]`` space, classified by the stream's ``/N``."""
+    """An ``[/ICCBased stream]`` space, by the profile's own colour space when readable, else by the stream's ``/N``."""
     try:
         components = int(space[1].get("/N"))
     except IndexError, TypeError, ValueError, AttributeError:
         return OTHER
-    return _ICC_COMPONENTS.get(components, OTHER)
+    try:
+        signature = bytes(space[1].read_bytes())[16:20]
+    except pikepdf.PdfError:  # unreadable profile: /N is all there is
+        return _ICC_COMPONENTS.get(components, OTHER)
+    return _ICC_SIGNATURES.get(signature, OTHER) if len(signature) == 4 else _ICC_COMPONENTS.get(components, OTHER)
 
 
 def spot_names(space: object, resources: pikepdf.Object | None, *, depth: int = 0) -> list[str]:

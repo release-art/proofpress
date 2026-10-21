@@ -342,6 +342,10 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         # A page of another size after the card, and a three-page file for a multiple-of-four rule.
         "two-sizes": _multi_page([(148, 210)]),
         "three-pages": _multi_page([(105, 148), (105, 148)]),
+        # A background that stops at the trim edge: every other check passes, and cutting leaves a white sliver.
+        "no-bleed": build(
+            b"0.9 g %f %f %f %f re f" % (BLEED, BLEED, TRIM_W, TRIM_H) + GOOD_CONTENT[GOOD_CONTENT.index(b" 0.2") :]
+        ),
         # PDF/A metadata but no output intent: veraPDF fails on DeviceGray, and proof-pdf adds a hint.
         "no-output-intent": build(output_intent=False),
     }
