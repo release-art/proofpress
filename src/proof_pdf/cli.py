@@ -79,6 +79,13 @@ PathsArg = typing.Annotated[
 ]
 GsOpt = typing.Annotated[str, typer.Option("--gs", help="Ghostscript executable.")]
 TimeoutOpt = typing.Annotated[float, typer.Option("--timeout", help="Per-tool timeout, in seconds.")]
+ExemptOpt = typing.Annotated[
+    list[str] | None,
+    typer.Option(
+        "--exempt",
+        help="GLOB=reason: skip matching PDFs, list them with the reason. Matches at any directory level.",
+    ),
+]
 ExcludeOpt = typing.Annotated[
     list[str] | None,
     typer.Option("--exclude", help="Glob, relative to a directory argument, of PDFs to skip. Repeatable."),
@@ -90,6 +97,7 @@ QuietOpt = typing.Annotated[bool, typer.Option("--quiet", help="Exit code only, 
 def verify_cmd(
     files: PathsArg = None,
     exclude: ExcludeOpt = None,
+    exempt: ExemptOpt = None,
     flavour: typing.Annotated[
         str, typer.Option("--flavour", help="veraPDF PDF/A flavour: 2b, 2a, 2u, 1b, 3b, 4...")
     ] = "2b",
@@ -120,6 +128,9 @@ def verify_cmd(
     strict_cmyk: typing.Annotated[
         bool, typer.Option("--strict-cmyk", help="Fail, rather than warn, on RGB vector fills.")
     ] = False,
+    k_only_text: typing.Annotated[
+        bool, typer.Option("--k-only-text", help="Fail text painted with any ink but K (house rule; off by default).")
+    ] = False,
     jobs: typing.Annotated[
         int, typer.Option("--jobs", "-j", min=1, help="Files to verify at once.")
     ] = core.DEFAULT_JOBS,
@@ -147,9 +158,18 @@ def verify_cmd(
         small_text_pt=small_text_pt,
         min_dpi=min_dpi,
         strict_cmyk=strict_cmyk,
+        k_only_text=k_only_text,
     )
     reports = asyncio.run(
-        core.verify_files(targets, profile, jobs=jobs, verapdf_bin=verapdf_bin, gs_bin=gs_bin, timeout=timeout)
+        core.verify_files(
+            targets,
+            profile,
+            exemptions=_parse_exemptions(exempt or []),
+            jobs=jobs,
+            verapdf_bin=verapdf_bin,
+            gs_bin=gs_bin,
+            timeout=timeout,
+        )
     )
 
     if as_json:
@@ -208,6 +228,17 @@ def preview_cmd(
         typer.secho(f"\nOK -- {len(written)} page(s){note} from {len(targets)} file(s)", fg=typer.colors.GREEN)
 
 
+def _parse_exemptions(specs: list[str]) -> dict[str, str]:
+    """``GLOB=reason`` options as a mapping; a missing reason is rejected, since the reason is the point."""
+    exemptions: dict[str, str] = {}
+    for spec in specs:
+        glob, _, reason = spec.partition("=")
+        if not glob.strip() or not reason.strip():
+            raise typer.BadParameter(f"--exempt must look like GLOB=reason, got {spec!r}")
+        exemptions[glob.strip()] = reason.strip()
+    return exemptions
+
+
 def _page_geometry(trim_mm: str, bleed_mm: float, tolerance_mm: float) -> PageGeometry:
     """Parse ``--trim-mm WxH`` into a :class:`PageGeometry`."""
     parts = trim_mm.lower().replace("*", "x").split("x")
@@ -234,11 +265,16 @@ def _as_record(report: FileReport) -> dict:
     return {
         "path": str(report.path),
         "ok": report.ok,
+        "exempt": report.exempt,
         "findings": [dataclasses.asdict(f) for f in report.findings],
     }
 
 
 def _print_report(report: FileReport) -> None:
+    if report.exempt is not None:
+        typer.echo(f"  {_rel(report.path):<52} {typer.style('EXEMPT', fg=typer.colors.YELLOW)}")
+        typer.echo(f"      - {report.exempt}")
+        return
     status = typer.style("OK", fg=typer.colors.GREEN) if report.ok else typer.style("FAIL", fg=typer.colors.RED)
     typer.echo(f"  {_rel(report.path):<52} {status}")
     for finding, pages in _collapse(report.findings):
@@ -291,17 +327,21 @@ def _print_summary(reports: list[FileReport], profile: Profile) -> None:
             ("PDF/X-4", profile.pdfx),
             ("geometry", profile.geometry is not None),
             ("colour", profile.colour),
+            ("K-only text", profile.k_only_text),
         )
         if on
     )
     failed = [r for r in reports if not r.ok]
+    exempt = [r for r in reports if r.exempt is not None]
+    checked = len(reports) - len(exempt)
     typer.echo("")
     if failed:
-        typer.secho(f"FAIL -- {len(failed)} of {len(reports)} file(s) failed: {layers}", fg=typer.colors.RED)
+        typer.secho(f"FAIL -- {len(failed)} of {checked} file(s) failed: {layers}", fg=typer.colors.RED)
         return
     warnings = sum(len(r.warnings) for r in reports)
-    note = f" ({warnings} advisory warning(s))" if warnings else ""
-    typer.secho(f"OK -- all {len(reports)} file(s) passed: {layers}{note}", fg=typer.colors.GREEN)
+    notes = ([f"{warnings} advisory warning(s)"] if warnings else []) + ([f"{len(exempt)} exempt"] if exempt else [])
+    note = f" ({', '.join(notes)})" if notes else ""
+    typer.secho(f"OK -- all {checked} file(s) passed: {layers}{note}", fg=typer.colors.GREEN)
 
 
 # Re-exported so callers can special-case a genuine tool failure if they wish.

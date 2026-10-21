@@ -91,22 +91,54 @@ class TestTotalAreaCoverage:
 
 
 class TestOverprint:
-    def test_applied_overprint_is_flagged(self, make_content_pdf):
-        path = make_content_pdf(b"/GS1 gs", font=False, extgstates={"/GS1": pikepdf.Dictionary(OP=True, op=True)})
-        with pikepdf.open(path) as pdf:
-            findings = colour.check_overprint(pdf)
+    GS = {"/GS1": pikepdf.Dictionary(OP=True, op=True)}
+    FILL = b"0 0 10 10 re f"
+
+    def _findings(self, make_content_pdf, stream, **kwargs):
+        with pikepdf.open(make_content_pdf(stream, extgstates=self.GS, **kwargs)) as pdf:
+            return colour.check_overprint(pdf)
+
+    def test_painting_under_overprint_is_flagged(self, make_content_pdf):
+        findings = self._findings(make_content_pdf, b"/GS1 gs " + self.FILL, font=False)
         assert [f.severity for f in findings] == [Severity.WARN]
+
+    def test_applied_but_never_painted_under_is_not_flagged(self, make_content_pdf):
+        """Overprint with nothing painted while it is on changes nothing on press."""
+        assert self._findings(make_content_pdf, b"/GS1 gs", font=False) == []
 
     def test_declared_but_never_applied_is_not_flagged(self, make_content_pdf):
         """An ExtGState nobody invokes changes nothing on press."""
-        path = make_content_pdf(b"", font=False, extgstates={"/GS1": pikepdf.Dictionary(OP=True)})
-        with pikepdf.open(path) as pdf:
-            assert colour.check_overprint(pdf) == []
+        assert self._findings(make_content_pdf, self.FILL, font=False) == []
 
     def test_overprint_off_is_clean(self, make_content_pdf):
-        path = make_content_pdf(b"/GS1 gs", font=False, extgstates={"/GS1": pikepdf.Dictionary(OP=False)})
-        with pikepdf.open(path) as pdf:
+        off = {"/GS1": pikepdf.Dictionary(OP=False)}
+        with pikepdf.open(make_content_pdf(b"/GS1 gs " + self.FILL, font=False, extgstates=off)) as pdf:
             assert colour.check_overprint(pdf) == []
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            pytest.param(b"0 0 0 1 k", id="cmyk-100k"),
+            pytest.param(b"0 g", id="gray-black"),
+        ],
+    )
+    def test_overprinting_100_percent_k_text_is_fine(self, make_content_pdf, text):
+        assert self._findings(make_content_pdf, b"/GS1 gs BT /F1 8 Tf " + text + b" (x) Tj ET") == []
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            pytest.param(b"0 0 0 0.6 k", id="k-tint"),
+            pytest.param(b"0.6 0.5 0.4 0.9 k", id="rich-black"),
+            pytest.param(b"1 0 0 0 k", id="colour"),
+        ],
+    )
+    def test_overprinting_other_text_is_flagged(self, make_content_pdf, text):
+        findings = self._findings(make_content_pdf, b"/GS1 gs BT /F1 8 Tf " + text + b" (x) Tj ET")
+        assert _checks(findings) == {"overprint"}
+
+    def test_a_q_restores_overprint(self, make_content_pdf):
+        assert self._findings(make_content_pdf, b"q /GS1 gs Q " + self.FILL, font=False) == []
 
     def test_overprint_inside_a_form_is_found(self, tmp_path, make_form):
         """The page-only scan this replaces could not see nested content."""
@@ -115,7 +147,7 @@ class TestOverprint:
         form = pdf.make_indirect(
             make_form(
                 pdf,
-                b"/GS1 gs",
+                b"/GS1 gs " + self.FILL,
                 resources=pikepdf.Dictionary(ExtGState=pikepdf.Dictionary(GS1=pikepdf.Dictionary(OP=True))),
             )
         )
@@ -123,6 +155,21 @@ class TestOverprint:
         pdf.save(path)
         with pikepdf.open(path) as opened:
             assert _checks(colour.check_overprint(opened)) == {"overprint"}
+
+    def test_overprint_set_in_a_form_does_not_leak_out_of_it(self, tmp_path, make_form):
+        path = tmp_path / "leak.pdf"
+        pdf = pikepdf.new()
+        form = pdf.make_indirect(
+            make_form(
+                pdf,
+                b"/GS1 gs",
+                resources=pikepdf.Dictionary(ExtGState=pikepdf.Dictionary(GS1=pikepdf.Dictionary(OP=True))),
+            )
+        )
+        _page_with(pdf, b"/Fm1 Do " + self.FILL, pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
+        pdf.save(path)
+        with pikepdf.open(path) as opened:
+            assert colour.check_overprint(opened) == []
 
 
 class TestColourSpaces:
@@ -237,6 +284,12 @@ class TestRichBlack:
         with pikepdf.open(make_content_pdf(stream)) as pdf:
             assert colour.check_rich_black(pdf, 12.0) == []
 
+    def test_a_q_restores_the_fill_before_the_text(self, make_content_pdf):
+        """The fill set inside q...Q is gone by the time the text is shown."""
+        stream = b"q 0.6 0.5 0.4 0.9 k Q BT /F1 8 Tf (x) Tj ET"
+        with pikepdf.open(make_content_pdf(stream)) as pdf:
+            assert colour.check_rich_black(pdf, 12.0) == []
+
     def test_text_matrix_scaling_counts_towards_the_size(self, make_content_pdf):
         """4pt text scaled 4x is 16pt on the page, and must not be flagged."""
         path = make_content_pdf(b"BT 4 0 0 4 0 0 Tm /F1 4 Tf 0.6 0.5 0.4 0.9 k (x) Tj ET")
@@ -273,6 +326,97 @@ class TestRichBlack:
         with pikepdf.open(path) as opened:
             findings = colour.check_rich_black(opened, 12.0)
         assert findings and "6.0pt" in findings[0].message
+
+
+class TestKOnlyText:
+    def _findings(self, make_content_pdf, stream, **kwargs):
+        with pikepdf.open(make_content_pdf(stream, **kwargs)) as pdf:
+            return colour.check_k_only_text(pdf)
+
+    @pytest.mark.parametrize(
+        "stream",
+        [
+            pytest.param(b"BT /F1 8 Tf 0 0 0 1 k (x) Tj ET", id="process-black"),
+            pytest.param(b"BT /F1 8 Tf 0 0 0 0.4 k (x) Tj ET", id="k-tint"),
+            pytest.param(b"BT /F1 8 Tf 0 0 0 0 k (x) Tj ET", id="white"),
+            pytest.param(b"BT /F1 8 Tf 0 g (x) Tj ET", id="gray-black"),
+            pytest.param(b"BT /F1 8 Tf 0.4 g (x) Tj ET", id="gray-tint"),
+            pytest.param(b"BT /F1 8 Tf (x) Tj ET", id="no-colour-set"),
+            pytest.param(b"/DeviceCMYK cs 0 0 0 1 scn BT /F1 8 Tf (x) Tj ET", id="scn-k-only"),
+        ],
+    )
+    def test_k_only_text_is_clean(self, make_content_pdf, stream):
+        assert self._findings(make_content_pdf, stream) == []
+
+    def test_a_four_colour_build_is_an_error_naming_the_ink(self, make_content_pdf):
+        findings = self._findings(make_content_pdf, b"BT /F1 8 Tf 1 0.5 0 0.5 k (x) Tj ET")
+        assert [f.severity for f in findings] == [Severity.ERROR]
+        assert "C100 M50 Y0 K50" in findings[0].message
+
+    def test_rich_black_is_not_k_only(self, make_content_pdf):
+        assert _checks(self._findings(make_content_pdf, b"BT /F1 8 Tf 0.6 0.5 0.4 0.9 k (x) Tj ET")) == {"k-only-text"}
+
+    def test_rgb_text_is_flagged(self, make_content_pdf):
+        findings = self._findings(make_content_pdf, b"BT /F1 8 Tf 0 0 0 rg (x) Tj ET")
+        assert "RGB" in findings[0].message
+
+    def test_scn_in_a_colour_family_is_read(self, make_content_pdf):
+        findings = self._findings(make_content_pdf, b"/DeviceCMYK cs 1 0 0 0 scn BT /F1 8 Tf (x) Tj ET")
+        assert "C100" in findings[0].message
+
+    def test_a_spot_colour_is_flagged(self, make_content_pdf):
+        spot = pikepdf.Array([pikepdf.Name.Separation, pikepdf.Name("/Spot"), pikepdf.Name.DeviceCMYK])
+        findings = self._findings(make_content_pdf, b"/CS1 cs 1 scn BT /F1 8 Tf (x) Tj ET", colorspaces={"/CS1": spot})
+        assert "spot" in findings[0].message
+
+    def test_a_pattern_fill_is_flagged(self, make_content_pdf):
+        findings = self._findings(make_content_pdf, b"/Pattern cs /P1 scn BT /F1 8 Tf (x) Tj ET")
+        assert _checks(findings) == {"k-only-text"}
+
+    def test_a_q_restores_the_fill_before_the_text(self, make_content_pdf):
+        stream = b"0 0 0 1 k q 1 0 0 0 k Q BT /F1 8 Tf (x) Tj ET"
+        assert self._findings(make_content_pdf, stream) == []
+
+    def test_only_text_is_judged_not_graphics(self, make_content_pdf):
+        assert self._findings(make_content_pdf, b"1 0 0 0 k 0 0 10 10 re f") == []
+
+    def test_one_finding_per_page_counts_the_runs(self, make_content_pdf):
+        stream = b"BT /F1 8 Tf 1 0 0 0 k (a) Tj (b) Tj (c) Tj ET"
+        findings = self._findings(make_content_pdf, stream)
+        assert len(findings) == 1 and "and 2 more runs" in findings[0].message
+
+    def test_a_form_runs_in_its_own_state(self, tmp_path, make_form):
+        """Cyan set inside a form does not colour the black text the page shows afterwards."""
+        path = tmp_path / "form.pdf"
+        pdf = pikepdf.new()
+        font = pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name("/Helvetica"))
+        )
+        resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+        form = pdf.make_indirect(make_form(pdf, b"1 0 0 0 k", resources=resources))
+        page_resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form), Font=pikepdf.Dictionary(F1=font))
+        _page_with(pdf, b"/Fm1 Do BT /F1 8 Tf (x) Tj ET", page_resources)
+        pdf.save(path)
+        with pikepdf.open(path) as opened:
+            assert colour.check_k_only_text(opened) == []
+
+    def test_cyan_text_inside_a_form_is_found(self, tmp_path, make_form):
+        path = tmp_path / "form.pdf"
+        pdf = pikepdf.new()
+        font = pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name("/Helvetica"))
+        )
+        form = pdf.make_indirect(
+            make_form(
+                pdf,
+                b"BT /F1 8 Tf 1 0 0 0 k (x) Tj ET",
+                resources=pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font)),
+            )
+        )
+        _page_with(pdf, b"/Fm1 Do", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
+        pdf.save(path)
+        with pikepdf.open(path) as opened:
+            assert _checks(colour.check_k_only_text(opened)) == {"k-only-text"}
 
 
 @pytest.mark.skipif(shutil.which("gs") is None, reason="Ghostscript not installed")

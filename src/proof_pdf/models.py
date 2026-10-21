@@ -80,6 +80,7 @@ class Profile:
     print jobs usually target ``2b``. *pdfx* toggles the PDF/X-4 structural layer;
     *colour* toggles the ink-coverage / overprint / rich-black / colour-space
     layer; *geometry* is the expected finished size, or ``None`` to skip it.
+    *k_only_text* is an opt-in house rule: text may be painted with the K plate only.
     """
 
     flavour: str = "2b"
@@ -91,14 +92,16 @@ class Profile:
     small_text_pt: float = DEFAULT_SMALL_TEXT_PT
     min_dpi: float = DEFAULT_MIN_DPI
     strict_cmyk: bool = False
+    k_only_text: bool = False
 
 
 @dataclasses.dataclass
 class FileReport:
-    """Every finding gathered for a single PDF."""
+    """Every finding gathered for a single PDF, or the reason it was exempt from checking."""
 
     path: pathlib.Path
     findings: list[Finding] = dataclasses.field(default_factory=list)
+    exempt: str | None = None  # why the file was declared exempt and not checked; never a failure
 
     @property
     def errors(self) -> list[Finding]:

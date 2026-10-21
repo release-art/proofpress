@@ -56,19 +56,40 @@ async def verify_file(
     return report
 
 
+def exemption(path: pathlib.PurePath, exemptions: collections.abc.Mapping[str, str]) -> str | None:
+    """The reason *path* was declared exempt, or ``None``.
+
+    Each key is a glob matched against the path from any directory level, so
+    ``*_preview.pdf`` and ``res/**`` work without spelling out the whole path
+    (:meth:`pathlib.PurePath.full_match`). The first matching glob wins.
+    """
+    for glob, reason in exemptions.items():
+        if path.full_match(glob) or path.full_match(f"**/{glob}"):
+            return reason
+    return None
+
+
 async def verify_files(
     paths: collections.abc.Iterable[pathlib.Path],
     profile: Profile,
     *,
+    exemptions: collections.abc.Mapping[str, str] | None = None,
     jobs: int = DEFAULT_JOBS,
     verapdf_bin: str = "verapdf",
     gs_bin: str = "gs",
     timeout: float | None = None,
 ) -> list[FileReport]:
-    """Verify *paths*, at most *jobs* files at a time, and return the reports in input order."""
+    """Verify *paths*, at most *jobs* files at a time, and return the reports in input order.
+
+    A path matching an *exemptions* glob is not checked: its report carries the
+    reason and counts as passing. That is a declaration, never inferred from what
+    the file contains, so a file that merely forgot its metadata still fails.
+    """
     gate = asyncio.Semaphore(jobs)
 
     async def one(path: pathlib.Path) -> FileReport:
+        if (reason := exemption(path, exemptions or {})) is not None:
+            return FileReport(path=path, exempt=reason)
         async with gate:
             return await verify_file(path, profile, verapdf_bin=verapdf_bin, gs_bin=gs_bin, timeout=timeout)
 
@@ -86,6 +107,8 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                 findings += structure.check_pdfx_identity(pdf)
             if profile.geometry is not None:
                 findings += structure.check_geometry(pdf, profile.geometry)
+            if profile.k_only_text:
+                findings += colour.check_k_only_text(pdf)
             if profile.colour:
                 findings += colour.check_overprint(pdf)
                 findings += colour.check_rich_black(pdf, profile.small_text_pt)

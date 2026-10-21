@@ -1,6 +1,7 @@
 """Orchestration: which layers run, and what a missing tool means."""
 
 import asyncio
+import pathlib
 
 import pytest
 
@@ -145,6 +146,57 @@ class TestConcurrency:
         reports = await core.verify_files(paths, Profile(), jobs=2)
         assert [r.path for r in reports] == paths
         assert peak == 2
+
+
+class TestKOnlyLayer:
+    async def test_off_by_default(self, make_content_pdf):
+        path = make_content_pdf(b"BT /F1 8 Tf 1 0 0 0 k (x) Tj ET")
+        profile = Profile(pdfa=False, pdfx=False, colour=False)
+        assert "k-only-text" not in _checks(await core.verify_file(path, profile))
+
+    async def test_opt_in_fails_non_k_text(self, make_content_pdf):
+        path = make_content_pdf(b"BT /F1 8 Tf 1 0 0 0 k (x) Tj ET")
+        profile = Profile(pdfa=False, pdfx=False, colour=False, k_only_text=True)
+        report = await core.verify_file(path, profile)
+        assert "k-only-text" in _checks(report) and not report.ok
+
+
+class TestExemption:
+    @pytest.mark.parametrize(
+        ("glob", "path", "matches"),
+        [
+            pytest.param("*_preview.pdf", "job/deep/Deck_preview.pdf", True, id="name-glob-at-any-depth"),
+            pytest.param("*_preview.pdf", "Deck_preview.pdf", True, id="name-glob-at-the-top"),
+            pytest.param("res/**", "job/res/logo.pdf", True, id="dir-glob"),
+            pytest.param("res/logo.pdf", "job/res/logo.pdf", True, id="exact-tail"),
+            pytest.param("res/logo.pdf", "job/other/logo.pdf", False, id="tail-must-match-whole"),
+            pytest.param("*_preview.pdf", "job/Deck_full.pdf", False, id="no-match"),
+            pytest.param("/abs/x.pdf", "/abs/x.pdf", True, id="absolute"),
+        ],
+    )
+    def test_glob_matching(self, glob, path, matches):
+        reason = core.exemption(pathlib.PurePath(path), {glob: "because"})
+        assert (reason == "because") is matches
+
+    def test_first_matching_glob_wins(self):
+        assert core.exemption(pathlib.PurePath("a.pdf"), {"*.pdf": "first", "a.pdf": "second"}) == "first"
+
+    def test_no_exemptions_means_none(self):
+        assert core.exemption(pathlib.PurePath("a.pdf"), {}) is None
+
+
+class TestVerifyFilesExemptions:
+    async def test_exempt_files_are_reported_not_checked(self, tmp_path, mocker):
+
+        async def _verify(path, *a, **k):
+            return FileReport(path=path)
+
+        verify = mocker.patch.object(core, "verify_file", side_effect=_verify)
+        paths = [tmp_path / "a.pdf", tmp_path / "manual.pdf"]
+        reports = await core.verify_files(paths, Profile(), exemptions={"manual.pdf": "internal docs"})
+        assert [r.exempt for r in reports] == [None, "internal docs"]
+        assert all(r.ok for r in reports)
+        assert [call.args[0].name for call in verify.call_args_list] == ["a.pdf"]
 
 
 class TestExpandTargets:

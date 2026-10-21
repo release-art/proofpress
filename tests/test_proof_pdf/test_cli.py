@@ -143,6 +143,49 @@ class TestProfileWiring:
         assert seen[0][1].geometry.trim_w_mm == 85.0
 
 
+class TestExemptAndKOnly:
+    def test_exempt_files_are_listed_with_their_reason_and_pass(self, runner, tmp_path, stub_verify):
+        stub_verify({})
+        result = runner.invoke(
+            cli.pdf_app,
+            [
+                "verify",
+                str(_pdf(tmp_path, "a.pdf")),
+                str(_pdf(tmp_path, "manual.pdf")),
+                "--exempt",
+                "manual.pdf=internal docs, never printed",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "EXEMPT" in result.output and "internal docs, never printed" in result.output
+        assert "all 1 file(s) passed" in result.output and "1 exempt" in result.output
+
+    def test_exempt_files_are_in_the_json(self, runner, tmp_path, stub_verify):
+        stub_verify({})
+        result = runner.invoke(
+            cli.pdf_app,
+            ["verify", str(_pdf(tmp_path, "m.pdf")), "--exempt", "m.pdf=why", "--json"],
+        )
+        record = json.loads(result.output)[0]
+        assert record["exempt"] == "why" and record["ok"] is True
+
+    @pytest.mark.parametrize("spec", ["manual.pdf", "=reason", "manual.pdf=", " = "])
+    def test_exempt_needs_a_glob_and_a_reason(self, runner, tmp_path, stub_verify, spec):
+        stub_verify({})
+        result = runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--exempt", spec])
+        assert result.exit_code != 0
+
+    def test_k_only_text_flag_reaches_the_profile(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--k-only-text"])
+        assert seen[0][1].k_only_text is True
+
+    def test_k_only_text_is_off_by_default(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert seen[0][1].k_only_text is False
+
+
 class TestCollapsedOutput:
     def test_identical_findings_across_pages_become_one_line(self, runner, tmp_path, stub_verify):
         """A 50-card deck must not print the same sentence fifty times."""

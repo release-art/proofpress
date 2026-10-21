@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `--exempt GLOB=reason`: declare files out of scope. They are listed with the reason, counted separately and never fail
+  (`FileReport.exempt`, `core.verify_files(..., exemptions=...)`).
+- `--k-only-text` (opt-in): text painted with any ink but K is an error.
+- A hint on veraPDF's "device colour used without an output intent" failures (clause 6.2.4.3).
+
 ### Changed
 
+- Overprint is judged by what is painted under it: overprinting 100% K text passes, and overprint that paints nothing is
+  silent. Overprint on any other content is still flagged.
+- The overprint, rich-black and K-only checks share one graphics-state walk that honours `q`/`Q` and Form XObject scope, so a
+  fill set inside `q ... Q` no longer leaks onto later text.
 - The library API is async: `verify_file`, `verify_files`, `verapdf.run`, `colour.check_tac` and `preview.preview_file` are
   coroutines. veraPDF and Ghostscript run as asyncio subprocesses, killed on timeout or cancellation, and the PDF checks run in
   worker threads.

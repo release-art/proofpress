@@ -20,7 +20,8 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 - **PDF/X-4 structure**: page boxes, `/Trapped`, the `GTS_PDFX` output intent and the XMP version key (`--no-pdfx`).
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
 - **Colour**: total ink coverage (`--max-tac`, 300% default), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default),
-  overprint and rich-black small text (`--no-colour`).
+  overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged.
+- **K-only text** (opt-in, `--k-only-text`): text painted with any ink but K (a four-colour build, RGB, a spot or a pattern) is an error.
 
 `preview` rasterises each page and draws the trim, bleed and safe guides from the PDF's own boxes, so a geometry finding can be seen.
 
@@ -28,13 +29,18 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 pip install proof-pdf          # Python 3.15; needs verapdf and gs (Ghostscript) on PATH
 
 proof-pdf verify job/ --trim-mm 105x148 --bleed-mm 3 --exclude '*_preview.pdf'
+proof-pdf verify job/ --exempt 'manual.pdf=internal docs, never printed'   # listed with the reason, never fails
+proof-pdf verify job/ --k-only-text       # house rule: text is K-only
 proof-pdf verify card.pdf --json          # machine-readable findings, for CI
 proof-pdf preview card.pdf --dpi 150
 proof-pdf --version                       # version, plus the commit when built from an image
 ```
 
 - Arguments are files or directories; a directory expands to every PDF beneath it, minus `--exclude` globs (relative to that directory).
+- `--exempt GLOB=reason` declares a file out of scope. It is still listed, with the reason, and never fails; the glob matches at any
+  directory level (`res/**`, `*_preview.pdf`). Unlike `--exclude`, which drops files silently, an exemption stays visible in CI output.
 - **A check whose tool is missing fails, it is never skipped**: a file that can't be confirmed must not read as OK.
+- A veraPDF "device colour without an output intent" failure carries a hint saying what to add.
 - Errors fail the file and exit 1. Warnings are advisory. `--quiet` prints nothing, for exit-code-only use.
 
 `verify -j N` checks N files at once (default: up to 4). veraPDF and Ghostscript run as subprocesses and the PDF checks in worker threads,

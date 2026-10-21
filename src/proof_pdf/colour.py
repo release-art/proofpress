@@ -1,6 +1,6 @@
 """Best-effort colour sanity -- the things neither PDF/A nor PDF/X judge.
 
-Four checks a printer cares about but no standard enforces:
+Checks a printer cares about but no standard enforces:
 
 * **Total area coverage** -- the summed ink of the four plates. Rasterise each
   page to DeviceCMYK with Ghostscript and take the peak; over the FOGRA51
@@ -11,10 +11,13 @@ Four checks a printer cares about but no standard enforces:
   RGB image here means one escaped the workflow: an ``ERROR``. Vector RGB fills
   are advisory by default, since a RIP will convert them against the output
   intent; ``--strict-cmyk`` promotes them when that is not wanted.
-* **Overprint** -- an applied ``ExtGState`` turning overprint on. Usually
-  deliberate, so advisory: it is flagged, not failed.
+* **Overprint** -- content painted while an ``ExtGState`` has overprint on.
+  Overprinting 100% K text is the normal, safe case and passes; anything else
+  is usually a knockout that was meant, so it is advisory: flagged, not failed.
 * **Rich-black small text** -- small text painted in a built black (K plus other
   plates) mis-registers. Advisory.
+* **K-only text** (opt-in) -- text painted with any ink but K. One plate cannot
+  mis-register with itself, so a house rule may require it: an error.
 
 The raster step shells out to Ghostscript (its absence or failure is surfaced as
 a failure by the caller, not silently skipped); the rest read the
@@ -22,10 +25,13 @@ a failure by the caller, not silently skipped); the rest read the
 """
 
 import asyncio
+import collections.abc
+import dataclasses
 import logging
 import pathlib
 import shutil
 import tempfile
+import typing
 
 import pikepdf
 from PIL import Image, ImageMath
@@ -48,6 +54,8 @@ _TAC_DPI = 150
 # top. Pure process black (0/0/0/K) never trips it.
 _RICH_K_MIN = 0.5
 _RICH_OTHER_MIN = 0.3
+# An ink amount this close to zero is no ink, and this close to one is solid.
+_INK_EPSILON = 0.01
 
 # Colour-space families, as classified from a PDF colour space object.
 _RGB = "rgb"
@@ -139,32 +147,194 @@ def _peak_tac(tif: pathlib.Path) -> float:
     return peak / 255.0 * 100.0
 
 
+# --------------------------------------------------------- painting walk ----
+@dataclasses.dataclass(frozen=True)
+class _Fill:
+    """The current fill colour: its family and, for device spaces, its components."""
+
+    family: str
+    value: tuple[float, ...] = ()
+
+
+# What a colour space's colour is straight after ``cs``, per the PDF spec.
+_INITIAL_FILL = {
+    _GRAY: _Fill(_GRAY, (0.0,)),
+    _RGB: _Fill(_RGB, (0.0, 0.0, 0.0)),
+    _CMYK: _Fill(_CMYK, (0.0, 0.0, 0.0, 1.0)),
+    _OTHER: _Fill(_OTHER),
+}
+
+
+@dataclasses.dataclass(frozen=True)
+class _State:
+    """The slice of the graphics state these checks read. A new page starts in DeviceGray black."""
+
+    fill: _Fill = _INITIAL_FILL[_GRAY]
+    font_size: float = 0.0
+    overprint: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class _Paint:
+    """One thing painted on the page, with the state it was painted in."""
+
+    kind: str  # "text", "path", "image" or "shading"
+    fill: _Fill
+    overprint: bool
+    size: float = 0.0  # effective point size; text only
+
+
+_PATH_PAINT = frozenset(("f", "F", "f*", "B", "B*", "b", "b*", "S", "s"))
+
+
+class _Walker:
+    """Walks a page's operators keeping the :class:`_State` they would leave a viewer in.
+
+    ``q``/``Q`` restore the state, and so does leaving a Form XObject (a form runs
+    in its own graphics state), which is why this is not a flat scan of the
+    operators. Painting operators are reported; everything else only updates state.
+    """
+
+    def __init__(self) -> None:
+        self.state = _State()
+        self.entered: list[_State] = []  # the state to restore when leaving each form
+        self.saved: dict[int, list[_State]] = {0: []}  # q-stack per nesting depth
+        self.depth = 0
+        self.text_matrix: content.Matrix = content.IDENTITY
+
+    def walk(self, page: pikepdf.Page) -> collections.abc.Iterator[_Paint]:
+        for op in content.iter_operations(page):
+            self._scope(op.depth)
+            paint = self._paint(op)
+            if paint is not None:
+                yield paint
+            elif (update := self._UPDATES.get(op.operator)) is not None:
+                update(self, op)
+
+    def _scope(self, depth: int) -> None:
+        while self.depth < depth:
+            self.entered.append(self.state)
+            self.depth += 1
+            self.saved[self.depth] = []
+        while self.depth > depth:
+            self.state = self.entered.pop()
+            self.depth -= 1
+
+    def _paint(self, op: content.Operation) -> _Paint | None:
+        state, name = self.state, op.operator
+        if name in _SHOW_TEXT:
+            size = state.font_size * content.vertical_scale(content.mul(self.text_matrix, op.ctm))
+            return _Paint("text", state.fill, state.overprint, size)
+        if name in _PATH_PAINT:
+            return _Paint("path", state.fill, state.overprint)
+        if name == "sh":
+            return _Paint("shading", state.fill, state.overprint)
+        if name == "Do":
+            xobject = content.lookup_xobject(op.resources, op.operands)
+            if xobject is not None and str(xobject.get("/Subtype")) == "/Image":
+                return _Paint("image", state.fill, state.overprint)
+        return None
+
+    def _set(self, **changes: object) -> None:
+        self.state = dataclasses.replace(self.state, **changes)  # pyright: ignore[reportArgumentType]
+
+    def _save(self, op: content.Operation) -> None:
+        self.saved[self.depth].append(self.state)
+
+    def _restore(self, op: content.Operation) -> None:
+        if self.saved[self.depth]:
+            self.state = self.saved[self.depth].pop()
+
+    def _begin_text(self, op: content.Operation) -> None:
+        self.text_matrix = content.IDENTITY
+
+    def _text_matrix(self, op: content.Operation) -> None:
+        self.text_matrix = content.matrix(op.operands)
+
+    def _move_text(self, op: content.Operation) -> None:
+        self.text_matrix = content.mul(_translation(op.operands), self.text_matrix)
+
+    def _font(self, op: content.Operation) -> None:
+        self._set(font_size=_number(op.operands, 1))
+
+    def _gray(self, op: content.Operation) -> None:
+        self._set(fill=_Fill(_GRAY, (_number(op.operands, 0),)))
+
+    def _rgb(self, op: content.Operation) -> None:
+        self._set(fill=_Fill(_RGB, tuple(_number(op.operands, i) for i in range(3))))
+
+    def _cmyk(self, op: content.Operation) -> None:
+        self._set(fill=_Fill(_CMYK, tuple(_number(op.operands, i) for i in range(4))))
+
+    def _colour_space(self, op: content.Operation) -> None:
+        family = classify_colour_space(op.operands[0] if op.operands else None, op.resources)
+        self._set(fill=_INITIAL_FILL[family])
+
+    def _components(self, op: content.Operation) -> None:
+        self._set(fill=_with_components(self.state.fill, op.operands))
+
+    def _graphics_state(self, op: content.Operation) -> None:
+        overprint = _overprint_in(op)
+        if overprint is not None:
+            self._set(overprint=overprint)
+
+    _UPDATES: typing.ClassVar[dict[str, collections.abc.Callable[["_Walker", content.Operation], None]]] = {
+        "q": _save,
+        "Q": _restore,
+        "BT": _begin_text,
+        "Tm": _text_matrix,
+        "Td": _move_text,
+        "TD": _move_text,
+        "Tf": _font,
+        "g": _gray,
+        "rg": _rgb,
+        "k": _cmyk,
+        "cs": _colour_space,
+        "sc": _components,
+        "scn": _components,
+        "gs": _graphics_state,
+    }
+
+
+def _paint_events(page: pikepdf.Page) -> collections.abc.Iterator[_Paint]:
+    """Everything *page* paints, with the fill, font size and overprint in force."""
+    return _Walker().walk(page)
+
+
+def _with_components(fill: _Fill, args: list) -> _Fill:
+    """The fill after ``sc``/``scn``: new components in the same family, or a pattern/spot."""
+    if args and isinstance(args[-1], pikepdf.Name):  # scn ... /Pattern
+        return _Fill(_OTHER)
+    if fill.family in (_GRAY, _RGB, _CMYK):
+        return _Fill(fill.family, tuple(_number(args, i) for i in range(len(args))))
+    return fill  # a spot or DeviceN tint: still not a device colour
+
+
+def _overprint_in(op: content.Operation) -> bool | None:
+    """Overprint as an applied ``gs`` sets it; ``None`` when it says nothing about overprint."""
+    state = _lookup_resource(op.resources, "/ExtGState", op.operands)
+    if state is None or (state.get("/OP") is None and state.get("/op") is None):
+        return None
+    return _truthy(state.get("/OP")) or _truthy(state.get("/op"))
+
+
 # ------------------------------------------------------------- overprint ----
 def check_overprint(pdf: pikepdf.Pdf) -> list[Finding]:
-    """Note pages that *apply* an ExtGState enabling overprint (advisory).
+    """Note pages that paint anything but 100% K text with overprint on (advisory).
 
-    Fires on the ``gs`` operator rather than on the resource dictionary, so it
-    sees overprint set inside a Form XObject, and does not fire on a graphics
-    state that is declared but never invoked.
+    Fires on what is painted, not on the ``gs`` that turns overprint on, so a
+    graphics state that is applied but never painted under, or that only ever
+    overprints black text, is silent.
     """
     findings: list[Finding] = []
     for i, page in enumerate(pdf.pages, start=1):
-        if any(_sets_overprint(op) for op in content.iter_operations(page)):
+        if any(p.overprint and not (p.kind == "text" and _is_full_k(p.fill)) for p in _paint_events(page)):
             findings.append(
                 Finding(
                     "overprint", Severity.WARN, "overprint is enabled -- confirm it is intentional, not knockout", i
                 )
             )
     return findings
-
-
-def _sets_overprint(op: content.Operation) -> bool:
-    if op.operator != "gs":
-        return False
-    state = _lookup_resource(op.resources, "/ExtGState", op.operands)
-    if state is None:
-        return False
-    return _truthy(state.get("/OP")) or _truthy(state.get("/op"))
 
 
 def _lookup_resource(resources: pikepdf.Object | None, category: str, operands: list) -> pikepdf.Object | None:
@@ -291,13 +461,17 @@ def check_rich_black(pdf: pikepdf.Pdf, small_text_pt: float) -> list[Finding]:
     """Flag small text painted in a built (rich) black on any page (advisory)."""
     findings: list[Finding] = []
     for i, page in enumerate(pdf.pages, start=1):
-        smallest = _smallest_rich_black_text(page, small_text_pt)
-        if smallest is not None:
+        sizes = [
+            p.size
+            for p in _paint_events(page)
+            if p.kind == "text" and _is_rich_black(p.fill) and p.size <= small_text_pt
+        ]
+        if sizes:
             findings.append(
                 Finding(
                     "rich-black",
                     Severity.WARN,
-                    f"text as small as {smallest:.1f}pt is set in rich black -- "
+                    f"text as small as {min(sizes):.1f}pt is set in rich black -- "
                     "use process black to avoid mis-registration",
                     i,
                 )
@@ -305,38 +479,53 @@ def check_rich_black(pdf: pikepdf.Pdf, small_text_pt: float) -> list[Finding]:
     return findings
 
 
-def _smallest_rich_black_text(page: pikepdf.Page, small_text_pt: float) -> float | None:
-    """Effective point size of the smallest rich-black run on the page, if any.
+def _is_rich_black(fill: _Fill) -> bool:
+    if fill.family != _CMYK or len(fill.value) < 4:
+        return False
+    c, m, y, k = fill.value[:4]
+    return k >= _RICH_K_MIN and (c + m + y) >= _RICH_OTHER_MIN
 
-    Text state (font size, fill, text matrix) is tracked across the whole walk
-    rather than reset per Form XObject: a form that shows text essentially always
-    sets its own ``Tf`` and ``BT`` first, and this check is advisory, so the
-    extra reach costs nothing and buys visibility into nested content.
-    """
-    text_matrix: content.Matrix = content.IDENTITY
-    font_size = 0.0
-    fill: tuple[float, float, float, float] | None = None
-    smallest: float | None = None
 
-    for op in content.iter_operations(page):
-        name, args = op.operator, op.operands
-        if name == "BT":
-            text_matrix = content.IDENTITY
-        elif name == "Tm":
-            text_matrix = content.matrix(args)
-        elif name in ("Td", "TD"):
-            text_matrix = content.mul(_translation(args), text_matrix)
-        elif name == "Tf":
-            font_size = _number(args, 1)
-        elif name == "k":
-            fill = _cmyk(args)
-        elif name in ("g", "rg"):
-            fill = None  # grayscale / RGB black is never rich black
-        elif name in _SHOW_TEXT and _is_rich_black(fill):
-            size = font_size * content.vertical_scale(content.mul(text_matrix, op.ctm))
-            if size <= small_text_pt and (smallest is None or size < smallest):
-                smallest = size
-    return smallest
+# ------------------------------------------------------------ K-only text ----
+def check_k_only_text(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Flag text painted with any ink but K: a four-colour build, RGB, or a spot or pattern."""
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        bad = [p.fill for p in _paint_events(page) if p.kind == "text" and not _is_k_only(p.fill)]
+        if bad:
+            more = f" (and {len(bad) - 1} more runs)" if len(bad) > 1 else ""
+            findings.append(
+                Finding(
+                    "k-only-text",
+                    Severity.ERROR,
+                    f"text is painted in {_describe(bad[0])}{more} -- text ink must be K only",
+                    i,
+                )
+            )
+    return findings
+
+
+def _is_k_only(fill: _Fill) -> bool:
+    """Gray, or CMYK with no C, M or Y: only the K plate (or no ink at all) is used."""
+    if fill.family == _GRAY:
+        return True
+    return fill.family == _CMYK and max(fill.value[:3], default=0.0) <= _INK_EPSILON
+
+
+def _is_full_k(fill: _Fill) -> bool:
+    """Solid black on the K plate alone: DeviceGray 0, or CMYK 0/0/0/100."""
+    if fill.family == _GRAY:
+        return bool(fill.value) and fill.value[0] <= _INK_EPSILON
+    return _is_k_only(fill) and len(fill.value) >= 4 and fill.value[3] >= 1.0 - _INK_EPSILON
+
+
+def _describe(fill: _Fill) -> str:
+    if fill.family == _CMYK and len(fill.value) >= 4:
+        c, m, y, k = (round(v * 100) for v in fill.value[:4])
+        return f"C{c} M{m} Y{y} K{k}"
+    if fill.family == _RGB:
+        return "RGB"
+    return "a spot, pattern or other non-K colour"
 
 
 def _translation(args: list) -> content.Matrix:
@@ -348,16 +537,3 @@ def _number(args: list, index: int) -> float:
         return float(args[index])
     except IndexError, TypeError, ValueError:
         return 0.0
-
-
-def _cmyk(args: list) -> tuple[float, float, float, float] | None:
-    if len(args) < 4:
-        return None
-    return (_number(args, 0), _number(args, 1), _number(args, 2), _number(args, 3))
-
-
-def _is_rich_black(fill: tuple[float, float, float, float] | None) -> bool:
-    if fill is None:
-        return False
-    c, m, y, k = fill
-    return k >= _RICH_K_MIN and (c + m + y) >= _RICH_OTHER_MIN

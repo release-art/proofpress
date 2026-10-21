@@ -82,8 +82,25 @@ def _rule_finding(flavour: str, rule: dict) -> Finding:
     description = (rule.get("description") or "").strip()
     detail = _first_error_message(rule)
     suffix = f" -- {detail}" if detail else ""
-    message = f"PDF/A-{flavour} {clause}-{test}: {description}{suffix}"
+    message = f"PDF/A-{flavour} {clause}-{test}: {description}{suffix}{_hint(clause, detail)}"
     return Finding("pdfa", Severity.ERROR, message)
+
+
+# 6.2.4.3 is the "device colour space needs an output intent" family (DeviceGray, DeviceRGB, DeviceCMYK). With no
+# output intent a single stray operator fails the file, and the message does not say what to add.
+_OUTPUT_INTENT_HINT = (
+    " (hint: the file has no PDF/A output intent for this colour space; declare one with an ICC profile, "
+    "or avoid device colour operators)"
+)
+
+
+def _hint(clause: str, detail: str) -> str:
+    """A one-line fix for the failures whose veraPDF message names the symptom but not the cause."""
+    lowered = detail.lower()
+    # "...used without output intent profile" (Gray, RGB) / "...without CMYK output intent profile"
+    if clause == "6.2.4.3" and "without" in lowered and "output intent" in lowered:
+        return _OUTPUT_INTENT_HINT
+    return ""
 
 
 def _first_error_message(rule: dict) -> str:
