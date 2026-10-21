@@ -7,6 +7,8 @@ The entrypoint is `proof-pdf`.
 ```zsh
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/work releaseart/full verify job/ --trim-mm 105x148 --bleed-mm 3
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/work releaseart/full preview card.pdf --dpi 150
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/work releaseart/full inspect card.pdf
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/work releaseart/full texlog book.log
 docker run --rm releaseart/full --version
 ```
 

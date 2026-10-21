@@ -124,8 +124,38 @@ def build(
 
 
 def _font(pdf: pikepdf.Pdf) -> pikepdf.Object:
+    """Helvetica, not embedded, with declared widths so text boxes measure exactly (every glyph 556/1000 em)."""
     return pdf.make_indirect(
-        pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name("/Helvetica"))
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font,
+            Subtype=pikepdf.Name.Type1,
+            BaseFont=pikepdf.Name("/Helvetica"),
+            FirstChar=32,
+            LastChar=126,
+            Widths=[556] * 95,
+        )
+    )
+
+
+def _type0_font(pdf: pikepdf.Pdf) -> pikepdf.Object:
+    """A composite Identity-H font like LuaLaTeX writes, where code 0 is the .notdef glyph."""
+    descendant = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font,
+            Subtype=pikepdf.Name.CIDFontType2,
+            BaseFont=pikepdf.Name("/ABCDEF+Nunito"),
+            DW=600,
+            FontDescriptor=pikepdf.Dictionary(Type=pikepdf.Name.FontDescriptor, Ascent=1000, Descent=-250),
+        )
+    )
+    return pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font,
+            Subtype=pikepdf.Name.Type0,
+            BaseFont=pikepdf.Name("/ABCDEF+Nunito"),
+            Encoding=pikepdf.Name("/Identity-H"),
+            DescendantFonts=[descendant],
+        )
     )
 
 
@@ -146,14 +176,24 @@ def _with_image(name: str, *, size: int, space: pikepdf.Object, components: int,
     return build(content, resources=pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)), pdf=pdf)
 
 
-def _with_text(stream: bytes, *, overprint: bool = False) -> pikepdf.Pdf:
+def _with_text(
+    stream: bytes,
+    *,
+    overprint: bool = False,
+    size: float = 12,
+    at: tuple[float, float] | None = None,
+    prefix: bytes = b"",
+    type0: bool = False,
+) -> pikepdf.Pdf:
     pdf = pikepdf.new()
-    resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=_font(pdf)))
+    font = _type0_font(pdf) if type0 else _font(pdf)
+    resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
     if overprint:
         resources["/ExtGState"] = pikepdf.Dictionary(GS1=pikepdf.Dictionary(OP=True, op=True))
         stream = b"/GS1 gs " + stream
+    x, y = at or (BLEED + 20, 300)  # clear of the dark square GOOD_CONTENT paints low on the page
     return build(
-        GOOD_CONTENT + b" BT /F1 12 Tf %f %f Td " % (BLEED + 20, BLEED + 20) + stream + b" ET",
+        GOOD_CONTENT + prefix + b" BT /F1 %f Tf %f %f Td " % (size, x, y) + stream + b" ET",
         resources=resources,
         pdf=pdf,
     )
@@ -185,6 +225,22 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         "black-text": _with_text(b"0 0 0 1 k (black) Tj", overprint=True),
         # Small text in a built black, which mis-registers.
         "rich-black-text": _with_text(b"0.6 0.5 0.4 0.9 k (rich) Tj"),
+        # A character the font has no glyph for: code 0 in an Identity-H font is .notdef, printed as a box.
+        "notdef-text": _with_text(b"<00410000> Tj", type0=True),
+        # 4 pt text, below any sensible floor.
+        "small-text": _with_text(b"0 g (tiny) Tj", size=4),
+        # A zero-width stroke, the thinnest line the device can draw.
+        "hairline": build(GOOD_CONTENT + b" 0 w 40 40 m 200 40 l S"),
+        # Text one millimetre inside the trim edge.
+        "edge-text": _with_text(b"0 g (edge) Tj", at=(BLEED + 1 * MM, 200)),
+        # Mid-grey text on a slightly lighter panel: a small L* difference.
+        "low-contrast": _with_text(
+            b"0.8 g (faint) Tj",
+            prefix=b" 0.9 g %f %f 200 60 re f" % (BLEED + 20, BLEED + 10),
+            at=(BLEED + 30, BLEED + 30),
+        ),
+        # Black text on bare paper: the opposite.
+        "high-contrast": _with_text(b"0 g (clear) Tj"),
         # PDF/A metadata but no output intent: veraPDF fails on DeviceGray, and proof-pdf adds a hint.
         "no-output-intent": build(output_intent=False),
     }

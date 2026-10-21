@@ -19,9 +19,10 @@ import os
 import pathlib
 import typing
 
+import pikepdf
 import typer
 
-from . import core, preview, verapdf
+from . import core, inventory, preview, texlog, verapdf
 from .models import (
     DEFAULT_MAX_TAC,
     DEFAULT_MIN_DPI,
@@ -131,6 +132,31 @@ def verify_cmd(
     k_only_text: typing.Annotated[
         bool, typer.Option("--k-only-text", help="Fail text painted with any ink but K (house rule; off by default).")
     ] = False,
+    missing_glyphs: typing.Annotated[
+        bool, typer.Option("--missing-glyphs/--no-missing-glyphs", help="Flag characters shown with the .notdef glyph.")
+    ] = True,
+    min_text_pt: typing.Annotated[
+        float | None, typer.Option("--min-text-pt", help="Fail text set smaller than this (pt). No default.")
+    ] = None,
+    min_stroke_pt: typing.Annotated[
+        float | None, typer.Option("--min-stroke-pt", help="Fail lines thinner than this (pt). No default.")
+    ] = None,
+    safe_mm: typing.Annotated[
+        float | None,
+        typer.Option("--safe-mm", help="Fail text outside this inset from the trim edge, in mm. No default."),
+    ] = None,
+    min_delta_l: typing.Annotated[
+        float | None,
+        typer.Option(
+            "--min-delta-l", help="Fail text whose L* difference from its background is below this. No default."
+        ),
+    ] = None,
+    proof_profile: typing.Annotated[
+        pathlib.Path | None,
+        typer.Option(
+            "--proof-profile", help="ICC profile to measure contrast through (default: the PDF's output intent)."
+        ),
+    ] = None,
     jobs: typing.Annotated[
         int, typer.Option("--jobs", "-j", min=1, help="Files to verify at once.")
     ] = core.DEFAULT_JOBS,
@@ -159,6 +185,12 @@ def verify_cmd(
         min_dpi=min_dpi,
         strict_cmyk=strict_cmyk,
         k_only_text=k_only_text,
+        missing_glyphs=missing_glyphs,
+        min_text_pt=min_text_pt,
+        min_stroke_pt=min_stroke_pt,
+        safe_mm=safe_mm,
+        min_delta_l=min_delta_l,
+        proof_profile=proof_profile,
     )
     reports = asyncio.run(
         core.verify_files(
@@ -181,6 +213,74 @@ def verify_cmd(
     raise typer.Exit(1 if any(not r.ok for r in reports) else 0)
 
 
+@pdf_app.command("inspect")
+def inspect_cmd(
+    files: PathsArg = None,
+    exclude: ExcludeOpt = None,
+    proof_profile: typing.Annotated[
+        pathlib.Path | None,
+        typer.Option(
+            "--proof-profile", help="ICC profile to measure contrast through (default: the PDF's output intent)."
+        ),
+    ] = None,
+    contrast: typing.Annotated[
+        bool, typer.Option("--contrast/--no-contrast", help="Measure text/background lightness differences.")
+    ] = True,
+    as_json: typing.Annotated[bool, typer.Option("--json", help="Emit the inventory as JSON.")] = False,
+) -> None:
+    """Report what is in each PDF (fonts, text colours and sizes, inks, images, contrast) without judging it."""
+    targets = core.expand_targets(files or [], exclude or [])
+    if not targets:
+        typer.echo("no PDFs to inspect", err=True)
+        raise typer.Exit(1)
+    failed = False
+    records: list[dict] = []
+    for target in targets:
+        try:
+            facts = asyncio.run(inventory.inspect_file(target, proof_profile=proof_profile, with_contrast=contrast))
+        except pikepdf.PdfError as exc:
+            typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
+            failed = True
+            continue
+        records.append(facts.to_dict())
+        if not as_json:
+            _print_inventory(facts)
+    if as_json:
+        typer.echo(json.dumps(records, indent=2))
+    raise typer.Exit(1 if failed else 0)
+
+
+@pdf_app.command("texlog")
+def texlog_cmd(
+    logs: typing.Annotated[list[pathlib.Path] | None, typer.Argument(help="LaTeX .log files to lint.")] = None,
+    max_overfull_pt: typing.Annotated[
+        float | None,
+        typer.Option(
+            "--max-overfull-pt", help="Fail an overfull \\hbox wider than this (pt). Otherwise only a warning."
+        ),
+    ] = None,
+    as_json: typing.Annotated[bool, typer.Option("--json", help="Emit machine-readable findings.")] = False,
+    quiet: QuietOpt = False,
+) -> None:
+    """Lint a LaTeX log: dropped characters, TeX errors, undefined references, substituted fonts, overfull boxes."""
+    if not logs:
+        typer.echo("no logs to lint", err=True)
+        raise typer.Exit(1)
+    reports = [FileReport(path=log, findings=texlog.check_log(log, max_overfull_pt=max_overfull_pt)) for log in logs]
+    if as_json:
+        typer.echo(json.dumps([_as_record(r) for r in reports], indent=2))
+    elif not quiet:
+        for report in reports:
+            _print_report(report)
+        failed = sum(not r.ok for r in reports)
+        typer.echo("")
+        if failed:
+            typer.secho(f"FAIL -- {failed} of {len(reports)} log(s) have errors", fg=typer.colors.RED)
+        else:
+            typer.secho(f"OK -- {len(reports)} log(s) clean of errors", fg=typer.colors.GREEN)
+    raise typer.Exit(1 if any(not r.ok for r in reports) else 0)
+
+
 @pdf_app.command("preview")
 def preview_cmd(
     files: PathsArg = None,
@@ -189,7 +289,10 @@ def preview_cmd(
     guides: typing.Annotated[
         bool, typer.Option("--guides/--no-guides", help="Draw trim/bleed/safe guides from the page boxes.")
     ] = True,
-    safe_mm: typing.Annotated[float, typer.Option("--safe", help="Safe-area inset from the trim edge, in mm.")] = 3.0,
+    safe_mm: typing.Annotated[
+        float | None,
+        typer.Option("--safe", help="Also draw a safe-area guide this far inside the trim edge, in mm. No default."),
+    ] = None,
     out: typing.Annotated[
         pathlib.Path | None,
         typer.Option("--out", help="Output directory (default: a preview/ folder beside each PDF)."),
@@ -251,6 +354,32 @@ def _page_geometry(trim_mm: str, bleed_mm: float, tolerance_mm: float) -> PageGe
     if width <= 0 or height <= 0:
         raise typer.BadParameter(f"--trim-mm must be positive, got {trim_mm!r}")
     return PageGeometry(trim_w_mm=width, trim_h_mm=height, bleed_mm=bleed_mm, tolerance_mm=tolerance_mm)
+
+
+def _print_inventory(facts: inventory.Inventory) -> None:
+    pages = len(facts.pages)
+    typer.echo(f"{_rel(pathlib.Path(facts.path))}  ({pages} page{'s' if pages != 1 else ''})")
+    for page in facts.pages:
+        size = f"trim {page.trim_mm[0]:g}x{page.trim_mm[1]:g}mm" if page.trim_mm else "no TrimBox"
+        text = f", {page.text_runs} text run(s), smallest {page.smallest_text_pt:.1f}pt" if page.text_runs else ""
+        line = f", thinnest line {page.thinnest_stroke_pt:g}pt" if page.thinnest_stroke_pt is not None else ""
+        typer.echo(f"  page {page.number}: {size}{text}{line}")
+    for font in facts.fonts:
+        flags = ("embedded" if font.embedded else "NOT embedded") + ("" if font.has_to_unicode else ", no ToUnicode")
+        notdef = f", {font.notdef} .notdef" if font.notdef else ""
+        typer.echo(f"  font {font.name} ({font.subtype}, {flags}): {font.glyphs} glyph(s){notdef}")
+    for colour in facts.text_colours:
+        typer.echo(f"  text colour {colour.colour}: {colour.runs} run(s), smallest {colour.smallest_pt:.1f}pt")
+    if facts.spot_inks:
+        typer.echo(f"  spot inks: {', '.join(facts.spot_inks)}")
+    for image in facts.images:
+        dpi = f"{image.dpi:g} dpi" if image.dpi is not None else "unknown dpi"
+        typer.echo(f"  image {image.name} {image.colour_space} {image.pixels[0]}x{image.pixels[1]}px, {dpi}")
+    for pair in facts.contrast:
+        measure = f"L* diff {pair.delta_l:g}, dE2000 {pair.delta_e:g}" if pair.delta_l is not None else "not measured"
+        typer.echo(f"  contrast {pair.text} on {pair.background}: {measure} ({pair.runs} run(s))")
+    if facts.contrast_error:
+        typer.echo(f"  contrast: not measured ({facts.contrast_error})")
 
 
 def _rel(path: pathlib.Path) -> str:
@@ -328,6 +457,11 @@ def _print_summary(reports: list[FileReport], profile: Profile) -> None:
             ("geometry", profile.geometry is not None),
             ("colour", profile.colour),
             ("K-only text", profile.k_only_text),
+            ("missing glyphs", profile.missing_glyphs),
+            ("min text size", profile.min_text_pt is not None),
+            ("hairlines", profile.min_stroke_pt is not None),
+            ("safe area", profile.safe_mm is not None),
+            ("contrast", profile.min_delta_l is not None),
         )
         if on
     )

@@ -8,6 +8,7 @@ and the report. They skip when veraPDF or Ghostscript is missing; ``bin/docker/t
 import json
 import pathlib
 import shutil
+import subprocess
 import typing
 
 import pytest
@@ -16,6 +17,8 @@ from PIL import Image
 
 from proof_pdf import cli, core, preview
 from proof_pdf.models import PageGeometry, Profile
+
+from .test_contrast import CMYK_PROFILE
 
 pytestmark = [
     pytest.mark.container,
@@ -199,3 +202,110 @@ class TestPreview:
         )
         [png] = tmp_path.glob("*.png")
         assert preview._TRIM_RGB not in _colours(png)
+
+
+PROOFING = ["--no-pdfa", "--no-pdfx", "--no-colour"]  # isolate the proofing checks from the standards layers
+
+
+class TestProofingChecks:
+    """Each fixture breaks exactly one proofing rule; the rule fires only when its threshold is supplied."""
+
+    def test_missing_glyphs_are_checked_by_default(self, runner):
+        code, [record] = _verify(runner, PDFS / "notdef-text.pdf", *PROOFING)
+        assert code == 1 and _checks(record) == {"missing-glyph"}
+        assert "Nunito" in _messages(record, "missing-glyph")[0]
+
+    def test_and_can_be_turned_off(self, runner):
+        code, [record] = _verify(runner, PDFS / "notdef-text.pdf", *PROOFING, "--no-missing-glyphs")
+        assert (code, record["findings"]) == (0, [])
+
+    @pytest.mark.parametrize(
+        ("fixture", "flags", "check"),
+        [
+            ("small-text", ["--min-text-pt", "7"], "text-size"),
+            ("hairline", ["--min-stroke-pt", "0.25"], "hairline"),
+            ("edge-text", ["--safe-mm", "5"], "safe-area"),
+            ("low-contrast", ["--min-delta-l", "30"], "contrast"),
+        ],
+    )
+    def test_each_rule_fires_when_asked(self, runner, fixture, flags, check):
+        code, [record] = _verify(runner, PDFS / f"{fixture}.pdf", *PROOFING, *flags)
+        assert code == 1 and _checks(record) == {check}
+
+    @pytest.mark.parametrize("fixture", ["small-text", "hairline", "edge-text", "low-contrast"])
+    def test_and_stays_silent_without_a_threshold(self, runner, fixture):
+        code, [record] = _verify(runner, PDFS / f"{fixture}.pdf", *PROOFING)
+        assert (code, record["findings"]) == (0, [])
+
+    def test_a_looser_threshold_lets_the_same_file_through(self, runner):
+        assert _verify(runner, PDFS / "low-contrast.pdf", *PROOFING, "--min-delta-l", "5")[0] == 0
+        assert _verify(runner, PDFS / "edge-text.pdf", *PROOFING, "--safe-mm", "0.5")[0] == 0
+
+    def test_high_contrast_text_and_a_clean_card_pass_every_rule(self, runner):
+        every = ["--min-text-pt", "7", "--min-stroke-pt", "0.25", "--safe-mm", "5", "--min-delta-l", "30"]
+        for name in ("high-contrast", "good"):
+            code, [record] = _verify(runner, PDFS / f"{name}.pdf", *PROOFING, *every)
+            assert (code, record["findings"]) == (0, []), name
+
+    def test_cmyk_text_needs_a_cmyk_profile_to_be_measured(self, runner):
+        code, [record] = _verify(runner, PDFS / "black-text.pdf", *PROOFING, "--min-delta-l", "30")
+        assert code == 1 and "no CMYK profile" in _messages(record, "contrast")[0]
+
+    @pytest.mark.skipif(CMYK_PROFILE is None, reason="no CMYK ICC profile on this machine")
+    def test_and_is_measured_through_a_supplied_one(self, runner):
+        args = [*PROOFING, "--min-delta-l", "30", "--proof-profile", str(CMYK_PROFILE or "")]
+        code, [record] = _verify(runner, PDFS / "black-text.pdf", *args)
+        assert (code, record["findings"]) == (0, [])
+
+
+class TestInspectOnRealFiles:
+    def test_inspect_agrees_with_verify_about_the_same_file(self, runner):
+        inspected = json.loads(runner.invoke(cli.pdf_app, ["inspect", str(PDFS / "rgb-image.pdf"), "--json"]).stdout)
+        _, [verified] = _verify(runner, PDFS / "rgb-image.pdf", *A6)
+        assert inspected[0]["images"][0]["colour_space"] == "rgb" and "colour-space" in _checks(verified)
+
+
+LUALATEX = shutil.which("lualatex")
+TEX = r"""\documentclass{article}
+\usepackage{fontspec}
+\begin{document}
+Hello \symbol{"2665} world \ref{nowhere}.
+\end{document}
+"""
+
+
+@pytest.fixture(scope="module")
+def lualatex_build(tmp_path_factory):
+    directory = tmp_path_factory.mktemp("lualatex")
+    (directory / "doc.tex").write_text(TEX)
+    subprocess.run(
+        [LUALATEX or "lualatex", "-interaction=nonstopmode", "doc.tex"],
+        cwd=directory,
+        capture_output=True,
+        check=True,
+        timeout=200,
+    )
+    return directory
+
+
+@pytest.mark.skipif(LUALATEX is None, reason="needs lualatex")
+@pytest.mark.timeout(240)
+class TestRealLuaLatexBuild:
+    """A document with a character Latin Modern lacks and a dangling reference, built by the real engine."""
+
+    def test_the_log_names_the_dropped_character_and_the_reference(self, runner, lualatex_build):
+        result = runner.invoke(cli.pdf_app, ["texlog", str(lualatex_build / "doc.log"), "--json"])
+        [record] = json.loads(result.stdout)
+        assert result.exit_code == 1
+        assert {"missing-character", "undefined-reference"} <= _checks(record)
+        assert "U+2665" in _messages(record, "missing-character")[0]
+
+    def test_the_pdf_shows_the_notdef_glyph_the_engine_typeset(self, runner, lualatex_build):
+        code, [record] = _verify(runner, lualatex_build / "doc.pdf", *PROOFING)
+        assert code == 1 and "LMRoman10-Regular" in _messages(record, "missing-glyph")[0]
+
+    def test_inspect_lists_the_embedded_fonts_and_the_notdef(self, runner, lualatex_build):
+        [record] = json.loads(runner.invoke(cli.pdf_app, ["inspect", str(lualatex_build / "doc.pdf"), "--json"]).stdout)
+        regular = next(f for f in record["fonts"] if f["name"] == "LMRoman10-Regular")
+        assert regular["embedded"] and regular["has_to_unicode"] and regular["notdef"] == 1
+        assert record["contrast"][0]["background"] == "paper" and record["contrast"][0]["delta_l"] > 95

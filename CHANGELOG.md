@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--k-only-text` (opt-in): text painted with any ink but K is an error.
 - A hint on veraPDF's "device colour used without an output intent" failures (clause 6.2.4.3).
 
+- Proofing checks on `verify`: missing glyphs (`.notdef`, on by default), `--min-text-pt`, `--min-stroke-pt` (hairlines),
+  `--safe-mm` and `--min-delta-l` (L* contrast through the output intent or `--proof-profile`, with CIEDE2000 reported
+  beside it). Every threshold is opt-in with no default.
+- `proof-pdf inspect`: what is in a PDF, as data (fonts and whether they are embedded, text colours and sizes, spot inks,
+  images with their effective dpi, the thinnest line, contrast pairs), and `proof_pdf.inventory.inspect_pdf`.
+- `proof-pdf texlog`: lint a LaTeX log for dropped characters, TeX errors, undefined references, font substitution,
+  package warnings and overfull boxes.
+
 ### Fixed
 
 - A veraPDF failure on a file it cannot open now reads as one sentence ("... doesn't appear to be a valid PDF.") instead
@@ -21,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `preview --safe` no longer defaults to 3 mm; a safe-area guide is drawn only when an inset is given.
 - Overprint is judged by what is painted under it: overprinting 100% K text passes, and overprint that paints nothing is
   silent. Overprint on any other content is still flagged.
 - The overprint, rich-black and K-only checks share one graphics-state walk that honours `q`/`Q` and Form XObject scope, so a

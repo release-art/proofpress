@@ -81,6 +81,10 @@ class Profile:
     *colour* toggles the ink-coverage / overprint / rich-black / colour-space
     layer; *geometry* is the expected finished size, or ``None`` to skip it.
     *k_only_text* is an opt-in house rule: text may be painted with the K plate only.
+    *missing_glyphs* flags ``.notdef`` glyphs; *min_text_pt*, *min_stroke_pt* and *safe_mm* are opt-in thresholds with
+    no default, because a size floor or a safe margin is a house rule and not something to infer.
+    *min_delta_l* turns on the contrast check (an L* difference floor), measured through *proof_profile* or the PDF's
+    own output intent.
     """
 
     flavour: str = "2b"
@@ -93,6 +97,12 @@ class Profile:
     min_dpi: float = DEFAULT_MIN_DPI
     strict_cmyk: bool = False
     k_only_text: bool = False
+    missing_glyphs: bool = True
+    min_text_pt: float | None = None
+    min_stroke_pt: float | None = None
+    safe_mm: float | None = None
+    min_delta_l: float | None = None
+    proof_profile: pathlib.Path | None = None
 
 
 @dataclasses.dataclass

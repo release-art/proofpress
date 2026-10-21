@@ -186,6 +186,51 @@ class TestExemptAndKOnly:
         assert seen[0][1].k_only_text is False
 
 
+class TestProofingOptions:
+    @pytest.mark.parametrize(
+        ("flags", "field", "expected"),
+        [
+            (["--min-text-pt", "6"], "min_text_pt", 6.0),
+            (["--min-stroke-pt", "0.25"], "min_stroke_pt", 0.25),
+            (["--safe-mm", "4"], "safe_mm", 4.0),
+            (["--min-delta-l", "30"], "min_delta_l", 30.0),
+            (["--no-missing-glyphs"], "missing_glyphs", False),
+        ],
+    )
+    def test_each_flag_reaches_the_profile(self, runner, tmp_path, stub_verify, flags, field, expected):
+        seen = stub_verify({})
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), *flags])
+        assert getattr(seen[0][1], field) == expected
+
+    def test_the_thresholds_have_no_default_but_missing_glyphs_does(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf"))])
+        profile = seen[0][1]
+        assert (profile.min_text_pt, profile.min_stroke_pt, profile.safe_mm, profile.min_delta_l) == (None,) * 4
+        assert profile.missing_glyphs is True and profile.proof_profile is None
+
+    def test_the_proof_profile_path_is_passed_through(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        icc = tmp_path / "p.icc"
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--proof-profile", str(icc)])
+        assert seen[0][1].proof_profile == icc
+
+    def test_the_summary_names_the_layers_that_are_on(self, runner, tmp_path, stub_verify):
+        stub_verify({})
+        result = runner.invoke(
+            cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--safe-mm", "4", "--min-delta-l", "30"]
+        )
+        assert "missing glyphs" in result.stdout and "safe area" in result.stdout and "contrast" in result.stdout
+
+    def test_preview_draws_no_safe_guide_unless_asked(self, runner, tmp_path, mocker):
+        mocker.patch.object(cli.preview, "gs_available", return_value=True)
+        calls = mocker.patch.object(cli.preview, "preview_file", return_value=[])
+        runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])
+        assert calls.call_args.kwargs["safe_mm"] is None
+        runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "b.pdf")), "--safe", "4"])
+        assert calls.call_args.kwargs["safe_mm"] == 4.0
+
+
 class TestCollapsedOutput:
     def test_identical_findings_across_pages_become_one_line(self, runner, tmp_path, stub_verify):
         """A 50-card deck must not print the same sentence fifty times."""

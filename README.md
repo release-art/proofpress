@@ -22,8 +22,9 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 - **Colour**: total ink coverage (`--max-tac`, 300% default), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default),
   overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged.
 - **K-only text** (opt-in, `--k-only-text`): text painted with any ink but K (a four-colour build, RGB, a spot or a pattern) is an error.
+- **Proofing** (the text and lines a page paints, measured in page points; see below).
 
-`preview` rasterises each page and draws the trim, bleed and safe guides from the PDF's own boxes, so a geometry finding can be seen.
+`inspect` reports what is in a PDF without judging it, and `texlog` lints a LaTeX build log. `preview` rasterises each page and draws the trim, bleed and safe guides from the PDF's own boxes, so a geometry finding can be seen.
 
 ```zsh
 pip install proof-pdf          # Python 3.15; needs verapdf and gs (Ghostscript) on PATH
@@ -48,6 +49,41 @@ so nothing blocks the event loop.
 
 As a library the API is async: `await proof_pdf.core.verify_file(path, profile)` returns a `FileReport` of `Finding`s, and
 `await proof_pdf.core.verify_files(paths, profile, jobs=4)` returns one report per path in order. See `proof_pdf.models.Profile`.
+
+### Proofing
+
+Beyond the standards, `verify` can hold a PDF to the rules a print job usually has. Missing glyphs are checked by default
+(they are exact); every rule that needs a number takes it from you and has **no default**, because a size floor or a safe
+margin is a house rule, not something to infer.
+
+| Flag | Fails when |
+|---|---|
+| *(on by default)* `--no-missing-glyphs` | a character is shown with the `.notdef` glyph (prints as a box or nothing) |
+| `--min-text-pt N` | text is smaller than N pt (effective size, after every scale) |
+| `--min-stroke-pt N` | a stroked line is thinner than N pt; a zero-width line is the thinnest the device can draw |
+| `--safe-mm N` | text reaches past the trim edge inset by N mm (a box from the font's declared widths; a font without widths gives an estimated warning) |
+| `--min-delta-l N` | text and its background differ by less than N in L* |
+
+Contrast is deliberately **not WCAG**, which is a screen model. Colours are converted through an ICC profile (the PDF's own
+output intent, or `--proof-profile`) to L*a*b*, the paper is the page's white, and the L* difference is reported with
+CIEDE2000 beside it. The background of a text run is the last filled shape painted under it, else the paper; text over an
+image or shading is reported as *not measured*, never as a pass. Clipping and transparency are not modelled, so treat it as
+the design's intent. CMYK ink needs a CMYK profile to be measured through; without one the check says so and fails.
+
+```zsh
+proof-pdf inspect card.pdf                # fonts (embedded?, .notdef), text colours and sizes, spot inks, images, contrast
+proof-pdf inspect card.pdf --json         # the same as data, for other tools
+proof-pdf texlog build/card.log           # dropped characters, TeX errors, undefined references, substituted fonts, overfull boxes
+proof-pdf verify card.pdf --safe-mm 3 --min-text-pt 6 --min-delta-l 30 --proof-profile FOGRA51.icc
+```
+
+`texlog` reads the log because the PDF can't tell the whole story: pdfTeX drops a character the font lacks (LuaTeX typesets
+`.notdef`, which `verify` finds), and an undefined reference only prints as `??`. Missing characters, TeX errors and
+undefined references are errors; font substitution, package warnings, a pending rerun and overfull boxes are warnings
+(`--max-overfull-pt N` promotes the worst overfull boxes).
+
+The library offers the same as data: `proof_pdf.inventory.inspect_pdf(path)` returns plain dataclasses, and the checks are
+functions over an opened `pikepdf.Pdf`.
 
 ## Docker images
 

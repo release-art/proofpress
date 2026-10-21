@@ -17,7 +17,7 @@ import pathlib
 
 import pikepdf
 
-from . import colour, resolution, structure, verapdf
+from . import colour, contrast, resolution, structure, text, verapdf
 from .models import FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,7 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                 findings += structure.check_geometry(pdf, profile.geometry)
             if profile.k_only_text:
                 findings += colour.check_k_only_text(pdf)
+            findings += _text_checks(pdf, profile)
             if profile.colour:
                 findings += colour.check_overprint(pdf)
                 findings += colour.check_rich_black(pdf, profile.small_text_pt)
@@ -117,6 +118,21 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
     except pikepdf.PdfError as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
         return [Finding("structure", Severity.ERROR, f"cannot open the PDF (corrupt or encrypted): {exc}")], False
     return findings, True
+
+
+def _text_checks(pdf: pikepdf.Pdf, profile: Profile) -> list[Finding]:
+    findings: list[Finding] = []
+    if profile.missing_glyphs:
+        findings += text.check_missing_glyphs(pdf)
+    if profile.min_text_pt is not None:
+        findings += text.check_min_text_size(pdf, profile.min_text_pt)
+    if profile.min_stroke_pt is not None:
+        findings += text.check_min_stroke(pdf, profile.min_stroke_pt)
+    if profile.safe_mm is not None:
+        findings += text.check_safe_area(pdf, profile.safe_mm)
+    if profile.min_delta_l is not None:
+        findings += contrast.check_contrast(pdf, profile.min_delta_l, profile.proof_profile)
+    return findings
 
 
 async def _run_verapdf(path: pathlib.Path, profile: Profile, binary: str, timeout: float | None) -> list[Finding]:
