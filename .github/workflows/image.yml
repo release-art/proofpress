@@ -80,3 +80,12 @@ jobs:
             PKG_VERSION=${{ env.PKG_VERSION }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+      - name: Sync the Docker Hub description
+        # Needs a token with write access to the repo's metadata; if this 403s, raise the token to Read/Write/Delete.
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: releaseart/${{ matrix.target }}
+          short-description: "${{ matrix.target == 'full' && 'lualatex + Ghostscript + veraPDF + proof-pdf: check print PDFs against PDF/X-4 and PDF/A' || 'TeX Live 2025 with LuaLaTeX on Debian, multi-arch, no Java or Python' }}"
+          readme-filepath: docker/hub-${{ matrix.target }}.md
