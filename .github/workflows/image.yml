@@ -1,7 +1,7 @@
 name: Image
 
 # PRs: build both images for the runner's arch and smoke them (no push).
-# Weekly (Mon 04:00 UTC) and manual runs: smoke, then push amd64+arm64 as :latest, :tl2025 and :YYYYMMDD.
+# Weekly (Mon 04:00 UTC) and manual runs: smoke, then push amd64+arm64 as :latest and :tl2025.
 # A v* tag: smoke, then push the same images as :<version>, :latest and :tl2025.
 #   So :latest is always the most recent build, weekly or release.
 on:
@@ -67,7 +67,6 @@ jobs:
             type=semver,pattern={{version}},enable=${{ env.IS_TAG }}
             type=raw,value=latest
             type=raw,value=${{ env.TL_TAG }}
-            type=raw,value={{date 'YYYYMMDD'}},enable=${{ env.IS_TAG != 'true' }}
       - uses: docker/build-push-action@v6
         with:
           context: .
