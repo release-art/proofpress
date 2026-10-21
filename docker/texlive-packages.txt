@@ -12,4 +12,3 @@ fontspec
 geometry
 xcolor
 latexmk
-latexmk
