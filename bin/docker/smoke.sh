@@ -5,7 +5,7 @@ tex='\documentclass{article}\usepackage{fontspec}\begin{document}hello\end{docum
 for t in lualatex lualatex-python full; do
     docker run --rm --entrypoint sh "releaseart/$t:local" -c "cd /tmp && printf '%s' '$tex' > a.tex && lualatex -interaction=nonstopmode a.tex >/dev/null && test -s a.pdf"
     # tlmgr needs both to download packages; without them `tlmgr install` fails quietly (exit 0).
-    docker run --rm --entrypoint sh "releaseart/$t:local" -c 'command -v curl && command -v xz' >/dev/null
+    docker run --rm --entrypoint sh "releaseart/$t:local" -c 'command -v curl && command -v xz && latexmk -v' >/dev/null
     docker run --rm --entrypoint sh "releaseart/$t:local" -c 'latexmk -v >/dev/null'
     echo "ok: $t compiles, has latexmk"
 done

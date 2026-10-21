@@ -7,12 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-21
+
+v0.3.1 and v0.3.2 were tagged without changelog sections.
+
 ## [0.3.3] - 2026-10-21
 
 v0.3.1 and v0.3.2 were tagged without changelog sections.
 
 ### Added
 
+- `latexmk` in the TeX Live set of `releaseart/lualatex`, `releaseart/lualatex-python` and `releaseart/full`.
 - `proof_pdf.load_profile()` (public `proof_pdf.config`): the CLI's config-file reading for library callers, returning the `Profile`,
   `exclude` globs, `exempt` map and the tool settings (`LoadedConfig`); errors are `proof_pdf.ConfigError`.
 - `core.missing_tools(profile)`: which of veraPDF and Ghostscript the profile needs and cannot find.
