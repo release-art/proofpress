@@ -1,6 +1,6 @@
 """Best-effort colour sanity -- the things neither PDF/A nor PDF/X judge.
 
-Four checks a printer cares about but no standard enforces:
+Checks a printer cares about but no standard enforces:
 
 * **Total area coverage** -- the summed ink of the four plates. Rasterise each
   page to DeviceCMYK with Ghostscript and take the peak; over the FOGRA51
@@ -11,27 +11,33 @@ Four checks a printer cares about but no standard enforces:
   RGB image here means one escaped the workflow: an ``ERROR``. Vector RGB fills
   are advisory by default, since a RIP will convert them against the output
   intent; ``--strict-cmyk`` promotes them when that is not wanted.
-* **Overprint** -- an applied ``ExtGState`` turning overprint on. Usually
-  deliberate, so advisory: it is flagged, not failed.
+* **Overprint** -- content painted while an ``ExtGState`` has overprint on.
+  Overprinting 100% K text is the normal, safe case and passes; anything else
+  is usually a knockout that was meant, so it is advisory: flagged, not failed.
 * **Rich-black small text** -- small text painted in a built black (K plus other
   plates) mis-registers. Advisory.
+* **K-only text** (opt-in) -- text painted with any ink but K. One plate cannot
+  mis-register with itself, so a house rule may require it: an error.
 
 The raster step shells out to Ghostscript (its absence or failure is surfaced as
 a failure by the caller, not silently skipped); the rest read the
 :class:`pikepdf.Pdf` through :mod:`.content`, so they see nested Form XObjects.
 """
 
+import asyncio
+import collections.abc
 import logging
 import pathlib
 import shutil
-import subprocess
 import tempfile
 
 import pikepdf
 from PIL import Image, ImageMath
 
-from . import content
+from . import content, proc
 from .models import Finding, Severity
+from .paint import Fill, Walker, paint_events
+from .spaces import CMYK, GRAY, RGB, classify_colour_space, intent_family
 
 logger = logging.getLogger(__name__)
 
@@ -48,31 +54,8 @@ _TAC_DPI = 150
 # top. Pure process black (0/0/0/K) never trips it.
 _RICH_K_MIN = 0.5
 _RICH_OTHER_MIN = 0.3
-
-# Colour-space families, as classified from a PDF colour space object.
-_RGB = "rgb"
-_CMYK = "cmyk"
-_GRAY = "gray"
-_OTHER = "other"
-
-_DEVICE_FAMILIES = {
-    "/DeviceRGB": _RGB,
-    "/CalRGB": _RGB,
-    "/Lab": _OTHER,
-    "/DeviceCMYK": _CMYK,
-    "/DeviceGray": _GRAY,
-    "/CalGray": _GRAY,
-    "/Pattern": _OTHER,
-}
-# Spot and multi-ink spaces carry an *alternate* space that is only a preview
-# hint -- a Separation whose alternate is DeviceRGB is a correct spot colour, not
-# stray RGB. Never look past these.
-_SPOT_FAMILIES = ("/Separation", "/DeviceN")
-_ICC_COMPONENTS = {1: _GRAY, 3: _RGB, 4: _CMYK}
-
-# Text-showing operators: whatever fill is in force when one runs is the colour
-# the glyphs are painted in.
-_SHOW_TEXT = ("Tj", "TJ", "'", '"')
+# An ink amount this close to zero is no ink, and this close to one is solid.
+_INK_EPSILON = 0.01
 
 
 def gs_available(binary: str) -> bool:
@@ -81,10 +64,10 @@ def gs_available(binary: str) -> bool:
 
 
 # ------------------------------------------------------------ total ink ----
-def check_tac(binary: str, path: str, max_tac: float, *, timeout: float | None = None) -> list[Finding]:
+async def check_tac(binary: str, path: str, max_tac: float, *, timeout: float | None = None) -> list[Finding]:
     """Flag any page whose peak total ink coverage exceeds *max_tac* percent."""
     findings: list[Finding] = []
-    for i, peak in enumerate(_page_tac_peaks(binary, path, timeout=timeout), start=1):
+    for i, peak in enumerate(await _page_tac_peaks(binary, path, timeout=timeout), start=1):
         if peak > max_tac:
             findings.append(
                 Finding("tac", Severity.ERROR, f"peak ink coverage {peak:.0f}% exceeds the {max_tac:.0f}% limit", i)
@@ -92,12 +75,12 @@ def check_tac(binary: str, path: str, max_tac: float, *, timeout: float | None =
     return findings
 
 
-def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> list[float]:
+async def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> list[float]:
     """The peak TAC (0-400%) of each page, via a DeviceCMYK Ghostscript raster."""
     with tempfile.TemporaryDirectory() as tmp:
         pattern = str(pathlib.Path(tmp) / "page-%03d.tif")
         try:
-            result = subprocess.run(
+            result = await proc.run(
                 [
                     binary,
                     "-q",
@@ -109,11 +92,9 @@ def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> 
                     f"-sOutputFile={pattern}",
                     path,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=timeout,
             )
-        except subprocess.TimeoutExpired as exc:
+        except proc.ProcTimeoutError as exc:
             raise GhostscriptError(f"ghostscript timed out after {timeout:.0f}s") from exc
         if result.returncode != 0:
             message = result.stderr.strip() or "ghostscript failed"
@@ -124,7 +105,7 @@ def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> 
         pages = sorted(pathlib.Path(tmp).glob("page-*.tif"), key=lambda t: int(t.stem.rsplit("-", 1)[-1]))
         peaks: list[float] = []
         for tif in pages:
-            peaks.append(_peak_tac(tif))
+            peaks.append(await asyncio.to_thread(_peak_tac, tif))
             # A 50-page file at 150 dpi is ~150 MB of TIFF if it all stays on
             # disk; each raster is dead the moment its peak is read.
             tif.unlink(missing_ok=True)
@@ -143,15 +124,15 @@ def _peak_tac(tif: pathlib.Path) -> float:
 
 # ------------------------------------------------------------- overprint ----
 def check_overprint(pdf: pikepdf.Pdf) -> list[Finding]:
-    """Note pages that *apply* an ExtGState enabling overprint (advisory).
+    """Note pages that paint anything but 100% K text with overprint on (advisory).
 
-    Fires on the ``gs`` operator rather than on the resource dictionary, so it
-    sees overprint set inside a Form XObject, and does not fire on a graphics
-    state that is declared but never invoked.
+    Fires on what is painted, not on the ``gs`` that turns overprint on, so a
+    graphics state that is applied but never painted under, or that only ever
+    overprints black text, is silent.
     """
     findings: list[Finding] = []
     for i, page in enumerate(pdf.pages, start=1):
-        if any(_sets_overprint(op) for op in content.iter_operations(page)):
+        if any(p.overprint and not (p.kind == "text" and _is_full_k(p.fill)) for p in paint_events(page)):
             findings.append(
                 Finding(
                     "overprint", Severity.WARN, "overprint is enabled -- confirm it is intentional, not knockout", i
@@ -160,31 +141,105 @@ def check_overprint(pdf: pikepdf.Pdf) -> list[Finding]:
     return findings
 
 
-def _sets_overprint(op: content.Operation) -> bool:
-    if op.operator != "gs":
-        return False
-    state = _lookup_resource(op.resources, "/ExtGState", op.operands)
-    if state is None:
-        return False
-    return _truthy(state.get("/OP")) or _truthy(state.get("/op"))
+def check_white_overprint(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Flag white text or shapes set to overprint: overprinting white adds no ink, so it vanishes on press."""
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        whites = [
+            p
+            for p in paint_events(page)
+            if p.overprint and _is_white(p.fill) and (p.kind == "text" or (p.kind == "path" and p.filled))
+        ]
+        if whites:
+            findings.append(
+                Finding(
+                    "white-overprint",
+                    Severity.ERROR,
+                    f"{len(whites)} white object(s) are set to overprint and will disappear on press: "
+                    "white must knock out",
+                    i,
+                )
+            )
+    return findings
 
 
-def _lookup_resource(resources: pikepdf.Object | None, category: str, operands: list) -> pikepdf.Object | None:
-    """Resolve a name operand against one category of a resource dictionary."""
-    if resources is None or not operands:
-        return None
-    table = resources.get(category)
-    if table is None:
-        return None
-    try:
-        return table.get(str(operands[0]))
-    except KeyError, TypeError:
-        return None
+def _is_white(fill: Fill) -> bool:
+    if fill.family == GRAY:
+        return bool(fill.value) and fill.value[0] >= 1.0 - _INK_EPSILON
+    if fill.family == RGB:
+        return len(fill.value) >= 3 and min(fill.value[:3]) >= 1.0 - _INK_EPSILON
+    if fill.family == CMYK:
+        return len(fill.value) >= 4 and max(fill.value[:4]) <= _INK_EPSILON
+    return False
 
 
-def _truthy(value: object) -> bool:
-    """A PDF boolean object read as a plain bool."""
-    return value is not None and str(value) == "True"
+# ------------------------------------------------------------- spot inks ----
+def check_spot_inks(pdf: pikepdf.Pdf, allowed: collections.abc.Collection[str]) -> list[Finding]:
+    """Flag any spot ink a page selects that is not on the caller's list (names match exactly).
+
+    A stray spot adds a plate and a charge. ``All`` is the registration colour: it prints on every plate, which is
+    right for printer's marks and wrong for artwork, so it must be allowed by name.
+    """
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        walker = Walker()
+        for _ in walker.walk(page):
+            pass
+        unexpected = sorted(name for name in walker.spots - set(allowed) if name != "None")
+        if unexpected:
+            note = "; All is the registration colour and prints on every plate" if "All" in unexpected else ""
+            findings.append(
+                Finding(
+                    "spot-ink",
+                    Severity.ERROR,
+                    f"spot ink(s) not on the allowed list: {', '.join(unexpected)}{note}",
+                    i,
+                )
+            )
+    return findings
+
+
+# ---------------------------------------------------------- transparency ----
+def check_transparency(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Check that a page using transparency blends in the colour space the job prints in.
+
+    PDF/X-4 keeps live transparency, so the blend colour space decides how overlaps are computed. One that differs
+    from the output intent's (RGB blending in a CMYK job) shifts colours at overlaps; one that is not declared leaves
+    the choice to the RIP.
+    """
+    expected = intent_family(pdf)
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        walker = Walker()
+        for _ in walker.walk(page):
+            pass
+        if not walker.transparency:
+            continue
+        reasons = ", ".join(sorted(walker.transparency))
+        group = page.obj.get("/Group")
+        space = group.get("/CS") if group is not None else None
+        if space is None:
+            findings.append(
+                Finding(
+                    "blend-space",
+                    Severity.WARN,
+                    f"the page uses transparency ({reasons}) but declares no blend colour space: the RIP chooses one",
+                    i,
+                )
+            )
+            continue
+        family = classify_colour_space(space, page.obj.get("/Resources"))
+        if expected is not None and family != expected:
+            findings.append(
+                Finding(
+                    "blend-space",
+                    Severity.ERROR,
+                    f"transparency ({reasons}) blends in {family.upper()} but the output intent is "
+                    f"{expected.upper()}: overlapping colours will shift",
+                    i,
+                )
+            )
+    return findings
 
 
 # ---------------------------------------------------------- colour space ----
@@ -235,57 +290,9 @@ def _rgb_image_name(op: content.Operation) -> str | None:
     xobject = content.lookup_xobject(op.resources, op.operands)
     if xobject is None or str(xobject.get("/Subtype")) != "/Image":
         return None
-    if classify_colour_space(xobject.get("/ColorSpace"), op.resources) != _RGB:
+    if classify_colour_space(xobject.get("/ColorSpace"), op.resources) != RGB:
         return None
     return str(op.operands[0])
-
-
-def classify_colour_space(space: object, resources: pikepdf.Object | None, *, depth: int = 0) -> str:
-    """Which colour family a PDF colour space object belongs to.
-
-    Resolves named spaces through the resource dictionary and looks through
-    ``/Indexed`` to its base, but deliberately stops at ``/Separation`` and
-    ``/DeviceN``: their alternate space is a rendering hint for a spot ink, and
-    treating it as the artwork's own space produces false positives on entirely
-    correct print files.
-    """
-    if space is None or depth > 4:
-        return _OTHER
-    if isinstance(space, pikepdf.Array) or (hasattr(space, "__len__") and not isinstance(space, pikepdf.Name)):
-        return _classify_array(space, resources, depth)
-    name = str(space)
-    if name in _DEVICE_FAMILIES:
-        return _DEVICE_FAMILIES[name]
-    named = _lookup_resource(resources, "/ColorSpace", [name])
-    if named is not None:
-        return classify_colour_space(named, resources, depth=depth + 1)
-    return _OTHER
-
-
-def _classify_array(space, resources: pikepdf.Object | None, depth: int) -> str:
-    try:
-        head = str(space[0])
-    except IndexError, TypeError:
-        return _OTHER
-    if head in _SPOT_FAMILIES:
-        return _OTHER
-    if head == "/ICCBased":
-        return _classify_icc(space)
-    if head == "/Indexed":
-        base = space[1] if len(space) > 1 else None
-        return classify_colour_space(base, resources, depth=depth + 1)
-    if head in _DEVICE_FAMILIES:
-        return _DEVICE_FAMILIES[head]
-    return _OTHER
-
-
-def _classify_icc(space) -> str:
-    """An ``[/ICCBased stream]`` space, classified by the stream's ``/N``."""
-    try:
-        components = int(space[1].get("/N"))
-    except IndexError, TypeError, ValueError, AttributeError:
-        return _OTHER
-    return _ICC_COMPONENTS.get(components, _OTHER)
 
 
 # ------------------------------------------------ rich-black small text ----
@@ -293,13 +300,17 @@ def check_rich_black(pdf: pikepdf.Pdf, small_text_pt: float) -> list[Finding]:
     """Flag small text painted in a built (rich) black on any page (advisory)."""
     findings: list[Finding] = []
     for i, page in enumerate(pdf.pages, start=1):
-        smallest = _smallest_rich_black_text(page, small_text_pt)
-        if smallest is not None:
+        sizes = [
+            p.size
+            for p in paint_events(page)
+            if p.kind == "text" and _is_rich_black(p.fill) and p.size <= small_text_pt
+        ]
+        if sizes:
             findings.append(
                 Finding(
                     "rich-black",
                     Severity.WARN,
-                    f"text as small as {smallest:.1f}pt is set in rich black -- "
+                    f"text as small as {min(sizes):.1f}pt is set in rich black -- "
                     "use process black to avoid mis-registration",
                     i,
                 )
@@ -307,59 +318,50 @@ def check_rich_black(pdf: pikepdf.Pdf, small_text_pt: float) -> list[Finding]:
     return findings
 
 
-def _smallest_rich_black_text(page: pikepdf.Page, small_text_pt: float) -> float | None:
-    """Effective point size of the smallest rich-black run on the page, if any.
-
-    Text state (font size, fill, text matrix) is tracked across the whole walk
-    rather than reset per Form XObject: a form that shows text essentially always
-    sets its own ``Tf`` and ``BT`` first, and this check is advisory, so the
-    extra reach costs nothing and buys visibility into nested content.
-    """
-    text_matrix: content.Matrix = content.IDENTITY
-    font_size = 0.0
-    fill: tuple[float, float, float, float] | None = None
-    smallest: float | None = None
-
-    for op in content.iter_operations(page):
-        name, args = op.operator, op.operands
-        if name == "BT":
-            text_matrix = content.IDENTITY
-        elif name == "Tm":
-            text_matrix = content.matrix(args)
-        elif name in ("Td", "TD"):
-            text_matrix = content.mul(_translation(args), text_matrix)
-        elif name == "Tf":
-            font_size = _number(args, 1)
-        elif name == "k":
-            fill = _cmyk(args)
-        elif name in ("g", "rg"):
-            fill = None  # grayscale / RGB black is never rich black
-        elif name in _SHOW_TEXT and _is_rich_black(fill):
-            size = font_size * content.vertical_scale(content.mul(text_matrix, op.ctm))
-            if size <= small_text_pt and (smallest is None or size < smallest):
-                smallest = size
-    return smallest
-
-
-def _translation(args: list) -> content.Matrix:
-    return (1.0, 0.0, 0.0, 1.0, _number(args, 0), _number(args, 1))
-
-
-def _number(args: list, index: int) -> float:
-    try:
-        return float(args[index])
-    except IndexError, TypeError, ValueError:
-        return 0.0
-
-
-def _cmyk(args: list) -> tuple[float, float, float, float] | None:
-    if len(args) < 4:
-        return None
-    return (_number(args, 0), _number(args, 1), _number(args, 2), _number(args, 3))
-
-
-def _is_rich_black(fill: tuple[float, float, float, float] | None) -> bool:
-    if fill is None:
+def _is_rich_black(fill: Fill) -> bool:
+    if fill.family != CMYK or len(fill.value) < 4:
         return False
-    c, m, y, k = fill
+    c, m, y, k = fill.value[:4]
     return k >= _RICH_K_MIN and (c + m + y) >= _RICH_OTHER_MIN
+
+
+# ------------------------------------------------------------ K-only text ----
+def check_k_only_text(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Flag text painted with any ink but K: a four-colour build, RGB, or a spot or pattern."""
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        bad = [p.fill for p in paint_events(page) if p.kind == "text" and not _is_k_only(p.fill)]
+        if bad:
+            more = f" (and {len(bad) - 1} more runs)" if len(bad) > 1 else ""
+            findings.append(
+                Finding(
+                    "k-only-text",
+                    Severity.ERROR,
+                    f"text is painted in {_describe(bad[0])}{more} -- text ink must be K only",
+                    i,
+                )
+            )
+    return findings
+
+
+def _is_k_only(fill: Fill) -> bool:
+    """Gray, or CMYK with no C, M or Y: only the K plate (or no ink at all) is used."""
+    if fill.family == GRAY:
+        return True
+    return fill.family == CMYK and max(fill.value[:3], default=0.0) <= _INK_EPSILON
+
+
+def _is_full_k(fill: Fill) -> bool:
+    """Solid black on the K plate alone: DeviceGray 0, or CMYK 0/0/0/100."""
+    if fill.family == GRAY:
+        return bool(fill.value) and fill.value[0] <= _INK_EPSILON
+    return _is_k_only(fill) and len(fill.value) >= 4 and fill.value[3] >= 1.0 - _INK_EPSILON
+
+
+def _describe(fill: Fill) -> str:
+    if fill.family == CMYK and len(fill.value) >= 4:
+        c, m, y, k = (round(v * 100) for v in fill.value[:4])
+        return f"C{c} M{m} Y{y} K{k}"
+    if fill.family == RGB:
+        return "RGB"
+    return "a spot, pattern or other non-K colour"

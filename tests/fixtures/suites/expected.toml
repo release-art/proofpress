@@ -1,0 +1,20 @@
+# What `proof-pdf verify --no-pdfa` is expected to raise on each external test-suite file (see README.md here).
+# The suites are valid PDF/X-4 output-workflow tests, not defective files: every entry below is the file doing what it was
+# built to do (a deliberate RGB patch, a deliberately coarse raster, a full-ink patch), or a limitation of ours.
+# Checked by tests/test_proof_pdf/test_suites.py: the set of checks per file must equal the keys, and nothing may crash.
+
+["eci_altona-test-suite-v2_technical2_x4.pdf"]
+bleedbox = "correct: the test page declares no BleedBox"
+blend-space = "correct: the page uses transparency and its page has no /Group naming a blend colour space"
+overprint = "correct: the page enables overprint (advisory); its white overprint paths are strokes, so no white-overprint"
+colour-space = "correct: RGB image patches are in the suite on purpose"
+image-dpi = "correct: 1x9 px tint-ramp strips (2 dpi) and 72/75 dpi patches are below 300 dpi by design"
+tac = "correct: the full-ink patch peaks at 363%"
+
+["eci_altona-test-suite-v2_technical2_one-patch-per-page_x4.pdf"]
+bleedbox = "correct: no BleedBox on the test pages"
+blend-space = "correct: transparency patches without a page /Group blend space"
+overprint = "correct: overprint patches"
+colour-space = "correct: RGB image patches"
+image-dpi = "correct: coarse raster patches"
+tac = "correct: full-ink patches"

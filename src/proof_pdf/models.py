@@ -80,6 +80,15 @@ class Profile:
     print jobs usually target ``2b``. *pdfx* toggles the PDF/X-4 structural layer;
     *colour* toggles the ink-coverage / overprint / rich-black / colour-space
     layer; *geometry* is the expected finished size, or ``None`` to skip it.
+    *k_only_text* is an opt-in house rule: text may be painted with the K plate only.
+    *missing_glyphs* flags ``.notdef`` glyphs; *min_text_pt*, *min_stroke_pt* and *safe_mm* are opt-in thresholds with
+    no default, because a size floor or a safe margin is a house rule and not something to infer.
+    *fonts* flags unembedded and Type 3 fonts; *allow_spots* (exact names) turns on the spot-ink allowlist;
+    *output_condition* names the printing condition the output intent must carry; *uniform_pages* and
+    *pages_multiple_of* are page-set rules. *require_bleed* turns on the artwork-bleed check: artwork that reaches the
+    trim edge must run on to the bleed edge.
+    *min_delta_l* turns on the contrast check (an L* difference floor), measured through *proof_profile* or the PDF's
+    own output intent.
     """
 
     flavour: str = "2b"
@@ -91,14 +100,28 @@ class Profile:
     small_text_pt: float = DEFAULT_SMALL_TEXT_PT
     min_dpi: float = DEFAULT_MIN_DPI
     strict_cmyk: bool = False
+    k_only_text: bool = False
+    missing_glyphs: bool = True
+    min_text_pt: float | None = None
+    min_stroke_pt: float | None = None
+    safe_mm: float | None = None
+    min_delta_l: float | None = None
+    proof_profile: pathlib.Path | None = None
+    fonts: bool = True
+    allow_spots: tuple[str, ...] | None = None
+    output_condition: str | None = None
+    uniform_pages: bool = False
+    pages_multiple_of: int | None = None
+    require_bleed: bool = False
 
 
 @dataclasses.dataclass
 class FileReport:
-    """Every finding gathered for a single PDF."""
+    """Every finding gathered for a single PDF, or the reason it was exempt from checking."""
 
     path: pathlib.Path
     findings: list[Finding] = dataclasses.field(default_factory=list)
+    exempt: str | None = None  # why the file was declared exempt and not checked; never a failure
 
     @property
     def errors(self) -> list[Finding]:

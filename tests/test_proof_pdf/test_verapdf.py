@@ -1,10 +1,8 @@
 """The veraPDF layer: shelling out, and parsing the JSON verdict."""
 
-import subprocess
-
 import pytest
 
-from proof_pdf import verapdf
+from proof_pdf import proc, verapdf
 from proof_pdf.models import Severity
 
 RULE = {
@@ -14,35 +12,66 @@ RULE = {
     "checks": [{"errorMessage": "CIDSet is incomplete"}],
 }
 
+DEVICE_GRAY = {
+    "clause": "6.2.4.3",
+    "testNumber": 4,
+    "description": "DeviceGray shall only be used if a PDF/A OutputIntent is present.",
+    "checks": [{"errorMessage": "DeviceGray colour space is used without output intent profile"}],
+}
+
 
 class TestRun:
-    def test_available(self, monkeypatch):
-        monkeypatch.setattr(verapdf.shutil, "which", lambda b: "/usr/bin/verapdf" if b == "verapdf" else None)
+    def test_available(self, mocker):
+        mocker.patch.object(
+            verapdf.shutil, "which", side_effect=lambda b: "/usr/bin/verapdf" if b == "verapdf" else None
+        )
         assert verapdf.available("verapdf")
         assert not verapdf.available("missing")
 
     @pytest.mark.parametrize("returncode", [0, 1], ids=["valid", "invalid"])
-    def test_both_verdict_exits_return_stdout(self, fake_run, returncode):
+    async def test_both_verdict_exits_return_stdout(self, fake_run, returncode):
         """veraPDF exits 1 for a non-conformant file; that is a verdict, not an error."""
-        calls = fake_run(verapdf, returncode=returncode, stdout='{"report": {}}')
-        assert verapdf.run("verapdf", "2b", "x.pdf") == '{"report": {}}'
+        calls = fake_run(returncode=returncode, stdout='{"report": {}}')
+        assert await verapdf.run("verapdf", "2b", "x.pdf") == '{"report": {}}'
         assert calls == [["verapdf", "--format", "json", "-f", "2b", "x.pdf"]]
 
     @pytest.mark.parametrize(
         ("stderr", "expected"), [("java exploded", "java exploded"), ("", "exited 2")], ids=["detail", "default"]
     )
-    def test_non_verdict_exit_raises(self, fake_run, stderr, expected):
-        fake_run(verapdf, returncode=2, stderr=stderr)
+    async def test_non_verdict_exit_raises(self, fake_run, stderr, expected):
+        fake_run(returncode=2, stderr=stderr)
         with pytest.raises(verapdf.VeraPdfError, match=expected):
-            verapdf.run("verapdf", "2b", "x.pdf")
+            await verapdf.run("verapdf", "2b", "x.pdf")
 
-    def test_timeout_raises(self, monkeypatch):
-        def _timeout(*a, **k):
-            raise subprocess.TimeoutExpired(cmd="verapdf", timeout=5)
-
-        monkeypatch.setattr(verapdf.subprocess, "run", _timeout)
+    async def test_timeout_raises(self, mocker):
+        mocker.patch.object(proc, "run", side_effect=proc.ProcTimeoutError("timed out"))
         with pytest.raises(verapdf.VeraPdfError, match="timed out"):
-            verapdf.run("verapdf", "2b", "x.pdf", timeout=5)
+            await verapdf.run("verapdf", "2b", "x.pdf", timeout=5)
+
+
+class TestHints:
+    def test_missing_output_intent_gets_a_fix(self, vera_json):
+        message = verapdf.parse(vera_json(False, rule=DEVICE_GRAY), "2b")[0].message
+        assert "6.2.4.3-4" in message and "hint: the file has no PDF/A output intent" in message
+
+    def test_the_cmyk_wording_gets_the_hint_too(self, vera_json):
+        """veraPDF says "without CMYK output intent profile" for DeviceCMYK, not "without output intent profile"."""
+        rule = {
+            **DEVICE_GRAY,
+            "testNumber": 3,
+            "checks": [{"errorMessage": "DeviceCMYK colour space is used without CMYK output intent profile"}],
+        }
+        assert (
+            "hint: the file has no PDF/A output intent" in verapdf.parse(vera_json(False, rule=rule), "2b")[0].message
+        )
+
+    def test_a_different_6_2_4_3_failure_gets_no_hint(self, vera_json):
+        rule = {**DEVICE_GRAY, "checks": [{"errorMessage": "DefaultGray has the wrong number of components"}]}
+        assert "hint" not in verapdf.parse(vera_json(False, rule=rule), "2b")[0].message
+
+    def test_other_clauses_get_no_hint(self, vera_json):
+        rule = {**RULE, "checks": [{"errorMessage": "without output intent"}]}
+        assert "hint" not in verapdf.parse(vera_json(False, rule=rule), "2b")[0].message
 
 
 class TestParse:

@@ -11,15 +11,15 @@ Ghostscript is required (as for ink coverage); its absence or failure is a hard
 error, not a silent skip.
 """
 
+import asyncio
 import dataclasses
 import logging
 import pathlib
-import subprocess
 
 import pikepdf
 from PIL import Image, ImageDraw, ImageFont
 
-from . import structure
+from . import proc, structure
 from .colour import GhostscriptError, gs_available
 from .models import MM_PER_IN, PT_PER_IN
 
@@ -57,27 +57,31 @@ def page_boxes(pdf: pikepdf.Pdf) -> list[PageBoxes]:
     ]
 
 
-def preview_file(
+async def preview_file(
     pdf_path: pathlib.Path,
     out_dir: pathlib.Path,
     *,
     dpi: int,
     guides: bool,
-    safe_mm: float,
+    safe_mm: float | None,
     gs_bin: str,
     timeout: float | None = None,
 ) -> list[pathlib.Path]:
     """Render *pdf_path* to one PNG per page in *out_dir*; overlay guides if asked."""
-    pngs = _render_pages(gs_bin, pdf_path, out_dir, dpi, timeout=timeout)
+    pngs = await _render_pages(gs_bin, pdf_path, out_dir, dpi, timeout=timeout)
     if guides:
-        with pikepdf.open(pdf_path) as pdf:
-            boxes = page_boxes(pdf)
-        for png, box in zip(pngs, boxes, strict=False):
-            _overlay_guides(png, box, dpi, safe_mm)
+        await asyncio.to_thread(_draw_guides, pdf_path, pngs, dpi, safe_mm)
     return pngs
 
 
-def _render_pages(
+def _draw_guides(pdf_path: pathlib.Path, pngs: list[pathlib.Path], dpi: int, safe_mm: float | None) -> None:
+    with pikepdf.open(pdf_path) as pdf:
+        boxes = page_boxes(pdf)
+    for png, box in zip(pngs, boxes, strict=False):
+        _overlay_guides(png, box, dpi, safe_mm)
+
+
+async def _render_pages(
     gs_bin: str,
     pdf_path: pathlib.Path,
     out_dir: pathlib.Path,
@@ -89,7 +93,7 @@ def _render_pages(
     out_dir.mkdir(parents=True, exist_ok=True)
     pattern = str(out_dir / f"{pdf_path.stem}-p%d.png")
     try:
-        result = subprocess.run(
+        result = await proc.run(
             [
                 gs_bin,
                 "-q",
@@ -101,11 +105,9 @@ def _render_pages(
                 f"-sOutputFile={pattern}",
                 str(pdf_path),
             ],
-            capture_output=True,
-            text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired as exc:
+    except proc.ProcTimeoutError as exc:
         raise GhostscriptError(f"ghostscript timed out after {timeout:.0f}s") from exc
     if result.returncode != 0:
         message = result.stderr.strip() or "ghostscript failed"
@@ -118,8 +120,8 @@ def _page_number(png: pathlib.Path) -> int:
     return int(png.stem.rsplit("-p", 1)[1])
 
 
-def _overlay_guides(png: pathlib.Path, boxes: PageBoxes, dpi: int, safe_mm: float) -> None:
-    """Draw the trim/bleed/safe rectangles onto a rendered page, in place."""
+def _overlay_guides(png: pathlib.Path, boxes: PageBoxes, dpi: int, safe_mm: float | None) -> None:
+    """Draw the trim and bleed rectangles, and a safe-area one when an inset is given, onto a rendered page."""
     if boxes.media is None:  # cannot map points to pixels without the media origin
         return
     with Image.open(png) as opened:
@@ -133,7 +135,8 @@ def _overlay_guides(png: pathlib.Path, boxes: PageBoxes, dpi: int, safe_mm: floa
         _guide(draw, to_px(boxes.bleed), _BLEED_RGB, line, "bleed", font)
     if boxes.trim is not None:
         _guide(draw, to_px(boxes.trim), _TRIM_RGB, line + 1, "trim", font)
-        _guide(draw, to_px(_inset(boxes.trim, safe_mm)), _SAFE_RGB, line, "safe", font)
+        if safe_mm is not None:
+            _guide(draw, to_px(_inset(boxes.trim, safe_mm)), _SAFE_RGB, line, "safe", font)
     img.save(png)
 
 

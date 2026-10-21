@@ -1,0 +1,74 @@
+%PDF-1.7
+%¿÷¢þ
+1 0 obj
+<< /Metadata 3 0 R /Pages 4 0 R /Type /Catalog >>
+endobj
+2 0 obj
+<< /Trapped /False >>
+endobj
+3 0 obj
+<< /Subtype /XML /Type /Metadata /Length 1683 >>
+stream
+<?xpacket begin="ï»¿" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/" rdf:about="">
+      <pdfaid:part>2</pdfaid:part>
+      <pdfaid:conformance>B</pdfaid:conformance>
+    </rdf:Description>
+    <rdf:Description xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/" rdf:about="">
+      <pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion>
+    </rdf:Description>
+    <rdf:Description xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#" rdf:about="">
+      <pdfaExtension:schemas>
+        <rdf:Bag>
+          <rdf:li rdf:parseType="Resource">
+            <pdfaSchema:schema>PDF/X ID Schema</pdfaSchema:schema>
+            <pdfaSchema:namespaceURI>http://www.npes.org/pdfx/ns/id/</pdfaSchema:namespaceURI>
+            <pdfaSchema:prefix>pdfxid</pdfaSchema:prefix>
+            <pdfaSchema:property>
+              <rdf:Seq>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>GTS_PDFXVersion</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>internal</pdfaProperty:category>
+                  <pdfaProperty:description>ID of PDF/X standard</pdfaProperty:description>
+                </rdf:li>
+              </rdf:Seq>
+            </pdfaSchema:property>
+          </rdf:li>
+        </rdf:Bag>
+      </pdfaExtension:schemas>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+
+<?xpacket end="w"?>
+
+endstream
+endobj
+4 0 obj
+<< /Count 1 /Kids [ 5 0 R ] /Type /Pages >>
+endobj
+5 0 obj
+<< /BleedBox [ 0 0 314.645669 436.535433 ] /Contents 6 0 R /MediaBox [ 0 0 314.645669 436.535433 ] /Parent 4 0 R /Resources << >> /TrimBox [ 8.503937 8.503937 306.141732 428.031496 ] /Type /Page >>
+endobj
+6 0 obj
+<< /Length 89 >>
+stream
+0.9 g 0 0 314.645669 436.535433 re f 0.2 g 28.503937 28.503937 120.000000 120.000000 re f
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000080 00000 n 
+0000000117 00000 n 
+0000001882 00000 n 
+0000001941 00000 n 
+0000002154 00000 n 
+trailer << /Info 2 0 R /Root 1 0 R /Size 7 /ID [<54ac5384d5c9af2b424668a7aa424550><54ac5384d5c9af2b424668a7aa424550>] >>
+startxref
+2293
+%%EOF

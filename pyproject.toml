@@ -44,6 +44,8 @@ line-ending = "lf"
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "E402"]
 "cli.py" = ["B008"] # typer.Option() as default arg
+"deltae.py" = ["N803", "N806"] # the formula's published symbols (kL, dLp, T, ...)
+"tests/fixtures/*.py" = ["T201"] # the fixture builder is a script
 
 [tool.ruff.lint.isort]
 order-by-type = true
@@ -77,6 +79,8 @@ build-backend = "pdm.backend"
 [tool.pytest.ini_options]
 addopts = "-v -l --color=yes --cov=proof_pdf --cov-report term-missing --no-cov-on-fail"
 pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 timeout = 15
 markers = [
@@ -91,4 +95,5 @@ dev = [
     "pytest-timeout>=2.4.0",
     "ruff>=0.17.1",
     "pyright>=1.1.414",
+    "pytest-asyncio>=1.4.0",
 ]
