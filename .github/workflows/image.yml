@@ -1,0 +1,68 @@
+name: Image
+
+# PRs build both images for linux/amd64 and run the smoke script (no push).
+# A v* tag builds amd64 + arm64 and pushes to Docker Hub.
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker/**
+      - bin/docker/**
+      - pyproject.toml
+      - pdm.lock
+      - src/**
+      - .github/workflows/image.yml
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  TL_TAG: tl2025 # keep in step with TL_REPO in the Dockerfile
+
+jobs:
+  smoke:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - run: bin/docker/build.sh
+      - run: bin/docker/smoke.sh
+
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [lualatex, full]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: releaseart/${{ matrix.target }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=${{ env.TL_TAG }}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}

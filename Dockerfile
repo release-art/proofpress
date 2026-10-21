@@ -2,8 +2,8 @@
 #   lualatex  TeX Live 2025 (lualatex + a general package set) on Debian. No Java, no Python.
 #   full      lualatex's TeX tree + Ghostscript + veraPDF + the proof-pdf CLI.
 #
-#   docker build --target lualatex -t proofpress/lualatex .
-#   docker build --target full     -t proofpress/full .
+#   docker build --target lualatex -t releaseart/lualatex .
+#   docker build --target full     -t releaseart/full .
 #
 # Bases are pinned by digest and bumped deliberately.
 ARG DEBIAN_IMAGE=debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
@@ -48,7 +48,7 @@ RUN pdm install --frozen-lockfile --prod --no-editable
 FROM ${DEBIAN_IMAGE} AS lualatex
 ARG VERSION=dev
 ARG REVISION=unknown
-LABEL org.opencontainers.image.title="proofpress/lualatex" \
+LABEL org.opencontainers.image.title="releaseart/lualatex" \
       org.opencontainers.image.source="https://github.com/release-art/proofpress" \
       org.opencontainers.image.licenses="LPPL-1.3c AND GPL-2.0-or-later" \
       org.opencontainers.image.version="${VERSION}" \
@@ -66,7 +66,7 @@ CMD ["lualatex", "--version"]
 FROM ${PYTHON_IMAGE} AS full
 ARG VERSION=dev
 ARG REVISION=unknown
-LABEL org.opencontainers.image.title="proofpress/full" \
+LABEL org.opencontainers.image.title="releaseart/full" \
       org.opencontainers.image.source="https://github.com/release-art/proofpress" \
       org.opencontainers.image.licenses="Apache-2.0 AND AGPL-3.0-or-later AND LPPL-1.3c AND GPL-2.0-or-later" \
       org.opencontainers.image.version="${VERSION}" \

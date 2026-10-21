@@ -18,3 +18,8 @@ Geometry is checked only when `--trim-mm` is given.
 Development: `git config core.hooksPath .githooks`, then `bin/autoformat.sh` and `bin/test.sh`.
 
 Licence: Apache-2.0. See `NOTICE` for third-party terms.
+
+## Images
+
+`releaseart/lualatex` (TeX Live 2025) and `releaseart/full` (adds Ghostscript, veraPDF and `proof-pdf`) on Docker Hub.
+Build locally with `bin/docker/build.sh`, check with `bin/docker/smoke.sh`.
