@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - run: python -m pip install pdm
       - run: pdm install --with dev
       - run: pdm run ruff check src tests

@@ -8,7 +8,7 @@
 # Bases float on their tags so rebuilds pick up security fixes; bin/docker/base-digests.sh logs
 # what they resolved to (CI runs it before every build).
 ARG DEBIAN_IMAGE=debian:trixie-slim
-ARG PYTHON_IMAGE=python:3.14-slim
+ARG PYTHON_IMAGE=python:3.15-slim
 ARG TL_REPO=https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final
 
 # ---- TeX Live from the frozen historic mirror (reproducible) --------------------

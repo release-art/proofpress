@@ -25,7 +25,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 `preview` rasterises each page and draws the trim, bleed and safe guides from the PDF's own boxes, so a geometry finding can be seen.
 
 ```zsh
-pip install proof-pdf          # Python 3.14; needs verapdf and gs (Ghostscript) on PATH
+pip install proof-pdf          # Python 3.15; needs verapdf and gs (Ghostscript) on PATH
 
 proof-pdf verify job/ --trim-mm 105x148 --bleed-mm 3 --exclude '*_preview.pdf'
 proof-pdf verify card.pdf --json          # machine-readable findings, for CI
@@ -56,7 +56,7 @@ and `:tl2025` tracks the TeX Live year. Each image reports its commit in `PROOFP
 
 ## Development
 
-Python 3.14 and [PDM](https://pdm-project.org).
+Python 3.15 and [PDM](https://pdm-project.org).
 
 ```zsh
 git config core.hooksPath .githooks   # ruff + pyright before each commit
