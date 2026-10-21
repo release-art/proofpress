@@ -20,7 +20,9 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 - **PDF/X-4 structure**: page boxes, `/Trapped`, the `GTS_PDFX` output intent and the XMP version key (`--no-pdfx`).
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
 - **Colour**: total ink coverage (`--max-tac`, 300% default), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default),
-  overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged.
+  overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged,
+  and **white that overprints is an error** (it adds no ink, so it vanishes on press). A page that uses transparency must blend
+  in the output intent's colour space (a mismatch is an error, an undeclared space a warning).
 - **K-only text** (opt-in, `--k-only-text`): text painted with any ink but K (a four-colour build, RGB, a spot or a pattern) is an error.
 - **Proofing** (the text and lines a page paints, measured in page points; see below).
 
@@ -52,23 +54,56 @@ As a library the API is async: `await proof_pdf.core.verify_file(path, profile)`
 
 ### Proofing
 
-Beyond the standards, `verify` can hold a PDF to the rules a print job usually has. Missing glyphs are checked by default
-(they are exact); every rule that needs a number takes it from you and has **no default**, because a size floor or a safe
-margin is a house rule, not something to infer.
+Beyond the standards, `verify` can hold a PDF to the rules a print job usually has. Missing glyphs and fonts are checked by
+default (they are exact); every rule that needs a number or a name takes it from you and has **no default**, because a size
+floor, a safe margin or a printing condition is a house rule, not something to infer.
 
 | Flag | Fails when |
 |---|---|
 | *(on by default)* `--no-missing-glyphs` | a character is shown with the `.notdef` glyph (prints as a box or nothing) |
+| *(on by default)* `--no-fonts` | text is set in a font that is not embedded (error), or in a Type 3 font (warning); independent of PDF/A |
 | `--min-text-pt N` | text is smaller than N pt (effective size, after every scale) |
 | `--min-stroke-pt N` | a stroked line is thinner than N pt; a zero-width line is the thinnest the device can draw |
 | `--safe-mm N` | text reaches past the trim edge inset by N mm (a box from the font's declared widths; a font without widths gives an estimated warning) |
 | `--min-delta-l N` | text and its background differ by less than N in L* |
+| `--allow-spot NAME` (repeatable) | a spot ink not on the list is used; names match exactly, and `All` (the registration colour) must be named |
+| `--output-condition TEXT` | no output intent names this printing condition (e.g. `FOGRA51`; matched against its identifier and its ICC profile's description) |
+| `--uniform-pages` | a page's finished size differs from the first page's (a rotated page is a warning) |
+| `--pages-multiple-of N` | the page count is not a multiple of N (booklets) |
 
 Contrast is deliberately **not WCAG**, which is a screen model. Colours are converted through an ICC profile (the PDF's own
 output intent, or `--proof-profile`) to L*a*b*, the paper is the page's white, and the L* difference is reported with
 CIEDE2000 beside it. The background of a text run is the last filled shape painted under it, else the paper; text over an
 image or shading is reported as *not measured*, never as a pass. Clipping and transparency are not modelled, so treat it as
 the design's intent. CMYK ink needs a CMYK profile to be measured through; without one the check says so and fails.
+
+### Printer profiles
+
+A job's numbers come from its printer's spec, so keep them in a file committed with the job instead of repeating flags in CI.
+`proof-pdf.toml` (or a `[tool.proof-pdf]` table in `pyproject.toml`) is found by walking up from the working directory, or
+named with `--config` / `PROOF_PDF_CONFIG`. Each table is a command and each key one of its options, written with dashes or
+underscores (or as the flag is spelled):
+
+```toml
+[verify]
+trim-mm = "105x148"
+bleed-mm = 3
+min-text-pt = 6
+min-stroke-pt = 0.25
+safe-mm = 3
+output-condition = "FOGRA51"
+allow-spot = ["Dieline"]
+proof-profile = "profiles/PSOcoated_v3.icc"     # relative to this file
+
+[verify.exempt]
+"manual.pdf" = "internal documentation, never printed"
+
+[profiles.deluxe.verify]                         # chosen with --profile deluxe; overrides [verify]
+bleed-mm = 5
+```
+
+A flag on the command line beats the file, and the file beats the built-in default. Unknown tables and keys are errors, so a
+typo cannot silently switch a check off.
 
 ```zsh
 proof-pdf inspect card.pdf                # fonts (embedded?, .notdef), text colours and sizes, spot inks, images, contrast

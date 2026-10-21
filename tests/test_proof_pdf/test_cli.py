@@ -195,6 +195,11 @@ class TestProofingOptions:
             (["--safe-mm", "4"], "safe_mm", 4.0),
             (["--min-delta-l", "30"], "min_delta_l", 30.0),
             (["--no-missing-glyphs"], "missing_glyphs", False),
+            (["--no-fonts"], "fonts", False),
+            (["--allow-spot", "Dieline", "--allow-spot", "Foil"], "allow_spots", ("Dieline", "Foil")),
+            (["--output-condition", "FOGRA51"], "output_condition", "FOGRA51"),
+            (["--uniform-pages"], "uniform_pages", True),
+            (["--pages-multiple-of", "4"], "pages_multiple_of", 4),
         ],
     )
     def test_each_flag_reaches_the_profile(self, runner, tmp_path, stub_verify, flags, field, expected):
@@ -207,7 +212,9 @@ class TestProofingOptions:
         runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf"))])
         profile = seen[0][1]
         assert (profile.min_text_pt, profile.min_stroke_pt, profile.safe_mm, profile.min_delta_l) == (None,) * 4
-        assert profile.missing_glyphs is True and profile.proof_profile is None
+        assert profile.missing_glyphs is True and profile.fonts is True and profile.proof_profile is None
+        assert (profile.allow_spots, profile.output_condition, profile.uniform_pages) == (None, None, False)
+        assert profile.pages_multiple_of is None
 
     def test_the_proof_profile_path_is_passed_through(self, runner, tmp_path, stub_verify):
         seen = stub_verify({})
@@ -229,6 +236,89 @@ class TestProofingOptions:
         assert calls.call_args.kwargs["safe_mm"] is None
         runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "b.pdf")), "--safe", "4"])
         assert calls.call_args.kwargs["safe_mm"] == 4.0
+
+
+class TestConfigFile:
+    def _config(self, tmp_path, text):
+        path = tmp_path / "printer.toml"
+        path.write_text(text)
+        return path
+
+    def test_config_values_become_the_defaults(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        cfg = self._config(tmp_path, '[verify]\nmin-text-pt = 6\nsafe-mm = 3\noutput-condition = "FOGRA51"\n')
+        runner.invoke(cli.pdf_app, ["--config", str(cfg), "verify", str(_pdf(tmp_path, "a.pdf"))])
+        profile = seen[0][1]
+        assert (profile.min_text_pt, profile.safe_mm, profile.output_condition) == (6.0, 3.0, "FOGRA51")
+
+    def test_a_flag_on_the_command_line_wins(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        cfg = self._config(tmp_path, "[verify]\nmin-text-pt = 6\n")
+        runner.invoke(cli.pdf_app, ["--config", str(cfg), "verify", str(_pdf(tmp_path, "a.pdf")), "--min-text-pt", "9"])
+        assert seen[0][1].min_text_pt == 9.0
+
+    def test_a_config_can_switch_a_default_on_check_off(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        cfg = self._config(tmp_path, "[verify]\nfonts = false\npdfa = false\n")
+        runner.invoke(cli.pdf_app, ["--config", str(cfg), "verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert (seen[0][1].fonts, seen[0][1].pdfa) == (False, False)
+
+    def test_a_profile_is_chosen_with_dash_dash_profile(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        cfg = self._config(
+            tmp_path, "[verify]\nbleed-mm = 3\ntrim-mm = '105x148'\n[profiles.big.verify]\nbleed-mm = 5\n"
+        )
+        runner.invoke(cli.pdf_app, ["--config", str(cfg), "--profile", "big", "verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert seen[0][1].geometry is not None and seen[0][1].geometry.bleed_mm == 5.0
+
+    def test_exemptions_and_spots_come_from_the_file(self, runner, tmp_path, stub_verify):
+        stub_verify({})
+        cfg = self._config(tmp_path, '[verify]\nallow-spot = ["Dieline"]\n[verify.exempt]\n"m.pdf" = "internal"\n')
+        result = runner.invoke(
+            cli.pdf_app, ["--config", str(cfg), "verify", str(_pdf(tmp_path, "a.pdf")), str(_pdf(tmp_path, "m.pdf"))]
+        )
+        assert "EXEMPT" in result.stdout and "internal" in result.stdout
+
+    def test_the_nearest_file_is_found_from_the_working_directory(self, runner, tmp_path, stub_verify, monkeypatch):
+        seen = stub_verify({})
+        (tmp_path / "proof-pdf.toml").write_text("[verify]\nsafe-mm = 4\n")
+        job = tmp_path / "job"
+        job.mkdir()
+        monkeypatch.chdir(job)
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(job, "a.pdf"))])
+        assert seen[0][1].safe_mm == 4.0
+
+    def test_the_environment_can_name_the_file_and_profile(self, runner, tmp_path, stub_verify, monkeypatch):
+        seen = stub_verify({})
+        cfg = self._config(tmp_path, "[profiles.p.verify]\nsafe-mm = 7\n")
+        monkeypatch.setenv("PROOF_PDF_CONFIG", str(cfg))
+        monkeypatch.setenv("PROOF_PDF_PROFILE", "p")
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert seen[0][1].safe_mm == 7.0
+
+    def test_other_commands_have_their_own_tables(self, runner, tmp_path):
+        cfg = self._config(tmp_path, "[texlog]\nmax-overfull-pt = 10\n")
+        log = tmp_path / "b.log"
+        log.write_text("Overfull \\hbox (12.5pt too wide) in paragraph at lines 4--5\n")
+        assert runner.invoke(cli.pdf_app, ["--config", str(cfg), "texlog", str(log)]).exit_code == 1
+
+    def test_a_typo_in_the_file_is_an_error_not_a_silently_disabled_check(self, runner, tmp_path, stub_verify):
+        stub_verify({})
+        cfg = self._config(tmp_path, "[verify]\nmin-txt-pt = 6\n")
+        result = runner.invoke(cli.pdf_app, ["--config", str(cfg), "verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert result.exit_code == 2 and "min-txt-pt" in result.output
+
+    def test_a_profile_without_any_config_is_an_error(self, runner, tmp_path, stub_verify, monkeypatch):
+        stub_verify({})
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(cli.pdf_app, ["--profile", "x", "verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert result.exit_code == 2 and "needs a config file" in result.output
+
+    def test_no_config_changes_nothing(self, runner, tmp_path, stub_verify, monkeypatch):
+        seen = stub_verify({})
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert seen[0][1].min_text_pt is None and seen[0][1].fonts is True
 
 
 class TestCollapsedOutput:

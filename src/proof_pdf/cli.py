@@ -22,7 +22,14 @@ import typing
 import pikepdf
 import typer
 
-from . import core, inventory, preview, texlog, verapdf
+from . import (
+    config as config_file,
+    core,
+    inventory,
+    preview,
+    texlog,
+    verapdf,
+)
 from .models import (
     DEFAULT_MAX_TAC,
     DEFAULT_MIN_DPI,
@@ -59,11 +66,34 @@ def _show_version(value: bool) -> None:
 
 @pdf_app.callback()
 def _main(
+    ctx: typer.Context,
     version: typing.Annotated[
         bool, typer.Option("--version", help="Show the version and exit.", callback=_show_version, is_eager=True)
     ] = False,
+    config: typing.Annotated[
+        pathlib.Path | None,
+        typer.Option(
+            "--config",
+            envvar="PROOF_PDF_CONFIG",
+            help="Defaults file (default: the nearest proof-pdf.toml, or [tool.proof-pdf] in pyproject.toml).",
+        ),
+    ] = None,
+    profile: typing.Annotated[
+        str | None,
+        typer.Option("--profile", envvar="PROOF_PDF_PROFILE", help="Named profile in the config file, e.g. a printer."),
+    ] = None,
 ) -> None:
-    pass
+    """Read the config file, if any, into the defaults of the command about to run."""
+    path = config or config_file.find_config(pathlib.Path.cwd())
+    if path is None:
+        if profile:
+            raise typer.BadParameter("--profile needs a config file, and none was found", param_hint="--profile")
+        return
+    commands = getattr(ctx.command, "commands", {})
+    try:
+        ctx.default_map = config_file.default_map(path, profile, commands)
+    except config_file.ConfigError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--config") from exc
 
 
 # A hung Ghostscript on a 400 MB file would otherwise block a CI run for ever.
@@ -145,6 +175,27 @@ def verify_cmd(
         float | None,
         typer.Option("--safe-mm", help="Fail text outside this inset from the trim edge, in mm. No default."),
     ] = None,
+    fonts: typing.Annotated[
+        bool, typer.Option("--fonts/--no-fonts", help="Flag fonts that are not embedded, and Type 3 fonts.")
+    ] = True,
+    allow_spot: typing.Annotated[
+        list[str] | None,
+        typer.Option(
+            "--allow-spot", help="Fail any spot ink not named here (exact match; repeatable; 'All' needs naming)."
+        ),
+    ] = None,
+    output_condition: typing.Annotated[
+        str | None,
+        typer.Option(
+            "--output-condition", help="Fail unless an output intent names this printing condition, e.g. FOGRA51."
+        ),
+    ] = None,
+    uniform_pages: typing.Annotated[
+        bool, typer.Option("--uniform-pages", help="Fail pages whose finished size differs from the first page's.")
+    ] = False,
+    pages_multiple_of: typing.Annotated[
+        int | None, typer.Option("--pages-multiple-of", min=1, help="Fail a page count that is not a multiple of N.")
+    ] = None,
     min_delta_l: typing.Annotated[
         float | None,
         typer.Option(
@@ -191,6 +242,11 @@ def verify_cmd(
         safe_mm=safe_mm,
         min_delta_l=min_delta_l,
         proof_profile=proof_profile,
+        fonts=fonts,
+        allow_spots=tuple(allow_spot) if allow_spot else None,
+        output_condition=output_condition,
+        uniform_pages=uniform_pages,
+        pages_multiple_of=pages_multiple_of,
     )
     reports = asyncio.run(
         core.verify_files(
@@ -462,6 +518,10 @@ def _print_summary(reports: list[FileReport], profile: Profile) -> None:
             ("hairlines", profile.min_stroke_pt is not None),
             ("safe area", profile.safe_mm is not None),
             ("contrast", profile.min_delta_l is not None),
+            ("fonts", profile.fonts),
+            ("spot inks", profile.allow_spots is not None),
+            ("output condition", profile.output_condition is not None),
+            ("page set", profile.uniform_pages or bool(profile.pages_multiple_of)),
         )
         if on
     )

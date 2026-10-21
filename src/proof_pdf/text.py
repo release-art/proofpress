@@ -11,7 +11,7 @@ so it is found here; pdfTeX drops the character, which leaves no trace in the PD
 
 import pikepdf
 
-from . import structure
+from . import fonts, structure
 from .models import MM_PER_IN, PT_PER_IN, Finding, Severity
 from .paint import Paint, paint_events
 
@@ -39,6 +39,46 @@ def check_missing_glyphs(pdf: pikepdf.Pdf) -> list[Finding]:
                     Severity.ERROR,
                     f"{sum(per_font.values())} character(s) are shown with the .notdef glyph ({detail}): "
                     "the font has no glyph for them",
+                    i,
+                )
+            )
+    return findings
+
+
+def check_fonts(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Flag fonts a page shows text in that are not embedded, and Type 3 fonts.
+
+    An unembedded font is substituted by whatever the printer's RIP has, which changes the layout and the glyphs. A
+    Type 3 font is a bitmap or hand-built face and prints poorly at press resolutions. This is independent of PDF/A,
+    which also requires embedding but is often switched off.
+    """
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        unembedded: dict[str, int] = {}
+        type3: dict[str, int] = {}
+        for run in _text_runs(page):
+            font = run.font
+            if font is None or font is fonts.UNKNOWN:
+                continue
+            if font.subtype == "Type3":
+                type3[font.name] = type3.get(font.name, 0) + 1
+            elif not font.embedded:
+                unembedded[font.name] = unembedded.get(font.name, 0) + 1
+        for name, runs in sorted(unembedded.items()):
+            findings.append(
+                Finding(
+                    "font-embedded",
+                    Severity.ERROR,
+                    f"font {name} is not embedded ({runs} run(s)): the printer's RIP would substitute it",
+                    i,
+                )
+            )
+        for name, runs in sorted(type3.items()):
+            findings.append(
+                Finding(
+                    "font-type3",
+                    Severity.WARN,
+                    f"font {name} is a Type 3 font ({runs} run(s)): bitmap or hand-built faces print poorly",
                     i,
                 )
             )

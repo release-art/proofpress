@@ -104,3 +104,12 @@ def spot_names(space: object, resources: pikepdf.Object | None, *, depth: int = 
     except IndexError, TypeError:
         return []
     return []
+
+
+def intent_family(pdf: pikepdf.Pdf) -> str | None:
+    """The colour family of the PDF's first output-intent profile (by its ``/N``), or ``None`` without one."""
+    for intent in pdf.Root.get("/OutputIntents", []):
+        profile = intent.get("/DestOutputProfile")
+        if profile is not None and "/N" in profile:
+            return _ICC_COMPONENTS.get(int(profile["/N"]))
+    return None

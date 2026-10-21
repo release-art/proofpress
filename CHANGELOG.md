@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `proof-pdf texlog`: lint a LaTeX log for dropped characters, TeX errors, undefined references, font substitution,
   package warnings and overfull boxes.
 
+- More print-readiness checks: white overprint (error), unembedded and Type 3 fonts (independent of PDF/A), the output
+  intent's printing condition (`--output-condition`), a spot-ink allowlist (`--allow-spot`), the transparency blend space
+  against the output intent, and page-set rules (`--uniform-pages`, `--pages-multiple-of`).
+- A config file (`proof-pdf.toml` or `[tool.proof-pdf]`) with named profiles (`--profile`) for a printer's numbers, found from
+  the working directory or named with `--config`. Command-line flags win; unknown keys are errors.
+
 ### Fixed
 
 - A veraPDF failure on a file it cannot open now reads as one sentence ("... doesn't appear to be a valid PDF.") instead

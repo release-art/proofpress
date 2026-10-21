@@ -25,6 +25,7 @@ a failure by the caller, not silently skipped); the rest read the
 """
 
 import asyncio
+import collections.abc
 import logging
 import pathlib
 import shutil
@@ -35,8 +36,8 @@ from PIL import Image, ImageMath
 
 from . import content, proc
 from .models import Finding, Severity
-from .paint import Fill, paint_events
-from .spaces import CMYK, GRAY, RGB, classify_colour_space
+from .paint import Fill, Walker, paint_events
+from .spaces import CMYK, GRAY, RGB, classify_colour_space, intent_family
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,107 @@ def check_overprint(pdf: pikepdf.Pdf) -> list[Finding]:
             findings.append(
                 Finding(
                     "overprint", Severity.WARN, "overprint is enabled -- confirm it is intentional, not knockout", i
+                )
+            )
+    return findings
+
+
+def check_white_overprint(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Flag white text or shapes set to overprint: overprinting white adds no ink, so it vanishes on press."""
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        whites = [
+            p
+            for p in paint_events(page)
+            if p.overprint and _is_white(p.fill) and (p.kind == "text" or (p.kind == "path" and p.filled))
+        ]
+        if whites:
+            findings.append(
+                Finding(
+                    "white-overprint",
+                    Severity.ERROR,
+                    f"{len(whites)} white object(s) are set to overprint and will disappear on press: "
+                    "white must knock out",
+                    i,
+                )
+            )
+    return findings
+
+
+def _is_white(fill: Fill) -> bool:
+    if fill.family == GRAY:
+        return bool(fill.value) and fill.value[0] >= 1.0 - _INK_EPSILON
+    if fill.family == RGB:
+        return len(fill.value) >= 3 and min(fill.value[:3]) >= 1.0 - _INK_EPSILON
+    if fill.family == CMYK:
+        return len(fill.value) >= 4 and max(fill.value[:4]) <= _INK_EPSILON
+    return False
+
+
+# ------------------------------------------------------------- spot inks ----
+def check_spot_inks(pdf: pikepdf.Pdf, allowed: collections.abc.Collection[str]) -> list[Finding]:
+    """Flag any spot ink a page selects that is not on the caller's list (names match exactly).
+
+    A stray spot adds a plate and a charge. ``All`` is the registration colour: it prints on every plate, which is
+    right for printer's marks and wrong for artwork, so it must be allowed by name.
+    """
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        walker = Walker()
+        for _ in walker.walk(page):
+            pass
+        unexpected = sorted(name for name in walker.spots - set(allowed) if name != "None")
+        if unexpected:
+            note = "; All is the registration colour and prints on every plate" if "All" in unexpected else ""
+            findings.append(
+                Finding(
+                    "spot-ink",
+                    Severity.ERROR,
+                    f"spot ink(s) not on the allowed list: {', '.join(unexpected)}{note}",
+                    i,
+                )
+            )
+    return findings
+
+
+# ---------------------------------------------------------- transparency ----
+def check_transparency(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Check that a page using transparency blends in the colour space the job prints in.
+
+    PDF/X-4 keeps live transparency, so the blend colour space decides how overlaps are computed. One that differs
+    from the output intent's (RGB blending in a CMYK job) shifts colours at overlaps; one that is not declared leaves
+    the choice to the RIP.
+    """
+    expected = intent_family(pdf)
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        walker = Walker()
+        for _ in walker.walk(page):
+            pass
+        if not walker.transparency:
+            continue
+        reasons = ", ".join(sorted(walker.transparency))
+        group = page.obj.get("/Group")
+        space = group.get("/CS") if group is not None else None
+        if space is None:
+            findings.append(
+                Finding(
+                    "blend-space",
+                    Severity.WARN,
+                    f"the page uses transparency ({reasons}) but declares no blend colour space: the RIP chooses one",
+                    i,
+                )
+            )
+            continue
+        family = classify_colour_space(space, page.obj.get("/Resources"))
+        if expected is not None and family != expected:
+            findings.append(
+                Finding(
+                    "blend-space",
+                    Severity.ERROR,
+                    f"transparency ({reasons}) blends in {family.upper()} but the output intent is "
+                    f"{expected.upper()}: overlapping colours will shift",
+                    i,
                 )
             )
     return findings

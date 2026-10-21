@@ -426,3 +426,136 @@ async def test_page_tac_peaks_against_real_ghostscript(make_content_pdf):
     peaks = await colour._page_tac_peaks("gs", str(path), timeout=10)
     assert len(peaks) == 1
     assert 0.0 <= peaks[0] <= 400.0
+
+
+GS_OP = {"/GS1": pikepdf.Dictionary(OP=True, op=True)}
+
+
+class TestWhiteOverprint:
+    @pytest.mark.parametrize(
+        "white",
+        [
+            pytest.param(b"1 g", id="gray"),
+            pytest.param(b"1 1 1 rg", id="rgb"),
+            pytest.param(b"0 0 0 0 k", id="cmyk"),
+        ],
+    )
+    def test_white_text_set_to_overprint_is_an_error(self, make_content_pdf, white):
+        path = make_content_pdf(b"/GS1 gs BT /F1 12 Tf " + white + b" (x) Tj ET", extgstates=GS_OP)
+        with pikepdf.open(path) as pdf:
+            [finding] = colour.check_white_overprint(pdf)
+        assert finding.severity is Severity.ERROR and finding.check == "white-overprint" and finding.page == 1
+        assert "knock out" in finding.message
+
+    def test_a_white_shape_under_overprint_is_flagged_too(self, make_content_pdf):
+        path = make_content_pdf(b"/GS1 gs 1 g 0 0 10 10 re f", font=False, extgstates=GS_OP)
+        with pikepdf.open(path) as pdf:
+            assert _checks(colour.check_white_overprint(pdf)) == {"white-overprint"}
+
+    def test_white_that_knocks_out_is_fine(self, make_content_pdf):
+        path = make_content_pdf(b"BT /F1 12 Tf 1 g (x) Tj ET", extgstates=GS_OP)
+        with pikepdf.open(path) as pdf:
+            assert colour.check_white_overprint(pdf) == []
+
+    def test_overprinting_black_is_not_white(self, make_content_pdf):
+        path = make_content_pdf(b"/GS1 gs BT /F1 12 Tf 0 g (x) Tj ET", extgstates=GS_OP)
+        with pikepdf.open(path) as pdf:
+            assert colour.check_white_overprint(pdf) == []
+
+    def test_a_q_restores_a_white_fill(self, make_content_pdf):
+        path = make_content_pdf(b"/GS1 gs q 1 g Q BT /F1 12 Tf (x) Tj ET", extgstates=GS_OP)
+        with pikepdf.open(path) as pdf:
+            assert colour.check_white_overprint(pdf) == []
+
+
+class TestSpotInks:
+    SEP = {"/CS1": pikepdf.Array([pikepdf.Name.Separation, pikepdf.Name("/PANTONE 185 C"), pikepdf.Name.DeviceCMYK])}
+    ALL = {"/CS1": pikepdf.Array([pikepdf.Name.Separation, pikepdf.Name.All, pikepdf.Name.DeviceCMYK])}
+    STREAM = b"/CS1 cs 1 scn 0 0 5 5 re f"
+
+    def _findings(self, make_content_pdf, spaces, allowed):
+        with pikepdf.open(make_content_pdf(self.STREAM, font=False, colorspaces=spaces)) as pdf:
+            return colour.check_spot_inks(pdf, allowed)
+
+    def test_a_spot_not_on_the_list_is_an_error_naming_it(self, make_content_pdf):
+        [finding] = self._findings(make_content_pdf, self.SEP, ["Dieline"])
+        assert finding.check == "spot-ink" and finding.severity is Severity.ERROR
+        assert "PANTONE 185 C" in finding.message and finding.page == 1
+
+    def test_a_listed_spot_passes_and_names_match_exactly(self, make_content_pdf):
+        assert self._findings(make_content_pdf, self.SEP, ["PANTONE 185 C"]) == []
+        assert len(self._findings(make_content_pdf, self.SEP, ["pantone 185 c"])) == 1
+
+    def test_the_registration_colour_is_called_out(self, make_content_pdf):
+        [finding] = self._findings(make_content_pdf, self.ALL, [])
+        assert "registration colour" in finding.message
+        assert self._findings(make_content_pdf, self.ALL, ["All"]) == []
+
+    def test_no_spots_means_nothing_to_report(self, make_content_pdf):
+        with pikepdf.open(make_content_pdf(b"0 g 0 0 5 5 re f", font=False)) as pdf:
+            assert colour.check_spot_inks(pdf, []) == []
+
+
+def _transparent(tmp_path, *, group_cs=None, intent_n=None, extgstate=None, stream=b"/GS1 gs 0.5 g 0 0 50 50 re f"):
+    pdf = pikepdf.new()
+    gs = {"/GS1": pikepdf.Dictionary(ca=0.5)} if extgstate is None else extgstate
+    page = pikepdf.Dictionary(
+        Type=pikepdf.Name.Page,
+        MediaBox=[0, 0, 100, 100],
+        Contents=pdf.make_stream(stream),
+        Resources=pikepdf.Dictionary(ExtGState=pikepdf.Dictionary(gs)),
+    )
+    if group_cs is not None:
+        page["/Group"] = pikepdf.Dictionary(S=pikepdf.Name.Transparency, CS=pikepdf.Name(group_cs))
+    pdf.pages.append(pikepdf.Page(pdf.make_indirect(page)))
+    if intent_n is not None:
+        profile = pdf.make_stream(b"x")
+        profile["/N"] = intent_n
+        pdf.Root["/OutputIntents"] = pikepdf.Array([pikepdf.Dictionary(DestOutputProfile=pdf.make_indirect(profile))])
+    path = tmp_path / "t.pdf"
+    pdf.save(path)
+    return pikepdf.open(path)
+
+
+class TestTransparency:
+    def test_a_blend_space_that_disagrees_with_the_output_intent_is_an_error(self, tmp_path):
+        with _transparent(tmp_path, group_cs="/DeviceRGB", intent_n=4) as pdf:
+            [finding] = colour.check_transparency(pdf)
+        assert finding.severity is Severity.ERROR and finding.check == "blend-space"
+        assert "RGB" in finding.message and "CMYK" in finding.message and "opacity" in finding.message
+
+    def test_a_matching_blend_space_is_clean(self, tmp_path):
+        with _transparent(tmp_path, group_cs="/DeviceCMYK", intent_n=4) as pdf:
+            assert colour.check_transparency(pdf) == []
+
+    def test_an_undeclared_blend_space_is_a_warning(self, tmp_path):
+        with _transparent(tmp_path, intent_n=4) as pdf:
+            [finding] = colour.check_transparency(pdf)
+        assert finding.severity is Severity.WARN and "declares no blend colour space" in finding.message
+
+    def test_without_transparency_there_is_nothing_to_say(self, tmp_path):
+        with _transparent(tmp_path, extgstate={"/GS1": pikepdf.Dictionary(ca=1.0)}, intent_n=4) as pdf:
+            assert colour.check_transparency(pdf) == []
+
+    @pytest.mark.parametrize(
+        ("extgstate", "reason"),
+        [
+            pytest.param({"/GS1": pikepdf.Dictionary(CA=0.3)}, "opacity", id="stroke-opacity"),
+            pytest.param({"/GS1": pikepdf.Dictionary(BM=pikepdf.Name.Multiply)}, "blend mode", id="blend-mode"),
+            pytest.param({"/GS1": pikepdf.Dictionary(SMask=pikepdf.Dictionary())}, "soft mask", id="soft-mask"),
+        ],
+    )
+    def test_each_kind_of_transparency_is_recognised(self, tmp_path, extgstate, reason):
+        with _transparent(tmp_path, group_cs="/DeviceRGB", intent_n=4, extgstate=extgstate) as pdf:
+            [finding] = colour.check_transparency(pdf)
+        assert reason in finding.message
+
+    @pytest.mark.parametrize("mode", ["/Normal", "/Compatible"])
+    def test_a_normal_blend_mode_is_not_transparency(self, tmp_path, mode):
+        gs = {"/GS1": pikepdf.Dictionary(BM=pikepdf.Name(mode), SMask=pikepdf.Name("/None"))}
+        with _transparent(tmp_path, group_cs="/DeviceRGB", intent_n=4, extgstate=gs) as pdf:
+            assert colour.check_transparency(pdf) == []
+
+    def test_no_output_intent_means_no_mismatch_to_report(self, tmp_path):
+        with _transparent(tmp_path, group_cs="/DeviceRGB") as pdf:
+            assert colour.check_transparency(pdf) == []

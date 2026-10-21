@@ -130,3 +130,51 @@ class TestSafeArea:
         pdf = pikepdf.new()
         pdf.add_blank_page()
         assert text.check_safe_area(pdf, 5.0) == []
+
+
+class TestFonts:
+    def _embedded(self, pdf: pikepdf.Pdf | None = None) -> pikepdf.Dictionary:
+        descriptor = pikepdf.Dictionary(FontFile2=(pdf or pikepdf.new()).make_stream(b"x"))
+        return _simple(FontDescriptor=descriptor, FirstChar=65, Widths=[600])
+
+    def test_an_unembedded_font_is_an_error_naming_it(self, tmp_path):
+        with _page(tmp_path, b"BT /F1 12 Tf (A) Tj ET", fonts={"F1": _simple(FirstChar=65, Widths=[600])}) as pdf:
+            [finding] = text.check_fonts(pdf)
+        assert finding.check == "font-embedded" and finding.severity is Severity.ERROR
+        assert "Face" in finding.message and "not embedded" in finding.message
+
+    def test_an_embedded_font_is_clean(self, tmp_path):
+        pdf = pikepdf.new()
+        font = pdf.make_indirect(self._embedded(pdf))
+        page = pikepdf.Dictionary(
+            Type=pikepdf.Name.Page,
+            Contents=pdf.make_stream(b"BT /F1 12 Tf (A) Tj ET"),
+            Resources=pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font)),
+            **BOXES,
+        )
+        pdf.pages.append(pikepdf.Page(pdf.make_indirect(page)))
+        assert text.check_fonts(pdf) == []
+
+    def test_a_type3_font_is_a_warning(self, tmp_path):
+        type3 = pikepdf.Dictionary(
+            Type=pikepdf.Name.Font,
+            Subtype=pikepdf.Name.Type3,
+            Name=pikepdf.Name.F1,
+            FontMatrix=[0.001, 0, 0, 0.001, 0, 0],
+            FirstChar=65,
+            Widths=[600],
+        )
+        with _page(tmp_path, b"BT /F1 12 Tf (A) Tj ET", fonts={"F1": type3}) as pdf:
+            [finding] = text.check_fonts(pdf)
+        assert finding.check == "font-type3" and finding.severity is Severity.WARN
+
+    def test_a_font_no_text_is_shown_in_is_not_reported(self, tmp_path):
+        with _page(tmp_path, b"0 g 0 0 5 5 re f", fonts={"F1": _simple()}) as pdf:
+            assert text.check_fonts(pdf) == []
+
+    def test_each_font_is_reported_once_per_page_with_its_run_count(self, tmp_path):
+        with _page(
+            tmp_path, b"BT /F1 12 Tf (A) Tj (A) Tj ET", fonts={"F1": _simple(FirstChar=65, Widths=[600])}
+        ) as pdf:
+            [finding] = text.check_fonts(pdf)
+        assert "2 run(s)" in finding.message

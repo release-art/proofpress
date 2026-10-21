@@ -10,7 +10,10 @@ only requires that the boxes exist and nest correctly, so a file can be a
 perfectly valid PDF/X-4 and still be trimmed to the wrong size.
 """
 
+import io
+
 import pikepdf
+from PIL import ImageCms
 
 from .models import Finding, PageGeometry, Severity, mm_to_pt, pt_to_mm
 
@@ -19,6 +22,9 @@ from .models import Finding, PageGeometry, Severity, mm_to_pt, pt_to_mm
 _BOX_TOLERANCE = 0.5
 
 Rect = tuple[float, float, float, float]
+
+# Two pages whose finished sizes differ by less than this are the same size.
+_UNIFORM_TOLERANCE_MM = 0.1
 
 
 def _rect(obj: object) -> Rect | None:
@@ -240,3 +246,70 @@ def _check_centring(media: Rect, trim: Rect, tolerance_mm: float, page: int) -> 
             page,
         )
     ]
+
+
+def check_output_condition(pdf: pikepdf.Pdf, expected: str) -> list[Finding]:
+    """Check an output intent names the printing condition the job expects (case-insensitive substring).
+
+    Matched against each intent's identifier, condition and info strings and its ICC profile's description, so
+    ``FOGRA51`` matches an identifier that says so, or a profile called "PSO Coated v3 (FOGRA51)".
+    """
+    intents = list(pdf.Root.get("/OutputIntents", []))
+    if not intents:
+        return [
+            Finding("output-condition", Severity.ERROR, f"no output intent to compare with the expected {expected!r}")
+        ]
+    named: list[str] = []
+    for intent in intents:
+        texts = [str(intent.get(key, "")) for key in ("/OutputConditionIdentifier", "/OutputCondition", "/Info")]
+        texts.append(_profile_description(intent))
+        if any(expected.lower() in text.lower() for text in texts if text):
+            return []
+        named.append(next((t for t in texts if t), "unnamed"))
+    return [
+        Finding(
+            "output-condition",
+            Severity.ERROR,
+            f"the output intent is {', '.join(repr(n) for n in named)}, expected {expected!r}",
+        )
+    ]
+
+
+def _profile_description(intent: pikepdf.Object) -> str:
+    profile = intent.get("/DestOutputProfile")
+    if profile is None:
+        return ""
+    try:
+        return ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(profile.read_bytes()))).strip()
+    except Exception:  # an unreadable profile just has no description; the other fields still match
+        return ""
+
+
+def check_pages(pdf: pikepdf.Pdf, *, uniform: bool, multiple_of: int | None) -> list[Finding]:
+    """Page-set rules: every page the same finished size, rotation absent, and a page count a booklet can fold to."""
+    findings: list[Finding] = []
+    count = len(pdf.pages)
+    if multiple_of and count % multiple_of:
+        findings.append(Finding("page-count", Severity.ERROR, f"{count} pages is not a multiple of {multiple_of}"))
+    if not uniform:
+        return findings
+    reference: tuple[float, float] | None = None
+    for i, page in enumerate(pdf.pages, start=1):
+        rect = own_box(page.obj, "TrimBox") or media_box(page.obj)
+        if rect is None:
+            continue
+        size = _size_mm(rect)
+        reference = reference or size
+        if abs(size[0] - reference[0]) > _UNIFORM_TOLERANCE_MM or abs(size[1] - reference[1]) > _UNIFORM_TOLERANCE_MM:
+            findings.append(
+                Finding(
+                    "page-size",
+                    Severity.ERROR,
+                    f"the page is {size[0]:g} x {size[1]:g} mm but the first page is "
+                    f"{reference[0]:g} x {reference[1]:g} mm",
+                    i,
+                )
+            )
+        if int(page.obj.get("/Rotate", 0)) % 360:
+            findings.append(Finding("page-rotate", Severity.WARN, "the page is rotated with /Rotate", i))
+    return findings

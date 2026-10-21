@@ -229,3 +229,80 @@ class TestGeometry:
     def test_missing_trim_is_left_to_check_page_boxes(self, make_pdf):
         with pikepdf.open(make_pdf(boxes={"MediaBox": [0, 0, MEDIA_W, MEDIA_H]})) as pdf:
             assert structure.check_geometry(pdf, A6) == []
+
+
+def _with_intent(identifier: str | None, *, description_profile: bool = False) -> pikepdf.Pdf:
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(100, 100))
+    intent = pikepdf.Dictionary(Type=pikepdf.Name.OutputIntent, S=pikepdf.Name.GTS_PDFX)
+    if identifier is not None:
+        intent["/OutputConditionIdentifier"] = pikepdf.String(identifier)
+    if description_profile:
+        from PIL import ImageCms
+
+        profile = pdf.make_stream(ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes())
+        profile["/N"] = 3
+        intent["/DestOutputProfile"] = pdf.make_indirect(profile)
+    pdf.Root["/OutputIntents"] = pikepdf.Array([pdf.make_indirect(intent)])
+    return pdf
+
+
+class TestOutputCondition:
+    def test_a_matching_identifier_passes_case_insensitively(self):
+        assert structure.check_output_condition(_with_intent("FOGRA51 (PSO Coated v3)"), "fogra51") == []
+
+    def test_a_different_condition_is_an_error_naming_both(self):
+        [finding] = structure.check_output_condition(_with_intent("sRGB IEC61966-2.1"), "FOGRA51")
+        assert finding.severity is Severity.ERROR and finding.check == "output-condition"
+        assert "sRGB IEC61966-2.1" in finding.message and "FOGRA51" in finding.message
+
+    def test_the_icc_profile_description_counts_too(self):
+        pdf = _with_intent(None, description_profile=True)
+        assert structure.check_output_condition(pdf, "sRGB") == []
+
+    def test_no_output_intent_is_an_error(self):
+        pdf = pikepdf.new()
+        pdf.add_blank_page()
+        [finding] = structure.check_output_condition(pdf, "FOGRA51")
+        assert "no output intent" in finding.message
+
+
+def _pages(*sizes_mm: tuple[float, float], rotate: dict[int, int] | None = None) -> pikepdf.Pdf:
+    pdf = pikepdf.new()
+    for i, (w, h) in enumerate(sizes_mm):
+        pdf.add_blank_page(page_size=(w / 25.4 * 72, h / 25.4 * 72))
+        if rotate and i in rotate:
+            pdf.pages[i].obj["/Rotate"] = rotate[i]
+    return pdf
+
+
+class TestPageSet:
+    def test_a_count_that_is_not_a_multiple_is_an_error(self):
+        [finding] = structure.check_pages(_pages(*[(105, 148)] * 10), uniform=False, multiple_of=4)
+        assert finding.check == "page-count" and "10 pages" in finding.message
+
+    def test_a_multiple_passes(self):
+        assert structure.check_pages(_pages(*[(105, 148)] * 8), uniform=False, multiple_of=4) == []
+
+    def test_a_page_of_another_size_is_named(self):
+        [finding] = structure.check_pages(_pages((105, 148), (105, 148), (148, 210)), uniform=True, multiple_of=None)
+        assert finding.check == "page-size" and finding.page == 3
+        assert "148 x 210" in finding.message and "105 x 148" in finding.message
+
+    def test_sizes_within_a_tenth_of_a_millimetre_are_the_same(self):
+        assert structure.check_pages(_pages((105, 148), (105.05, 148.05)), uniform=True, multiple_of=None) == []
+
+    def test_a_rotated_page_is_a_warning(self):
+        [finding] = structure.check_pages(
+            _pages((105, 148), (105, 148), rotate={1: 90}), uniform=True, multiple_of=None
+        )
+        assert finding.check == "page-rotate" and finding.severity is Severity.WARN and finding.page == 2
+
+    def test_nothing_is_checked_unless_asked(self):
+        assert structure.check_pages(_pages((105, 148), (148, 210)), uniform=False, multiple_of=None) == []
+
+    def test_the_trim_box_is_the_size_when_there_is_one(self):
+        pdf = _pages((111, 154), (111, 154))
+        for page in pdf.pages:
+            page.obj["/TrimBox"] = [8.5, 8.5, 8.5 + 105 / 25.4 * 72, 8.5 + 148 / 25.4 * 72]
+        assert structure.check_pages(pdf, uniform=True, multiple_of=None) == []

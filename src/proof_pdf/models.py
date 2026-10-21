@@ -83,6 +83,9 @@ class Profile:
     *k_only_text* is an opt-in house rule: text may be painted with the K plate only.
     *missing_glyphs* flags ``.notdef`` glyphs; *min_text_pt*, *min_stroke_pt* and *safe_mm* are opt-in thresholds with
     no default, because a size floor or a safe margin is a house rule and not something to infer.
+    *fonts* flags unembedded and Type 3 fonts; *allow_spots* (exact names) turns on the spot-ink allowlist;
+    *output_condition* names the printing condition the output intent must carry; *uniform_pages* and
+    *pages_multiple_of* are page-set rules.
     *min_delta_l* turns on the contrast check (an L* difference floor), measured through *proof_profile* or the PDF's
     own output intent.
     """
@@ -103,6 +106,11 @@ class Profile:
     safe_mm: float | None = None
     min_delta_l: float | None = None
     proof_profile: pathlib.Path | None = None
+    fonts: bool = True
+    allow_spots: tuple[str, ...] | None = None
+    output_condition: str | None = None
+    uniform_pages: bool = False
+    pages_multiple_of: int | None = None
 
 
 @dataclasses.dataclass

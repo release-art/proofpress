@@ -107,10 +107,13 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                 findings += structure.check_pdfx_identity(pdf)
             if profile.geometry is not None:
                 findings += structure.check_geometry(pdf, profile.geometry)
+            findings += _structure_rules(pdf, profile)
             if profile.k_only_text:
                 findings += colour.check_k_only_text(pdf)
             findings += _text_checks(pdf, profile)
             if profile.colour:
+                findings += colour.check_white_overprint(pdf)
+                findings += colour.check_transparency(pdf)
                 findings += colour.check_overprint(pdf)
                 findings += colour.check_rich_black(pdf, profile.small_text_pt)
                 findings += colour.check_colour_spaces(pdf, strict=profile.strict_cmyk)
@@ -120,10 +123,23 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
     return findings, True
 
 
+def _structure_rules(pdf: pikepdf.Pdf, profile: Profile) -> list[Finding]:
+    findings: list[Finding] = []
+    if profile.output_condition is not None:
+        findings += structure.check_output_condition(pdf, profile.output_condition)
+    if profile.uniform_pages or profile.pages_multiple_of:
+        findings += structure.check_pages(pdf, uniform=profile.uniform_pages, multiple_of=profile.pages_multiple_of)
+    if profile.allow_spots is not None:
+        findings += colour.check_spot_inks(pdf, profile.allow_spots)
+    return findings
+
+
 def _text_checks(pdf: pikepdf.Pdf, profile: Profile) -> list[Finding]:
     findings: list[Finding] = []
     if profile.missing_glyphs:
         findings += text.check_missing_glyphs(pdf)
+    if profile.fonts:
+        findings += text.check_fonts(pdf)
     if profile.min_text_pt is not None:
         findings += text.check_min_text_size(pdf, profile.min_text_pt)
     if profile.min_stroke_pt is not None:

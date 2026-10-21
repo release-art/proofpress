@@ -132,22 +132,22 @@ class TestTextRules:
     """The text fixtures use a non-embedded font and DeviceCMYK, so veraPDF rightly fails them: run with --no-pdfa."""
 
     def test_cyan_text_under_overprint_fails_k_only_and_warns_overprint(self, runner):
-        code, [record] = _verify(runner, PDFS / "cyan-text.pdf", *A6, "--no-pdfa", "--k-only-text")
+        code, [record] = _verify(runner, PDFS / "cyan-text.pdf", *A6, "--no-pdfa", "--no-fonts", "--k-only-text")
         assert code == 1
         assert _checks(record, severity="error") == {"k-only-text"}
         assert _checks(record, severity="warn") == {"overprint"}
         assert "C100" in _messages(record, "k-only-text")[0]
 
     def test_k_only_is_opt_in(self, runner):
-        code, [record] = _verify(runner, PDFS / "cyan-text.pdf", *A6, "--no-pdfa")
+        code, [record] = _verify(runner, PDFS / "cyan-text.pdf", *A6, "--no-pdfa", "--no-fonts")
         assert _checks(record) == {"overprint"} and code == 0  # advisory only
 
     def test_overprinting_100_percent_k_text_is_clean(self, runner):
-        code, [record] = _verify(runner, PDFS / "black-text.pdf", *A6, "--no-pdfa", "--k-only-text")
+        code, [record] = _verify(runner, PDFS / "black-text.pdf", *A6, "--no-pdfa", "--no-fonts", "--k-only-text")
         assert (code, record["findings"]) == (0, [])
 
     def test_rich_black_small_text_is_a_warning_that_does_not_fail(self, runner):
-        code, [record] = _verify(runner, PDFS / "rich-black-text.pdf", *A6, "--no-pdfa")
+        code, [record] = _verify(runner, PDFS / "rich-black-text.pdf", *A6, "--no-pdfa", "--no-fonts")
         assert code == 0
         assert _checks(record, severity="warn") == {"rich-black"} and _checks(record, severity="error") == set()
 
@@ -204,7 +204,7 @@ class TestPreview:
         assert preview._TRIM_RGB not in _colours(png)
 
 
-PROOFING = ["--no-pdfa", "--no-pdfx", "--no-colour"]  # isolate the proofing checks from the standards layers
+PROOFING = ["--no-pdfa", "--no-pdfx", "--no-colour", "--no-fonts"]  # isolate the proofing checks from other layers
 
 
 class TestProofingChecks:
@@ -309,3 +309,129 @@ class TestRealLuaLatexBuild:
         regular = next(f for f in record["fonts"] if f["name"] == "LMRoman10-Regular")
         assert regular["embedded"] and regular["has_to_unicode"] and regular["notdef"] == 1
         assert record["contrast"][0]["background"] == "paper" and record["contrast"][0]["delta_l"] > 95
+
+
+NO_STANDARDS = ["--no-pdfa", "--no-pdfx"]
+
+
+class TestPrintReadiness:
+    """White overprint, fonts, spot inks, transparency, output condition and page-set rules, on real files."""
+
+    def test_white_text_set_to_overprint_is_an_error_beside_the_generic_overprint_warning(self, runner):
+        code, [record] = _verify(runner, PDFS / "white-overprint.pdf", *NO_STANDARDS, "--no-fonts")
+        assert code == 1
+        assert _checks(record, severity="error") == {"white-overprint"}
+        assert _checks(record, severity="warn") == {"overprint"}
+
+    def test_an_unembedded_font_fails_even_without_pdfa(self, runner):
+        code, [record] = _verify(runner, PDFS / "cyan-text.pdf", *NO_STANDARDS, "--no-colour")
+        assert code == 1 and _checks(record) == {"font-embedded"}
+        assert "Helvetica" in _messages(record, "font-embedded")[0]
+
+    def test_an_embedded_font_passes_and_type3_only_warns(self, runner):
+        code, [record] = _verify(runner, PDFS / "embedded-text.pdf", *NO_STANDARDS, "--no-colour")
+        assert (code, record["findings"]) == (0, [])
+        code, [record] = _verify(runner, PDFS / "type3-text.pdf", *NO_STANDARDS, "--no-colour")
+        assert code == 0 and _checks(record, severity="warn") == {"font-type3"}
+
+    def test_a_spot_ink_off_the_list_is_named(self, runner):
+        code, [record] = _verify(runner, PDFS / "spot-ink.pdf", *NO_STANDARDS, "--allow-spot", "Dieline")
+        assert code == 1 and _checks(record) == {"spot-ink"}
+        assert "PANTONE 185 C" in _messages(record, "spot-ink")[0]
+
+    def test_a_listed_spot_passes_and_no_list_means_no_check(self, runner):
+        assert _verify(runner, PDFS / "spot-ink.pdf", *NO_STANDARDS, "--allow-spot", "PANTONE 185 C")[0] == 0
+        assert _verify(runner, PDFS / "spot-ink.pdf", *NO_STANDARDS)[0] == 0
+
+    def test_the_registration_colour_must_be_named_and_the_ink_limit_catches_it_anyway(self, runner):
+        _, [flagged] = _verify(runner, PDFS / "registration-spot.pdf", *NO_STANDARDS, "--allow-spot", "Dieline")
+        assert "registration colour" in _messages(flagged, "spot-ink")[0]
+        _, [allowed] = _verify(runner, PDFS / "registration-spot.pdf", *NO_STANDARDS, "--allow-spot", "All")
+        assert _checks(allowed) == {"tac"}  # Ghostscript renders 'All' as ink on every plate: far over the limit
+
+    def test_transparency_blend_space_against_the_output_intent(self, runner):
+        ok = _verify(runner, PDFS / "transparent-matching.pdf", *NO_STANDARDS)
+        bad = _verify(runner, PDFS / "transparent-mismatch.pdf", *NO_STANDARDS)
+        unset = _verify(runner, PDFS / "transparent-undeclared.pdf", *NO_STANDARDS)
+        assert (ok[0], ok[1][0]["findings"]) == (0, [])
+        assert bad[0] == 1 and _checks(bad[1][0], severity="error") == {"blend-space"}
+        assert unset[0] == 0 and _checks(unset[1][0], severity="warn") == {"blend-space"}
+
+    def test_output_condition_must_name_the_expected_printing_condition(self, runner):
+        assert _verify(runner, PDFS / "good.pdf", *A6, "--output-condition", "sRGB")[0] == 0
+        code, [record] = _verify(runner, PDFS / "good.pdf", *A6, "--output-condition", "FOGRA51")
+        assert code == 1 and _checks(record) == {"output-condition"}
+        assert "sRGB IEC61966-2.1" in _messages(record, "output-condition")[0]
+
+    def test_no_output_intent_cannot_satisfy_an_expected_condition(self, runner):
+        _, [record] = _verify(runner, PDFS / "plain.pdf", *NO_STANDARDS, "--output-condition", "FOGRA51")
+        assert "no output intent" in _messages(record, "output-condition")[0]
+
+    def test_page_set_rules(self, runner):
+        code, [record] = _verify(runner, PDFS / "two-sizes.pdf", *NO_STANDARDS, "--uniform-pages")
+        assert code == 1 and _checks(record) == {"page-size"} and record["findings"][0]["page"] == 2
+        code, [record] = _verify(runner, PDFS / "three-pages.pdf", *NO_STANDARDS, "--pages-multiple-of", "4")
+        assert code == 1 and _checks(record) == {"page-count"}
+        assert _verify(runner, PDFS / "three-pages.pdf", *NO_STANDARDS, "--uniform-pages")[0] == 0
+
+    def test_a_clean_card_passes_every_rule_at_once(self, runner):
+        flags = ["--allow-spot", "Dieline", "--output-condition", "sRGB", "--uniform-pages", "--pages-multiple-of", "1"]
+        code, [record] = _verify(runner, PDFS / "good.pdf", *A6, *flags)
+        assert (code, record["findings"]) == (0, [])
+
+
+class TestPrinterProfileEndToEnd:
+    """One config file carries a printer's numbers; the real CLI applies them to real files."""
+
+    CONFIG = """
+[verify]
+pdfa = false
+pdfx = false
+colour = false
+fonts = false
+trim-mm = "105x148"
+bleed-mm = 3
+min-text-pt = 7
+safe-mm = 5
+output-condition = "sRGB"
+
+[verify.exempt]
+"high-contrast.pdf" = "sample, not a deliverable"
+
+[profiles.relaxed.verify]
+min-text-pt = 3
+safe-mm = 0.5
+"""
+
+    @pytest.fixture
+    def job(self, tmp_path):
+        for name in ("small-text", "edge-text", "good", "high-contrast"):
+            shutil.copy(PDFS / f"{name}.pdf", tmp_path / f"{name}.pdf")
+        (tmp_path / "proof-pdf.toml").write_text(self.CONFIG)
+        return tmp_path
+
+    def _run(self, runner, job, *args):
+        result = runner.invoke(cli.pdf_app, [*args, "verify", str(job), "--json"])
+        return result.exit_code, {pathlib.Path(r["path"]).name: r for r in json.loads(result.stdout)}
+
+    def test_the_printers_rules_apply_with_no_flags(self, runner, job, monkeypatch):
+        monkeypatch.chdir(job)
+        code, by_name = self._run(runner, job)
+        assert code == 1
+        assert _checks(by_name["small-text.pdf"]) == {"text-size"}
+        assert _checks(by_name["edge-text.pdf"]) == {"safe-area"}
+        assert by_name["good.pdf"]["findings"] == []
+        assert by_name["high-contrast.pdf"]["exempt"] == "sample, not a deliverable"
+
+    def test_a_named_profile_relaxes_them(self, runner, job, monkeypatch):
+        monkeypatch.chdir(job)
+        code, by_name = self._run(runner, job, "--profile", "relaxed")
+        assert code == 0 and all(r["findings"] == [] for r in by_name.values())
+
+    def test_a_flag_still_wins_over_the_file(self, runner, job, monkeypatch):
+        monkeypatch.chdir(job)
+        code, by_name = self._run(runner, job, "--profile", "relaxed")
+        result = runner.invoke(
+            cli.pdf_app, ["--profile", "relaxed", "verify", str(job), "--min-text-pt", "7", "--json"]
+        )
+        assert code == 0 and result.exit_code == 1

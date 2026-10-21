@@ -140,6 +140,7 @@ class Walker:
         self.line_matrix: content.Matrix = content.IDENTITY
         self.path: list[tuple[float, float]] = []
         self.spots: set[str] = set()
+        self.transparency: set[str] = set()  # why the page needs a blend space: opacity, blend mode, soft mask
         self._fonts: dict[tuple[int, int] | int, fonts.Font] = {}
 
     def walk(self, page: pikepdf.Page) -> collections.abc.Iterator[Paint]:
@@ -177,6 +178,8 @@ class Walker:
         if name == "Do":
             xobject = content.lookup_xobject(op.resources, op.operands)
             if xobject is not None and str(xobject.get("/Subtype")) == "/Image":
+                if xobject.get("/SMask") is not None:
+                    self.transparency.add("soft mask")
                 bbox = _aabb(op.ctm, [(0, 0), (1, 0), (0, 1), (1, 1)])
                 return Paint("image", state.fill, state.overprint, bbox=bbox, xobject=xobject, name=str(op.operands[0]))
         return None
@@ -305,6 +308,19 @@ class Walker:
             self._set(overprint=truthy(gs.get("/OP")) or truthy(gs.get("/op")))
         if gs.get("/LW") is not None:
             self._set(line_width=number([gs.get("/LW")], 0))
+        self._note_transparency(gs)
+
+    def _note_transparency(self, gs: pikepdf.Object) -> None:
+        if any(gs.get(key) is not None and number([gs.get(key)], 0) < 1.0 for key in ("/ca", "/CA")):
+            self.transparency.add("opacity")
+        blend = gs.get("/BM")
+        if blend is not None:
+            modes = list(blend) if isinstance(blend, pikepdf.Array) else [blend]
+            if any(str(m) not in ("/Normal", "/Compatible") for m in modes):
+                self.transparency.add("blend mode")
+        mask = gs.get("/SMask")
+        if mask is not None and not (isinstance(mask, pikepdf.Name) and str(mask) == "/None"):
+            self.transparency.add("soft mask")
 
     def _line_width(self, op: content.Operation) -> None:
         self._set(line_width=number(op.operands, 0))

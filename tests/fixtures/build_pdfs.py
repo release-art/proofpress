@@ -73,6 +73,7 @@ def build(
     output_intent: bool = True,
     xmp: bool = True,
     trapped: bool = True,
+    group_cs: str | None = None,
     pdf: pikepdf.Pdf | None = None,
 ) -> pikepdf.Pdf:
     """The good card, with any one part switched off or swapped."""
@@ -89,6 +90,8 @@ def build(
         Resources=resources if resources is not None else pikepdf.Dictionary(),
         **boxes,
     )
+    if group_cs is not None:
+        page["/Group"] = pikepdf.Dictionary(S=pikepdf.Name.Transparency, CS=pikepdf.Name(f"/{group_cs}"))
     pdf.pages.append(pikepdf.Page(pdf.make_indirect(page)))
     if output_intent:
         profile = pdf.make_stream(zlib.compress(_icc()))
@@ -133,6 +136,48 @@ def _font(pdf: pikepdf.Pdf) -> pikepdf.Object:
             FirstChar=32,
             LastChar=126,
             Widths=[556] * 95,
+        )
+    )
+
+
+def _embedded_font(pdf: pikepdf.Pdf) -> pikepdf.Object:
+    """A simple font that declares an embedded program (the bytes are a stand-in: only the declaration is read)."""
+    descriptor = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.FontDescriptor,
+            FontName=pikepdf.Name("/ABCDEF+Nunito"),
+            FontFile2=pdf.make_stream(b"stand-in font program"),
+        )
+    )
+    return pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font,
+            Subtype=pikepdf.Name.TrueType,
+            BaseFont=pikepdf.Name("/ABCDEF+Nunito"),
+            FirstChar=32,
+            LastChar=126,
+            Widths=[556] * 95,
+            FontDescriptor=descriptor,
+        )
+    )
+
+
+def _type3_font(pdf: pikepdf.Pdf) -> pikepdf.Object:
+    """A Type 3 font with one glyph, as a bitmap or hand-built face appears."""
+    glyph = pdf.make_stream(b"600 0 d0 0 0 500 500 re f")
+    return pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font,
+            Subtype=pikepdf.Name.Type3,
+            Name=pikepdf.Name("/T3"),
+            FontBBox=[0, 0, 600, 500],
+            FontMatrix=[0.001, 0, 0, 0.001, 0, 0],
+            CharProcs=pikepdf.Dictionary(A=glyph),
+            Encoding=pikepdf.Dictionary(Type=pikepdf.Name.Encoding, Differences=[65, pikepdf.Name("/A")]),
+            FirstChar=65,
+            LastChar=65,
+            Widths=[600],
+            Resources=pikepdf.Dictionary(),
         )
     )
 
@@ -184,9 +229,11 @@ def _with_text(
     at: tuple[float, float] | None = None,
     prefix: bytes = b"",
     type0: bool = False,
+    kind: str = "plain",
 ) -> pikepdf.Pdf:
     pdf = pikepdf.new()
-    font = _type0_font(pdf) if type0 else _font(pdf)
+    makers = {"plain": _font, "embedded": _embedded_font, "type3": _type3_font}
+    font = _type0_font(pdf) if type0 else makers[kind](pdf)
     resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
     if overprint:
         resources["/ExtGState"] = pikepdf.Dictionary(GS1=pikepdf.Dictionary(OP=True, op=True))
@@ -197,6 +244,43 @@ def _with_text(
         resources=resources,
         pdf=pdf,
     )
+
+
+def _with_spot(name: str) -> pikepdf.Pdf:
+    space = pikepdf.Array([pikepdf.Name.Separation, pikepdf.Name(f"/{name}"), pikepdf.Name.DeviceCMYK, _tint(name)])
+    content = GOOD_CONTENT + b" /CS1 cs 1 scn %f %f 60 60 re f" % (BLEED + 160, BLEED + 20)
+    return build(content, resources=pikepdf.Dictionary(ColorSpace=pikepdf.Dictionary(CS1=space)))
+
+
+def _tint(name: str) -> pikepdf.Dictionary:
+    """A tint transform for the Separation (type 2 exponential function from white to a CMYK ink)."""
+    return pikepdf.Dictionary(FunctionType=2, Domain=[0, 1], C0=[0, 0, 0, 0], C1=[0, 1, 1, 0], N=1)
+
+
+def _transparent(group_cs: str | None) -> pikepdf.Pdf:
+    resources = pikepdf.Dictionary(ExtGState=pikepdf.Dictionary(GS1=pikepdf.Dictionary(ca=0.5, CA=0.5)))
+    content = GOOD_CONTENT + b" /GS1 gs 0.5 g %f %f 80 80 re f" % (BLEED + 150, BLEED + 150)
+    return build(content, resources=resources, group_cs=group_cs)
+
+
+def _multi_page(extra: list[tuple[float, float]]) -> pikepdf.Pdf:
+    """The good card followed by pages of the given finished sizes in mm (each centred in a 3 mm bleed)."""
+    pdf = build()
+    for width_mm, height_mm in extra:
+        w, h = width_mm * MM, height_mm * MM
+        boxes = {
+            "MediaBox": [0, 0, w + 2 * BLEED, h + 2 * BLEED],
+            "TrimBox": [BLEED, BLEED, BLEED + w, BLEED + h],
+            "BleedBox": [0, 0, w + 2 * BLEED, h + 2 * BLEED],
+        }
+        page = pikepdf.Dictionary(
+            Type=pikepdf.Name.Page,
+            Contents=pdf.make_stream(b"0.9 g 0 0 10 10 re f"),
+            Resources=pikepdf.Dictionary(),
+            **boxes,
+        )
+        pdf.pages.append(pikepdf.Page(pdf.make_indirect(page)))
+    return pdf
 
 
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
@@ -241,6 +325,23 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         ),
         # Black text on bare paper: the opposite.
         "high-contrast": _with_text(b"0 g (clear) Tj"),
+        # White text set to overprint: it adds no ink and vanishes on press.
+        "white-overprint": _with_text(b"1 g (hidden) Tj", overprint=True),
+        # Text in an embedded font: the fonts check passes.
+        "embedded-text": _with_text(b"0 g (embedded) Tj", kind="embedded"),
+        # Text in a Type 3 font: a warning.
+        "type3-text": _with_text(b"0 g (A) Tj", kind="type3"),
+        # A Pantone spot ink, and the registration colour used as if it were artwork.
+        "spot-ink": _with_spot("PANTONE 185 C"),
+        "registration-spot": _with_spot("All"),
+        # Live transparency with the blend space declared RGB, matching the sRGB output intent; CMYK, mismatching it;
+        # and not declared at all.
+        "transparent-matching": _transparent("DeviceRGB"),
+        "transparent-mismatch": _transparent("DeviceCMYK"),
+        "transparent-undeclared": _transparent(None),
+        # A page of another size after the card, and a three-page file for a multiple-of-four rule.
+        "two-sizes": _multi_page([(148, 210)]),
+        "three-pages": _multi_page([(105, 148), (105, 148)]),
         # PDF/A metadata but no output intent: veraPDF fails on DeviceGray, and proof-pdf adds a hint.
         "no-output-intent": build(output_intent=False),
     }
