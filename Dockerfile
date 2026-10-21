@@ -17,7 +17,7 @@ FROM ${DEBIAN_IMAGE} AS tex
 ARG TL_REPO
 RUN apt-get update && apt-get install -y --no-install-recommends perl curl xz-utils ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-RUN mkdir /tmp/itl && curl -fsSL ${TL_REPO}/install-tl-unx.tar.gz | tar -xz -C /tmp/itl --strip-components=1 \
+RUN mkdir /tmp/itl && curl -fsSL --retry 5 --retry-delay 10 ${TL_REPO}/install-tl-unx.tar.gz | tar -xz -C /tmp/itl --strip-components=1 \
  && printf 'selected_scheme scheme-infraonly\nTEXDIR /opt/texlive\nTEXMFLOCAL /opt/texlive/texmf-local\nTEXMFSYSVAR /opt/texlive/texmf-var\nTEXMFSYSCONFIG /opt/texlive/texmf-config\ninstopt_adjustpath 0\ntlpdbopt_install_docfiles 0\ntlpdbopt_install_srcfiles 0\n' > /tmp/p \
  && /tmp/itl/install-tl -profile /tmp/p -repository ${TL_REPO} \
  && rm -rf /tmp/itl /tmp/p
@@ -25,7 +25,10 @@ RUN mkdir /tmp/itl && curl -fsSL ${TL_REPO}/install-tl-unx.tar.gz | tar -xz -C /
 RUN ln -s /opt/texlive/bin/$(uname -m)-linux /opt/texlive/bin/current
 ENV PATH=/opt/texlive/bin/current:$PATH
 COPY docker/texlive-packages.txt /tmp/texlive-packages.txt
-RUN tlmgr option repository ${TL_REPO} && tlmgr install $(grep -v '^#' /tmp/texlive-packages.txt) \
+# The mirror drops downloads from CI runners now and then; tlmgr then carries on without the package and fails later in
+# fmtutil. Re-running the install fetches only what is missing, so retry before giving up.
+RUN tlmgr option repository ${TL_REPO} \
+ && for i in 1 2 3 4; do tlmgr install $(grep -v '^#' /tmp/texlive-packages.txt) && break || { [ "$i" = 4 ] && exit 1; sleep 30; }; done \
  && fmtutil-sys --byfmt lualatex >/dev/null
 
 # ---- veraPDF ----------------------------------------------------------------------
@@ -34,7 +37,8 @@ ARG VERAPDF_VERSION=1.30.2
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip openjdk-21-jre-headless \
  && rm -rf /var/lib/apt/lists/*
 COPY docker/verapdf-auto-install.xml /tmp/auto-install.xml
-RUN curl -fsSL https://software.verapdf.org/rel/1.30/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip -o /tmp/v.zip \
+# --retry covers the 502s these hosts return now and then.
+RUN curl -fsSL --retry 5 --retry-delay 10 https://software.verapdf.org/rel/1.30/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip -o /tmp/v.zip \
  && unzip -q /tmp/v.zip -d /tmp/v && java -jar /tmp/v/*/verapdf-izpack-installer-*.jar /tmp/auto-install.xml \
  && rm -rf /tmp/v /tmp/v.zip
 
