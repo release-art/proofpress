@@ -1,5 +1,6 @@
 """The ``tools pdf`` command surface: exit codes, layers, and readable output."""
 
+import importlib.metadata
 import json
 import pathlib
 
@@ -234,3 +235,19 @@ def test_relative_path_display(tmp_path, monkeypatch):
 
 def test_verapdf_error_is_reexported():
     assert cli.VeraPdfError is core.verapdf.VeraPdfError
+
+
+class TestVersion:
+    def test_prints_the_package_version(self, runner, monkeypatch):
+        monkeypatch.delenv("PROOFPRESS_REVISION", raising=False)
+        result = runner.invoke(cli.pdf_app, ["--version"])
+        assert result.exit_code == 0
+        assert result.output.strip() == f"proof-pdf {importlib.metadata.version('proof-pdf')}"
+
+    def test_includes_the_commit_the_image_recorded(self, runner, monkeypatch):
+        monkeypatch.setenv("PROOFPRESS_REVISION", "0123456789abcdef0123")
+        assert "(commit 0123456789ab)" in runner.invoke(cli.pdf_app, ["--version"]).output
+
+    def test_unknown_revision_is_not_shown(self, runner, monkeypatch):
+        monkeypatch.setenv("PROOFPRESS_REVISION", "unknown")
+        assert "commit" not in runner.invoke(cli.pdf_app, ["--version"]).output

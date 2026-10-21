@@ -11,8 +11,10 @@ the same way a freshly built one is.
 """
 
 import dataclasses
+import importlib.metadata
 import json
 import logging
+import os
 import pathlib
 import typing
 
@@ -37,6 +39,30 @@ pdf_app = typer.Typer(
     help="Verify and proof print PDFs (PDF/X-4 + PDF/A).",
     no_args_is_help=True,
 )
+
+
+def version_string() -> str:
+    """``1.2.3``, plus ``(commit abc123)`` when the image or build recorded one in PROOFPRESS_REVISION."""
+    version = importlib.metadata.version("proof-pdf")
+    revision = os.environ.get("PROOFPRESS_REVISION")
+    return f"{version} (commit {revision[:12]})" if revision and revision != "unknown" else version
+
+
+def _show_version(value: bool) -> None:
+    # An eager option callback: click would otherwise reject a bare ``--version`` as a missing command.
+    if value:
+        typer.echo(f"proof-pdf {version_string()}")
+        raise typer.Exit()
+
+
+@pdf_app.callback()
+def _main(
+    version: typing.Annotated[
+        bool, typer.Option("--version", help="Show the version and exit.", callback=_show_version, is_eager=True)
+    ] = False,
+) -> None:
+    pass
+
 
 # A hung Ghostscript on a 400 MB file would otherwise block a CI run for ever.
 DEFAULT_TIMEOUT = 900.0

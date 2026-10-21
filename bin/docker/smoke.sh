@@ -7,5 +7,6 @@ for t in lualatex full; do
     echo "ok: $t compiles"
 done
 docker run --rm --entrypoint sh releaseart/full:local -c 'verapdf --version >/dev/null && gs --version >/dev/null'
-docker run --rm releaseart/full:local --help >/dev/null
+docker run --rm releaseart/full:local --version | grep -E "^proof-pdf [0-9]+\.[0-9]+\.[0-9]+.*\(commit [0-9a-f]{12}"
+docker run --rm --entrypoint sh releaseart/lualatex:local -c 'test -n "$PROOFPRESS_REVISION"'
 echo "ok: full has verapdf, gs, proof-pdf"

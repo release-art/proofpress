@@ -2,11 +2,12 @@
 # bin/docker/build.sh [lualatex|full ...]   (default: both) -> releaseart/<target>:local, host arch
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+eval "$(bin/docker/version.sh)" # PKG_VERSION, REVISION
+bin/docker/base-digests.sh
 for target in "${@:-lualatex full}"; do
     for t in $target; do
         docker buildx build --target "$t" --load \
-            --build-arg VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)" \
-            --build-arg REVISION="$(git rev-parse HEAD 2>/dev/null || echo unknown)" \
+            --build-arg VERSION="$PKG_VERSION" --build-arg REVISION="$REVISION" --build-arg PKG_VERSION="$PKG_VERSION" \
             -t "releaseart/$t:local" .
     done
 done

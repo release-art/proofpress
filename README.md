@@ -22,4 +22,11 @@ Licence: Apache-2.0. See `NOTICE` for third-party terms.
 ## Images
 
 `releaseart/lualatex` (TeX Live 2025) and `releaseart/full` (adds Ghostscript, veraPDF and `proof-pdf`) on Docker Hub.
-Build locally with `bin/docker/build.sh`, check with `bin/docker/smoke.sh`.
+`:latest` is the weekly build of `main` (Monday, with fresh base images); `:1.2.3` tags come from a git tag and never move
+`:latest`. Build locally with `bin/docker/build.sh`, check with `bin/docker/smoke.sh`.
+
+## Releasing
+
+Add the release to `CHANGELOG.md`, then push a tag: `git tag v1.2.3 && git push origin v1.2.3`.
+The tag is the version. It runs the tests, publishes to PyPI (TestPyPI first), creates a GitHub Release and
+pushes both Docker images. `proof-pdf --version` shows the version and the commit it was built from.

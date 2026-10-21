@@ -1,6 +1,6 @@
 [project]
 name = "proof-pdf"
-version = "0.0.0dev0"
+dynamic = ["version"]
 description = "Hold print PDFs to PDF/X-4 and PDF/A: veraPDF, page boxes, geometry, ink and image resolution."
 authors = [{name = "Ilja Orlovs", email = "ilja@release.art"}]
 license = "Apache-2.0"
@@ -42,6 +42,13 @@ pythonVersion = "3.14"
 
 [tool.pdm]
 distribution = true
+
+# The version is the git tag (v1.2.3). No tag, or no .git (the Docker build), falls back to 0.0.0
+# unless PDM_BUILD_SCM_VERSION says otherwise.
+[tool.pdm.version]
+source = "scm"
+tag_regex = '^v(?P<version>\d+\.\d+\.\d+.*)$'
+fallback_version = "0.0.0"
 
 [tool.pdm.build]
 package-dir = "src"

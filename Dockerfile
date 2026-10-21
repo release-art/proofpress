@@ -5,9 +5,10 @@
 #   docker build --target lualatex -t releaseart/lualatex .
 #   docker build --target full     -t releaseart/full .
 #
-# Bases are pinned by digest and bumped deliberately.
-ARG DEBIAN_IMAGE=debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
-ARG PYTHON_IMAGE=python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
+# Bases float on their tags so rebuilds pick up security fixes; bin/docker/base-digests.sh logs
+# what they resolved to (CI runs it before every build).
+ARG DEBIAN_IMAGE=debian:trixie-slim
+ARG PYTHON_IMAGE=python:3.14-slim
 ARG TL_REPO=https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final
 
 # ---- TeX Live from the frozen historic mirror (reproducible) --------------------
@@ -38,6 +39,9 @@ RUN curl -fsSL https://software.verapdf.org/rel/1.30/verapdf-greenfield-${VERAPD
 
 # ---- proof-pdf's venv, from the lockfile ------------------------------------------
 FROM ${PYTHON_IMAGE} AS app
+# The release workflow passes the tag; there is no .git in the build context to read it from.
+ARG PKG_VERSION=0.0.0
+ENV PDM_BUILD_SCM_VERSION=${PKG_VERSION}
 RUN pip install --no-cache-dir pdm
 WORKDIR /app
 COPY pyproject.toml pdm.lock README.md LICENSE NOTICE /app/
@@ -53,6 +57,7 @@ LABEL org.opencontainers.image.title="releaseart/lualatex" \
       org.opencontainers.image.licenses="LPPL-1.3c AND GPL-2.0-or-later" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
+ENV PROOFPRESS_VERSION=${VERSION} PROOFPRESS_REVISION=${REVISION}
 # fontconfig for luaotfload; perl because several TeX Live scripts (tlmgr, latexmk) need it.
 RUN apt-get update && apt-get install -y --no-install-recommends perl fontconfig ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -71,6 +76,7 @@ LABEL org.opencontainers.image.title="releaseart/full" \
       org.opencontainers.image.licenses="Apache-2.0 AND AGPL-3.0-or-later AND LPPL-1.3c AND GPL-2.0-or-later" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
+ENV PROOFPRESS_VERSION=${VERSION} PROOFPRESS_REVISION=${REVISION}
 # Ghostscript (AGPL; source via `apt-get source ghostscript`) and Java for veraPDF.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ghostscript openjdk-21-jre-headless perl fontconfig \
