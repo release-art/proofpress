@@ -1,0 +1,13 @@
+# Added to scheme-infraonly. Downstream images add their own with `tlmgr install`.
+collection-basic
+collection-latex
+collection-luatex
+collection-latexrecommended
+collection-fontsrecommended
+adjustbox
+microtype
+tcolorbox
+pgf
+fontspec
+geometry
+xcolor
