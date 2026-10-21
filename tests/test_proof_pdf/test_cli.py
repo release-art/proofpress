@@ -17,17 +17,17 @@ def runner():
 
 
 @pytest.fixture
-def stub_verify(monkeypatch):
+def stub_verify(mocker):
     """Replace the verification with canned findings, keyed by file name."""
 
     def _install(findings_by_name: dict[str, list[Finding]]):
         seen: list = []
 
-        def _verify(path, profile, **kwargs):
+        async def _verify(path, profile, **kwargs):
             seen.append((path, profile, kwargs))
             return FileReport(path=path, findings=list(findings_by_name.get(path.name, [])))
 
-        monkeypatch.setattr(cli.core, "verify_file", _verify)
+        mocker.patch.object(cli.core, "verify_file", side_effect=_verify)
         return seen
 
     return _install
@@ -126,6 +126,11 @@ class TestProfileWiring:
         )
         assert seen[0][1].geometry == PageGeometry(trim_w_mm=85.0, trim_h_mm=55.0, bleed_mm=3.0)
 
+    def test_jobs_option_reaches_the_runner(self, runner, tmp_path, mocker):
+        verify_files = mocker.patch.object(cli.core, "verify_files", return_value=[])
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "-j", "7"])
+        assert verify_files.call_args.kwargs["jobs"] == 7
+
     @pytest.mark.parametrize("value", ["105", "105x148x2", "axb", "0x148", "-5x10"])
     def test_malformed_trim_is_rejected(self, runner, tmp_path, stub_verify, value):
         stub_verify({})
@@ -178,46 +183,46 @@ class TestCollapsedOutput:
 
 
 class TestPreviewCommand:
-    def test_writes_pages_and_reports_them(self, runner, tmp_path, monkeypatch):
-        monkeypatch.setattr(cli.preview, "gs_available", lambda b: True)
+    def test_writes_pages_and_reports_them(self, runner, tmp_path, mocker):
+        mocker.patch.object(cli.preview, "gs_available", return_value=True)
         written = tmp_path / "out" / "a-p1.png"
 
-        def _preview_file(target, dst, **kwargs):
+        async def _preview_file(target, dst, **kwargs):
             dst.mkdir(parents=True, exist_ok=True)
             written.parent.mkdir(parents=True, exist_ok=True)
             written.write_bytes(b"png")
             return [written]
 
-        monkeypatch.setattr(cli.preview, "preview_file", _preview_file)
+        mocker.patch.object(cli.preview, "preview_file", side_effect=_preview_file)
         result = runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf")), "--out", str(tmp_path / "out")])
         assert result.exit_code == 0
         assert "1 page(s)" in result.output
 
-    def test_default_output_sits_beside_the_pdf(self, runner, tmp_path, monkeypatch):
-        monkeypatch.setattr(cli.preview, "gs_available", lambda b: True)
+    def test_default_output_sits_beside_the_pdf(self, runner, tmp_path, mocker):
+        mocker.patch.object(cli.preview, "gs_available", return_value=True)
         seen: list[pathlib.Path] = []
 
-        def _preview_file(target, dst, **kwargs):
+        async def _preview_file(target, dst, **kwargs):
             seen.append(dst)
             return []
 
-        monkeypatch.setattr(cli.preview, "preview_file", _preview_file)
+        mocker.patch.object(cli.preview, "preview_file", side_effect=_preview_file)
         runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])
         assert seen == [tmp_path / "preview"]
 
-    def test_missing_ghostscript_fails_fast(self, runner, tmp_path, monkeypatch):
-        monkeypatch.setattr(cli.preview, "gs_available", lambda b: False)
+    def test_missing_ghostscript_fails_fast(self, runner, tmp_path, mocker):
+        mocker.patch.object(cli.preview, "gs_available", return_value=False)
         result = runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])
         assert result.exit_code == 1
         assert "Ghostscript not found" in result.output
 
-    def test_render_failure_exits_one(self, runner, tmp_path, monkeypatch):
-        monkeypatch.setattr(cli.preview, "gs_available", lambda b: True)
+    def test_render_failure_exits_one(self, runner, tmp_path, mocker):
+        mocker.patch.object(cli.preview, "gs_available", return_value=True)
 
-        def _boom(*a, **k):
+        async def _boom(*a, **k):
             raise preview.GhostscriptError("bad page")
 
-        monkeypatch.setattr(cli.preview, "preview_file", _boom)
+        mocker.patch.object(cli.preview, "preview_file", side_effect=_boom)
         result = runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])
         assert result.exit_code == 1
         assert "bad page" in result.output

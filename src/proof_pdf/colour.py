@@ -21,16 +21,16 @@ a failure by the caller, not silently skipped); the rest read the
 :class:`pikepdf.Pdf` through :mod:`.content`, so they see nested Form XObjects.
 """
 
+import asyncio
 import logging
 import pathlib
 import shutil
-import subprocess
 import tempfile
 
 import pikepdf
 from PIL import Image, ImageMath
 
-from . import content
+from . import content, proc
 from .models import Finding, Severity
 
 logger = logging.getLogger(__name__)
@@ -81,10 +81,10 @@ def gs_available(binary: str) -> bool:
 
 
 # ------------------------------------------------------------ total ink ----
-def check_tac(binary: str, path: str, max_tac: float, *, timeout: float | None = None) -> list[Finding]:
+async def check_tac(binary: str, path: str, max_tac: float, *, timeout: float | None = None) -> list[Finding]:
     """Flag any page whose peak total ink coverage exceeds *max_tac* percent."""
     findings: list[Finding] = []
-    for i, peak in enumerate(_page_tac_peaks(binary, path, timeout=timeout), start=1):
+    for i, peak in enumerate(await _page_tac_peaks(binary, path, timeout=timeout), start=1):
         if peak > max_tac:
             findings.append(
                 Finding("tac", Severity.ERROR, f"peak ink coverage {peak:.0f}% exceeds the {max_tac:.0f}% limit", i)
@@ -92,12 +92,12 @@ def check_tac(binary: str, path: str, max_tac: float, *, timeout: float | None =
     return findings
 
 
-def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> list[float]:
+async def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> list[float]:
     """The peak TAC (0-400%) of each page, via a DeviceCMYK Ghostscript raster."""
     with tempfile.TemporaryDirectory() as tmp:
         pattern = str(pathlib.Path(tmp) / "page-%03d.tif")
         try:
-            result = subprocess.run(
+            result = await proc.run(
                 [
                     binary,
                     "-q",
@@ -109,11 +109,9 @@ def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> 
                     f"-sOutputFile={pattern}",
                     path,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=timeout,
             )
-        except subprocess.TimeoutExpired as exc:
+        except proc.ProcTimeoutError as exc:
             raise GhostscriptError(f"ghostscript timed out after {timeout:.0f}s") from exc
         if result.returncode != 0:
             message = result.stderr.strip() or "ghostscript failed"
@@ -124,7 +122,7 @@ def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> 
         pages = sorted(pathlib.Path(tmp).glob("page-*.tif"), key=lambda t: int(t.stem.rsplit("-", 1)[-1]))
         peaks: list[float] = []
         for tif in pages:
-            peaks.append(_peak_tac(tif))
+            peaks.append(await asyncio.to_thread(_peak_tac, tif))
             # A 50-page file at 150 dpi is ~150 MB of TIFF if it all stays on
             # disk; each raster is dead the moment its peak is read.
             tif.unlink(missing_ok=True)

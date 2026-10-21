@@ -1,7 +1,7 @@
 """The veraPDF layer: run the validator and turn its JSON into findings.
 
 veraPDF owns the PDF/A side (it has no PDF/X profile). It is an external Java
-tool, so it is isolated behind two small functions -- :func:`run` shells out,
+tool, so it is isolated behind two small functions -- :func:`run` shells out (awaited),
 :func:`parse` is pure. Its absence is surfaced by the caller as a failure, not a
 silent pass: the point of the tool is to *confirm* conformance.
 """
@@ -9,8 +9,8 @@ silent pass: the point of the tool is to *confirm* conformance.
 import json
 import logging
 import shutil
-import subprocess
 
+from . import proc
 from .models import Finding, Severity
 
 logger = logging.getLogger(__name__)
@@ -30,17 +30,12 @@ def available(binary: str) -> bool:
     return shutil.which(binary) is not None
 
 
-def run(binary: str, flavour: str, path: str, *, timeout: float | None = None) -> str:
+async def run(binary: str, flavour: str, path: str, *, timeout: float | None = None) -> str:
     """Validate *path* against *flavour* and return veraPDF's JSON stdout."""
     logger.debug(f"verapdf: validating {path} against PDF/A-{flavour}")
     try:
-        result = subprocess.run(
-            [binary, "--format", "json", "-f", flavour, path],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired as exc:
+        result = await proc.run([binary, "--format", "json", "-f", flavour, path], timeout=timeout)
+    except proc.ProcTimeoutError as exc:
         raise VeraPdfError(f"veraPDF timed out after {timeout:.0f}s") from exc
     if result.returncode not in _VALIDATION_EXITS:
         message = result.stderr.strip() or f"veraPDF exited {result.returncode}"

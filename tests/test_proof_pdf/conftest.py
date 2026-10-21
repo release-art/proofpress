@@ -15,6 +15,7 @@ from typing import Any, cast
 import pikepdf
 import pytest
 
+from proof_pdf import proc
 from proof_pdf.models import PageGeometry
 
 # An A6 card (105x148 mm) centred inside a 3 mm bleed: the "correct" baseline.
@@ -183,24 +184,23 @@ def vera_json():
 
 
 @pytest.fixture
-def fake_run(monkeypatch):
-    """Replace a module's ``subprocess.run`` with a recorded stub.
+def fake_run(mocker):
+    """Replace ``proc.run`` with a recorded stub, returning the argv of every call.
 
-    A ``SimpleNamespace`` stands in for the
-    ``CompletedProcess``, with the argv captured so a test can assert on the
-    command that would have been issued.
+    A ``SimpleNamespace`` stands in for the ``CompletedProcess``, so a test can also assert on the command that
+    would have been issued. *side_effect* runs synchronously, e.g. to write the files the tool would have written.
     """
 
-    def _install(module, *, returncode: int = 0, stdout: str = "", stderr: str = "", side_effect=None):
+    def _install(*, returncode: int = 0, stdout: str = "", stderr: str = "", side_effect=None):
         calls: list[list[str]] = []
 
-        def _run(argv, **kwargs):
+        async def _run(argv, **kwargs):
             calls.append(list(argv))
             if side_effect is not None:
                 side_effect(argv, **kwargs)
             return types.SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
 
-        monkeypatch.setattr(module.subprocess, "run", _run)
+        mocker.patch.object(proc, "run", side_effect=_run)
         return calls
 
     return _install

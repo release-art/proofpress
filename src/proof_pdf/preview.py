@@ -11,15 +11,15 @@ Ghostscript is required (as for ink coverage); its absence or failure is a hard
 error, not a silent skip.
 """
 
+import asyncio
 import dataclasses
 import logging
 import pathlib
-import subprocess
 
 import pikepdf
 from PIL import Image, ImageDraw, ImageFont
 
-from . import structure
+from . import proc, structure
 from .colour import GhostscriptError, gs_available
 from .models import MM_PER_IN, PT_PER_IN
 
@@ -57,7 +57,7 @@ def page_boxes(pdf: pikepdf.Pdf) -> list[PageBoxes]:
     ]
 
 
-def preview_file(
+async def preview_file(
     pdf_path: pathlib.Path,
     out_dir: pathlib.Path,
     *,
@@ -68,16 +68,20 @@ def preview_file(
     timeout: float | None = None,
 ) -> list[pathlib.Path]:
     """Render *pdf_path* to one PNG per page in *out_dir*; overlay guides if asked."""
-    pngs = _render_pages(gs_bin, pdf_path, out_dir, dpi, timeout=timeout)
+    pngs = await _render_pages(gs_bin, pdf_path, out_dir, dpi, timeout=timeout)
     if guides:
-        with pikepdf.open(pdf_path) as pdf:
-            boxes = page_boxes(pdf)
-        for png, box in zip(pngs, boxes, strict=False):
-            _overlay_guides(png, box, dpi, safe_mm)
+        await asyncio.to_thread(_draw_guides, pdf_path, pngs, dpi, safe_mm)
     return pngs
 
 
-def _render_pages(
+def _draw_guides(pdf_path: pathlib.Path, pngs: list[pathlib.Path], dpi: int, safe_mm: float) -> None:
+    with pikepdf.open(pdf_path) as pdf:
+        boxes = page_boxes(pdf)
+    for png, box in zip(pngs, boxes, strict=False):
+        _overlay_guides(png, box, dpi, safe_mm)
+
+
+async def _render_pages(
     gs_bin: str,
     pdf_path: pathlib.Path,
     out_dir: pathlib.Path,
@@ -89,7 +93,7 @@ def _render_pages(
     out_dir.mkdir(parents=True, exist_ok=True)
     pattern = str(out_dir / f"{pdf_path.stem}-p%d.png")
     try:
-        result = subprocess.run(
+        result = await proc.run(
             [
                 gs_bin,
                 "-q",
@@ -101,11 +105,9 @@ def _render_pages(
                 f"-sOutputFile={pattern}",
                 str(pdf_path),
             ],
-            capture_output=True,
-            text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired as exc:
+    except proc.ProcTimeoutError as exc:
         raise GhostscriptError(f"ghostscript timed out after {timeout:.0f}s") from exc
     if result.returncode != 0:
         message = result.stderr.strip() or "ghostscript failed"

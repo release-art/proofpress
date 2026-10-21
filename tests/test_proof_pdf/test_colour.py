@@ -2,13 +2,12 @@
 
 import pathlib
 import shutil
-import subprocess
 
 import pikepdf
 import pytest
 from PIL import Image
 
-from proof_pdf import colour
+from proof_pdf import colour, proc
 from proof_pdf.models import Severity
 
 
@@ -27,22 +26,22 @@ def _page_with(pdf: pikepdf.Pdf, stream: bytes, resources: pikepdf.Dictionary) -
 
 
 class TestTotalAreaCoverage:
-    def test_peak_over_limit_is_an_error(self, monkeypatch):
-        monkeypatch.setattr(colour, "_page_tac_peaks", lambda *a, **k: [250.0, 340.0])
-        findings = colour.check_tac("gs", "x.pdf", 300.0)
+    async def test_peak_over_limit_is_an_error(self, mocker):
+        mocker.patch.object(colour, "_page_tac_peaks", return_value=[250.0, 340.0])
+        findings = await colour.check_tac("gs", "x.pdf", 300.0)
         assert [f.page for f in findings] == [2]
         assert findings[0].severity is Severity.ERROR
 
-    def test_all_under_limit_is_clean(self, monkeypatch):
-        monkeypatch.setattr(colour, "_page_tac_peaks", lambda *a, **k: [250.0, 299.9])
-        assert colour.check_tac("gs", "x.pdf", 300.0) == []
+    async def test_all_under_limit_is_clean(self, mocker):
+        mocker.patch.object(colour, "_page_tac_peaks", return_value=[250.0, 299.9])
+        assert await colour.check_tac("gs", "x.pdf", 300.0) == []
 
     def test_peak_tac_reads_a_real_cmyk_raster(self, tmp_path):
         tif = tmp_path / "page.tif"
         Image.new("CMYK", (4, 4), (255, 255, 0, 0)).save(tif)
         assert colour._peak_tac(tif) == pytest.approx(200.0)
 
-    def test_rasters_are_deleted_as_they_are_read(self, tmp_path, fake_run):
+    async def test_rasters_are_deleted_as_they_are_read(self, tmp_path, fake_run):
         """A 50-page deck must not keep every TIFF on disk at once."""
         seen: list[int] = []
 
@@ -52,14 +51,14 @@ class TestTotalAreaCoverage:
                 Image.new("CMYK", (2, 2), (0, 0, 0, 0)).save(out % i)
             seen.append(len(list(pathlib.Path(out).parent.glob("*.tif"))))
 
-        fake_run(colour, side_effect=_write_pages)
-        peaks = colour._page_tac_peaks("gs", str(tmp_path / "in.pdf"))
+        fake_run(side_effect=_write_pages)
+        peaks = await colour._page_tac_peaks("gs", str(tmp_path / "in.pdf"))
         assert len(peaks) == 3
         assert seen == [3]  # all written by gs...
         # ...and none left behind once each peak was read.
         assert not list(tmp_path.glob("**/page-*.tif"))
 
-    def test_pages_sort_numerically_not_lexicographically(self, tmp_path, fake_run):
+    async def test_pages_sort_numerically_not_lexicographically(self, tmp_path, fake_run):
         """`page-1000.tif` must not sort before `page-999.tif`."""
 
         def _write(argv, **kwargs):
@@ -68,28 +67,25 @@ class TestTotalAreaCoverage:
             for i, ink in ((999, 0), (1000, 255)):
                 Image.new("CMYK", (2, 2), (0, 0, 0, ink)).save(base / f"page-{i}.tif")
 
-        fake_run(colour, side_effect=_write)
-        peaks = colour._page_tac_peaks("gs", "in.pdf")
+        fake_run(side_effect=_write)
+        peaks = await colour._page_tac_peaks("gs", "in.pdf")
         assert peaks == [pytest.approx(0.0), pytest.approx(100.0)]
 
     @pytest.mark.parametrize(
         ("stderr", "expected"), [("boom", "boom"), ("", "ghostscript failed")], ids=["detail", "default"]
     )
-    def test_ghostscript_failure_raises(self, fake_run, stderr, expected):
-        fake_run(colour, returncode=1, stderr=stderr)
+    async def test_ghostscript_failure_raises(self, fake_run, stderr, expected):
+        fake_run(returncode=1, stderr=stderr)
         with pytest.raises(colour.GhostscriptError, match=expected):
-            colour._page_tac_peaks("gs", "in.pdf")
+            await colour._page_tac_peaks("gs", "in.pdf")
 
-    def test_timeout_raises(self, monkeypatch):
-        def _timeout(*a, **k):
-            raise subprocess.TimeoutExpired(cmd="gs", timeout=5)
-
-        monkeypatch.setattr(colour.subprocess, "run", _timeout)
+    async def test_timeout_raises(self, mocker):
+        mocker.patch.object(proc, "run", side_effect=proc.ProcTimeoutError("timed out"))
         with pytest.raises(colour.GhostscriptError, match="timed out"):
-            colour._page_tac_peaks("gs", "in.pdf", timeout=5)
+            await colour._page_tac_peaks("gs", "in.pdf", timeout=5)
 
-    def test_gs_available(self, monkeypatch):
-        monkeypatch.setattr(colour.shutil, "which", lambda b: "/usr/bin/gs" if b == "gs" else None)
+    def test_gs_available(self, mocker):
+        mocker.patch.object(colour.shutil, "which", side_effect=lambda b: "/usr/bin/gs" if b == "gs" else None)
         assert colour.gs_available("gs")
         assert not colour.gs_available("nope")
 
@@ -280,9 +276,9 @@ class TestRichBlack:
 
 
 @pytest.mark.skipif(shutil.which("gs") is None, reason="Ghostscript not installed")
-def test_page_tac_peaks_against_real_ghostscript(make_content_pdf):
+async def test_page_tac_peaks_against_real_ghostscript(make_content_pdf):
     """One end-to-end pass through the real binary, on a deliberately tiny file."""
     path = make_content_pdf(b"0 0 0 0 k 0 0 50 50 re f", font=False)
-    peaks = colour._page_tac_peaks("gs", str(path), timeout=10)
+    peaks = await colour._page_tac_peaks("gs", str(path), timeout=10)
     assert len(peaks) == 1
     assert 0.0 <= peaks[0] <= 400.0

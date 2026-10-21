@@ -10,6 +10,7 @@ The commands take paths only, so a file a printer sends back can be checked
 the same way a freshly built one is.
 """
 
+import asyncio
 import dataclasses
 import importlib.metadata
 import json
@@ -119,6 +120,9 @@ def verify_cmd(
     strict_cmyk: typing.Annotated[
         bool, typer.Option("--strict-cmyk", help="Fail, rather than warn, on RGB vector fills.")
     ] = False,
+    jobs: typing.Annotated[
+        int, typer.Option("--jobs", "-j", min=1, help="Files to verify at once.")
+    ] = core.DEFAULT_JOBS,
     verapdf_bin: typing.Annotated[str, typer.Option("--verapdf", help="veraPDF executable.")] = "verapdf",
     gs_bin: GsOpt = "gs",
     timeout: TimeoutOpt = DEFAULT_TIMEOUT,
@@ -144,7 +148,9 @@ def verify_cmd(
         min_dpi=min_dpi,
         strict_cmyk=strict_cmyk,
     )
-    reports = [core.verify_file(t, profile, verapdf_bin=verapdf_bin, gs_bin=gs_bin, timeout=timeout) for t in targets]
+    reports = asyncio.run(
+        core.verify_files(targets, profile, jobs=jobs, verapdf_bin=verapdf_bin, gs_bin=gs_bin, timeout=timeout)
+    )
 
     if as_json:
         typer.echo(json.dumps([_as_record(r) for r in reports], indent=2))
@@ -185,8 +191,10 @@ def preview_cmd(
     for target in targets:
         dst = out if out is not None else target.parent / "preview"
         try:
-            pngs = preview.preview_file(
-                target, dst, dpi=dpi, guides=guides, safe_mm=safe_mm, gs_bin=gs_bin, timeout=timeout
+            pngs = asyncio.run(
+                preview.preview_file(
+                    target, dst, dpi=dpi, guides=guides, safe_mm=safe_mm, gs_bin=gs_bin, timeout=timeout
+                )
             )
         except preview.GhostscriptError as exc:
             typer.secho(f"FAIL -- Ghostscript could not render {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)

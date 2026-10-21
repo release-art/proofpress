@@ -37,7 +37,11 @@ proof-pdf --version                       # version, plus the commit when built 
 - **A check whose tool is missing fails, it is never skipped**: a file that can't be confirmed must not read as OK.
 - Errors fail the file and exit 1. Warnings are advisory. `--quiet` prints nothing, for exit-code-only use.
 
-As a library, `proof_pdf.core.verify_file(path, profile)` returns a `FileReport` of `Finding`s; see `proof_pdf.models.Profile`.
+`verify -j N` checks N files at once (default: up to 4). veraPDF and Ghostscript run as subprocesses and the PDF checks in worker threads,
+so nothing blocks the event loop.
+
+As a library the API is async: `await proof_pdf.core.verify_file(path, profile)` returns a `FileReport` of `Finding`s, and
+`await proof_pdf.core.verify_files(paths, profile, jobs=4)` returns one report per path in order. See `proof_pdf.models.Profile`.
 
 ## Docker images
 

@@ -1,14 +1,13 @@
 """Rasterising proofs and drawing the page-box guides."""
 
 import pathlib
-import subprocess
 from typing import cast
 
 import pikepdf
 import pytest
 from PIL import Image
 
-from proof_pdf import preview
+from proof_pdf import preview, proc
 
 from .conftest import BLEED, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W
 
@@ -38,32 +37,29 @@ class TestPageBoxes:
 
 
 class TestRenderPages:
-    def test_pages_come_back_in_numeric_order(self, tmp_path, fake_run):
+    async def test_pages_come_back_in_numeric_order(self, tmp_path, fake_run):
         def _write(argv, **kwargs):
             out = next(a for a in argv if a.startswith("-sOutputFile=")).removeprefix("-sOutputFile=")
             for i in (1, 2, 10):
                 _white_png(pathlib.Path(out.replace("%d", str(i))))
 
-        calls = fake_run(preview, side_effect=_write)
-        pngs = preview._render_pages("gs", tmp_path / "deck.pdf", tmp_path / "out", 150)
+        calls = fake_run(side_effect=_write)
+        pngs = await preview._render_pages("gs", tmp_path / "deck.pdf", tmp_path / "out", 150)
         assert [p.name for p in pngs] == ["deck-p1.png", "deck-p2.png", "deck-p10.png"]
         assert "-r150" in calls[0]
 
     @pytest.mark.parametrize(
         ("stderr", "expected"), [("bad page", "bad page"), ("", "ghostscript failed")], ids=["detail", "default"]
     )
-    def test_failure_raises(self, tmp_path, fake_run, stderr, expected):
-        fake_run(preview, returncode=1, stderr=stderr)
+    async def test_failure_raises(self, tmp_path, fake_run, stderr, expected):
+        fake_run(returncode=1, stderr=stderr)
         with pytest.raises(preview.GhostscriptError, match=expected):
-            preview._render_pages("gs", tmp_path / "a.pdf", tmp_path / "out", 150)
+            await preview._render_pages("gs", tmp_path / "a.pdf", tmp_path / "out", 150)
 
-    def test_timeout_raises(self, tmp_path, monkeypatch):
-        def _timeout(*a, **k):
-            raise subprocess.TimeoutExpired(cmd="gs", timeout=5)
-
-        monkeypatch.setattr(preview.subprocess, "run", _timeout)
+    async def test_timeout_raises(self, tmp_path, mocker):
+        mocker.patch.object(proc, "run", side_effect=proc.ProcTimeoutError("timed out"))
         with pytest.raises(preview.GhostscriptError, match="timed out"):
-            preview._render_pages("gs", tmp_path / "a.pdf", tmp_path / "out", 150, timeout=5)
+            await preview._render_pages("gs", tmp_path / "a.pdf", tmp_path / "out", 150, timeout=5)
 
 
 class TestGuideOverlay:
@@ -104,33 +100,33 @@ class TestGuideOverlay:
 
 
 class TestPreviewFile:
-    def _fake_render(self, monkeypatch, tmp_path, count=1):
-        def _render(gs_bin, pdf_path, out_dir, dpi, *, timeout=None):
+    def _fake_render(self, mocker, tmp_path, count=1):
+        async def _render(gs_bin, pdf_path, out_dir, dpi, *, timeout=None):
             out_dir.mkdir(parents=True, exist_ok=True)
             return [_white_png(out_dir / f"{pdf_path.stem}-p{i}.png", size=(340, 462)) for i in range(1, count + 1)]
 
-        monkeypatch.setattr(preview, "_render_pages", _render)
+        mocker.patch.object(preview, "_render_pages", side_effect=_render)
 
-    def test_guides_are_overlaid_when_asked(self, make_pdf, tmp_path, monkeypatch):
-        self._fake_render(monkeypatch, tmp_path)
+    async def test_guides_are_overlaid_when_asked(self, make_pdf, tmp_path, mocker):
+        self._fake_render(mocker, tmp_path)
         path = make_pdf()
-        pngs = preview.preview_file(path, tmp_path / "out", dpi=72, guides=True, safe_mm=3.0, gs_bin="gs")
+        pngs = await preview.preview_file(path, tmp_path / "out", dpi=72, guides=True, safe_mm=3.0, gs_bin="gs")
         assert preview._TRIM_RGB in _pixels(pngs[0])
 
-    def test_no_guides_leaves_the_raster_untouched(self, make_pdf, tmp_path, monkeypatch):
-        self._fake_render(monkeypatch, tmp_path)
-        pngs = preview.preview_file(make_pdf(), tmp_path / "out", dpi=72, guides=False, safe_mm=3.0, gs_bin="gs")
+    async def test_no_guides_leaves_the_raster_untouched(self, make_pdf, tmp_path, mocker):
+        self._fake_render(mocker, tmp_path)
+        pngs = await preview.preview_file(make_pdf(), tmp_path / "out", dpi=72, guides=False, safe_mm=3.0, gs_bin="gs")
         assert _pixels(pngs[0]) == {(255, 255, 255)}
 
-    def test_the_guides_show_where_a_wrong_trimbox_actually_is(self, make_pdf, tmp_path, monkeypatch):
+    async def test_the_guides_show_where_a_wrong_trimbox_actually_is(self, make_pdf, tmp_path, mocker):
         """The visual counterpart of the geometry finding: a trim guide inset 25pt."""
-        self._fake_render(monkeypatch, tmp_path)
+        self._fake_render(mocker, tmp_path)
         boxes = {
             "MediaBox": [0, 0, 337.32198, 459.21146],
             "TrimBox": [25, 20, 312.32198, 439.21146],
             "BleedBox": [0, 0, 337.32198, 459.21146],
         }
-        pngs = preview.preview_file(
+        pngs = await preview.preview_file(
             make_pdf(boxes=boxes), tmp_path / "out", dpi=72, guides=True, safe_mm=3.0, gs_bin="gs"
         )
         with Image.open(pngs[0]) as img:
