@@ -159,6 +159,9 @@ def describe(fill: Fill | None) -> str:
     if fill.family == RGB and len(fill.value) >= 3:
         r, g, b = (round(v * 255) for v in fill.value[:3])
         return f"RGB({r},{g},{b})"
+    if fill.spot:
+        tint = f" {round(fill.value[0] * 100)}%" if len(fill.spot) == 1 and fill.value else ""
+        return f"spot {'+'.join(fill.spot)}{tint}"
     return "a spot or pattern colour"
 
 

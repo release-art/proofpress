@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `proof-pdf extract` and `proof_pdf.extract.extract_pdf()`: recover assets from any PDF, for rebuilding a template from an
+  archived job. Writes the images (JPEG and JPEG 2000 as stored, soft masks as `.mask.png`), the embedded font programs, ICC
+  profiles, and vector artwork as one cropped PDF per piece (identical pieces deduplicated), plus `document.json`: page boxes,
+  metadata and XMP, output intents, every asset with its placements (page, x, y, width, height in points), every text run
+  with its font, size, colour and position, the same runs joined into `lines`, the plain rectangles and rules of the layout
+  (touching collinear rules merged, a line's end points kept), and the `inspect` inventory. Vector pieces are named by page and
+  order (`vector/p003-v02.pdf`).
+- `proof-pdf crop` and `proof_pdf.crop.crop_page()` (public `proof_pdf.crop`): cut a rectangle of a page out as a
+  one-page PDF of its own, for an illustration the extraction missed or an image model asks for. It is the page's own
+  content seen through a smaller window (text stays text, vectors stay vectors, images keep their pixels), in the same
+  point coordinates `document.json` gives every placement, so an asset's place can be cut out as it stands. The review
+  page shows the coordinates under the mouse.
+- `extract --previews` (`extract_pdf(previews=True)`): `previews/index.html`, a review page with each page rendered by
+  Ghostscript and every recovered image, vector piece, text line and rule boxed on it (toggleable layers, links to the
+  asset), then thumbnails of the images and vector pieces and the fonts, profiles and notes.
+- `document.json` carries `notes` (what could not be done, e.g. text in fonts without `/ToUnicode`) and the font codes of
+  such runs (`text[].codes`).
+- `proof_pdf.layout` and `document.json["layout"]`: page layout read back from where the text sits, for rebuilding a
+  template as a document class. Type styles with roles (body, heading levels, small print) and line pitch; text blocks
+  (paragraphs) with alignment, first-line indent, paragraph spacing and column; the text columns, margins and content box
+  per page; running headers, footers and folios; and a summary of the numbers a class takes (page size, margins, columns,
+  gutter, measure, body font, size and leading, alignment, indent, paragraph skip). Inferred from geometry, so heuristic.
+  Text in undecodable fonts takes part by its geometry (`lines[].text` is then `null`).
+- `document.json["palette"]`: the colours in use, with the panel area and text characters each colours; boxes carry
+  `fill_colour` and `stroke_colour` in the inventory's colour notation.
+- XMP metadata is saved as `xmp.xml` and decoded into `metadata.xmp` (prefixed keys, lists, language alternatives and
+  structures), which carries InDesign's font, plate and swatch lists and the edit history where the producer wrote them.
+- The review page shows the layout summary and the text blocks (a toggleable layer).
+- Text over vector artwork is drawn into the piece it overlaps, with its original font, and takes part in the grouping
+  (a label touching two parts joins them; two labels never join each other), so a dimensioned drawing or a block diagram
+  with its captions is one standalone PDF. The text is still recovered as text and also listed on the asset
+  (`details.text`); layout marks such text as a figure label (`Block.figure`) and leaves it out of the body statistics.
+  `--no-vector-text` turns it off. Short text within about a line and a half of a drawing is its label even when it does
+  not touch it (pin names, package titles, dimensions), a compound path too big to be told from a background (all of a
+  drawing's hairlines or arrowheads drawn as one path) is adopted by the drawing it lies in instead of being dropped, a label's reach follows its font size, and small shapes standing
+  next to a label (a diameter sign drawn as a path) extend it; text in running paragraphs (a long line, or three or more
+  left-aligned lines) never joins. The size cap for backgrounds applies to a shape, not to a whole drawing.
+- Vector grouping: short rules and box outlines now bridge the pieces of a diagram when most of the cluster is real
+  artwork (`ARTWORK_SHARE`), a cluster of mostly rules (a table) still groups only its non-plain shapes, and a group
+  lying mostly inside a bigger one is folded into it. Plain lines drawn with the same pen (stroke width and colour) as
+  an artwork shape in their cluster count as artwork, so a schematic that is mostly wires is one piece.
+- Text in Adobe GB1, CNS1 and Korea1 CID fonts without `/ToUnicode` is read through the collection's Latin CIDs (1-95 are
+  ASCII), which recovered all of one catalogue's text; other characters in such fonts stay `U+FFFD`.
+- `document.json["interactive"]`: form fields (type, value, options, font and size, rect; a digital signature is
+  summarised, never copied), links with their targets resolved to pages, other annotations, the outline, page labels,
+  layers and attachments (saved under `attachments/`).
+- Text runs carry rotation, horizontal scale, letter spacing and an invisible flag (an OCR layer); image placements
+  carry their matrix.
+- `document.json["spot_colours"]`: every Separation and DeviceN ink with its alternate colour at full tint, evaluated from
+  the tint transform (sampled, exponential, stitching and PostScript-calculator functions), and the pages that use it.
+  Spot fills are named in the palette and in text/box colours (`spot PANTONE 165 C 100%`); the palette now also counts
+  the area of vector artwork painted in each colour (`artwork_area_pt2`).
+- Tables (`layout.pages[].tables`): ruled grids (rules both ways, with row and column spans where a rule is missing) and
+  row-ruled tables (rules between rows, columns from where the text starts), each with its edges and cells and their
+  text. A candidate must hold text in enough cells, so gridlines and frames are not tables. Cell text is kept out of
+  the column and body statistics (`Block.table`), and the review page has a tables layer. Tables are read from the
+  rules the `vector` kind collects.
+- Tagged PDFs: `document.json["structure"]` is the structure tree as data, each element with its tag as written and its
+  standard role (through the `/RoleMap`), page, alt text, actual text, title, language, the producer's own layout
+  attributes (text alignment, indents, spacing, line height, row and column spans), and, from the content it points at,
+  its text and box. Runs carry `tag` (the paragraph-like element's role), `struct` and `artifact` (Header, Footer...
+  page furniture the PDF marked as such); lines under different structure elements are not merged into one paragraph;
+  a style whose lines are mostly tagged H1-H6, Title or Caption takes its role from the tag; artifact-marked headers and
+  footers are running text; images and vector pieces take their figure's alt text (`details.alt`), which is the nearest
+  thing a PDF has to a name for them.
+- Fonts carry their descriptor facts: family, weight, flags, italic angle, bold and italic (from flags, weight, slant or
+  the name), and metrics (`details.descriptor`).
+- Text recovery in the paint walk (`Paint.text`, read through `/ToUnicode`; word gaps from TJ kerns are a heuristic).
+
 ## [0.3.4] - 2026-10-21
 
 ### Added

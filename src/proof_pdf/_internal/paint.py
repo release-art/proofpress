@@ -31,6 +31,9 @@ Rect = tuple[float, float, float, float]
 
 # Text-showing operators: whatever fill is in force when one runs is the colour the glyphs are painted in.
 SHOW_TEXT = ("Tj", "TJ", "'", '"')
+# A TJ kern tighter than this (thousandths of an em, pulling the next glyph right) is read as a word gap when recovering
+# text: a heuristic, as the PDF carries no word boundaries. Kerning pairs are far smaller than a space (~250).
+WORD_GAP = 150.0
 _FILL_PATH = frozenset(("f", "F", "f*"))
 _STROKE_PATH = frozenset(("S", "s"))
 _FILL_STROKE_PATH = frozenset(("B", "B*", "b", "b*"))
@@ -42,6 +45,7 @@ class Fill:
 
     family: str
     value: tuple[float, ...] = ()
+    spot: tuple[str, ...] = ()  # the ink name(s) of a Separation or DeviceN fill, whose value is then the tint(s)
 
 
 # What a colour space's colour is straight after ``cs``, per the PDF spec.
@@ -59,6 +63,7 @@ class State:
 
     fill: Fill = INITIAL_FILL[GRAY]
     font: fonts.Font = fonts.UNKNOWN
+    font_resource: pikepdf.Object | None = None
     font_size: float = 0.0
     overprint: bool = False
     line_width: float = 1.0
@@ -67,7 +72,24 @@ class State:
     h_scale: float = 1.0
     rise: float = 0.0
     leading: float = 0.0
+    render_mode: int = 0  # Tr: 0 fill, 1 stroke, 2 both, 3 invisible (an OCR layer), 4-7 add clipping
     clip: Rect | None = None  # page-space extent of the clip in force; None until a clip is set (then it only narrows)
+
+
+@dataclasses.dataclass(frozen=True)
+class TextShow:
+    """What it takes to show a text run again on its own: the operator, its font and the text state it was shown in."""
+
+    operator: str  # "Tj" or "TJ", with the operands to match
+    operands: tuple[typing.Any, ...]
+    font_resource: pikepdf.Object | None
+    size: float  # the font size as set by Tf, before any matrix
+    char_spacing: float
+    word_spacing: float
+    h_scale: float
+    rise: float
+    render_mode: int
+    trm: content.Matrix  # text space to page space, as it stood when the run began
 
 
 @dataclasses.dataclass(frozen=True)
@@ -87,6 +109,18 @@ class Paint:
     filled: bool = False  # a path painted with its fill (not only stroked)
     xobject: pikepdf.Object | None = None  # the image, for kind == "image"
     name: str = ""  # the image's resource name
+    text: str | None = None  # the characters shown, for text; None when the font gives no way to read them
+    rotation: float = 0.0  # text direction in degrees counter-clockwise from the page's x axis
+    h_scale: float = 1.0  # Tz as a factor
+    char_spacing: float = 0.0  # Tc in ems of the font size
+    render_mode: int = 0
+    matrix: content.Matrix | None = None  # an image's placement matrix, which carries any rotation or flip
+    mcid: int | None = None  # the marked-content id in force, which a tagged PDF's structure tree refers to
+    artifact: str | None = (
+        None  # set when the PDF marks this as page furniture (Header, Footer, Layout...), not content
+    )
+    show: TextShow | None = None  # for text: how to show it again
+    codes: tuple[int, ...] = ()  # the font's character codes, kept only when text is None (for decoding it later)
 
 
 def number(args: list, index: int) -> float:
@@ -129,8 +163,10 @@ def _with_components(fill: Fill, args: list) -> Fill:
     if args and isinstance(args[-1], pikepdf.Name):  # scn ... /Pattern
         return Fill(OTHER)
     if fill.family in (GRAY, RGB, CMYK):
-        return Fill(fill.family, tuple(number(args, i) for i in range(len(args))))
-    return fill  # a spot or DeviceN tint: still not a device colour
+        return Fill(fill.family, tuple(number(args, i) for i in range(len(args))), ())
+    if fill.spot:
+        return Fill(OTHER, tuple(number(args, i) for i in range(len(args))), fill.spot)
+    return fill  # a tint in some other space: still not a device colour
 
 
 def _extgstate(op: content.Operation) -> pikepdf.Object | None:
@@ -153,6 +189,7 @@ class Walker:
         self.text_matrix: content.Matrix = content.IDENTITY
         self.line_matrix: content.Matrix = content.IDENTITY
         self.path: list[tuple[float, float]] = []
+        self.marked: list[tuple[int | None, str | None]] = []  # BMC/BDC nesting: each level's MCID and artifact kind
         self.clip_pending = False  # a W/W* has been seen; the path-ending operator that follows applies it
         self.spots: set[str] = set()
         self.transparency: set[str] = set()  # why the page needs a blend space: opacity, blend mode, soft mask
@@ -205,6 +242,9 @@ class Walker:
                     visible=self._visible(bbox),
                     xobject=xobject,
                     name=str(op.operands[0]),
+                    matrix=op.ctm,
+                    mcid=self._mcid(),
+                    artifact=self._artifact(),
                 )
         return None
 
@@ -233,16 +273,25 @@ class Walker:
         items = list(args[0]) if name == "TJ" and args else [args[-1]] if args else []
         font, size = state.font, state.font_size
         advance, glyphs, notdef = 0.0, 0, 0
+        parts: list[str | None] = []
+        shown: list[int] = []
         for item in items:
             if isinstance(item, pikepdf.String):
-                for code in font.decode(bytes(item)):
+                codes = font.decode(bytes(item))
+                shown += codes
+                parts.append(font.text(codes))
+                for code in codes:
                     advance += (font.width(code) / 1000.0 * size + state.char_spacing) * state.h_scale
                     if font.code_bytes == 1 and code == 32:
                         advance += state.word_spacing * state.h_scale
                     glyphs += 1
                     notdef += font.is_notdef(code)
             else:
-                advance -= number([item], 0) / 1000.0 * size * state.h_scale
+                kern = number([item], 0)
+                advance -= kern / 1000.0 * size * state.h_scale
+                if kern < -WORD_GAP:
+                    parts.append(" ")  # TeX and most layout engines space words with a kern, not a space glyph
+        text = "".join(p for p in parts if p is not None) if any(p is not None for p in parts) else None
         trm = content.mul(self.text_matrix, op.ctm)
         low = font.descent / 1000.0 * size + state.rise
         high = font.ascent / 1000.0 * size + state.rise
@@ -258,6 +307,26 @@ class Walker:
             font=font,
             glyphs=glyphs,
             notdef=notdef,
+            text=text,
+            rotation=math.degrees(math.atan2(trm[1], trm[0])),
+            h_scale=state.h_scale,
+            char_spacing=state.char_spacing / size if size else 0.0,
+            render_mode=state.render_mode,
+            mcid=self._mcid(),
+            artifact=self._artifact(),
+            show=TextShow(
+                "TJ" if name == "TJ" else "Tj",
+                (args[0],) if name == "TJ" and args else (args[-1],) if args else (),
+                state.font_resource,
+                size,
+                state.char_spacing,
+                state.word_spacing,
+                state.h_scale,
+                state.rise,
+                state.render_mode,
+                trm,
+            ),
+            codes=tuple(shown) if text is None else (),
         )
 
     # --------------------------------------------------------------- state
@@ -301,10 +370,39 @@ class Walker:
     def _rise(self, op: content.Operation) -> None:
         self._set(rise=number(op.operands, 0))
 
+    def _render_mode(self, op: content.Operation) -> None:
+        self._set(render_mode=int(number(op.operands, 0)))
+
+    def _begin_marked(self, op: content.Operation) -> None:
+        mcid, artifact = None, None
+        if op.operator == "BDC" and len(op.operands) > 1:
+            props = op.operands[1]
+            if isinstance(props, pikepdf.Name):
+                props = lookup_resource(op.resources, "/Properties", [props])
+            if isinstance(props, pikepdf.Dictionary):
+                # An MCID names marked content of the page's own stream; inside a form it means something else.
+                if props.get("/MCID") is not None and self.depth == 0:
+                    mcid = int(props["/MCID"])
+                if str(op.operands[0]) == "/Artifact":
+                    artifact = str(props.get("/Subtype") or props.get("/Type") or "Artifact").lstrip("/")
+        if op.operands and str(op.operands[0]) == "/Artifact" and artifact is None:
+            artifact = "Artifact"
+        self.marked.append((mcid, artifact))
+
+    def _end_marked(self, op: content.Operation) -> None:
+        if self.marked:
+            self.marked.pop()
+
+    def _mcid(self) -> int | None:
+        return next((m for m, _ in reversed(self.marked) if m is not None), None)
+
+    def _artifact(self) -> str | None:
+        return next((a for _, a in reversed(self.marked) if a is not None), None)
+
     def _font(self, op: content.Operation) -> None:
         resource = lookup_resource(op.resources, "/Font", op.operands)
         font = self._load_font(resource)
-        self._set(font=font, font_size=number(op.operands, 1))
+        self._set(font=font, font_resource=resource, font_size=number(op.operands, 1))
 
     def _load_font(self, resource: pikepdf.Object | None) -> fonts.Font:
         if resource is None:
@@ -326,9 +424,9 @@ class Walker:
     def _colour_space(self, op: content.Operation) -> None:
         space = op.operands[0] if op.operands else None
         family = classify_colour_space(space, op.resources)
-        if family == OTHER:
-            self.spots.update(spot_names(space, op.resources))
-        self._set(fill=INITIAL_FILL[family])
+        names = spot_names(space, op.resources) if family == OTHER else []
+        self.spots.update(names)
+        self._set(fill=Fill(OTHER, (1.0,) * len(names), tuple(names)) if names else INITIAL_FILL[family])
 
     def _components(self, op: content.Operation) -> None:
         self._set(fill=_with_components(self.state.fill, op.operands))
@@ -397,6 +495,10 @@ class Walker:
         "Tz": _h_scale,
         "Ts": _rise,
         "Tf": _font,
+        "Tr": _render_mode,
+        "BMC": _begin_marked,
+        "BDC": _begin_marked,
+        "EMC": _end_marked,
         "g": _gray,
         "rg": _rgb,
         "k": _cmyk,

@@ -11,6 +11,7 @@ the same way a freshly built one is.
 """
 
 import asyncio
+import collections
 import dataclasses
 import importlib.metadata
 import json
@@ -22,7 +23,7 @@ import typing
 import pikepdf
 import typer
 
-from . import core, inventory, preview, texlog
+from . import core, crop, extract, inventory, preview, texlog
 from ._internal import (
     config as config_file,
     verapdf,
@@ -285,6 +286,129 @@ def inspect_cmd(
     if as_json:
         typer.echo(json.dumps(records, indent=2))
     raise typer.Exit(1 if failed else 0)
+
+
+@pdf_app.command("extract")
+def extract_cmd(
+    files: PathsArg = None,
+    exclude: ExcludeOpt = None,
+    out: typing.Annotated[
+        pathlib.Path | None,
+        typer.Option("--out", help="Output directory; each PDF gets a folder of its name inside (default: beside it)."),
+    ] = None,
+    kind: typing.Annotated[
+        list[str] | None,
+        typer.Option(
+            "--kind",
+            help=f"What to recover: {', '.join(extract.KINDS)}. Repeatable (default: all). Tables need vector.",
+        ),
+    ] = None,
+    gap_pt: typing.Annotated[
+        float, typer.Option("--gap-pt", help="Vector shapes closer than this (pt) are one piece of artwork.")
+    ] = extract.DEFAULT_GAP_PT,
+    max_fraction: typing.Annotated[
+        float,
+        typer.Option(
+            "--max-fraction", help="Vector shapes covering more of the page than this are taken for backgrounds."
+        ),
+    ] = extract.DEFAULT_MAX_FRACTION,
+    vector_text: typing.Annotated[
+        bool,
+        typer.Option("--vector-text/--no-vector-text", help="Draw text lying on a piece of artwork into the piece."),
+    ] = True,
+    previews: typing.Annotated[
+        bool,
+        typer.Option(
+            "--previews", help="Also write previews/index.html: the pages with every asset boxed (Ghostscript)."
+        ),
+    ] = False,
+    preview_dpi: typing.Annotated[
+        int, typer.Option("--preview-dpi", help="Resolution of the page renders in the review page.")
+    ] = extract.DEFAULT_PREVIEW_DPI,
+    gs_bin: GsOpt = "gs",
+    quiet: QuietOpt = False,
+) -> None:
+    """Recover images, fonts, ICC profiles and vector artwork from each PDF, with a document.json saying where."""
+    unknown = sorted(set(kind or []) - set(extract.KINDS))
+    if unknown:
+        raise typer.BadParameter(f"unknown kind {', '.join(unknown)}; choose from {', '.join(extract.KINDS)}")
+    targets = core.expand_targets(files or [], exclude or [])
+    if not targets:
+        typer.echo("no PDFs to extract from", err=True)
+        raise typer.Exit(1)
+    if previews and not preview.gs_available(gs_bin):
+        typer.echo(f"Ghostscript not found ({gs_bin}) -- cannot render previews", err=True)
+        raise typer.Exit(1)
+    failed = False
+    for target in targets:
+        dst = (out if out is not None else target.parent) / target.stem
+        try:
+            result = extract.extract_pdf(
+                target,
+                dst,
+                kinds=kind or extract.KINDS,
+                gap_pt=gap_pt,
+                max_fraction=max_fraction,
+                vector_text=vector_text,
+                previews=previews,
+                preview_dpi=preview_dpi,
+                gs_bin=gs_bin,
+            )
+        except preview.GhostscriptError as exc:
+            typer.secho(f"FAIL -- Ghostscript could not render {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
+            failed = True
+            continue
+        except pikepdf.PdfError as exc:
+            typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
+            failed = True
+            continue
+        if not quiet:
+            _print_extraction(target, dst, result)
+    raise typer.Exit(1 if failed else 0)
+
+
+@pdf_app.command("crop")
+def crop_cmd(
+    file: typing.Annotated[pathlib.Path, typer.Argument(help="The PDF to cut from.")],
+    page: typing.Annotated[int, typer.Option("--page", min=1, help="Page number, from 1.")],
+    box: typing.Annotated[
+        str,
+        typer.Option(
+            "--box", help="X0,Y0,X1,Y1 in points from the page's bottom-left, as document.json gives placements."
+        ),
+    ],
+    pad_pt: typing.Annotated[
+        float, typer.Option("--pad-pt", min=0, help="Widen the box by this much on every side.")
+    ] = 0.0,
+    out: typing.Annotated[
+        pathlib.Path | None, typer.Option("--out", help="Output PDF (default: beside the file).")
+    ] = None,
+) -> None:
+    """Cut a rectangle of one page out as a one-page PDF: an illustration the extraction missed."""
+    try:
+        x0, y0, x1, y1 = (float(v) for v in box.split(","))
+    except ValueError as exc:
+        raise typer.BadParameter(f"--box must be four numbers, X0,Y0,X1,Y1; got {box!r}", param_hint="--box") from exc
+    target = out or file.with_name(f"{file.stem}-p{page}-{round(min(x0, x1))}-{round(min(y0, y1))}.pdf")
+    try:
+        crop.crop_page(file, page, (x0, y0, x1, y1), target, pad_pt=pad_pt)
+    except ValueError as exc:
+        typer.secho(f"FAIL -- {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    except pikepdf.PdfError as exc:
+        typer.secho(f"FAIL -- cannot open {_rel(file)}: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"wrote {_rel(target)}")
+
+
+def _print_extraction(target: pathlib.Path, dst: pathlib.Path, result: extract.Extraction) -> None:
+    counts = collections.Counter(a.kind for a in result.assets)
+    found = ", ".join(f"{n} {k}" for k, n in sorted(counts.items())) or "no assets"
+    typer.echo(f"{_rel(target)} -> {_rel(dst)}/  ({found}, {len(result.lines)} text line(s))")
+    for message in (*result.notes, *result.failures):
+        typer.secho(f"  ! {message}", fg=typer.colors.YELLOW)
+    if result.previews:
+        typer.echo(f"  review: {_rel(dst / result.previews)}")
 
 
 @pdf_app.command("texlog")

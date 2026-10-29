@@ -14,6 +14,8 @@ import pikepdf
 
 _SUBSET_PREFIX = re.compile(r"^[A-Z]{6}\+")
 _IDENTITY = ("/Identity-H", "/Identity-V")
+_ADOBE_COLLECTIONS = ("GB1", "CNS1", "Korea1")  # Japan1 differs from ASCII at a few Latin CIDs, so it is left out
+_ADOBE_LATIN_CIDS, _ADOBE_LATIN_OFFSET = 95, 31  # CID 1 is the space, U+0020
 _FALLBACK_WIDTH = 500.0  # per 1000 em; typical of a text face
 _DEFAULT_ASCENT, _DEFAULT_DESCENT = 800.0, -200.0
 
@@ -32,6 +34,19 @@ class Font:
     descent: float = _DEFAULT_DESCENT
     composite: bool = False
     decodable: bool = True  # False for a composite font whose encoding is not Identity: codes can't be split reliably
+    to_unicode: dict[int, str] = dataclasses.field(default_factory=dict)
+    adobe_latin: bool = False  # an Adobe GB1/CNS1/Korea1 CID font: CIDs 1-95 are ASCII 0x20-0x7E by definition
+
+    def text(self, codes: list[int]) -> str | None:
+        """The characters *codes* show: from ``/ToUnicode``, else (for an Adobe CJK collection) the Latin CIDs, else
+        Latin-1 for a simple font, else ``None`` (unknown)."""
+        if self.to_unicode or self.adobe_latin:
+            shown = [self.to_unicode.get(code) or self._latin(code) or "\N{REPLACEMENT CHARACTER}" for code in codes]
+            return "".join(shown) if self.to_unicode or any(c != "\N{REPLACEMENT CHARACTER}" for c in shown) else None
+        return None if self.composite else bytes(code & 0xFF for code in codes).decode("latin-1")
+
+    def _latin(self, code: int) -> str | None:
+        return chr(code + _ADOBE_LATIN_OFFSET) if self.adobe_latin and 1 <= code <= _ADOBE_LATIN_CIDS else None
 
     def decode(self, data: bytes) -> list[int]:
         """The character codes in a shown string."""
@@ -82,6 +97,7 @@ def _load(font: pikepdf.Object) -> Font:
         default_width=missing or (_FALLBACK_WIDTH if not widths else 0.0),
         widths=widths,
         notdef_codes=_notdef_codes(font.get("/Encoding")),
+        to_unicode=_to_unicode(font.get("/ToUnicode")),
         ascent=float(descriptor.get("/Ascent", _DEFAULT_ASCENT)) if descriptor is not None else _DEFAULT_ASCENT,
         descent=float(descriptor.get("/Descent", _DEFAULT_DESCENT)) if descriptor is not None else _DEFAULT_DESCENT,
     )
@@ -101,11 +117,59 @@ def _load_composite(font: pikepdf.Object, name: str) -> Font:
         default_width=float(descendant.get("/DW", 1000)),
         widths=_cid_widths(descendant.get("/W")),
         notdef_codes=frozenset(),
+        to_unicode=_to_unicode(font.get("/ToUnicode")),
         ascent=float(descriptor.get("/Ascent", _DEFAULT_ASCENT)) if descriptor is not None else _DEFAULT_ASCENT,
         descent=float(descriptor.get("/Descent", _DEFAULT_DESCENT)) if descriptor is not None else _DEFAULT_DESCENT,
         composite=True,
         decodable=identity,
+        adobe_latin=identity and _adobe_collection(descendant),
     )
+
+
+def _adobe_collection(descendant: pikepdf.Object) -> bool:
+    info = descendant.get("/CIDSystemInfo")
+    return (
+        info is not None and str(info.get("/Registry")) == "Adobe" and str(info.get("/Ordering")) in _ADOBE_COLLECTIONS
+    )
+
+
+_BF_CHAR = re.compile(rb"beginbfchar(.*?)endbfchar", re.DOTALL)
+_BF_RANGE = re.compile(rb"beginbfrange(.*?)endbfrange", re.DOTALL)
+_BF_TOKEN = re.compile(rb"<[^>]*>|\[|\]")
+
+
+def _hex(token: bytes) -> bytes:
+    return bytes.fromhex(re.sub(rb"[<>\s]", b"", token).decode())
+
+
+def _to_unicode(stream: pikepdf.Object | None) -> dict[int, str]:
+    """A ``/ToUnicode`` CMap's ``bfchar`` and ``bfrange`` entries as code -> text; empty if absent or unreadable."""
+    if stream is None:
+        return {}
+    try:
+        data = bytes(stream.read_bytes())
+        mapping: dict[int, str] = {}
+        for block in _BF_CHAR.findall(data):
+            tokens = _BF_TOKEN.findall(block)
+            for src, dst in zip(tokens[::2], tokens[1::2], strict=False):
+                mapping[int.from_bytes(_hex(src))] = _hex(dst).decode("utf-16-be", "replace")
+        for block in _BF_RANGE.findall(data):
+            tokens, i = _BF_TOKEN.findall(block), 0
+            while i + 2 < len(tokens):
+                low, high = int.from_bytes(_hex(tokens[i])), int.from_bytes(_hex(tokens[i + 1]))
+                if tokens[i + 2] == b"[":
+                    end = tokens.index(b"]", i + 2)
+                    for code, dst in zip(range(low, high + 1), tokens[i + 3 : end], strict=False):
+                        mapping[code] = _hex(dst).decode("utf-16-be", "replace")
+                    i = end + 1
+                else:
+                    base = _hex(tokens[i + 2]).decode("utf-16-be", "replace")
+                    for offset in range(min(high - low, 0xFFFF) + 1):
+                        mapping[low + offset] = base[:-1] + chr(ord(base[-1]) + offset) if base else ""
+                    i += 3
+        return mapping
+    except pikepdf.PdfError, ValueError, IndexError, TypeError, OverflowError:
+        return {}
 
 
 def _embedded(descriptor: pikepdf.Object | None) -> bool:

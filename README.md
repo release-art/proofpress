@@ -124,6 +124,8 @@ typo cannot silently switch a check off.
 ```zsh
 proof-pdf inspect card.pdf                # fonts (embedded?, .notdef), text colours and sizes, spot inks, images, contrast
 proof-pdf inspect card.pdf --json         # the same as data, for other tools
+proof-pdf extract old/brochure.pdf       # recover images, fonts, ICC profiles, vector artwork and text into old/brochure/
+proof-pdf extract old/brochure.pdf --previews   # ...plus old/brochure/previews/index.html to review it
 proof-pdf texlog build/card.log           # dropped characters, TeX errors, undefined references, substituted fonts, overfull boxes
 proof-pdf verify card.pdf --safe-mm 3 --min-text-pt 6 --min-delta-l 30 --proof-profile FOGRA51.icc
 ```
@@ -133,7 +135,59 @@ proof-pdf verify card.pdf --safe-mm 3 --min-text-pt 6 --min-delta-l 30 --proof-p
 undefined references are errors; font substitution, package warnings, a pending rerun and overfull boxes are warnings
 (`--max-overfull-pt N` promotes the worst overfull boxes).
 
-The library offers the same as data: `proof_pdf.inventory.inspect_pdf(path)` returns plain dataclasses, and the checks are
+`extract` is for the archive: a customer's old PDF is all that is left of a job, and you want its logo, pictograms and
+photos back. It writes `images/`, `fonts/`, `icc/` and `vector/` (one cropped PDF per piece of artwork, ready for
+`\includegraphics`) and a `document.json` with the page boxes, every asset's placements in points from the page's
+bottom-left, every text run with font, size, colour and position (and the runs joined into lines), and the plain rectangles and rules of
+the layout.
+Vector artwork has no names in a PDF, so pieces are found by grouping shapes that touch (`--gap-pt`) and ignoring
+anything covering more than `--max-fraction` of the page; clips are not applied and text is not part of a piece.
+`document.json` also holds what a template rebuild needs: `metadata.xmp` (the XMP packet decoded, also saved as `xmp.xml`;
+InDesign writes its fonts, plates and swatches there), `palette`, and `layout`. The layout reads the page back from where
+the text sits: the type styles in use and what each is for (body, heading levels, small print), the paragraphs with their
+alignment, indent and spacing, the text columns, margins and content box of every page, the running headers, footers and
+folios, and a `summary` of the numbers a document class takes (page size, margins, columns, gutter, measure, body font,
+size and leading). It is inferred from geometry, so treat it as evidence to check against the page, not as fact; datasheets
+full of tables read poorly, flowing text well.
+
+`interactive` lists the form fields (with type, value, font and size, so a fillable certificate comes back as a form), the
+links and where they go, the outline, page labels, layers and attachments. A digital signature is described by who, when
+and how it was made, never copied. Text lying on a piece of artwork (dimensions on a drawing, labels on a diagram) is
+drawn into that piece's PDF and listed in its `details.text`, as well as recovered as text; `--no-vector-text` leaves the
+pieces as the drawn shapes alone.
+
+`spot_colours` names every ink the file paints with and what it stands in for on screen (the tint transform evaluated at
+full tint: a PANTONE usually comes back as Lab, a die-line as a CMYK tint); the printer's ink book, not this, says what the
+ink really is. `layout.pages[].tables` are tables read from their rules, with cells, spans and text, so a results table or
+a product list comes back as rows and columns rather than as scattered text; they need rules (a table made of whitespace
+alone is not found).
+
+For a tagged PDF (Word, InDesign and Acrobat export them), `structure` is what the producer said each piece is: which
+text is a level-2 heading, where a paragraph or table cell begins and ends, a figure's alt text (the nearest thing a PDF has
+to a name for an image or drawing, copied to the asset as `details.alt`), and its own alignment, indent and spacing
+numbers. Where the file is tagged it is better evidence than the geometry, and the layout uses it for heading roles and
+paragraph boundaries; an untagged file (`structure.tagged` is false) is read from geometry alone. Fonts carry their
+descriptor facts (bold, italic, weight, flags, metrics).
+
+`crop` is for what the extraction missed: it cuts a rectangle out of one page as a one-page PDF, exactly as the page
+shows it (text stays text, vectors stay vectors, images keep their pixels).
+
+```zsh
+proof-pdf crop old/brochure.pdf --page 14 --box 64,300,556,607 --pad-pt 2 --out figure-14.pdf
+```
+
+The box is `X0,Y0,X1,Y1` in points from the page's bottom-left, the numbers `document.json` gives every placement (`x`, `y`,
+`x + width`, `y + height`) and the review page shows under the mouse; from a preview PNG at a given dpi, a pixel is
+`x = media_x0 + px / dpi * 72`, `y = media_y1 - py / dpi * 72`. In code, `proof_pdf.crop.crop_page(path, page, box, out)`.
+The piece also holds the rest of the page's content outside the window, which a viewer does not show; rasterise it when
+that matters.
+
+`--previews` renders `previews/index.html` (needs Ghostscript): each page with every recovered asset boxed on it and
+linked to its thumbnail below, so a whole archive job can be reviewed by eye. Text in fonts without a `/ToUnicode` map
+cannot be read from the PDF; `document.json` says so in `notes` and keeps the font codes. Mind who owns the artwork you
+recover.
+
+The library offers the same as data: `proof_pdf.inventory.inspect_pdf(path)` returns plain dataclasses, `proof_pdf.extract.extract_pdf(path, out_dir)` writes the assets and returns what it found, and the checks are
 functions over an opened `pikepdf.Pdf`.
 
 ## Docker images
