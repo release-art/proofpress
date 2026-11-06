@@ -364,6 +364,111 @@ class TestRgbOnly:
             assert colour.check_rgb_only(pdf) == []
 
 
+def _shading(pdf: pikepdf.Pdf, space: pikepdf.Object) -> pikepdf.Object:
+    function = pikepdf.Dictionary(FunctionType=2, Domain=[0, 1], C0=[0, 0, 0], C1=[1, 1, 1], N=1)
+    return pdf.make_indirect(
+        pikepdf.Dictionary(ShadingType=2, ColorSpace=space, Coords=[0, 0, 1, 1], Function=function)
+    )
+
+
+def _tiling(pdf: pikepdf.Pdf, content: bytes, paint_type: int = 1) -> pikepdf.Object:
+    return pdf.make_stream(
+        content,
+        Type=pikepdf.Name.Pattern,
+        PatternType=1,
+        PaintType=paint_type,
+        TilingType=1,
+        BBox=[0, 0, 1, 1],
+        XStep=1,
+        YStep=1,
+        Resources=pikepdf.Dictionary(),
+    )
+
+
+def _pdf_with_pattern(stream: bytes, build) -> pikepdf.Pdf:
+    """A page whose /Shading, /Pattern and /ColorSpace resources are the three dicts *build* returns for the pdf."""
+    pdf = pikepdf.new()
+    shading, pattern, spaces = build(pdf)
+    _page_with(
+        pdf,
+        stream,
+        pikepdf.Dictionary(Shading=shading, Pattern=pattern, ColorSpace=spaces),
+    )
+    return pdf
+
+
+CMYK_SPACE = pikepdf.Name.DeviceCMYK
+RGB_SPACE = pikepdf.Name.DeviceRGB
+_FILL_PATTERN = b"/Pattern cs /P1 scn 0 0 10 10 re f"
+
+
+class TestShadingsAndPatterns:
+    @pytest.mark.parametrize(("space", "flagged"), [(CMYK_SPACE, True), (RGB_SPACE, False)])
+    def test_sh_is_judged_by_its_colour_space(self, space, flagged):
+        pdf = _pdf_with_pattern(
+            b"/Sh1 sh",
+            lambda p: (pikepdf.Dictionary(Sh1=_shading(p, space)), pikepdf.Dictionary(), pikepdf.Dictionary()),
+        )
+        assert bool(colour.check_rgb_only(pdf)) is flagged
+
+    @pytest.mark.parametrize(("space", "flagged"), [(CMYK_SPACE, True), (RGB_SPACE, False)])
+    def test_shading_pattern_is_judged_by_its_colour_space(self, space, flagged):
+        def build(p):
+            pattern = pikepdf.Dictionary(PatternType=2, Shading=_shading(p, space))
+            return pikepdf.Dictionary(), pikepdf.Dictionary(P1=p.make_indirect(pattern)), pikepdf.Dictionary()
+
+        assert bool(colour.check_rgb_only(_pdf_with_pattern(_FILL_PATTERN, build))) is flagged
+
+    @pytest.mark.parametrize(
+        ("content", "flagged"), [(b"0 0 0 1 k 0 0 1 1 re f", True), (b"1 0 0 rg 0 0 1 1 re f", False)]
+    )
+    def test_coloured_tiling_pattern_is_judged_by_its_content(self, content, flagged):
+        def build(p):
+            return pikepdf.Dictionary(), pikepdf.Dictionary(P1=_tiling(p, content)), pikepdf.Dictionary()
+
+        assert bool(colour.check_rgb_only(_pdf_with_pattern(_FILL_PATTERN, build))) is flagged
+
+    @pytest.mark.parametrize(("base", "flagged"), [(CMYK_SPACE, True), (RGB_SPACE, False)])
+    def test_uncoloured_tiling_pattern_takes_its_base_space(self, base, flagged):
+        def build(p):
+            # Its own content colours are ignored for an uncoloured pattern: the colour comes from scn.
+            pattern = _tiling(p, b"1 0 0 rg 0 0 1 1 re f", paint_type=2)
+            return (
+                pikepdf.Dictionary(),
+                pikepdf.Dictionary(P1=pattern),
+                pikepdf.Dictionary(CS0=pikepdf.Array([pikepdf.Name.Pattern, base])),
+            )
+
+        stream = b"/CS0 cs 0 0 0 0 /P1 scn 0 0 10 10 re f"
+        assert bool(colour.check_rgb_only(_pdf_with_pattern(stream, build))) is flagged
+
+    def test_stroked_pattern_is_found(self):
+        def build(p):
+            return (
+                pikepdf.Dictionary(),
+                pikepdf.Dictionary(P1=_tiling(p, b"0 0 0 1 k 0 0 1 1 re f")),
+                pikepdf.Dictionary(),
+            )
+
+        stream = b"/Pattern CS /P1 SCN 0 0 10 10 re S"
+        assert colour.check_rgb_only(_pdf_with_pattern(stream, build))
+
+    def test_a_pattern_that_contains_itself_does_not_loop(self):
+        def build(p):
+            pattern = _tiling(p, b"/Pattern cs /P1 scn 0 0 1 1 re f")
+            pattern.Resources = pikepdf.Dictionary(Pattern=pikepdf.Dictionary(P1=pattern))
+            return pikepdf.Dictionary(), pikepdf.Dictionary(P1=pattern), pikepdf.Dictionary()
+
+        assert colour.check_rgb_only(_pdf_with_pattern(_FILL_PATTERN, build)) == []
+
+    def test_rgb_shading_is_vector_severity_in_cmyk_mode(self):
+        pdf = _pdf_with_pattern(
+            b"/Sh1 sh",
+            lambda p: (pikepdf.Dictionary(Sh1=_shading(p, RGB_SPACE)), pikepdf.Dictionary(), pikepdf.Dictionary()),
+        )
+        assert [f.severity for f in colour.check_colour_spaces(pdf, strict=False)] == [Severity.WARN]
+
+
 class TestRichBlack:
     def test_small_rich_black_text_is_flagged(self, make_content_pdf):
         path = make_content_pdf(b"BT /F1 8 Tf 0.6 0.5 0.4 0.9 k (hello) Tj ET")

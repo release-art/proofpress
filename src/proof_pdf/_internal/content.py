@@ -85,18 +85,19 @@ def horizontal_scale(m: Matrix) -> float:
 
 
 def iter_operations(
-    page: pikepdf.Page,
+    page: pikepdf.Page | pikepdf.Object,
     *,
     max_depth: int = DEFAULT_MAX_DEPTH,
 ) -> collections.abc.Iterator[Operation]:
-    """Yield every operator on *page*, descending into Form XObjects.
+    """Yield every operator on *page* (or a pattern or form stream), descending into Form XObjects.
 
     The CTM carried by each :class:`Operation` reflects the ``q``/``Q``/``cm``
     state at that point, with each enclosing form's ``/Matrix`` already folded
     in -- so a consumer can convert directly from user space to page points
     without knowing how deeply nested it is.
     """
-    resources = page.obj.get("/Resources")
+    # A page, or any content stream with its own /Resources (a tiling pattern's, say).
+    resources = (page.obj if isinstance(page, pikepdf.Page) else page).get("/Resources")
     yield from _walk(page, resources, IDENTITY, 0, frozenset(), max_depth)
 
 

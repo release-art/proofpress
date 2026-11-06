@@ -36,7 +36,7 @@ from PIL import Image, ImageMath
 
 from ..models import Finding, Severity
 from . import proc
-from .paint import Fill, Paint, Walker, paint_events
+from .paint import Fill, Walker, paint_events
 from .spaces import CMYK, GRAY, RGB, classify_colour_space, intent_family
 
 logger = logging.getLogger(__name__)
@@ -56,8 +56,6 @@ _RICH_K_MIN = 0.5
 _RICH_OTHER_MIN = 0.3
 # An ink amount this close to zero is no ink, and this close to one is solid.
 _INK_EPSILON = 0.01
-# Text render modes that also stroke the glyph outlines.
-_STROKED_TEXT = frozenset((1, 2, 5, 6))
 
 
 def gs_available(binary: str) -> bool:
@@ -283,7 +281,7 @@ def check_colour_spaces(pdf: pikepdf.Pdf, *, strict: bool) -> list[Finding]:
 def check_rgb_only(pdf: pikepdf.Pdf) -> list[Finding]:
     """For a screen job: flag CMYK images and fills, a CMYK output intent, and (as advisory) spot colours.
 
-    Gray is colour-neutral and passes. Shadings and patterns are not inspected.
+    Gray is colour-neutral and passes. Shadings and patterns are looked through to the colour space they paint in.
     """
     findings: list[Finding] = []
     if intent_family(pdf) == CMYK:
@@ -305,17 +303,6 @@ def check_rgb_only(pdf: pikepdf.Pdf) -> list[Finding]:
     return findings
 
 
-def _painted_colours(p: Paint) -> list[Fill]:
-    """The colours a text, path or stencil-image paint actually puts down: its fill and/or its stroke."""
-    if p.kind == "text":
-        return [p.fill, p.stroke] if p.render_mode in _STROKED_TEXT else [p.fill]
-    if p.mask:  # a stencil image has no colour of its own: it paints in the fill
-        return [p.fill]
-    if p.kind == "path":
-        return ([p.fill] if p.filled else []) + ([p.stroke] if p.stroke_width is not None else [])
-    return []
-
-
 def _paint_in(page: pikepdf.Page, family: str) -> tuple[set[str], set[str], set[str]]:
     """The image names and colour descriptions in *family*, and the spot ink names, a page paints by fill or stroke."""
     images: set[str] = set()
@@ -326,9 +313,12 @@ def _paint_in(page: pikepdf.Page, family: str) -> tuple[set[str], set[str], set[
             if p.colour_space == family:
                 images.add(p.name)
             continue
-        painted = _painted_colours(p)
-        for colour in painted:
-            if colour.family == family:
+        if p.kind == "shading":
+            if p.colour_space == family:
+                colours.add(f"shading {p.name}")
+            continue
+        for colour in p.colours():
+            if colour.family == family or family in colour.pattern:
                 colours.add(_describe(colour))
             elif colour.spot:
                 spots.update(colour.spot)
@@ -399,6 +389,8 @@ def _is_full_k(fill: Fill) -> bool:
 
 
 def _describe(fill: Fill) -> str:
+    if fill.pattern:
+        return "a pattern using " + "/".join(sorted(f.upper() for f in fill.pattern))
     if fill.family == CMYK and len(fill.value) >= 4:
         c, m, y, k = (round(v * 100) for v in fill.value[:4])
         return f"C{c} M{m} Y{y} K{k}"

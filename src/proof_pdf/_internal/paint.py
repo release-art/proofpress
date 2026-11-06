@@ -37,6 +37,10 @@ WORD_GAP = 150.0
 _FILL_PATH = frozenset(("f", "F", "f*"))
 _STROKE_PATH = frozenset(("S", "s"))
 _FILL_STROKE_PATH = frozenset(("B", "B*", "b", "b*"))
+# Text render modes that also stroke the glyph outlines.
+STROKED_TEXT = frozenset((1, 2, 5, 6))
+# A tiling pattern's content can hold patterns in turn; this bounds a hostile or cyclic chain.
+_MAX_PATTERN_DEPTH = 4
 
 
 @dataclasses.dataclass(frozen=True)
@@ -46,6 +50,7 @@ class Fill:
     family: str
     value: tuple[float, ...] = ()
     spot: tuple[str, ...] = ()  # the ink name(s) of a Separation or DeviceN fill, whose value is then the tint(s)
+    pattern: frozenset[str] = frozenset()  # the colour families a pattern fill paints in (its shading, or its content)
 
 
 # What a colour space's colour is straight after ``cs``, per the PDF spec.
@@ -128,6 +133,22 @@ class Paint:
     show: TextShow | None = None  # for text: how to show it again
     codes: tuple[int, ...] = ()  # the font's character codes, kept only when text is None (for decoding it later)
 
+    def colours(self) -> list[Fill]:
+        """The colours a text, path or stencil-image paint puts down: its fill and/or its stroke."""
+        if self.mask:  # a stencil image has no colour of its own: it paints in the fill
+            return [self.fill]
+        if self.kind == "text":
+            return [self.fill, self.stroke] if self.render_mode in STROKED_TEXT else [self.fill]
+        if self.kind == "path":
+            return ([self.fill] if self.filled else []) + ([self.stroke] if self.stroke_width is not None else [])
+        return []
+
+    def families(self) -> set[str]:
+        """Every colour family this paint uses, looking through patterns."""
+        if self.kind in ("image", "inline-image", "shading") and not self.mask:
+            return {self.colour_space} if self.colour_space else set()
+        return {f for c in self.colours() for f in (c.family, *c.pattern)}
+
 
 def number(args: list, index: int) -> float:
     try:
@@ -175,6 +196,15 @@ def _with_components(fill: Fill, args: list) -> Fill:
     return fill  # a tint in some other space: still not a device colour
 
 
+def _pattern_base(space: object, resources: pikepdf.Object | None) -> str | None:
+    """The base colour family of a ``[/Pattern base]`` space (for uncoloured patterns), else ``None``."""
+    if isinstance(space, pikepdf.Name):
+        space = lookup_resource(resources, "/ColorSpace", [space])
+    if isinstance(space, pikepdf.Array) and len(space) > 1 and str(space[0]) == "/Pattern":
+        return classify_colour_space(space[1], resources)
+    return None
+
+
 def _extgstate(op: content.Operation) -> pikepdf.Object | None:
     return lookup_resource(op.resources, "/ExtGState", op.operands)
 
@@ -187,7 +217,8 @@ class Walker:
     state. After the walk, :attr:`spots` holds the names of the spot inks the page selected.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, _patterns: frozenset[tuple[int, int]] = frozenset()) -> None:
+        self._patterns = _patterns  # the tiling patterns being walked, to refuse a cycle
         self.state = State()
         self.entered: list[State] = []  # the state to restore when leaving each form
         self.saved: dict[int, list[State]] = {0: []}  # q-stack per nesting depth
@@ -201,7 +232,7 @@ class Walker:
         self.transparency: set[str] = set()  # why the page needs a blend space: opacity, blend mode, soft mask
         self._fonts: dict[tuple[int, int] | int, fonts.Font] = {}
 
-    def walk(self, page: pikepdf.Page) -> collections.abc.Iterator[Paint]:
+    def walk(self, page: pikepdf.Page | pikepdf.Object) -> collections.abc.Iterator[Paint]:
         for op in content.iter_operations(page):
             self._scope(op.depth)
             paint = self._paint(op)
@@ -233,7 +264,16 @@ class Walker:
         state = self.state
         if name == "sh":
             # A shading fills the whole clip; unclipped, its extent is unknown (it covers the page).
-            return Paint("shading", state.fill, state.overprint, visible=_non_empty(state.clip))
+            shading = lookup_resource(op.resources, "/Shading", op.operands)
+            space = classify_colour_space(shading.get("/ColorSpace"), op.resources) if shading is not None else None
+            return Paint(
+                "shading",
+                state.fill,
+                state.overprint,
+                visible=_non_empty(state.clip),
+                colour_space=space,
+                name=str(op.operands[0]) if op.operands else "",
+            )
         if name == "INLINE IMAGE":
             return self._inline_image(op)
         if name == "Do":
@@ -454,10 +494,37 @@ class Walker:
         family = classify_colour_space(space, op.resources)
         names = spot_names(space, op.resources) if family == OTHER else []
         self.spots.update(names)
-        self._set(**{key: Fill(OTHER, (1.0,) * len(names), tuple(names)) if names else INITIAL_FILL[family]})
+        fill = Fill(OTHER, (1.0,) * len(names), tuple(names)) if names else INITIAL_FILL[family]
+        if (base := _pattern_base(space, op.resources)) is not None:
+            fill = Fill(OTHER, pattern=frozenset({base}))  # remembered for an uncoloured pattern's scn
+        self._set(**{key: fill})
 
     def _components(self, op: content.Operation, key: str = "fill") -> None:
-        self._set(**{key: _with_components(getattr(self.state, key), op.operands)})
+        current = getattr(self.state, key)
+        if op.operands and isinstance(op.operands[-1], pikepdf.Name):  # scn ... /Pattern
+            pattern = lookup_resource(op.resources, "/Pattern", [op.operands[-1]])
+            self._set(**{key: Fill(OTHER, pattern=self._pattern_families(pattern, current.pattern))})
+            return
+        self._set(**{key: _with_components(current, op.operands)})
+
+    def _pattern_families(self, pattern: pikepdf.Object | None, base: frozenset[str]) -> frozenset[str]:
+        """The colour families a pattern paints in: its shading's space, its base if uncoloured, else its content's."""
+        if pattern is None:
+            return frozenset()
+        kind = int(pattern.get("/PatternType", 0))
+        if kind == 2:  # a shading pattern
+            shading = pattern.get("/Shading")
+            space = classify_colour_space(shading.get("/ColorSpace"), None) if shading is not None else None
+            return frozenset({space}) if space else frozenset()
+        if kind != 1:
+            return frozenset()
+        if int(pattern.get("/PaintType", 1)) == 2:  # uncoloured: painted in the colour set alongside it
+            return base
+        key = pattern.objgen
+        if key in self._patterns or len(self._patterns) >= _MAX_PATTERN_DEPTH:
+            return frozenset()
+        inner = Walker(_patterns=self._patterns | {key})
+        return frozenset(f for p in inner.walk(pattern) for f in p.families())
 
     def _graphics_state(self, op: content.Operation) -> None:
         gs = _extgstate(op)
