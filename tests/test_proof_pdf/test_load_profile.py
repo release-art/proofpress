@@ -88,3 +88,12 @@ def test_a_profile_without_a_file_is_a_config_error(tmp_path, monkeypatch):
 def test_only_verify_makes_a_profile():
     with pytest.raises(proof_pdf.ConfigError):
         proof_pdf.load_profile(command="inspect")
+
+
+def test_gray_mode_and_allow_k_only_come_from_the_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("PROOF_PDF_CONFIG", raising=False)
+    monkeypatch.delenv("PROOF_PDF_PROFILE", raising=False)
+    path = tmp_path / "proof-pdf.toml"
+    path.write_text('[verify]\ncolour-mode = "gray"\nallow-k-only = true\n')
+    loaded = proof_pdf.load_profile(path).profile
+    assert loaded.colour_mode == "gray" and loaded.allow_k_only is True

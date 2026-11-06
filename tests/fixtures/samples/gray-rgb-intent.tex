@@ -1,0 +1,9 @@
+% Gray artwork under an sRGB output intent: the intent is RGB in a gray job.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfProfile{srgb}{srgb.icc}{3}
+\PdfIntent{srgb}{Sample sRGB}
+\begin{document}
+\PdfDraw{0.4 g 100 500 140 140 re f}
+\end{document}

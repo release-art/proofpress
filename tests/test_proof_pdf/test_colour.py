@@ -34,6 +34,20 @@ class TestTotalAreaCoverage:
         assert [f.page for f in findings] == [2]
         assert findings[0].severity is Severity.ERROR
 
+    async def test_the_warn_tier_is_between_the_level_and_the_limit(self, mocker):
+        mocker.patch.object(colour, "_page_tac_peaks", return_value=[240.0, 250.0, 260.0, 300.0, 340.0])
+        findings = await colour.check_tac("gs", "x.pdf", 300.0, warn_tac=250.0)
+        assert [(f.page, f.severity) for f in findings] == [
+            (3, Severity.WARN),
+            (4, Severity.WARN),  # exactly at the limit is still within it
+            (5, Severity.ERROR),
+        ]
+        assert "advisory" in findings[0].message and "limit" in findings[2].message
+
+    async def test_without_a_warn_level_nothing_warns(self, mocker):
+        mocker.patch.object(colour, "_page_tac_peaks", return_value=[260.0, 299.0])
+        assert await colour.check_tac("gs", "x.pdf", 300.0) == []
+
     async def test_all_under_limit_is_clean(self, mocker):
         mocker.patch.object(colour, "_page_tac_peaks", return_value=[250.0, 299.9])
         assert await colour.check_tac("gs", "x.pdf", 300.0) == []

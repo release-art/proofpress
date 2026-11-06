@@ -1,0 +1,12 @@
+% K-only CMYK (0 0 0 k) as fills, strokes and text: gray only to a job that accepts a K plate.
+\documentclass{article}
+\usepackage[cmyk]{xcolor}
+\usepackage{tikz}
+\pagestyle{empty}
+\begin{document}
+\color[cmyk]{0,0,0,0.7} Text on the K plate.
+\begin{tikzpicture}
+  \fill[color={cmyk,1:cyan,0;magenta,0;yellow,0;black,0.7}] (0,0) rectangle (3,2);
+  \draw[line width=3pt,color={cmyk,1:cyan,0;magenta,0;yellow,0;black,1}] (4,0) -- (7,2);
+\end{tikzpicture}
+\end{document}

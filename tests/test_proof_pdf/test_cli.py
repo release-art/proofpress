@@ -205,6 +205,8 @@ class TestProofingOptions:
             (["--output-condition", "FOGRA51"], "output_condition", "FOGRA51"),
             (["--uniform-pages"], "uniform_pages", True),
             (["--pages-multiple-of", "4"], "pages_multiple_of", 4),
+            (["--colour-mode", "gray"], "colour_mode", "gray"),
+            (["--colour-mode", "gray", "--allow-k-only"], "allow_k_only", True),
         ],
     )
     def test_each_flag_reaches_the_profile(self, runner, tmp_path, stub_verify, flags, field, expected):
@@ -439,3 +441,40 @@ class TestVersion:
     def test_unknown_revision_is_not_shown(self, runner, monkeypatch):
         monkeypatch.setenv("PROOFPRESS_REVISION", "unknown")
         assert "commit" not in runner.invoke(cli.pdf_app, ["--version"]).output
+
+
+class TestImageLimitFlags:
+    @pytest.mark.parametrize(
+        ("flags", "field", "expected"),
+        [
+            (["--warn-dpi", "400"], "warn_dpi", 400.0),
+            (["--max-dpi", "600"], "max_dpi", 600.0),
+            (["--max-stretch-pct", "5"], "max_stretch_pct", 5.0),
+        ],
+    )
+    def test_each_flag_reaches_the_profile_and_is_off_by_default(
+        self, runner, tmp_path, stub_verify, flags, field, expected
+    ):
+        seen = stub_verify({})
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), *flags])
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert getattr(seen[0][1], field) == expected and getattr(seen[1][1], field) is None
+
+    def test_the_warn_level_must_be_above_the_minimum(self, runner, tmp_path, stub_verify):
+        stub_verify({})
+        result = runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--warn-dpi", "300"])
+        assert result.exit_code != 0 and "above --min-dpi" in result.output
+
+
+class TestWarnTacFlag:
+    def test_it_reaches_the_profile_and_is_off_by_default(self, runner, tmp_path, stub_verify):
+        seen = stub_verify({})
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--warn-tac", "250"])
+        runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf"))])
+        assert seen[0][1].warn_tac == 250.0 and seen[1][1].warn_tac is None
+
+    @pytest.mark.parametrize("level", ["300", "320"])
+    def test_it_must_be_below_the_limit(self, runner, tmp_path, stub_verify, level):
+        stub_verify({})
+        result = runner.invoke(cli.pdf_app, ["verify", str(_pdf(tmp_path, "a.pdf")), "--warn-tac", level])
+        assert result.exit_code != 0 and "below --max-tac" in result.output

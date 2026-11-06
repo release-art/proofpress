@@ -29,10 +29,11 @@ def pt_to_mm(pt: float) -> float:
 
 @enum.unique
 class ColourMode(enum.StrEnum):
-    """The colour model a job is proofed against. Further modes (grayscale, CMYK plus UV) would be added here."""
+    """The colour model a job is proofed against. Further modes (CMYK plus UV) would be added here."""
 
     CMYK = "cmyk"
     RGB = "rgb"
+    GRAY = "gray"
 
 
 @enum.unique
@@ -77,6 +78,19 @@ class PageGeometry:
     trim_h_mm: float
     bleed_mm: float  # per side
     tolerance_mm: float = 0.25
+    binding_bleed_mm: float | None = None  # on the binding edge; None means the same as bleed_mm
+    binding: str = "left"  # the binding edge of page 1, "left" or "right"; the other side on page 2, and so on
+
+    def bleeds_mm(self, page: int) -> tuple[float, float, float, float]:
+        """The bleed expected on (left, bottom, right, top) of the 1-based *page*: the binding edge alternates."""
+        binding = self.bleed_mm if self.binding_bleed_mm is None else self.binding_bleed_mm
+        left_binds = (self.binding == "left") == (page % 2 == 1)
+        return (
+            binding if left_binds else self.bleed_mm,
+            self.bleed_mm,
+            self.bleed_mm if left_binds else binding,
+            self.bleed_mm,
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,9 +108,13 @@ class Profile:
     *fonts* flags unembedded and Type 3 fonts; *allow_spots* (exact names) turns on the spot-ink allowlist;
     *output_condition* names the printing condition the output intent must carry; *uniform_pages* and
     *pages_multiple_of* are page-set rules. *require_bleed* turns on the artwork-bleed check: artwork that reaches the
-    trim edge must run on to the bleed edge.
+    trim edge must run on to the bleed edge. *no_marks* turns on the outside-bleed check: nothing may be painted
+    beyond the bleed region (printer's marks, slug text).
     *colour_mode* is the colour model the job is held to: ``RGB`` flags CMYK artwork and skips the ink checks (TAC,
-    overprint, rich black).
+    overprint, rich black); ``GRAY`` allows only the gray family and skips them too. *allow_k_only* (gray only) also
+    accepts DeviceCMYK that uses the K plate alone.
+    *warn_tac* (below *max_tac*) is an opt-in advisory level for total ink.
+    *warn_dpi*, *max_dpi* and *max_stretch_pct* are opt-in image limits with no default (see :mod:`.resolution`).
     *min_delta_l* turns on the contrast check (an L* difference floor), measured through *proof_profile* or the PDF's
     own output intent.
     """
@@ -107,8 +125,12 @@ class Profile:
     colour: bool = True
     geometry: PageGeometry | None = None
     max_tac: float = DEFAULT_MAX_TAC
+    warn_tac: float | None = None
     small_text_pt: float = DEFAULT_SMALL_TEXT_PT
     min_dpi: float = DEFAULT_MIN_DPI
+    warn_dpi: float | None = None
+    max_dpi: float | None = None
+    max_stretch_pct: float | None = None
     strict_cmyk: bool = False
     colour_mode: ColourMode = ColourMode.CMYK
     k_only_text: bool = False
@@ -124,6 +146,8 @@ class Profile:
     uniform_pages: bool = False
     pages_multiple_of: int | None = None
     require_bleed: bool = False
+    allow_k_only: bool = False
+    no_marks: bool = False
 
 
 @dataclasses.dataclass

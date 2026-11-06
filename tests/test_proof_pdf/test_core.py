@@ -6,7 +6,7 @@ import pathlib
 import pytest
 
 from proof_pdf import core
-from proof_pdf._internal import colour, verapdf
+from proof_pdf._internal import colour, pdfx, verapdf
 from proof_pdf.models import FileReport, Finding, PageGeometry, Profile, Severity
 
 from .conftest import A6
@@ -29,8 +29,8 @@ class TestVerifyFile:
     async def test_a_correct_file_passes_every_layer(self, make_pdf, tools_present, mocker):
         path = make_pdf()
         # The synthetic PDF has no PDF/X identity, which is a separate concern.
-        mocker.patch.object(core.structure, "check_pdfx_identity", return_value=[])
-        mocker.patch.object(core.structure, "check_trapped", return_value=[])
+        boxes_only = tuple(r for r in pdfx.RULES if r.id == "page-boxes")
+        mocker.patch.object(pdfx, "RULES", boxes_only)
         report = await core.verify_file(path, Profile())
         assert report.ok, report.findings
 

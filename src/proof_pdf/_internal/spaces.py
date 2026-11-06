@@ -24,6 +24,7 @@ _DEVICE_FAMILIES = {
     "/CalGray": GRAY,
     "/Pattern": OTHER,
 }
+_DEVICE_SPACES = frozenset(("/DeviceGray", "/DeviceRGB", "/DeviceCMYK"))
 _SPOT_FAMILIES = ("/Separation", "/DeviceN")
 _ICC_COMPONENTS = {1: GRAY, 3: RGB, 4: CMYK}
 # The profile header's data colour space (bytes 16-20). /N alone cannot tell an RGB profile from a Lab one.
@@ -46,6 +47,16 @@ def lookup_resource(resources: pikepdf.Object | None, category: str, operands: l
 def truthy(value: object) -> bool:
     """A PDF boolean object read as a plain bool."""
     return value is not None and str(value) == "True"
+
+
+def is_device_space(space: object, resources: pikepdf.Object | None) -> bool:
+    """Whether *space* is DeviceGray, DeviceRGB or DeviceCMYK, named directly or through a resource name."""
+    if not isinstance(space, pikepdf.Name):
+        return False
+    if str(space) in _DEVICE_SPACES:
+        return True
+    named = lookup_resource(resources, "/ColorSpace", [space])
+    return isinstance(named, pikepdf.Name) and str(named) in _DEVICE_SPACES
 
 
 def classify_colour_space(space: object, resources: pikepdf.Object | None, *, depth: int = 0) -> str:

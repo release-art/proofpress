@@ -1,0 +1,9 @@
+% A gray raster tagged with a gray ICC profile (ICCBased, N 1): the gray family.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfProfile{gray}{gray.icc}{1}
+\PdfImage{/Im1}{2}{2}{8}{\PdfICC{gray}}{00 55 aa ff}
+\begin{document}
+\PdfDraw{q 140 0 0 140 100 500 cm /Im1 Do Q}
+\end{document}
