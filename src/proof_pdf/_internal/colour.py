@@ -283,7 +283,7 @@ def check_colour_spaces(pdf: pikepdf.Pdf, *, strict: bool) -> list[Finding]:
 def check_rgb_only(pdf: pikepdf.Pdf) -> list[Finding]:
     """For a screen job: flag CMYK images and fills, a CMYK output intent, and (as advisory) spot colours.
 
-    Gray is colour-neutral and passes. Shadings, patterns and inline images are not inspected.
+    Gray is colour-neutral and passes. Shadings and patterns are not inspected.
     """
     findings: list[Finding] = []
     if intent_family(pdf) == CMYK:
@@ -306,9 +306,11 @@ def check_rgb_only(pdf: pikepdf.Pdf) -> list[Finding]:
 
 
 def _painted_colours(p: Paint) -> list[Fill]:
-    """The colours a text or path paint actually puts down: its fill and/or its stroke."""
+    """The colours a text, path or stencil-image paint actually puts down: its fill and/or its stroke."""
     if p.kind == "text":
         return [p.fill, p.stroke] if p.render_mode in _STROKED_TEXT else [p.fill]
+    if p.mask:  # a stencil image has no colour of its own: it paints in the fill
+        return [p.fill]
     if p.kind == "path":
         return ([p.fill] if p.filled else []) + ([p.stroke] if p.stroke_width is not None else [])
     return []
@@ -320,8 +322,8 @@ def _paint_in(page: pikepdf.Page, family: str) -> tuple[set[str], set[str], set[
     colours: set[str] = set()
     spots: set[str] = set()
     for p in paint_events(page):
-        if p.kind == "image":
-            if p.xobject is not None and classify_colour_space(p.xobject.get("/ColorSpace"), None) == family:
+        if p.kind in ("image", "inline-image") and not p.mask:
+            if p.colour_space == family:
                 images.add(p.name)
             continue
         painted = _painted_colours(p)

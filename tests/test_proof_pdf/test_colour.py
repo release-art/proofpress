@@ -312,6 +312,53 @@ class TestRgbOnly:
         with pikepdf.open(make_content_pdf(stream)) as pdf:
             assert bool(colour.check_rgb_only(pdf)) is flagged
 
+    @pytest.mark.parametrize(
+        ("space", "flagged"),
+        [(b"/CMYK", True), (b"/CS0", True), (b"[/I /CMYK 0 <00000000>]", True), (b"/RGB", False), (b"/G", False)],
+    )
+    def test_inline_images_are_checked(self, make_content_pdf, space, flagged):
+        stream = b"q 10 0 0 10 0 0 cm BI /W 1 /H 1 /CS " + space + b" /BPC 8 ID \x00\x00\x00\x00 EI Q"
+        path = make_content_pdf(stream, font=False, colorspaces={"/CS0": pikepdf.Name.DeviceCMYK})
+        with pikepdf.open(path) as pdf:
+            assert bool(colour.check_rgb_only(pdf)) is flagged
+
+    def test_inline_rgb_image_is_an_error_in_cmyk_mode(self, make_content_pdf):
+        path = make_content_pdf(b"BI /W 1 /H 1 /CS /RGB /BPC 8 ID \x00\x00\x00 EI", font=False)
+        with pikepdf.open(path) as pdf:
+            findings = colour.check_colour_spaces(pdf, strict=False)
+        assert [f.severity for f in findings] == [Severity.ERROR]
+
+    @pytest.mark.parametrize(
+        ("fill", "flagged"),
+        [(b"0 0 0 1 k", True), (b"1 0 0 rg", False), (b"0.5 g", False)],
+        ids=["cmyk", "rgb", "gray"],
+    )
+    @pytest.mark.parametrize("kind", ["inline", "xobject"])
+    def test_stencil_mask_takes_the_fill_colour(self, make_content_pdf, fill, flagged, kind):
+        pdf = pikepdf.new()
+        mask = pdf.make_stream(
+            b"\x00",
+            Type=pikepdf.Name.XObject,
+            Subtype=pikepdf.Name.Image,
+            Width=1,
+            Height=1,
+            ImageMask=True,
+            BitsPerComponent=1,
+        )
+        inline = b"BI /W 1 /H 1 /IM true /BPC 1 ID \x00 EI"
+        _page_with(
+            pdf,
+            fill + b" q 10 0 0 10 0 0 cm " + (inline if kind == "inline" else b"/Im1 Do") + b" Q",
+            pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=pdf.make_indirect(mask))),
+        )
+        assert bool(colour.check_rgb_only(pdf)) is flagged
+
+    def test_stencil_mask_in_rgb_fill_is_vector_severity_in_cmyk_mode(self, make_content_pdf):
+        path = make_content_pdf(b"1 0 0 rg BI /W 1 /H 1 /IM true /BPC 1 ID \x00 EI", font=False)
+        with pikepdf.open(path) as pdf:
+            findings = colour.check_colour_spaces(pdf, strict=False)
+        assert [f.severity for f in findings] == [Severity.WARN]
+
     def test_rgb_and_gray_are_clean(self, make_content_pdf):
         with pikepdf.open(make_content_pdf(b"1 0 0 rg 0 0 10 10 re f 0.5 g 0 0 5 5 re f", font=False)) as pdf:
             assert colour.check_rgb_only(pdf) == []

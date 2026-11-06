@@ -97,7 +97,7 @@ class TextShow:
 class Paint:
     """One thing painted on the page, with the state it was painted in."""
 
-    kind: str  # "text", "path", "image" or "shading"
+    kind: str  # "text", "path", "image", "inline-image" or "shading"
     fill: Fill
     overprint: bool
     stroke: Fill = INITIAL_FILL[
@@ -112,6 +112,8 @@ class Paint:
     stroke_width: float | None = None  # effective width in points, for stroked paths
     filled: bool = False  # a path painted with its fill (not only stroked)
     xobject: pikepdf.Object | None = None  # the image, for kind == "image"
+    colour_space: str | None = None  # the colour family of an image or inline image; None for a mask
+    mask: bool = False  # a stencil image (/ImageMask): it has no colour of its own and paints in the fill colour
     name: str = ""  # the image's resource name
     text: str | None = None  # the characters shown, for text; None when the font gives no way to read them
     rotation: float = 0.0  # text direction in degrees counter-clockwise from the page's x axis
@@ -232,6 +234,8 @@ class Walker:
         if name == "sh":
             # A shading fills the whole clip; unclipped, its extent is unknown (it covers the page).
             return Paint("shading", state.fill, state.overprint, visible=_non_empty(state.clip))
+        if name == "INLINE IMAGE":
+            return self._inline_image(op)
         if name == "Do":
             xobject = content.lookup_xobject(op.resources, op.operands)
             if xobject is not None and str(xobject.get("/Subtype")) == "/Image":
@@ -245,12 +249,30 @@ class Walker:
                     bbox=bbox,
                     visible=self._visible(bbox),
                     xobject=xobject,
+                    colour_space=classify_colour_space(xobject.get("/ColorSpace"), None),
+                    mask=truthy(xobject.get("/ImageMask")),
                     name=str(op.operands[0]),
                     matrix=op.ctm,
                     mcid=self._mcid(),
                     artifact=self._artifact(),
                 )
         return None
+
+    def _inline_image(self, op: content.Operation) -> Paint:
+        """A ``BI ... EI`` image. pikepdf expands its abbreviated keys; its colour space may name a resource."""
+        image = op.operands[0].obj
+        bbox = _aabb(op.ctm, [(0, 0), (1, 0), (0, 1), (1, 1)])
+        return Paint(
+            "inline-image",
+            self.state.fill,
+            self.state.overprint,
+            bbox=bbox,
+            visible=self._visible(bbox),
+            colour_space=classify_colour_space(image.get("/ColorSpace"), op.resources),
+            mask=truthy(image.get("/ImageMask")),
+            name="(inline)",
+            matrix=op.ctm,
+        )
 
     def _paint_path(self, op: content.Operation, *, filled: bool, stroked: bool) -> Paint:
         state = self.state
