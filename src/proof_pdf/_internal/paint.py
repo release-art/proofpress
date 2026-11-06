@@ -62,6 +62,7 @@ class State:
     """The slice of the graphics state the checks read. A new page starts in DeviceGray black."""
 
     fill: Fill = INITIAL_FILL[GRAY]
+    stroke: Fill = INITIAL_FILL[GRAY]
     font: fonts.Font = fonts.UNKNOWN
     font_resource: pikepdf.Object | None = None
     font_size: float = 0.0
@@ -99,6 +100,9 @@ class Paint:
     kind: str  # "text", "path", "image" or "shading"
     fill: Fill
     overprint: bool
+    stroke: Fill = INITIAL_FILL[
+        GRAY
+    ]  # the stroke colour in force; painted only by stroked paths and text modes 1, 2, 5, 6
     size: float = 0.0  # effective point size; text only
     bbox: Rect | None = None  # page space; None when the extent is unknown (a shading, an empty path)
     visible: Rect | None = None  # bbox cut to the clip; None when bbox is unknown or the clip leaves nothing
@@ -255,6 +259,7 @@ class Walker:
             "path",
             state.fill,
             state.overprint,
+            stroke=state.stroke,
             bbox=bbox,
             visible=self._visible(bbox),
             stroke_width=state.line_width * _scale(op.ctm) if stroked else None,
@@ -301,6 +306,7 @@ class Walker:
             "text",
             state.fill,
             state.overprint,
+            stroke=state.stroke,
             size=size * content.vertical_scale(trm),
             bbox=bbox,
             visible=self._visible(bbox),
@@ -412,24 +418,24 @@ class Walker:
             self._fonts[key] = fonts.load(resource)
         return self._fonts[key]
 
-    def _gray(self, op: content.Operation) -> None:
-        self._set(fill=Fill(GRAY, (number(op.operands, 0),)))
+    def _gray(self, op: content.Operation, key: str = "fill") -> None:
+        self._set(**{key: Fill(GRAY, (number(op.operands, 0),))})
 
-    def _rgb(self, op: content.Operation) -> None:
-        self._set(fill=Fill(RGB, tuple(number(op.operands, i) for i in range(3))))
+    def _rgb(self, op: content.Operation, key: str = "fill") -> None:
+        self._set(**{key: Fill(RGB, tuple(number(op.operands, i) for i in range(3)))})
 
-    def _cmyk(self, op: content.Operation) -> None:
-        self._set(fill=Fill(CMYK, tuple(number(op.operands, i) for i in range(4))))
+    def _cmyk(self, op: content.Operation, key: str = "fill") -> None:
+        self._set(**{key: Fill(CMYK, tuple(number(op.operands, i) for i in range(4)))})
 
-    def _colour_space(self, op: content.Operation) -> None:
+    def _colour_space(self, op: content.Operation, key: str = "fill") -> None:
         space = op.operands[0] if op.operands else None
         family = classify_colour_space(space, op.resources)
         names = spot_names(space, op.resources) if family == OTHER else []
         self.spots.update(names)
-        self._set(fill=Fill(OTHER, (1.0,) * len(names), tuple(names)) if names else INITIAL_FILL[family])
+        self._set(**{key: Fill(OTHER, (1.0,) * len(names), tuple(names)) if names else INITIAL_FILL[family]})
 
-    def _components(self, op: content.Operation) -> None:
-        self._set(fill=_with_components(self.state.fill, op.operands))
+    def _components(self, op: content.Operation, key: str = "fill") -> None:
+        self._set(**{key: _with_components(getattr(self.state, key), op.operands)})
 
     def _graphics_state(self, op: content.Operation) -> None:
         gs = _extgstate(op)
@@ -503,6 +509,12 @@ class Walker:
         "rg": _rgb,
         "k": _cmyk,
         "cs": _colour_space,
+        "G": lambda w, op: w._gray(op, "stroke"),
+        "RG": lambda w, op: w._rgb(op, "stroke"),
+        "K": lambda w, op: w._cmyk(op, "stroke"),
+        "CS": lambda w, op: w._colour_space(op, "stroke"),
+        "SC": lambda w, op: w._components(op, "stroke"),
+        "SCN": lambda w, op: w._components(op, "stroke"),
         "sc": _components,
         "scn": _components,
         "gs": _graphics_state,

@@ -35,8 +35,8 @@ import pikepdf
 from PIL import Image, ImageMath
 
 from ..models import Finding, Severity
-from . import content, proc
-from .paint import Fill, Walker, paint_events
+from . import proc
+from .paint import Fill, Paint, Walker, paint_events
 from .spaces import CMYK, GRAY, RGB, classify_colour_space, intent_family
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,8 @@ _RICH_K_MIN = 0.5
 _RICH_OTHER_MIN = 0.3
 # An ink amount this close to zero is no ink, and this close to one is solid.
 _INK_EPSILON = 0.01
+# Text render modes that also stroke the glyph outlines.
+_STROKED_TEXT = frozenset((1, 2, 5, 6))
 
 
 def gs_available(binary: str) -> bool:
@@ -255,15 +257,7 @@ def check_colour_spaces(pdf: pikepdf.Pdf, *, strict: bool) -> list[Finding]:
     findings: list[Finding] = []
     vector_severity = Severity.ERROR if strict else Severity.WARN
     for i, page in enumerate(pdf.pages, start=1):
-        images: set[str] = set()
-        vector = False
-        for op in content.iter_operations(page):
-            if op.operator in ("rg", "RG"):
-                vector = True
-            elif op.operator == "Do":
-                name = _rgb_image_name(op)
-                if name is not None:
-                    images.add(name)
+        images, colours, _ = _paint_in(page, RGB)
         for name in sorted(images):
             findings.append(
                 Finding(
@@ -273,44 +267,36 @@ def check_colour_spaces(pdf: pikepdf.Pdf, *, strict: bool) -> list[Finding]:
                     i,
                 )
             )
-        if vector:
+        if colours:
             findings.append(
                 Finding(
                     "colour-space",
                     vector_severity,
-                    "vector artwork is filled in DeviceRGB -- confirm the RIP is meant to convert it",
+                    "vector artwork is painted in RGB -- confirm the RIP is meant to convert it",
                     i,
                 )
             )
     return findings
 
 
-def _rgb_image_name(op: content.Operation) -> str | None:
-    """The name of the image this ``Do`` paints, if that image is in an RGB space."""
-    xobject = content.lookup_xobject(op.resources, op.operands)
-    if xobject is None or str(xobject.get("/Subtype")) != "/Image":
-        return None
-    if classify_colour_space(xobject.get("/ColorSpace"), op.resources) != RGB:
-        return None
-    return str(op.operands[0])
-
-
 # ------------------------------------------------------------ RGB proofing ----
 def check_rgb_only(pdf: pikepdf.Pdf) -> list[Finding]:
     """For a screen job: flag CMYK images and fills, a CMYK output intent, and (as advisory) spot colours.
 
-    Gray is colour-neutral and passes. Stroke colour is not tracked by the paint walk, so a CMYK-only stroke is missed.
-    """  # ponytail: fills and images only; strokes need stroke state in paint.py
+    Gray is colour-neutral and passes. Shadings, patterns and inline images are not inspected.
+    """
     findings: list[Finding] = []
     if intent_family(pdf) == CMYK:
         findings.append(Finding("rgb-only", Severity.ERROR, "the output intent is a CMYK profile in an RGB job"))
     for i, page in enumerate(pdf.pages, start=1):
-        images, fills, spots = _non_rgb_paint(page)
+        images, fills, spots = _paint_in(page, CMYK)
         for name in sorted(images):
             findings.append(Finding("rgb-only", Severity.ERROR, f"image {name} is in a CMYK colour space", i))
         if fills:
             findings.append(
-                Finding("rgb-only", Severity.ERROR, f"artwork is filled in CMYK ({', '.join(sorted(fills)[:3])}...)", i)
+                Finding(
+                    "rgb-only", Severity.ERROR, f"artwork is painted in CMYK ({', '.join(sorted(fills)[:3])}...)", i
+                )
             )
         if spots:
             findings.append(
@@ -319,21 +305,32 @@ def check_rgb_only(pdf: pikepdf.Pdf) -> list[Finding]:
     return findings
 
 
-def _non_rgb_paint(page: pikepdf.Page) -> tuple[set[str], set[str], set[str]]:
-    """The CMYK image names, CMYK fill descriptions and spot ink names a page paints."""
+def _painted_colours(p: Paint) -> list[Fill]:
+    """The colours a text or path paint actually puts down: its fill and/or its stroke."""
+    if p.kind == "text":
+        return [p.fill, p.stroke] if p.render_mode in _STROKED_TEXT else [p.fill]
+    if p.kind == "path":
+        return ([p.fill] if p.filled else []) + ([p.stroke] if p.stroke_width is not None else [])
+    return []
+
+
+def _paint_in(page: pikepdf.Page, family: str) -> tuple[set[str], set[str], set[str]]:
+    """The image names and colour descriptions in *family*, and the spot ink names, a page paints by fill or stroke."""
     images: set[str] = set()
-    fills: set[str] = set()
+    colours: set[str] = set()
     spots: set[str] = set()
     for p in paint_events(page):
         if p.kind == "image":
-            if p.xobject is not None and classify_colour_space(p.xobject.get("/ColorSpace"), None) == CMYK:
+            if p.xobject is not None and classify_colour_space(p.xobject.get("/ColorSpace"), None) == family:
                 images.add(p.name)
-        elif p.kind == "text" or (p.kind == "path" and p.filled):
-            if p.fill.family == CMYK:
-                fills.add(_describe(p.fill))
-            elif p.fill.spot:
-                spots.update(p.fill.spot)
-    return images, fills, spots
+            continue
+        painted = _painted_colours(p)
+        for colour in painted:
+            if colour.family == family:
+                colours.add(_describe(colour))
+            elif colour.spot:
+                spots.update(colour.spot)
+    return images, colours, spots
 
 
 # ------------------------------------------------ rich-black small text ----

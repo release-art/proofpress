@@ -260,6 +260,21 @@ class TestColourSpaces:
             findings = colour.check_colour_spaces(pdf, strict=strict)
         assert [f.severity for f in findings] == [expected]
 
+    @pytest.mark.parametrize(
+        ("stream", "flagged"),
+        [
+            (b"1 0 0 RG 0 0 10 10 re S", True),
+            (b"/DeviceRGB CS 1 0 0 SCN 0 0 10 10 re S", True),
+            (b"/DeviceRGB cs 1 0 0 scn 0 0 10 10 re f", True),
+            (b"1 0 0 RG 0 0 10 10 re f", False),  # colour set, never stroked
+            (b"0 0 0 1 K 0 0 10 10 re S", False),
+        ],
+    )
+    def test_vector_rgb_is_found_wherever_it_is_painted(self, make_content_pdf, stream, flagged):
+        path = make_content_pdf(stream, font=False, colorspaces={"/DeviceRGB": pikepdf.Name.DeviceRGB})
+        with pikepdf.open(path) as pdf:
+            assert bool(colour.check_colour_spaces(pdf, strict=False)) is flagged
+
     def test_repeated_image_reports_once_per_page(self, tmp_path, make_image):
         path = tmp_path / "repeat.pdf"
         pdf = pikepdf.new()
@@ -281,6 +296,21 @@ class TestRgbOnly:
         image = pdf.make_indirect(make_image(pdf, colorspace=pikepdf.Name.DeviceCMYK))
         _page_with(pdf, b"q 100 0 0 100 0 0 cm /Im1 Do Q", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)))
         assert "/Im1" in colour.check_rgb_only(pdf)[0].message
+
+    @pytest.mark.parametrize(
+        ("stream", "flagged"),
+        [
+            (b"0 0 0 1 K 0 0 10 10 re S", True),
+            (b"0 0 0 1 K 0 0 10 10 re f", False),  # a stroke colour that nothing strokes
+            (b"0 0 0 1 K 1 0 0 rg 0 0 10 10 re B", True),
+            (b"1 0 0 RG 0 0 10 10 re S", False),
+            (b"BT /F1 12 Tf 1 Tr 0 0 0 1 K (a) Tj ET", True),
+            (b"BT /F1 12 Tf 0 0 0 1 K (a) Tj ET", False),
+        ],
+    )
+    def test_stroke_colour_is_checked_only_where_it_paints(self, make_content_pdf, stream, flagged):
+        with pikepdf.open(make_content_pdf(stream)) as pdf:
+            assert bool(colour.check_rgb_only(pdf)) is flagged
 
     def test_rgb_and_gray_are_clean(self, make_content_pdf):
         with pikepdf.open(make_content_pdf(b"1 0 0 rg 0 0 10 10 re f 0.5 g 0 0 5 5 re f", font=False)) as pdf:
