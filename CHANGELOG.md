@@ -7,10 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-11-06
+
 ### Added
 
-- `proof-pdf verify --colour-mode rgb` (default `cmyk`): proof an RGB job. CMYK images and fills, and a CMYK output intent, are errors; spot colours a
-  warning. The ink checks (total ink, overprint, rich black) are skipped. Combine with `pdfx = false` in a `[profile.*]`.
+- `proof-pdf verify --colour-mode rgb` (default `cmyk`): proof an RGB job. CMYK images, fills, strokes, shadings and
+  patterns, and a CMYK output intent, are errors; spot colours a warning; gray passes. The ink checks (total ink,
+  overprint, rich black) are skipped, so Ghostscript is not needed. Combine with `pdfx = false` in a profile:
+  `[profiles.web.verify]` with `colour-mode = "rgb"`, chosen with `--profile web`. `Profile.colour_mode` is a
+  `proof_pdf.models.ColourMode` for library callers.
+
+### Changed
+
+- The CMYK-mode RGB check now reports RGB wherever it is painted, by fill or stroke, however the colour was set
+  (`rg`/`RG`, or `cs`/`scn` with a Device or ICC RGB space). Before, only the `rg` and `RG` operators were seen, and
+  colour that was set but never painted was reported too. The message now reads "vector artwork is painted in RGB".
+- Both colour checks cover inline images (`BI ... EI`), stencil image masks (judged by the fill colour they paint in),
+  shadings (`sh`) and patterns (shading patterns, coloured and uncoloured tiling patterns, followed into their content).
+
+## [0.3.5] - 2026-10-29
+
+### Added
+
 - `proof-pdf extract` and `proof_pdf.extract.extract_pdf()`: recover assets from any PDF, for rebuilding a template from an
   archived job. Writes the images (JPEG and JPEG 2000 as stored, soft masks as `.mask.png`), the embedded font programs, ICC
   profiles, and vector artwork as one cropped PDF per piece (identical pieces deduplicated), plus `document.json`: page boxes,
@@ -170,7 +188,9 @@ First release.
 - Weekly Docker image builds, with `:latest`, `:tl2025` and a `:<version>` tag per release. Each image records its
   commit, and `proof-pdf --version` shows it.
 
-[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/release-art/proofpress/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/release-art/proofpress/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/release-art/proofpress/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/release-art/proofpress/compare/v0.3.2...v0.3.3
 [0.3.0]: https://github.com/release-art/proofpress/compare/v0.1.0...v0.3.0
