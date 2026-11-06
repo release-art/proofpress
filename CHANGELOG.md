@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-11-06
+
 ### Added
 
 - `spot-definition` check: the same spot ink defined with different full-tint looks (same alternate space) is an error.
@@ -213,7 +215,8 @@ First release.
 - Weekly Docker image builds, with `:latest`, `:tl2025` and a `:<version>` tag per release. Each image records its
   commit, and `proof-pdf --version` shows it.
 
-[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/release-art/proofpress/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/release-art/proofpress/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/release-art/proofpress/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/release-art/proofpress/compare/v0.3.3...v0.3.4
