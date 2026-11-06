@@ -1,0 +1,12 @@
+% Artwork that stops at the trim edge, 3 mm short of the bleed: cutting would leave a paper sliver.
+% A6 card (105 x 148 mm) with 3 mm bleed: a 111 x 154 mm sheet and TrimBox/BleedBox set.
+\documentclass{article}
+\usepackage[paperwidth=111mm,paperheight=154mm,margin=0pt]{geometry}
+\usepackage[cmyk]{xcolor}
+\usepackage{eso-pic}
+\pdfvariable pageattr{/TrimBox [8.504 8.504 306.142 428.031] /BleedBox [0 0 314.646 436.535]}
+\pagestyle{empty}
+\AddToShipoutPictureBG*{\put(8.504,8.504){\color{cyan}\rule{297.638pt}{419.527pt}}}
+\begin{document}
+\mbox{}
+\end{document}

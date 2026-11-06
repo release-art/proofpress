@@ -1,0 +1,15 @@
+% Each colour model xcolor offers, in a default document: what ends up in the PDF?
+\documentclass{article}
+\usepackage{xcolor}
+\pagestyle{empty}
+\definecolor{mRGB}{rgb}{0.8,0.2,0.1}
+\definecolor{mHTML}{HTML}{FF8800}
+\definecolor{mGray}{gray}{0.4}
+\definecolor{mcmy}{cmy}{0.1,0.6,0.9}
+\definecolor{mhsb}{hsb}{0.6,0.8,0.7}
+\definecolor{mwave}{wave}{550}
+\definecolor{mcmyk}{cmyk}{0.2,0.7,0.9,0.1}
+\begin{document}
+\textcolor{mRGB}{rgb} \textcolor{mHTML}{HTML} \textcolor{mGray}{gray} \textcolor{mcmy}{cmy}
+\textcolor{mhsb}{hsb} \textcolor{mwave}{wave} \textcolor{mcmyk}{cmyk}
+\end{document}

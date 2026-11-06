@@ -1,0 +1,7 @@
+% Tints and mixes under the cmyk option stay CMYK.
+\documentclass{article}
+\usepackage[cmyk]{xcolor}
+\pagestyle{empty}
+\begin{document}
+\textcolor{red!30!blue}{red!30!blue} \textcolor{red!50}{red!50} \colorbox{blue!20!white}{tint}
+\end{document}

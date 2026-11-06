@@ -1,0 +1,11 @@
+% Does the cmyk option reach TikZ shadings? (pgf builds shadings in its own colour model.)
+\documentclass{article}
+\usepackage[cmyk]{xcolor}
+\usepackage{tikz}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \shade[left color=cyan,right color=magenta] (0,0) rectangle (3,2);
+  \shade[ball color=yellow] (5,1) circle (1);
+\end{tikzpicture}
+\end{document}

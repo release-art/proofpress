@@ -1,9 +1,11 @@
 # What `proof-pdf verify --no-pdfa --no-pdfx` must report for each sample, per colour mode, as "check/severity".
 # Each sample's .tex says what it is; this says what the checker must make of it. An empty list is a pass.
-# `options.allow_spots` is the spot-ink allowlist for that sample (spots are only judged against one).
+# `options` are Profile fields for that sample: allow_spots (spots are only judged against an allowlist), k_only_text,
+# min_dpi, min_stroke_pt, require_bleed, pdfa and pdfx (the standards layers, off unless a sample is meant to pass them),
+# and geometry = [trim_w_mm, trim_h_mm, bleed_mm].
 # Checked by tests/test_proof_pdf/test_samples.py.
 
-[rgb-image]
+[rgb-image-device]
 cmyk = ["colour-space/error"]  # an RGB raster in a CMYK press job
 rgb = []
 
@@ -81,3 +83,273 @@ options = { allow_spots = ["Foil"] }
 cmyk = ["spot-ink/error"]  # a spot used only inside an image's colour space
 rgb = ["spot-ink/error"]
 options = { allow_spots = [] }
+
+# ---- What the standard LaTeX tools write: xcolor models and options, TikZ, pgfplots, colortbl, tcolorbox, hyperref,
+# ---- placed figures and images, and real PDF/X-4 and PDF/A-2b files from pdfx.
+
+# Artwork that runs to the bleed edge: nothing for the cutter to expose.
+[bleed-full]
+cmyk = []
+rgb = ["rgb-only/error"]
+options = { geometry = [105, 148, 3], require_bleed = true }
+
+# Artwork that stops at the trim edge, 3 mm short of the bleed: cutting would leave a paper sliver.
+[bleed-short]
+cmyk = ["artwork-bleed/error"]
+rgb = ["artwork-bleed/error", "rgb-only/error"]
+options = { geometry = [105, 148, 3], require_bleed = true }
+
+# A table with shaded rows and cells, CMYK.
+[colortbl-cmyk]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# Default xcolor: cyan, magenta and yellow are CMYK-defined, so this table is all CMYK.
+[colortbl-default-doc]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# The rgb option converts every colour to RGB.
+[colortbl-rgb-doc]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# A CMYK PDF figure placed in a document: its colours arrive inside a Form XObject.
+[figure-cmyk-pdf]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# An RGB PDF figure placed in a document.
+[figure-rgb-pdf]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# A line thinner than a printer can hold (0.05 pt).
+[hairline-stroke]
+cmyk = ["hairline/error"]
+rgb = ["hairline/error"]
+options = { min_stroke_pt = 0.25 }
+
+# colorlinks set as CMYK colours, page content rather than annotation borders.
+[hyperref-colorlinks]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# hyperref's default link boxes: annotations with /Border and an RGB /C, not page content.
+[hyperref-links]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# A CMYK JPEG placed as a TikZ node, then an RGB PNG beside it.
+[image-in-tikz]
+cmyk = ["colour-space/error"]
+rgb = ["rgb-only/error"]
+
+# A 64 px CMYK JPEG placed 0.5 cm wide: about 325 dpi.
+[image-resolution-ok]
+cmyk = []
+rgb = ["rgb-only/error"]
+options = { min_dpi = 300 }
+
+# A solid at 400% total ink (C+M+Y+K = 1+1+1+1): over any press limit.
+[ink-over-limit]
+cmyk = ["tac/error"]
+rgb = ["rgb-only/error"]
+
+# A heavy but legal solid: 280% total ink.
+[ink-within-limit]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# A 64 px CMYK JPEG stretched over 10 cm: about 16 dpi.
+[low-resolution-image]
+cmyk = ["image-dpi/error"]
+rgb = ["image-dpi/error", "rgb-only/error"]
+options = { min_dpi = 300 }
+
+# PDF/A-2b with an RGB photo under the sRGB output intent.
+[pdfa-2b-rgb-image]
+cmyk = ["colour-space/error"]
+rgb = []
+options = { pdfa = true }
+
+# A real PDF/A-2b from the pdfx package: sRGB output intent, all colours RGB.
+[pdfa-2b-rgb]
+cmyk = ["colour-space/warn"]
+rgb = []
+options = { pdfa = true }
+
+# PDF/X-4 with a CMYK photo: the standard job.
+[pdfx-x4-cmyk-image]
+cmyk = []
+rgb = ["rgb-only/error"]
+options = { pdfx = true }
+
+# A real PDF/X-4 from the pdfx package: FOGRA39 output intent, page boxes, XMP identity, all colours CMYK.
+[pdfx-x4-cmyk]
+cmyk = []
+rgb = ["rgb-only/error"]
+options = { pdfx = true }
+
+# PDF/X-4 with an RGB photo: valid X-4, but an RGB image escaped conversion in a CMYK press job.
+[pdfx-x4-rgb-image]
+cmyk = ["colour-space/error"]
+rgb = ["rgb-only/error"]
+options = { pdfx = true }
+
+# A pgfplots chart in a cmyk-option document: axes, grid, a line, bars.
+[pgfplots-cmyk]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# Default xcolor: blue and red are RGB; the axis and grid grays are DeviceGray.
+[pgfplots-default-doc]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# The rgb option converts every colour to RGB.
+[pgfplots-rgb-doc]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# An RGB PNG with an alpha channel: an RGB image plus a soft mask.
+[rgba-image]
+cmyk = ["blend-space/warn", "colour-space/error"]
+rgb = ["blend-space/warn"]
+
+# A 1 pt line: heavy enough to print.
+[stroke-ok]
+cmyk = []
+rgb = []
+options = { min_stroke_pt = 0.25 }
+
+# tcolorbox frames and backgrounds in a cmyk-option document.
+[tcolorbox-cmyk]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# Default xcolor: blue is RGB but the cyan tint is CMYK.
+[tcolorbox-default-doc]
+cmyk = ["colour-space/warn"]
+rgb = ["rgb-only/error"]
+
+# The rgb option converts every colour to RGB.
+[tcolorbox-rgb-doc]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# Ordinary black text: LaTeX paints it in DeviceGray, which is K only.
+[text-black-default]
+cmyk = []
+rgb = []
+options = { k_only_text = true }
+
+# Black text set as RGB 0 0 0: it prints as four-colour black, a house-rule failure for K-only text.
+[text-black-rgb]
+cmyk = ["colour-space/warn", "k-only-text/error"]
+rgb = ["k-only-text/error"]
+options = { k_only_text = true }
+
+# Black text set as CMYK 0 0 0 1: also K only.
+[text-k-only-cmyk]
+cmyk = []
+rgb = ["rgb-only/error"]
+options = { k_only_text = true }
+
+# Small text in a built (rich) black mis-registers.
+[text-rich-black-small]
+cmyk = ["rich-black/warn"]
+rgb = ["rgb-only/error"]
+
+# TikZ in a cmyk-option document: fills, strokes, text and named colours all through xcolor.
+[tikz-cmyk-doc]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# Default xcolor: red, green and blue are RGB, but cyan, magenta, yellow and black are CMYK, so this mixes both.
+[tikz-default-doc]
+cmyk = ["colour-space/warn"]
+rgb = ["rgb-only/error"]
+
+# Transparency in a CMYK document: PDF/X-4 wants the page's blend colour space declared.
+[tikz-opacity-cmyk]
+cmyk = ["blend-space/warn"]
+rgb = ["blend-space/warn", "rgb-only/error"]
+
+# PDF/X-4 with transparency and the page's blend colour space declared as DeviceCMYK, matching the CMYK output intent.
+[tikz-opacity-group-cmyk]
+cmyk = []
+rgb = ["rgb-only/error"]
+options = { pdfx = true }
+
+# PDF/X-4 with a CMYK output intent but the blend colour space declared as DeviceRGB: overlaps will shift.
+[tikz-opacity-group-wrong]
+cmyk = ["blend-space/error"]
+rgb = ["blend-space/error", "rgb-only/error"]
+options = { pdfx = true }
+
+# Does the cmyk option reach TikZ patterns?
+[tikz-pattern-cmyk-doc]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# The rgb option converts every colour to RGB.
+[tikz-rgb-doc]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# Does the cmyk option reach TikZ shadings? (pgf builds shadings in its own colour model.)
+[tikz-shading-cmyk-doc]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# The cmyk option converts every colour, named ones included, to CMYK.
+[xcolor-cmyk-option]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# xcolor with no options: named colours are RGB, as xcolor defines them.
+[xcolor-default]
+cmyk = ["colour-space/warn"]
+rgb = ["rgb-only/error"]
+
+# CMYK-defined colours converted to RGB by the rgb option.
+[xcolor-dvipsnames-rgb]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# The dvipsnames colours are defined in CMYK, so they stay CMYK in a default document.
+[xcolor-dvipsnames]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# The gray option turns every colour into a gray level.
+[xcolor-gray-option]
+cmyk = []
+rgb = []
+
+# Tints and mixes under the cmyk option stay CMYK.
+[xcolor-mix-cmyk]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+# Tints and mixes of named colours in a default document (RGB model).
+[xcolor-mix-default]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# Each colour model xcolor offers, in a default document: what ends up in the PDF?
+[xcolor-models]
+cmyk = ["colour-space/warn"]
+rgb = ["rgb-only/error"]
+
+# The rgb option: the same as the default for these colours, stated explicitly.
+[xcolor-rgb-option]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+# The svgnames colours are defined in RGB.
+[xcolor-svgnames]
+cmyk = ["colour-space/warn"]
+rgb = []
+

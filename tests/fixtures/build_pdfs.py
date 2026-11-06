@@ -19,6 +19,8 @@ import pikepdf
 from PIL import ImageCms
 
 OUT = pathlib.Path(__file__).parent / "pdfs"
+# The LaTeX samples (samples/NAME.tex, built by samples/build.py) put their PDFs in this same directory.
+SAMPLES = {p.stem for p in (pathlib.Path(__file__).parent / "samples").glob("*.tex")}
 
 MM = 72.0 / 25.4
 TRIM_W, TRIM_H, BLEED = 105.0 * MM, 148.0 * MM, 3.0 * MM
@@ -387,7 +389,7 @@ def main() -> int:
             for n, data in built.items()
             if not (OUT / f"{n}.pdf").is_file() or (OUT / f"{n}.pdf").read_bytes() != data
         ]
-        stale += [p.stem for p in OUT.glob("*.pdf") if p.stem not in built]
+        stale += [p.stem for p in OUT.glob("*.pdf") if p.stem not in built and p.stem not in SAMPLES]
         if stale:
             print(f"stale fixtures: {', '.join(sorted(stale))}; run build_pdfs.py", file=sys.stderr)
             return 1

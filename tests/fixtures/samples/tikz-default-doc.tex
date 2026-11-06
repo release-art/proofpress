@@ -1,0 +1,13 @@
+% Default xcolor: red, green and blue are RGB, but cyan, magenta, yellow and black are CMYK, so this mixes both.
+\documentclass{article}
+\usepackage{xcolor}
+\usepackage{tikz}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \fill[red] (0,0) rectangle (2,1.5);
+  \draw[line width=2pt,blue,dashed] (3,0) -- (6,1.5);
+  \node[draw=black,fill=yellow!40,text=black] at (1,-1) {Label};
+  \draw[green!60!black,thick] (3,-1) circle (0.5);
+\end{tikzpicture}
+\end{document}

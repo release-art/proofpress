@@ -1,0 +1,12 @@
+% Does the cmyk option reach TikZ patterns?
+\documentclass{article}
+\usepackage[cmyk]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{patterns}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \fill[pattern=north east lines,pattern color=cyan] (0,0) rectangle (3,2);
+  \fill[pattern=dots,pattern color=magenta!80!black] (4,0) rectangle (7,2);
+\end{tikzpicture}
+\end{document}

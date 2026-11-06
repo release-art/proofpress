@@ -1,0 +1,10 @@
+% A real PDF/A-2b from the pdfx package: sRGB output intent, all colours RGB.
+\documentclass{article}
+\usepackage[a-2b]{pdfx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\pagestyle{empty}
+\begin{document}
+Hello \textcolor{red}{world}.
+\begin{tikzpicture}\fill[blue] (0,0) rectangle (1,1);\draw[green,thick] (2,0) -- (3,1);\end{tikzpicture}
+\end{document}

@@ -14,11 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/N`. In a CMYK job a CMYK profile other than the output intent's is a warning (the RIP converts through it); in an RGB
   job (`--colour-mode rgb`) mixed RGB profiles are an error. Profiles are told apart by description and size, since the
   same profile is often embedded byte-different.
-- Colour sample library, `tests/fixtures/samples`: LuaLaTeX sources (RGB, CMYK, gray and ICC-tagged images, inline
-  images, stencil masks, vector fills and strokes, shadings, patterns, spot inks) that `test_samples.py` runs
-  through `core.verify_file` in both colour modes against `expected.toml`. The sources and the built PDFs (`pdfs/`) are both
-  committed and the tests run on the PDFs, so CI needs no LaTeX; `build.py` rebuilds them, and a test fails when a `.tex`
-  changed without its PDF.
+- Colour sample library, `tests/fixtures/samples`: 69 LuaLaTeX sources, their built PDFs, and `expected.toml` saying what
+  `core.verify_file` must report for each in both colour modes. They cover what the standard tools write (`xcolor`
+  models and options, TikZ, pgfplots, colortbl, tcolorbox, hyperref, placed figures and images, transparency, bleed, and
+  real PDF/X-4 and PDF/A-2b files from `pdfx`) as well as raw cases LaTeX cannot make (ICC-tagged images, spot inks,
+  inline images, stencil masks, CMYK shadings and patterns). The sources and the PDFs (`tests/fixtures/pdfs/`) are both committed and the
+  tests run on the PDFs, so CI needs no LaTeX; `build.py` rebuilds them, and a test fails when a `.tex` changed without
+  its PDF. The README there lists what the samples established about the tools.
 
 ### Changed
 

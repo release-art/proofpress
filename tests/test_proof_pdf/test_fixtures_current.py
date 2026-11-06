@@ -19,6 +19,7 @@ def _builder():
 def test_committed_pdfs_match_a_rebuild():
     """Regenerate with ``pdm run python tests/fixtures/build_pdfs.py`` after changing the builder."""
     built = _builder().render()
-    committed = {p.stem: p.read_bytes() for p in (FIXTURES / "pdfs").glob("*.pdf")}
+    samples = {p.stem for p in (FIXTURES / "samples").glob("*.tex")}  # LaTeX-built, see test_samples.py
+    committed = {p.stem: p.read_bytes() for p in (FIXTURES / "pdfs").glob("*.pdf") if p.stem not in samples}
     assert committed.keys() == built.keys()
     assert [name for name in built if built[name] != committed[name]] == []

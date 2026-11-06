@@ -1,0 +1,11 @@
+% Transparency in a CMYK document: PDF/X-4 wants the page's blend colour space declared.
+\documentclass{article}
+\usepackage[cmyk]{xcolor}
+\usepackage{tikz}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \fill[cyan] (0,0) rectangle (3,2);
+  \fill[magenta,opacity=0.5] (1.5,0.5) rectangle (4.5,2.5);
+\end{tikzpicture}
+\end{document}

@@ -13,3 +13,9 @@ geometry
 xcolor
 latexmk
 latexmk
+# Needed to rebuild tests/fixtures/samples (the committed PDFs run without them):
+pgfplots
+pdfx
+colorprofiles
+xmpincl
+eso-pic

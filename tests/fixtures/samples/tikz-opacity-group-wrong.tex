@@ -1,0 +1,15 @@
+% PDF/X-4 with a CMYK output intent but the blend colour space declared as DeviceRGB: overlaps will shift.
+\documentclass{article}
+\usepackage[x-4]{pdfx}
+\usepackage[cmyk]{xcolor}
+\usepackage{tikz}
+% pdfx puts the page boxes in pagesattr and copies them to pageattr only if that is empty: start from them
+\AtBeginDocument{\edef\boxesnow{\the\pdfvariable pagesattr}%
+  \expandafter\pdfvariable\expandafter pageattr\expandafter{\boxesnow /Group << /S /Transparency /CS /DeviceRGB >>}}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \fill[cyan] (0,0) rectangle (3,2);
+  \fill[magenta,opacity=0.5] (1.5,0.5) rectangle (4.5,2.5);
+\end{tikzpicture}
+\end{document}

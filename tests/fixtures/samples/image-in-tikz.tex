@@ -1,0 +1,10 @@
+% A CMYK JPEG placed as a TikZ node, then an RGB PNG beside it.
+\documentclass{article}
+\usepackage{graphicx,tikz}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \node at (0,0) {\includegraphics[width=3cm]{cmyk.jpg}};
+  \node at (4,0) {\includegraphics[width=3cm]{rgb.png}};
+\end{tikzpicture}
+\end{document}
