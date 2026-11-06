@@ -1,87 +1,108 @@
-# What `proof-pdf verify --no-pdfa --no-pdfx` must report for each sample, per colour mode, as "check/severity".
+# What `proof-pdf verify --no-pdfa --no-pdfx` must report for each sample, per colour mode (cmyk, rgb, gray), as
+# "check/severity". `gray` is the strict gray job; `gray_k_only` is the same with --allow-k-only and, when absent, equals
+# `gray`, so only the samples where K-only CMYK matters carry it.
 # Each sample's .tex says what it is; this says what the checker must make of it. An empty list is a pass.
 # `options` are Profile fields for that sample: allow_spots (spots are only judged against an allowlist), k_only_text,
-# min_dpi, min_stroke_pt, require_bleed, pdfa and pdfx (the standards layers, off unless a sample is meant to pass them),
-# and geometry = [trim_w_mm, trim_h_mm, bleed_mm].
+# min_dpi, warn_tac, warn_dpi, max_dpi, max_stretch_pct, min_stroke_pt, require_bleed, no_marks, pdfa and pdfx (the standards layers, off unless a sample is meant to pass them),
+# and geometry = [trim_w_mm, trim_h_mm, bleed_mm] (optionally followed by tolerance_mm, binding_bleed_mm and binding).
 # Checked by tests/test_proof_pdf/test_samples.py.
 
 [rgb-image-device]
 cmyk = ["colour-space/error"]  # an RGB raster in a CMYK press job
 rgb = []
+gray = ["gray-only/error"]
 
 [rgb-image-profile]
 cmyk = ["colour-space/error"]
 rgb = []
+gray = ["gray-only/error"]
 
 [cmyk-image]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 [cmyk-image-profile]
 cmyk = []  # the image carries the output intent's own profile
 rgb = ["rgb-only/error"]  # the intent is CMYK, and so is the image
+gray = ["gray-only/error"]
 
 [cmyk-profile-mismatch]
 cmyk = ["icc-profile/warn"]  # tagged with a second CMYK profile: legal, but the RIP converts
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 [gray-image]
 cmyk = []
 rgb = []
+gray = []
 
 [mixed-rgb-profiles]
 cmyk = ["colour-space/error"]  # RGB images either way; two profiles only matters in an RGB job
 rgb = ["icc-profile/error"]
+gray = ["gray-only/error"]
 
 [rgb-vector]
 cmyk = ["colour-space/warn"]  # vector RGB is advisory: a RIP converts it
 rgb = []
+gray = ["gray-only/error"]
 
 [cmyk-vector]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 [cmyk-stroke-only]
 cmyk = []
 rgb = ["rgb-only/error"]  # found by the stroke alone
+gray = ["gray-only/error"]
 
 [inline-images]
 cmyk = ["colour-space/error"]  # the RGB one
 rgb = ["rgb-only/error"]  # the CMYK one
+gray = ["gray-only/error"]
 
 [mask-image]
 cmyk = []
 rgb = ["rgb-only/error"]  # a stencil takes the CMYK fill
+gray = ["gray-only/error"]
 
 [shading-pattern]
 cmyk = ["colour-space/warn"]  # pgf shades and patterns in RGB
 rgb = []
+gray = ["gray-only/error"]
 
 [cmyk-shading]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 [cmyk-pattern]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 [rgb-pattern]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 [spot-colour]
 cmyk = []
 rgb = ["rgb-only/warn"]  # a spot has no RGB value
+gray = ["gray-only/warn"]
 options = { allow_spots = ["Foil"] }
 
 [spot-conflict]
 cmyk = ["spot-definition/error"]
 rgb = ["spot-definition/error", "rgb-only/warn"]
+gray = ["gray-only/warn", "spot-definition/error"]
 options = { allow_spots = ["Foil"] }
 
 [spot-image]
 cmyk = ["spot-ink/error"]  # a spot used only inside an image's colour space
 rgb = ["spot-ink/error"]
+gray = ["gray-only/warn", "spot-ink/error"]
 options = { allow_spots = [] }
 
 # ---- What the standard LaTeX tools write: xcolor models and options, TikZ, pgfplots, colortbl, tcolorbox, hyperref,
@@ -91,265 +112,425 @@ options = { allow_spots = [] }
 [bleed-full]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 options = { geometry = [105, 148, 3], require_bleed = true }
 
 # Artwork that stops at the trim edge, 3 mm short of the bleed: cutting would leave a paper sliver.
 [bleed-short]
 cmyk = ["artwork-bleed/error"]
 rgb = ["artwork-bleed/error", "rgb-only/error"]
+gray = ["artwork-bleed/error", "gray-only/error"]
 options = { geometry = [105, 148, 3], require_bleed = true }
 
 # A table with shaded rows and cells, CMYK.
 [colortbl-cmyk]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # Default xcolor: cyan, magenta and yellow are CMYK-defined, so this table is all CMYK.
 [colortbl-default-doc]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # The rgb option converts every colour to RGB.
 [colortbl-rgb-doc]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # A CMYK PDF figure placed in a document: its colours arrive inside a Form XObject.
 [figure-cmyk-pdf]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # An RGB PDF figure placed in a document.
 [figure-rgb-pdf]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # A line thinner than a printer can hold (0.05 pt).
 [hairline-stroke]
 cmyk = ["hairline/error"]
 rgb = ["hairline/error"]
+gray = ["hairline/error"]
 options = { min_stroke_pt = 0.25 }
 
 # colorlinks set as CMYK colours, page content rather than annotation borders.
 [hyperref-colorlinks]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # hyperref's default link boxes: annotations with /Border and an RGB /C, not page content.
 [hyperref-links]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+gray_k_only = []
 
 # A CMYK JPEG placed as a TikZ node, then an RGB PNG beside it.
 [image-in-tikz]
 cmyk = ["colour-space/error"]
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # A 64 px CMYK JPEG placed 0.5 cm wide: about 325 dpi.
 [image-resolution-ok]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 options = { min_dpi = 300 }
 
 # A solid at 400% total ink (C+M+Y+K = 1+1+1+1): over any press limit.
 [ink-over-limit]
 cmyk = ["tac/error"]
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # A heavy but legal solid: 280% total ink.
 [ink-within-limit]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # A 64 px CMYK JPEG stretched over 10 cm: about 16 dpi.
 [low-resolution-image]
 cmyk = ["image-dpi/error"]
 rgb = ["image-dpi/error", "rgb-only/error"]
+gray = ["gray-only/error", "image-dpi/error"]
 options = { min_dpi = 300 }
 
 # PDF/A-2b with an RGB photo under the sRGB output intent.
 [pdfa-2b-rgb-image]
 cmyk = ["colour-space/error"]
 rgb = []
+gray = ["gray-only/error"]
 options = { pdfa = true }
 
 # A real PDF/A-2b from the pdfx package: sRGB output intent, all colours RGB.
 [pdfa-2b-rgb]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 options = { pdfa = true }
 
 # PDF/X-4 with a CMYK photo: the standard job.
 [pdfx-x4-cmyk-image]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 options = { pdfx = true }
 
 # A real PDF/X-4 from the pdfx package: FOGRA39 output intent, page boxes, XMP identity, all colours CMYK.
 [pdfx-x4-cmyk]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 options = { pdfx = true }
 
 # PDF/X-4 with an RGB photo: valid X-4, but an RGB image escaped conversion in a CMYK press job.
 [pdfx-x4-rgb-image]
 cmyk = ["colour-space/error"]
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 options = { pdfx = true }
 
 # A pgfplots chart in a cmyk-option document: axes, grid, a line, bars.
 [pgfplots-cmyk]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # Default xcolor: blue and red are RGB; the axis and grid grays are DeviceGray.
 [pgfplots-default-doc]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # The rgb option converts every colour to RGB.
 [pgfplots-rgb-doc]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # An RGB PNG with an alpha channel: an RGB image plus a soft mask.
 [rgba-image]
 cmyk = ["blend-space/warn", "colour-space/error"]
 rgb = ["blend-space/warn"]
+gray = ["blend-space/warn", "gray-only/error"]
 
 # A 1 pt line: heavy enough to print.
 [stroke-ok]
 cmyk = []
 rgb = []
+gray = []
 options = { min_stroke_pt = 0.25 }
 
 # tcolorbox frames and backgrounds in a cmyk-option document.
 [tcolorbox-cmyk]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # Default xcolor: blue is RGB but the cyan tint is CMYK.
 [tcolorbox-default-doc]
 cmyk = ["colour-space/warn"]
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # The rgb option converts every colour to RGB.
 [tcolorbox-rgb-doc]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # Ordinary black text: LaTeX paints it in DeviceGray, which is K only.
 [text-black-default]
 cmyk = []
 rgb = []
+gray = []
 options = { k_only_text = true }
 
 # Black text set as RGB 0 0 0: it prints as four-colour black, a house-rule failure for K-only text.
 [text-black-rgb]
 cmyk = ["colour-space/warn", "k-only-text/error"]
 rgb = ["k-only-text/error"]
+gray = ["gray-only/error", "k-only-text/error"]
 options = { k_only_text = true }
 
 # Black text set as CMYK 0 0 0 1: also K only.
 [text-k-only-cmyk]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+gray_k_only = []
 options = { k_only_text = true }
 
 # Small text in a built (rich) black mis-registers.
 [text-rich-black-small]
 cmyk = ["rich-black/warn"]
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # TikZ in a cmyk-option document: fills, strokes, text and named colours all through xcolor.
 [tikz-cmyk-doc]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # Default xcolor: red, green and blue are RGB, but cyan, magenta, yellow and black are CMYK, so this mixes both.
 [tikz-default-doc]
 cmyk = ["colour-space/warn"]
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # Transparency in a CMYK document: PDF/X-4 wants the page's blend colour space declared.
 [tikz-opacity-cmyk]
 cmyk = ["blend-space/warn"]
 rgb = ["blend-space/warn", "rgb-only/error"]
+gray = ["blend-space/warn", "gray-only/error"]
 
 # PDF/X-4 with transparency and the page's blend colour space declared as DeviceCMYK, matching the CMYK output intent.
 [tikz-opacity-group-cmyk]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 options = { pdfx = true }
 
 # PDF/X-4 with a CMYK output intent but the blend colour space declared as DeviceRGB: overlaps will shift.
 [tikz-opacity-group-wrong]
 cmyk = ["blend-space/error"]
 rgb = ["blend-space/error", "rgb-only/error"]
+gray = ["blend-space/error", "gray-only/error"]
 options = { pdfx = true }
 
 # Does the cmyk option reach TikZ patterns?
 [tikz-pattern-cmyk-doc]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # The rgb option converts every colour to RGB.
 [tikz-rgb-doc]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # Does the cmyk option reach TikZ shadings? (pgf builds shadings in its own colour model.)
 [tikz-shading-cmyk-doc]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # The cmyk option converts every colour, named ones included, to CMYK.
 [xcolor-cmyk-option]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # xcolor with no options: named colours are RGB, as xcolor defines them.
 [xcolor-default]
 cmyk = ["colour-space/warn"]
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # CMYK-defined colours converted to RGB by the rgb option.
 [xcolor-dvipsnames-rgb]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # The dvipsnames colours are defined in CMYK, so they stay CMYK in a default document.
 [xcolor-dvipsnames]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # The gray option turns every colour into a gray level.
 [xcolor-gray-option]
 cmyk = []
 rgb = []
+gray = []
 
 # Tints and mixes under the cmyk option stay CMYK.
 [xcolor-mix-cmyk]
 cmyk = []
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # Tints and mixes of named colours in a default document (RGB model).
 [xcolor-mix-default]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # Each colour model xcolor offers, in a default document: what ends up in the PDF?
 [xcolor-models]
 cmyk = ["colour-space/warn"]
 rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
 
 # The rgb option: the same as the default for these colours, stated explicitly.
 [xcolor-rgb-option]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
 # The svgnames colours are defined in RGB.
 [xcolor-svgnames]
 cmyk = ["colour-space/warn"]
 rgb = []
+gray = ["gray-only/error"]
 
+# ---- gray jobs: what counts as gray, and K-only CMYK under --allow-k-only (gray_k_only; defaults to gray).
+
+# K-only CMYK fills, strokes and text (xcolor 0 0 0 k): not gray strictly, gray with --allow-k-only.
+[gray-k-only-vector]
+cmyk = []
+rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+gray_k_only = []
+
+# A DeviceCMYK JPEG with only the K channel set: the pixels are decoded, so allow-k-only accepts it.
+[gray-k-only-image]
+cmyk = []
+rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+gray_k_only = []
+
+# Rich black (C10 K100) is more than K-only: fails both gray variants.
+[gray-rich-black]
+cmyk = []
+rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+
+# The CMYK sample image has C, M and Y: the pixel check does not trust the colour space.
+[gray-cmyk-image-not-k-only]
+cmyk = []
+rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+
+# K-only values in an ICC-tagged CMYK raster: never accepted as gray.
+[gray-icc-cmyk-image]
+cmyk = []
+rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+
+# TikZ fills, strokes and text in the gray model.
+[gray-vector]
+cmyk = []
+rgb = []
+gray = []
+
+# A gray raster tagged with a gray ICC profile.
+[gray-image-profile]
+cmyk = []
+rgb = []
+gray = []
+
+# Two gray images with two different gray profiles: only a gray job minds.
+[mixed-gray-profiles]
+cmyk = []
+rgb = []
+gray = ["icc-profile/error"]
+
+# Gray artwork under a gray output intent.
+[gray-intent]
+cmyk = []
+rgb = []
+gray = []
+
+# Gray artwork under an sRGB output intent: the intent is RGB in a gray job.
+[gray-rgb-intent]
+cmyk = []
+rgb = []
+gray = ["gray-only/error"]
+
+# ---- marks and content outside the bleed (no_marks): a bleed-box sheet with 10 mm of margin all round.
+# Crop marks in the margin, outside the bleed region.
+[marks-crop]
+cmyk = ["outside-bleed/error"]
+rgb = ["outside-bleed/error", "rgb-only/error"]
+gray = ["gray-only/error", "outside-bleed/error"]
+options = { no_marks = true }
+
+# The artwork inside the bleed and nothing in the margin.
+[marks-none]
+cmyk = []
+rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+options = { no_marks = true }
+
+# ---- placed image limits: all off until given (warn_dpi, max_dpi, max_stretch_pct).
+# A 800 px raster scaled to 2 cm: about 1000 dpi, above a 600 dpi limit.
+[image-too-sharp]
+cmyk = ["image-dpi-max/warn"]
+rgb = ["image-dpi-max/warn"]
+gray = ["image-dpi-max/warn"]
+options = { max_dpi = 600 }
+
+# A square raster squeezed to 5 x 2.5 cm: 33 dpi one way, 65 the other, past a 10% stretch limit.
+[image-stretched]
+cmyk = ["image-stretch/warn"]
+rgb = ["image-stretch/warn"]
+gray = ["image-stretch/warn"]
+options = { max_stretch_pct = 10 }
+
+# ---- total ink between an advisory level and the limit (warn_tac): 260% under the 300% default, over a 250% level.
+[ink-near-limit]
+cmyk = ["tac/warn"]
+rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+options = { warn_tac = 250 }
+
+# ---- a book interior: no bleed on the binding edge (geometry = [trim_w, trim_h, bleed, tolerance, binding_bleed, binding]).
+# Three A6 pages, bleed on the outer, top and bottom edges only, the bound edge alternating by page: the boxes fit.
+[bleed-book-interior]
+cmyk = []
+rgb = ["rgb-only/error"]
+gray = ["gray-only/error"]
+options = { geometry = [105, 148, 3, 0.25, 0, "left"] }

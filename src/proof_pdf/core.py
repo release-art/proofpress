@@ -17,7 +17,7 @@ import pathlib
 
 import pikepdf
 
-from ._internal import colour, contrast, resolution, structure, text, verapdf
+from ._internal import colour, contrast, pdfx, resolution, structure, text, verapdf
 from .models import ColourMode, FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)
@@ -119,14 +119,15 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
     try:
         with pikepdf.open(path) as pdf:
             if profile.pdfx:
-                findings += structure.check_page_boxes(pdf)
-                findings += structure.check_trapped(pdf)
-                findings += structure.check_pdfx_identity(pdf)
+                findings += pdfx.check(pdf, profile.pdfx_version)
             if profile.geometry is not None:
                 findings += structure.check_geometry(pdf, profile.geometry)
             findings += _structure_rules(pdf, profile)
+            findings += structure.check_outside_media(pdf)
             if profile.require_bleed:
                 findings += structure.check_artwork_bleed(pdf)
+            if profile.no_marks:
+                findings += structure.check_outside_bleed(pdf, profile.geometry)
             if profile.k_only_text:
                 findings += colour.check_k_only_text(pdf)
             findings += _text_checks(pdf, profile)
@@ -136,12 +137,20 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                 findings += colour.check_icc_profiles(pdf, profile.colour_mode)
                 if profile.colour_mode is ColourMode.RGB:
                     findings += colour.check_rgb_only(pdf)
+                elif profile.colour_mode is ColourMode.GRAY:
+                    findings += colour.check_gray_only(pdf, allow_k_only=profile.allow_k_only)
                 else:
                     findings += colour.check_white_overprint(pdf)
                     findings += colour.check_overprint(pdf)
                     findings += colour.check_rich_black(pdf, profile.small_text_pt)
                     findings += colour.check_colour_spaces(pdf, strict=profile.strict_cmyk)
-                findings += resolution.check_image_dpi(pdf, profile.min_dpi)
+                findings += resolution.check_image_dpi(
+                    pdf,
+                    profile.min_dpi,
+                    warn_dpi=profile.warn_dpi,
+                    max_dpi=profile.max_dpi,
+                    max_stretch_pct=profile.max_stretch_pct,
+                )
     except pikepdf.PdfError as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
         return [Finding("structure", Severity.ERROR, f"cannot open the PDF (corrupt or encrypted): {exc}")], False
     return findings, True
@@ -191,7 +200,7 @@ async def _run_tac(path: pathlib.Path, profile: Profile, binary: str, timeout: f
     if not colour.gs_available(binary):
         return [Finding("tac", Severity.ERROR, f"Ghostscript not found ({binary}) -- cannot measure ink coverage")]
     try:
-        return await colour.check_tac(binary, str(path), profile.max_tac, timeout=timeout)
+        return await colour.check_tac(binary, str(path), profile.max_tac, warn_tac=profile.warn_tac, timeout=timeout)
     except colour.GhostscriptError as exc:
         return [Finding("tac", Severity.ERROR, f"Ghostscript could not rasterise the file: {exc}")]
 

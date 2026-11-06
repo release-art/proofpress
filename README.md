@@ -18,9 +18,13 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 `verify` runs four layers, each of which can be switched off:
 
 - **PDF/A** with [veraPDF](https://verapdf.org) (`--flavour 2b` by default; `--no-pdfa` to skip).
-- **PDF/X-4 structure**: page boxes, `/Trapped`, the `GTS_PDFX` output intent and the XMP version key (`--no-pdfx`).
+- **PDF/X-4 structure**: page boxes, `/Trapped`, the `GTS_PDFX` output intent and the XMP version key (`--no-pdfx`). The rules live in
+  `proof_pdf/_internal/pdfx/`, one table per flavour, with `pdfx/COVERAGE.md` showing what is implemented. `--pdfx-version x1a|x3` selects
+  another flavour, but those have no rules yet (the standard's text has not been to hand): they fail with a `pdfx-coverage` error rather than pass.
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
-- **Colour**: total ink coverage (`--max-tac`, 300% default), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default),
+  For a book interior, `--binding-bleed-mm 0` (with `--binding left|right`, the bound edge of page 1; it alternates page by page) expects no bleed on the binding edge,
+  so the sheet is wider by the outer bleed only; the centring check follows the asymmetry. Equal bleed on every side behaves as before.
+- **Colour**: total ink coverage (`--max-tac`, 300% default; opt-in `--warn-tac N`, below it, warns when the peak is between N and the limit; the peak is measured per pixel on a Ghostscript CMYK raster), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default; opt-in `--warn-dpi N` warns below N, `--max-dpi N` warns above N since it only grows the file, `--max-stretch-pct P` warns when an image's two axes differ by more than P percent, larger over smaller less one; none has a default, and `--warn-dpi` must exceed `--min-dpi`; each message gives the worst placement in mm from the page's bottom-left),
   overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged,
   and **white that overprints is an error** (it adds no ink, so it vanishes on press). A page that uses transparency must blend
   in the output intent's colour space (a mismatch is an error, an undeclared space a warning).
@@ -29,6 +33,16 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
   profile other than the output intent's is a warning.
 - **RGB proofing** (opt-in, `--colour-mode rgb`): for a screen job, CMYK images, fills, strokes, shadings and patterns and a CMYK output intent are errors, spot colours a warning;
   total ink, overprint and rich-black checks are skipped. Save it as a profile: `[profiles.web.verify]` with `colour-mode = "rgb"` and `pdfx = false`, chosen with `proof-pdf --profile web verify`.
+- **Marks and hidden content** (`--no-marks`, opt-in): anything painted beyond the bleed region is an error (`outside-bleed`): crop and registration marks, slug text.
+  The region is the BleedBox, else the TrimBox grown by `--bleed-mm` when `--trim-mm` is given, else the TrimBox (a note says which). Judged on the visible extent after
+  clipping, so artwork in the bleed zone is correct; pages without a TrimBox are skipped and rotated pages reported as not checked. A text run's extent is its font box.
+  Always on, regardless of the flag: an object painted entirely beyond the MediaBox is a warning (`outside-media`, hidden content that ships in the file).
+- **Gray proofing** (opt-in, `--colour-mode gray`): for a black-and-white interior, anything painted outside the gray family (DeviceGray, CalGray, ICC gray) is an
+  error (`gray-only`): RGB, CMYK and Lab, by fill, stroke, image, inline image, stencil mask (judged by its fill), shading, pattern and form content; spot colours a warning;
+  an RGB or CMYK output intent is an error; more than one gray ICC profile is an error (`icc-profile`). The ink checks are skipped, so total ink is not measured (K alone cannot exceed 100%).
+  Strict by default. `--allow-k-only` also accepts DeviceCMYK that uses the K plate alone (C, M and Y all zero) and a CMYK output intent: CMYK images are then decoded to
+  check their pixels, once per image, which costs time on large images. A DeviceCMYK image that cannot be decoded, inline CMYK images, CMYK shadings and patterns, and
+  ICC-based or indexed CMYK are never accepted as K-only. `--allow-k-only` does nothing in the other modes.
 - **K-only text** (opt-in, `--k-only-text`): text painted with any ink but K (a four-colour build, RGB, a spot or a pattern) is an error.
 - **Proofing** (the text and lines a page paints, measured in page points; see below).
 

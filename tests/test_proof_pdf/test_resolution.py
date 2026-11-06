@@ -144,3 +144,70 @@ def test_inline_images_are_measured_too(tmp_path):
     _one_page(pdf, stream, pikepdf.Dictionary())
     [finding] = resolution.check_image_dpi(pdf, 300)
     assert finding.severity is Severity.ERROR and "(inline)" in finding.message and "100 dpi" in finding.message
+
+
+class TestLimits:
+    """The opt-in limits: warn tier, ceiling, stretch, and where the worst placement is."""
+
+    def _check(self, placed_image, stream=None, *, pixels=300, min_dpi=200.0, **limits):
+        with pikepdf.open(placed_image(pixels=pixels, stream=stream)) as pdf:
+            return resolution.check_image_dpi(pdf, min_dpi, **limits)
+
+    def test_everything_is_off_until_given(self, placed_image):
+        assert self._check(placed_image, pixels=3000) == []
+
+    def test_the_warn_tier_sits_between_the_minimum_and_its_level(self, placed_image):
+        [finding] = self._check(placed_image, pixels=250, warn_dpi=300.0)  # 250 dpi: above 200, below 300
+        assert (finding.check, finding.severity) == ("image-dpi", Severity.WARN)
+        assert "250 dpi" in finding.message and "advisory" in finding.message
+        assert self._check(placed_image, pixels=300, warn_dpi=300.0) == []  # at the level is fine
+        [error] = self._check(placed_image, pixels=100, warn_dpi=300.0)  # below the minimum stays the one error
+        assert error.severity is Severity.ERROR
+
+    def test_the_ceiling_warns_above_it_only(self, placed_image):
+        [finding] = self._check(placed_image, pixels=900, max_dpi=600.0)
+        assert (finding.check, finding.severity) == ("image-dpi-max", Severity.WARN)
+        assert "900 dpi" in finding.message and "file size" in finding.message
+        assert self._check(placed_image, pixels=600, max_dpi=600.0) == []
+
+    def test_stretch_is_the_larger_axis_over_the_smaller(self, placed_image):
+        stream = b"q 72 0 0 144 0 0 cm /Im1 Do Q"  # 300 dpi across, 150 up: a 100% stretch
+        assert self._check(placed_image, stream, min_dpi=100.0, max_stretch_pct=99.0)
+        assert self._check(placed_image, stream, min_dpi=100.0, max_stretch_pct=101.0) == []
+        [finding] = self._check(placed_image, stream, min_dpi=100.0, max_stretch_pct=50.0)
+        assert (finding.check, finding.severity) == ("image-stretch", Severity.WARN)
+        assert "100%" in finding.message and "300 x 150 dpi" in finding.message
+
+    def test_a_uniform_scale_is_not_a_stretch(self, placed_image):
+        assert self._check(placed_image, max_stretch_pct=0.0) == []
+
+    def test_the_message_says_where_the_image_sits_and_both_axes_when_they_differ(self, placed_image):
+        stream = b"q 72 0 0 288 28.3465 56.693 cm /Im1 Do Q"  # 300 x 75 dpi at (10, 20) mm
+        [finding] = self._check(placed_image, stream)
+        assert "75 dpi (300 x 75 dpi) at 10.0, 20.0 mm from the page's bottom-left" in finding.message
+        [uniform] = self._check(placed_image, b"q 144 0 0 144 28.3465 56.693 cm /Im1 Do Q")
+        assert (
+            "150 dpi at 10.0, 20.0 mm" in uniform.message and "x" not in uniform.message.split("at")[1].split("mm")[0]
+        )
+
+    def test_the_worst_placement_is_named_and_the_first_wins_a_tie(self, placed_image):
+        stream = (
+            b"q 72 0 0 72 0 0 cm /Im1 Do Q q 144 0 0 144 28.3465 0 cm /Im1 Do Q q 144 0 0 144 56.693 0 cm /Im1 Do Q"
+        )
+        [finding] = self._check(placed_image, stream)
+        assert "150 dpi at 10.0, 0.0 mm" in finding.message
+
+    def test_the_ceiling_names_the_sharpest_placement(self, placed_image):
+        stream = b"q 72 0 0 72 0 0 cm /Im1 Do Q q 36 0 0 36 72 0 cm /Im1 Do Q"
+        [finding] = self._check(placed_image, stream, max_dpi=500.0)
+        assert "600 dpi" in finding.message
+
+    def test_inline_images_are_measured_too(self, tmp_path):
+        pdf = pikepdf.new()
+        _one_page(
+            pdf,
+            b"q 36 0 0 36 0 0 cm BI /W 100 /H 100 /CS /G /BPC 8 ID " + bytes(10000) + b" EI Q",
+            pikepdf.Dictionary(),
+        )
+        [finding] = resolution.check_image_dpi(pdf, 200.0, max_dpi=100.0)
+        assert "(inline)" in finding.message and "200 dpi" in finding.message

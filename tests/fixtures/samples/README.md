@@ -4,7 +4,7 @@ One small LuaLaTeX document per colour situation, built into `../pdfs/` (with th
 Both the `.tex` sources and the PDFs (`tests/fixtures/pdfs/`) are committed, so CI runs on the PDFs and needs no LaTeX; the sources are there to
 read, confirm and change.
 
-- **`expected.toml`** says what `proof-pdf verify` must report for each sample in each colour mode, as `check/severity`
+- **`expected.toml`** says what `proof-pdf verify` must report for each sample in each colour mode (`cmyk`, `rgb`, `gray`; and `gray_k_only`, gray with `--allow-k-only`, defaulting to `gray`), as `check/severity`
   (an empty list is a pass). `options` are the `Profile` fields for that sample.
 - **Real packages first.** `xcolor-*`, `tikz-*`, `pgfplots-*`, `colortbl-*`, `tcolorbox-*`, `hyperref-*`, `figure-*`,
   `image-*`, `pdfx-*` and `pdfa-*` show what the standard tools actually write. LuaLaTeX ignores the ICC profile of a

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-11-06
+
+### Added
+
+- Book interiors: `--binding-bleed-mm` (`PageGeometry.binding_bleed_mm`, default the same as `--bleed-mm`) and `--binding left|right`
+  (`PageGeometry.binding`, the bound edge of page 1; it alternates page by page) expect that bleed on the binding edge and
+  `--bleed-mm` elsewhere. The `bleed` check is per side and per page parity, and `centring` follows the asymmetry; with equal
+  bleed both are exactly as before. `--no-marks` uses the same per-side bleed when it has to derive the region. New fixture
+  `book-interior` and sample `bleed-book-interior` (the per-page boxes come from a `shipout/before` hook).
+- `--warn-tac N` (`Profile.warn_tac`, no default, must be below `--max-tac`): a `tac` warning when the peak total ink is between N
+  and the limit. The error at `--max-tac` is unchanged. Sample `ink-near-limit`.
+- Image resolution limits, all off until given: `--warn-dpi N` (warning below N, at or above `--min-dpi`; must exceed it),
+  `--max-dpi N` (`image-dpi-max`, a warning above N), `--max-stretch-pct P` (`image-stretch`, a warning when the two axes
+  differ by more than P percent, larger over smaller less one). `--min-dpi` is unchanged. The `image-dpi` message now also
+  gives the placement in mm from the page's bottom-left and, when the axes differ, both values ("75 dpi (300 x 75 dpi)").
+  Samples `image-too-sharp` and `image-stretched`.
+- The PDF/X rules now live in their own package, `proof_pdf/_internal/pdfx/`, as a table of `Rule`s per flavour (x4 holds the
+  existing page-box, `/Trapped` and identity checks, moved without changing a check id, message or severity), with
+  `pdfx/COVERAGE.md` generated from the tables (`pdm run python -m proof_pdf._internal.pdfx`) and a test that it is current.
+  `--pdfx-version x1a|x3|x4` (default `x4`, `Profile.pdfx_version`, config key `pdfx-version`): x1a and x3 have only `todo`
+  rows, so they fail with `pdfx-coverage` instead of silently passing; no clause is recorded until it is sourced from the standard.
+- `proof-pdf verify --no-marks` (`Profile.no_marks`, config key `no-marks`): the `outside-bleed` check fails anything
+  painted beyond the bleed region (the BleedBox, else the TrimBox grown by `--bleed-mm`, else the TrimBox): crop and
+  registration marks, slug text. Always-on `outside-media` warns of objects painted entirely beyond the MediaBox. New
+  fixture `crop-marks` and samples `marks-crop`, `marks-none`.
+- `proof-pdf verify --colour-mode gray` (`ColourMode.GRAY`): proof a black-and-white job. Anything painted outside the gray
+  family is an error (`gray-only`), spot colours a warning, an RGB or CMYK output intent an error, and mixed gray ICC
+  profiles an error (`icc-profile`). The ink checks are skipped. `--allow-k-only` (`Profile.allow_k_only`, config key
+  `allow-k-only`) also accepts DeviceCMYK that uses the K plate alone, and a CMYK output intent; CMYK images are decoded to
+  confirm it. Ten new gray samples; `expected.toml` gains a `gray` key (and `gray_k_only`) for every sample.
+
 ## [0.3.7] - 2026-11-06
 
 ### Added
@@ -215,7 +246,8 @@ First release.
 - Weekly Docker image builds, with `:latest`, `:tl2025` and a `:<version>` tag per release. Each image records its
   commit, and `proof-pdf --version` shows it.
 
-[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.8...HEAD
+[0.3.8]: https://github.com/release-art/proofpress/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/release-art/proofpress/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/release-art/proofpress/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/release-art/proofpress/compare/v0.3.4...v0.3.5

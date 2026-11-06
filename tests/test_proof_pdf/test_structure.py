@@ -6,6 +6,7 @@ import pikepdf
 import pytest
 
 from proof_pdf._internal import structure
+from proof_pdf._internal.pdfx import x4
 from proof_pdf.models import PageGeometry, Severity
 
 from .conftest import A6, BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W, xmp_bytes
@@ -18,7 +19,7 @@ def _checks(findings) -> set[str]:
 class TestPageBoxes:
     def test_correct_boxes_are_clean(self, make_pdf):
         with pikepdf.open(make_pdf()) as pdf:
-            assert structure.check_page_boxes(pdf) == []
+            assert x4.check_page_boxes(pdf) == []
 
     @pytest.mark.parametrize(
         ("boxes", "expected_check", "expected_severity"),
@@ -58,7 +59,7 @@ class TestPageBoxes:
     )
     def test_violations(self, make_pdf, boxes, expected_check, expected_severity):
         with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            findings = structure.check_page_boxes(pdf)
+            findings = x4.check_page_boxes(pdf)
         assert expected_check in _checks(findings)
         assert any(f.severity is expected_severity for f in findings if f.check == expected_check)
 
@@ -69,14 +70,14 @@ class TestPageBoxes:
             "BleedBox": [BLEED, BLEED, BLEED + TRIM_W, BLEED + TRIM_H],
         }
         with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            findings = structure.check_page_boxes(pdf)
+            findings = x4.check_page_boxes(pdf)
         assert any("does not contain" in f.message for f in findings)
 
     def test_no_media_box(self, make_pdf):
         """Checked in memory: pikepdf re-supplies a default MediaBox on every save."""
         with pikepdf.open(make_pdf()) as pdf:
             del pdf.pages[0].obj["/MediaBox"]
-            findings = structure.check_page_boxes(pdf)
+            findings = x4.check_page_boxes(pdf)
         assert [f.check for f in findings] == ["boxes"]
 
     def test_media_box_inherited_from_page_tree(self, make_pdf):
@@ -86,11 +87,11 @@ class TestPageBoxes:
             pdf.Root.Pages["/MediaBox"] = [0, 0, MEDIA_W, MEDIA_H]
             pdf.save(path)
         with pikepdf.open(path) as pdf:
-            assert structure.check_page_boxes(pdf) == []
+            assert x4.check_page_boxes(pdf) == []
 
     def test_malformed_rect_is_ignored(self, make_pdf):
         with pikepdf.open(make_pdf(boxes={**GOOD_BOXES, "TrimBox": [1, 2, 3]})) as pdf:
-            findings = structure.check_page_boxes(pdf)
+            findings = x4.check_page_boxes(pdf)
         assert "trimbox" in _checks(findings)
 
 
@@ -105,11 +106,11 @@ class TestTrapped:
             pdf.docinfo["/Trapped"] = value
             pdf.save(path)
         with pikepdf.open(path) as pdf:
-            assert bool(structure.check_trapped(pdf)) is expect_finding
+            assert bool(x4.check_trapped(pdf)) is expect_finding
 
     def test_missing(self, make_pdf):
         with pikepdf.open(make_pdf()) as pdf:
-            findings = structure.check_trapped(pdf)
+            findings = x4.check_trapped(pdf)
         assert findings and "missing" in findings[0].message
 
 
@@ -130,11 +131,11 @@ class TestPdfxIdentity:
         path = make_pdf()
         self._build(path, xmp=True, intent=True)
         with pikepdf.open(path) as pdf:
-            assert structure.check_pdfx_identity(pdf) == []
+            assert x4.check_pdfx_identity(pdf) == []
 
     def test_missing_both(self, make_pdf):
         with pikepdf.open(make_pdf()) as pdf:
-            findings = structure.check_pdfx_identity(pdf)
+            findings = x4.check_pdfx_identity(pdf)
         assert _checks(findings) == {"pdfx-xmp", "pdfx-intent"}
 
     def test_wrong_intent_subtype(self, make_pdf):
@@ -145,7 +146,7 @@ class TestPdfxIdentity:
             ]
             pdf.save(path)
         with pikepdf.open(path) as pdf:
-            assert "pdfx-intent" in _checks(structure.check_pdfx_identity(pdf))
+            assert "pdfx-intent" in _checks(x4.check_pdfx_identity(pdf))
 
 
 class TestGeometry:
@@ -306,3 +307,66 @@ class TestPageSet:
         for page in pdf.pages:
             page.obj["/TrimBox"] = [8.5, 8.5, 8.5 + 105 / 25.4 * 72, 8.5 + 148 / 25.4 * 72]
         assert structure.check_pages(pdf, uniform=True, multiple_of=None) == []
+
+
+class TestBindingBleed:
+    """Book interiors: no bleed on the binding edge, which alternates from page to page."""
+
+    BOOK = PageGeometry(trim_w_mm=105, trim_h_mm=148, bleed_mm=3, binding_bleed_mm=0)
+    MM = 72 / 25.4
+
+    def _pdf(self, *margins_mm: tuple[float, float]):
+        """Pages of an A6 interior; each is given its (left, right) margin in mm, with 3 mm above and below the trim."""
+        pdf = pikepdf.new()
+        w, h = 105 * self.MM, 148 * self.MM
+        for left, right in margins_mm:
+            lm, bm = left * self.MM, 3 * self.MM
+            media = [0, 0, lm + w + right * self.MM, bm + h + bm]
+            boxes = {"MediaBox": media, "TrimBox": [lm, bm, lm + w, bm + h], "BleedBox": media}
+            page = pikepdf.Dictionary(Type=pikepdf.Name.Page, Contents=pdf.make_stream(b""), **boxes)
+            pdf.pages.append(pikepdf.Page(pdf.make_indirect(page)))
+        return pdf
+
+    def test_the_binding_edge_alternates_with_the_page(self):
+        assert self.BOOK.bleeds_mm(1) == (0, 3, 3, 3) and self.BOOK.bleeds_mm(2) == (3, 3, 0, 3)
+        right = PageGeometry(105, 148, 3, binding_bleed_mm=0, binding="right")
+        assert right.bleeds_mm(1) == (3, 3, 0, 3) and right.bleeds_mm(2) == (0, 3, 3, 3)
+
+    def test_a_correct_interior_is_clean(self):
+        assert structure.check_geometry(self._pdf((0, 3), (3, 0), (0, 3)), self.BOOK) == []
+
+    def test_bleed_on_the_wrong_side_is_flagged_on_that_page_only(self):
+        findings = structure.check_geometry(self._pdf((0, 3), (0, 3), (0, 3)), self.BOOK)  # page 2 repeats page 1
+        assert {(f.check, f.page) for f in findings} == {("bleed", 2), ("centring", 2)}
+        [bleed] = [f for f in findings if f.check == "bleed"]
+        assert "expected 3, 3, 0, 3 mm" in bleed.message
+
+    def test_bleed_on_the_binding_edge_is_flagged(self):
+        assert "bleed" in {f.check for f in structure.check_geometry(self._pdf((3, 3)), self.BOOK)}
+
+    def test_centring_follows_the_expected_asymmetry(self):
+        [finding] = [f for f in structure.check_geometry(self._pdf((1.5, 3)), self.BOOK) if f.check == "centring"]
+        assert "expected left minus right -3.00 mm" in finding.message
+
+    def test_without_a_binding_bleed_an_asymmetric_page_is_off_centre(self):
+        [finding] = [
+            f for f in structure.check_geometry(self._pdf((0, 3)), PageGeometry(105, 148, 3)) if f.check == "centring"
+        ]
+        assert "expected left minus right" not in finding.message  # today's message
+
+    def test_equal_bleed_is_exactly_the_old_behaviour(self):
+        for geometry in (PageGeometry(105, 148, 3), PageGeometry(105, 148, 3, binding_bleed_mm=3, binding="right")):
+            assert structure.check_geometry(self._pdf((3, 3), (3, 3)), geometry) == []
+            off = structure.check_geometry(self._pdf((3, 8)), geometry)
+            assert {f.check for f in off} == {"bleed", "centring"}
+            assert all("on every side" in f.message for f in off if f.check == "bleed")
+            assert all("expected left minus right" not in f.message for f in off if f.check == "centring")
+
+    def test_the_cli_flags_reach_the_geometry(self):
+        from proof_pdf import cli
+
+        geometry = cli._page_geometry("105x148", 3.0, 0.25, 0.0, "right")
+        assert geometry.binding_bleed_mm == 0.0 and geometry.binding == "right"
+        assert cli._page_geometry("105x148", 3.0, 0.25).binding_bleed_mm is None
+        with pytest.raises(Exception, match="left or right"):
+            cli._page_geometry("105x148", 3.0, 0.25, None, "top")

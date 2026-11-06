@@ -1,0 +1,9 @@
+% Gray artwork under a gray output intent: a gray job's normal PDF/X intent.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfProfile{gray}{gray.icc}{1}
+\PdfIntent{gray}{Sample gray}
+\begin{document}
+\PdfDraw{0.4 g 100 500 140 140 re f}
+\end{document}

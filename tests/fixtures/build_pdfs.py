@@ -285,6 +285,46 @@ def _multi_page(extra: list[tuple[float, float]]) -> pikepdf.Pdf:
     return pdf
 
 
+def _book_interior() -> pikepdf.Pdf:
+    """Three A6 interior pages with 3 mm bleed on the outer, top and bottom edges and none on the binding edge.
+
+    Page 1 is bound on the left, so its bleed is on the right; page 2 mirrors it, and page 3 repeats page 1.
+    """
+    pdf: pikepdf.Pdf | None = None
+    for left_mm, right_mm in ((0, 3), (3, 0), (0, 3)):
+        left, right = left_mm * MM, right_mm * MM
+        media = [0, 0, left + TRIM_W + right, BLEED + TRIM_H + BLEED]
+        boxes = {"MediaBox": media, "TrimBox": [left, BLEED, left + TRIM_W, BLEED + TRIM_H], "BleedBox": media}
+        content = b"0.9 g 0 0 %f %f re f" % (media[2], media[3])
+        if pdf is None:
+            pdf = build(content, boxes=boxes)
+            continue
+        page = pikepdf.Dictionary(
+            Type=pikepdf.Name.Page, Contents=pdf.make_stream(content), Resources=pikepdf.Dictionary(), **boxes
+        )
+        pdf.pages.append(pikepdf.Page(pdf.make_indirect(page)))
+    assert pdf is not None
+    return pdf
+
+
+def _crop_marks() -> pikepdf.Pdf:
+    """The good card centred on a sheet 20 pt wider all round, with a crop mark at each trim corner in the margin."""
+    m = 20.0
+    t0, t1 = m + BLEED, m + BLEED + TRIM_W
+    u0, u1 = m + BLEED, m + BLEED + TRIM_H
+    marks = b"0.25 w 0 G"
+    for x in (t0, t1):
+        marks += b" %f %f m %f %f l S %f %f m %f %f l S" % (x, 2, x, m - 4, x, m + MEDIA_H + 4, x, 2 * m + MEDIA_H - 2)
+    for y in (u0, u1):
+        marks += b" %f %f m %f %f l S %f %f m %f %f l S" % (2, y, m - 4, y, m + MEDIA_W + 4, y, 2 * m + MEDIA_W - 2, y)
+    boxes = {
+        "MediaBox": [0, 0, MEDIA_W + 2 * m, MEDIA_H + 2 * m],
+        "TrimBox": [t0, u0, t1, u1],
+        "BleedBox": [m, m, m + MEDIA_W, m + MEDIA_H],
+    }
+    return build(b"q 1 0 0 1 %f %f cm " % (m, m) + GOOD_CONTENT + b" Q " + marks, boxes=boxes)
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -348,6 +388,10 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         "no-bleed": build(
             b"0.9 g %f %f %f %f re f" % (BLEED, BLEED, TRIM_W, TRIM_H) + GOOD_CONTENT[GOOD_CONTENT.index(b" 0.2") :]
         ),
+        # A three-page A6 interior: bleed on the outer, top and bottom edges only, the bound edge alternating by page.
+        "book-interior": _book_interior(),
+        # The good card on a larger sheet with crop marks in the margin: valid, but a bare-page printer rejects them.
+        "crop-marks": _crop_marks(),
         # PDF/A metadata but no output intent: veraPDF fails on DeviceGray, and proof-pdf adds a hint.
         "no-output-intent": build(output_intent=False),
     }

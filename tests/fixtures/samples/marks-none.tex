@@ -1,0 +1,12 @@
+% The same sheet with the artwork inside the bleed and nothing in the margin: --no-marks passes.
+% A6 card (105 x 148 mm), 3 mm bleed, 10 mm of margin all round.
+\documentclass{article}
+\usepackage[paperwidth=131mm,paperheight=174mm,margin=0pt]{geometry}
+\usepackage[cmyk]{xcolor}
+\usepackage{eso-pic}
+\pdfvariable pageattr{/TrimBox [36.850 36.850 334.488 456.378] /BleedBox [28.346 28.346 342.992 464.882]}
+\pagestyle{empty}
+\AddToShipoutPictureBG*{\put(28.346,28.346){\color{cyan}\rule{314.646pt}{436.535pt}}}
+\begin{document}
+\mbox{}
+\end{document}

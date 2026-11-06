@@ -407,6 +407,47 @@ class TestArtworkBleed:
         assert code == 1 and "artwork-bleed" in _checks(record)
 
 
+class TestBookInterior:
+    FLAGS = [*A6, "--no-pdfa", "--no-pdfx"]
+
+    def test_it_passes_with_no_bleed_on_the_binding_edge(self, runner):
+        code, [record] = _verify(runner, PDFS / "book-interior.pdf", *self.FLAGS, "--binding-bleed-mm", "0")
+        assert (code, record["findings"]) == (0, [])
+
+    def test_the_alternation_is_what_makes_it_pass(self, runner):
+        code, [record] = _verify(
+            runner, PDFS / "book-interior.pdf", *self.FLAGS, "--binding-bleed-mm", "0", "--binding", "right"
+        )
+        assert code == 1 and {f["page"] for f in record["findings"] if f["check"] == "bleed"} == {1, 2, 3}
+
+    def test_without_the_flag_every_side_is_expected_to_bleed(self, runner):
+        code, [record] = _verify(runner, PDFS / "book-interior.pdf", *self.FLAGS)
+        assert code == 1 and _checks(record, severity="error") == {"bleed", "centring"}
+
+    def test_a_config_file_carries_the_binding(self, runner, tmp_path, monkeypatch):
+        shutil.copy(PDFS / "book-interior.pdf", tmp_path / "book.pdf")
+        lines = ['trim-mm = "105x148"', "bleed-mm = 3", "binding-bleed-mm = 0", 'binding = "left"', "pdfa = false"]
+        (tmp_path / "proof-pdf.toml").write_text("\n".join(["[verify]", *lines, "pdfx = false", ""]))
+        monkeypatch.chdir(tmp_path)
+        code, [record] = _verify(runner, tmp_path / "book.pdf")
+        assert (code, record["findings"]) == (0, [])
+
+
+class TestMarks:
+    def test_crop_marks_fail_only_this_check(self, runner):
+        code, [record] = _verify(runner, PDFS / "crop-marks.pdf", "--no-marks", "--require-bleed")
+        assert code == 1 and _checks(record, severity="error") == {"outside-bleed"}
+        assert "likely printer's marks" in _messages(record, "outside-bleed")[0]
+
+    def test_it_is_opt_in(self, runner):
+        code, [record] = _verify(runner, PDFS / "crop-marks.pdf")
+        assert code == 0 and "outside-bleed" not in _checks(record)
+
+    def test_the_bare_card_passes(self, runner):
+        code, [record] = _verify(runner, PDFS / "good.pdf", *A6, "--no-marks")
+        assert (code, record["findings"]) == (0, [])
+
+
 class TestPrinterProfileEndToEnd:
     """One config file carries a printer's numbers; the real CLI applies them to real files."""
 

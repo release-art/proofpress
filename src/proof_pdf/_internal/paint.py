@@ -21,6 +21,7 @@ from .spaces import (
     OTHER,
     RGB,
     classify_colour_space,
+    is_device_space,
     lookup_resource,
     spot_names,
     truthy,
@@ -51,6 +52,7 @@ class Fill:
     value: tuple[float, ...] = ()
     spot: tuple[str, ...] = ()  # the ink name(s) of a Separation or DeviceN fill, whose value is then the tint(s)
     pattern: frozenset[str] = frozenset()  # the colour families a pattern fill paints in (its shading, or its content)
+    profiled: bool = False  # set through an ICCBased, Cal or Indexed space, not a Device one (so not "plain" CMYK)
 
 
 # What a colour space's colour is straight after ``cs``, per the PDF spec.
@@ -116,7 +118,7 @@ class Paint:
     notdef: int = 0
     stroke_width: float | None = None  # effective width in points, for stroked paths
     filled: bool = False  # a path painted with its fill (not only stroked)
-    xobject: pikepdf.Object | None = None  # the image, for kind == "image"
+    xobject: pikepdf.Object | None = None  # the image, for kind == "image"; the shading dictionary for "shading"
     colour_space: str | None = None  # the colour family of an image or inline image; None for a mask
     mask: bool = False  # a stencil image (/ImageMask): it has no colour of its own and paints in the fill colour
     name: str = ""  # the image's resource name
@@ -190,7 +192,7 @@ def _with_components(fill: Fill, args: list) -> Fill:
     if args and isinstance(args[-1], pikepdf.Name):  # scn ... /Pattern
         return Fill(OTHER)
     if fill.family in (GRAY, RGB, CMYK):
-        return Fill(fill.family, tuple(number(args, i) for i in range(len(args))), ())
+        return Fill(fill.family, tuple(number(args, i) for i in range(len(args))), (), profiled=fill.profiled)
     if fill.spot:
         return Fill(OTHER, tuple(number(args, i) for i in range(len(args))), fill.spot)
     return fill  # a tint in some other space: still not a device colour
@@ -281,6 +283,7 @@ class Walker:
             state.fill,
             state.overprint,
             visible=_non_empty(state.clip),
+            xobject=shading,
             colour_space=space,
             name=str(op.operands[0]) if op.operands else "",
         )
@@ -509,6 +512,8 @@ class Walker:
         names = spot_names(space, op.resources) if family == OTHER else []
         self.spots.update(names)
         fill = Fill(OTHER, (1.0,) * len(names), tuple(names)) if names else INITIAL_FILL[family]
+        if family != OTHER and not is_device_space(space, op.resources):
+            fill = dataclasses.replace(fill, profiled=True)
         if (base := _pattern_base(space, op.resources)) is not None:
             self.spots.update(spot_names(base, op.resources))
             fill = Fill(OTHER, pattern=frozenset({classify_colour_space(base, op.resources)}))  # for an uncoloured scn

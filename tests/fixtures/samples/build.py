@@ -21,6 +21,7 @@ import os
 import pathlib
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -98,12 +99,40 @@ def _renamed(data: bytes) -> bytes:
     raise ValueError(f"cannot find the description {label!r} in the profile")
 
 
+def gray_profile(description: str) -> bytes:
+    """A minimal ICC v2 gray profile (gamma 2.2, D50) under *description*; Pillow cannot make one, TeX Live has none."""
+
+    def tag(sig: bytes, body: bytes) -> bytes:
+        return sig + b"\0\0\0\0" + body
+
+    ascii_desc = description.encode("ascii") + b"\0"
+    desc = tag(b"desc", struct.pack(">I", len(ascii_desc)) + ascii_desc + b"\0" * 8 + b"\0" * 70)
+    white = tag(b"XYZ ", struct.pack(">3i", 0xF6D6, 0x10000, 0xD32D))  # D50
+    curve = tag(b"curv", struct.pack(">IH", 1, 0x0233) + b"\0\0")  # one entry: a u8Fixed8 gamma of 2.2
+    notice = tag(b"text", b"Public domain\0")
+    tags = [(b"desc", desc), (b"wtpt", white), (b"kTRC", curve), (b"cprt", notice)]
+    offset = 128 + 4 + 12 * len(tags)
+    table, body = b"", b""
+    for sig, data in tags:
+        data += b"\0" * (-len(data) % 4)
+        table += sig + struct.pack(">II", offset + len(body), len(data))
+        body += data
+    header = struct.pack(">I4sI4s4s4s", offset + len(body), b"", 0x02100000, b"mntr", b"GRAY", b"XYZ ")
+    header += b"\0" * 12 + b"acsp" + b"\0" * 28 + struct.pack(">3i", 0xF6D6, 0x10000, 0xD32D)
+    header += b"\0" * 48
+    return header + struct.pack(">I", len(tags)) + table + body
+
+
 def _assets(directory: pathlib.Path) -> None:
     Image.new("RGB", (64, 64), (200, 60, 30)).save(directory / "rgb.png")
     Image.new("CMYK", (64, 64), (0, 150, 220, 0)).save(directory / "cmyk.jpg", quality=95)
     Image.new("L", (64, 64), 128).save(directory / "gray.png")
+    Image.new("L", (800, 800), 90).save(directory / "sharp.png")
+    Image.new("CMYK", (64, 64), (0, 0, 0, 180)).save(directory / "cmyk-k-only.jpg", quality=95)
     alpha = Image.linear_gradient("L").resize((64, 64))
     Image.merge("RGBA", (*Image.new("RGB", (64, 64), (30, 120, 200)).split(), alpha)).save(directory / "rgba.png")
+    (directory / "gray.icc").write_bytes(gray_profile("Sample gray"))
+    (directory / "gray-other.icc").write_bytes(gray_profile("Other gray"))
     srgb = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
     (directory / "srgb.icc").write_bytes(srgb)
     (directory / "rgb-other.icc").write_bytes(_renamed(srgb))
