@@ -271,6 +271,22 @@ class TestColourSpaces:
             assert len(colour.check_colour_spaces(opened, strict=False)) == 1
 
 
+class TestRgbOnly:
+    def test_cmyk_fill_is_an_error(self, make_content_pdf):
+        with pikepdf.open(make_content_pdf(b"0 0 0 1 k 0 0 10 10 re f", font=False)) as pdf:
+            assert [f.severity for f in colour.check_rgb_only(pdf)] == [Severity.ERROR]
+
+    def test_cmyk_image_is_an_error(self, tmp_path, make_image):
+        pdf = pikepdf.new()
+        image = pdf.make_indirect(make_image(pdf, colorspace=pikepdf.Name.DeviceCMYK))
+        _page_with(pdf, b"q 100 0 0 100 0 0 cm /Im1 Do Q", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)))
+        assert "/Im1" in colour.check_rgb_only(pdf)[0].message
+
+    def test_rgb_and_gray_are_clean(self, make_content_pdf):
+        with pikepdf.open(make_content_pdf(b"1 0 0 rg 0 0 10 10 re f 0.5 g 0 0 5 5 re f", font=False)) as pdf:
+            assert colour.check_rgb_only(pdf) == []
+
+
 class TestRichBlack:
     def test_small_rich_black_text_is_flagged(self, make_content_pdf):
         path = make_content_pdf(b"BT /F1 8 Tf 0.6 0.5 0.4 0.9 k (hello) Tj ET")

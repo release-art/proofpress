@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `proof-pdf verify --colour-mode rgb` (default `cmyk`): proof an RGB job. CMYK images and fills, and a CMYK output intent, are errors; spot colours a
+  warning. The ink checks (total ink, overprint, rich black) are skipped. Combine with `pdfx = false` in a `[profile.*]`.
 - `proof-pdf extract` and `proof_pdf.extract.extract_pdf()`: recover assets from any PDF, for rebuilding a template from an
   archived job. Writes the images (JPEG and JPEG 2000 as stored, soft masks as `.mask.png`), the embedded font programs, ICC
   profiles, and vector artwork as one cropped PDF per piece (identical pieces deduplicated), plus `document.json`: page boxes,

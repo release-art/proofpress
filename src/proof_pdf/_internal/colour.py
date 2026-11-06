@@ -295,6 +295,47 @@ def _rgb_image_name(op: content.Operation) -> str | None:
     return str(op.operands[0])
 
 
+# ------------------------------------------------------------ RGB proofing ----
+def check_rgb_only(pdf: pikepdf.Pdf) -> list[Finding]:
+    """For a screen job: flag CMYK images and fills, a CMYK output intent, and (as advisory) spot colours.
+
+    Gray is colour-neutral and passes. Stroke colour is not tracked by the paint walk, so a CMYK-only stroke is missed.
+    """  # ponytail: fills and images only; strokes need stroke state in paint.py
+    findings: list[Finding] = []
+    if intent_family(pdf) == CMYK:
+        findings.append(Finding("rgb-only", Severity.ERROR, "the output intent is a CMYK profile in an RGB job"))
+    for i, page in enumerate(pdf.pages, start=1):
+        images, fills, spots = _non_rgb_paint(page)
+        for name in sorted(images):
+            findings.append(Finding("rgb-only", Severity.ERROR, f"image {name} is in a CMYK colour space", i))
+        if fills:
+            findings.append(
+                Finding("rgb-only", Severity.ERROR, f"artwork is filled in CMYK ({', '.join(sorted(fills)[:3])}...)", i)
+            )
+        if spots:
+            findings.append(
+                Finding("rgb-only", Severity.WARN, f"spot colour(s) {', '.join(sorted(spots))} have no RGB value", i)
+            )
+    return findings
+
+
+def _non_rgb_paint(page: pikepdf.Page) -> tuple[set[str], set[str], set[str]]:
+    """The CMYK image names, CMYK fill descriptions and spot ink names a page paints."""
+    images: set[str] = set()
+    fills: set[str] = set()
+    spots: set[str] = set()
+    for p in paint_events(page):
+        if p.kind == "image":
+            if p.xobject is not None and classify_colour_space(p.xobject.get("/ColorSpace"), None) == CMYK:
+                images.add(p.name)
+        elif p.kind == "text" or (p.kind == "path" and p.filled):
+            if p.fill.family == CMYK:
+                fills.add(_describe(p.fill))
+            elif p.fill.spot:
+                spots.update(p.fill.spot)
+    return images, fills, spots
+
+
 # ------------------------------------------------ rich-black small text ----
 def check_rich_black(pdf: pikepdf.Pdf, small_text_pt: float) -> list[Finding]:
     """Flag small text painted in a built (rich) black on any page (advisory)."""

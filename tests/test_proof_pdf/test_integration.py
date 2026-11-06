@@ -92,6 +92,12 @@ class TestOffendingFiles:
         assert _checks(record) == {"colour-space"}
         assert "/Im1" in _messages(record, "colour-space")[0]
 
+    def test_rgb_mode_fails_cmyk_artwork_and_passes_rgb(self, runner):
+        rgb = ("--colour-mode", "rgb", "--no-pdfa", "--no-pdfx")
+        code, [record] = _verify(runner, PDFS / "cyan-text.pdf", *rgb)
+        assert (code, "rgb-only" in _checks(record)) == (1, True)
+        assert _verify(runner, PDFS / "rgb-image.pdf", *rgb)[0] == 0
+
     def test_a_low_resolution_image_is_an_image_dpi_error(self, runner):
         code, [record] = _verify(runner, PDFS / "low-dpi-image.pdf", *A6)
         assert code == 1

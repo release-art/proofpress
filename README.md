@@ -24,6 +24,8 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
   overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged,
   and **white that overprints is an error** (it adds no ink, so it vanishes on press). A page that uses transparency must blend
   in the output intent's colour space (a mismatch is an error, an undeclared space a warning).
+- **RGB proofing** (opt-in, `--colour-mode rgb`): for a screen job, CMYK images and fills and a CMYK output intent are errors, spot colours a warning;
+  total ink, overprint and rich-black checks are skipped. Save it as a profile: `[profiles.web.verify]` with `colour-mode = "rgb"` and `pdfx = false`, chosen with `proof-pdf --profile web verify`.
 - **K-only text** (opt-in, `--k-only-text`): text painted with any ink but K (a four-colour build, RGB, a spot or a pattern) is an error.
 - **Proofing** (the text and lines a page paints, measured in page points; see below).
 

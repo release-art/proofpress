@@ -32,6 +32,7 @@ from .models import (
     DEFAULT_MAX_TAC,
     DEFAULT_MIN_DPI,
     DEFAULT_SMALL_TEXT_PT,
+    ColourMode,
     FileReport,
     Finding,
     PageGeometry,
@@ -157,6 +158,13 @@ def verify_cmd(
     strict_cmyk: typing.Annotated[
         bool, typer.Option("--strict-cmyk", help="Fail, rather than warn, on RGB vector fills.")
     ] = False,
+    colour_mode: typing.Annotated[
+        ColourMode,
+        typer.Option(
+            "--colour-mode",
+            help="Colour model the job is proofed against. rgb fails CMYK artwork and skips ink checks.",
+        ),
+    ] = ColourMode.CMYK,
     k_only_text: typing.Annotated[
         bool, typer.Option("--k-only-text", help="Fail text painted with any ink but K (house rule; off by default).")
     ] = False,
@@ -516,6 +524,7 @@ def build_profile(options: typing.Mapping[str, typing.Any]) -> Profile:
         small_text_pt=o["small_text_pt"],
         min_dpi=o["min_dpi"],
         strict_cmyk=o["strict_cmyk"],
+        colour_mode=ColourMode(o["colour_mode"]),
         k_only_text=o["k_only_text"],
         missing_glyphs=o["missing_glyphs"],
         min_text_pt=o["min_text_pt"],

@@ -18,7 +18,7 @@ import pathlib
 import pikepdf
 
 from ._internal import colour, contrast, resolution, structure, text, verapdf
-from .models import FileReport, Finding, Profile, Severity
+from .models import ColourMode, FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,11 @@ async def verify_file(
     """
     report = FileReport(path=path)
     vera = asyncio.create_task(_run_verapdf(path, profile, verapdf_bin, timeout)) if profile.pdfa else None
-    tac = asyncio.create_task(_run_tac(path, profile, gs_bin, timeout)) if profile.colour else None
+    tac = (
+        asyncio.create_task(_run_tac(path, profile, gs_bin, timeout))
+        if profile.colour and profile.colour_mode is ColourMode.CMYK
+        else None
+    )
     try:
         structural, opened = await asyncio.to_thread(_check_pdf, path, profile)
         if vera:
@@ -62,7 +66,10 @@ def missing_tools(profile: Profile, *, verapdf_bin: str = "verapdf", gs_bin: str
     veraPDF is needed for the PDF/A layer and Ghostscript for the colour layer (total ink). :func:`verify_file` reports
     a missing tool as a failing finding; this lets a caller stop before a long run with one message of its own.
     """
-    needed = ((verapdf_bin, profile.pdfa, verapdf.available), (gs_bin, profile.colour, colour.gs_available))
+    needed = (
+        (verapdf_bin, profile.pdfa, verapdf.available),
+        (gs_bin, profile.colour and profile.colour_mode is ColourMode.CMYK, colour.gs_available),
+    )
     return [binary for binary, wanted, found in needed if wanted and not found(binary)]
 
 
@@ -124,11 +131,14 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                 findings += colour.check_k_only_text(pdf)
             findings += _text_checks(pdf, profile)
             if profile.colour:
-                findings += colour.check_white_overprint(pdf)
                 findings += colour.check_transparency(pdf)
-                findings += colour.check_overprint(pdf)
-                findings += colour.check_rich_black(pdf, profile.small_text_pt)
-                findings += colour.check_colour_spaces(pdf, strict=profile.strict_cmyk)
+                if profile.colour_mode is ColourMode.RGB:
+                    findings += colour.check_rgb_only(pdf)
+                else:
+                    findings += colour.check_white_overprint(pdf)
+                    findings += colour.check_overprint(pdf)
+                    findings += colour.check_rich_black(pdf, profile.small_text_pt)
+                    findings += colour.check_colour_spaces(pdf, strict=profile.strict_cmyk)
                 findings += resolution.check_image_dpi(pdf, profile.min_dpi)
     except pikepdf.PdfError as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
         return [Finding("structure", Severity.ERROR, f"cannot open the PDF (corrupt or encrypted): {exc}")], False

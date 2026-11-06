@@ -28,6 +28,14 @@ def pt_to_mm(pt: float) -> float:
 
 
 @enum.unique
+class ColourMode(enum.StrEnum):
+    """The colour model a job is proofed against. Further modes (grayscale, CMYK plus UV) would be added here."""
+
+    CMYK = "cmyk"
+    RGB = "rgb"
+
+
+@enum.unique
 class Severity(enum.StrEnum):
     """Whether a finding fails the file or is only advisory."""
 
@@ -87,6 +95,8 @@ class Profile:
     *output_condition* names the printing condition the output intent must carry; *uniform_pages* and
     *pages_multiple_of* are page-set rules. *require_bleed* turns on the artwork-bleed check: artwork that reaches the
     trim edge must run on to the bleed edge.
+    *colour_mode* is the colour model the job is held to: ``RGB`` flags CMYK artwork and skips the ink checks (TAC,
+    overprint, rich black).
     *min_delta_l* turns on the contrast check (an L* difference floor), measured through *proof_profile* or the PDF's
     own output intent.
     """
@@ -100,6 +110,7 @@ class Profile:
     small_text_pt: float = DEFAULT_SMALL_TEXT_PT
     min_dpi: float = DEFAULT_MIN_DPI
     strict_cmyk: bool = False
+    colour_mode: ColourMode = ColourMode.CMYK
     k_only_text: bool = False
     missing_glyphs: bool = True
     min_text_pt: float | None = None
