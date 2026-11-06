@@ -22,8 +22,8 @@ bin/test.sh                           # pytest with coverage
   the builder, regenerate with `pdm run python tests/fixtures/build_pdfs.py`; a test fails if the committed PDFs are stale.
   The colour samples beside them are LaTeX (`tests/fixtures/samples/*.tex`, built by its `build.py` into the same
   `tests/fixtures/pdfs/`); see the README there. Both builders leave each other's files alone.
-- PDF/X rules are rows in `src/proof_pdf/_internal/pdfx/x1a.py`, `x3.py` and `x4.py`; a clause is only filled in from the standard
-  itself. After changing a table, regenerate the coverage file with `pdm run python -m proof_pdf._internal.pdfx`; a test fails when it is stale.
+- PDF/X rules are rows in `src/proof_pdf/_internal/pdfx/x4.py`; a clause is only filled in from the standard
+  itself.
 - Calibration against the free Ghent and Altona test suites: `bin/suites/fetch.sh` downloads them (they may not be
   redistributed, so they are never committed) and `pdm run pytest tests/test_proof_pdf/test_suites.py` checks each file
   raises exactly the checks in `tests/fixtures/suites/expected.toml`. The tests skip without the files; CI runs them by

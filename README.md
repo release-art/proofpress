@@ -19,8 +19,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 
 - **PDF/A** with [veraPDF](https://verapdf.org) (`--flavour 2b` by default; `--no-pdfa` to skip).
 - **PDF/X-4 structure**: page boxes, `/Trapped`, the `GTS_PDFX` output intent and the XMP version key (`--no-pdfx`). The rules live in
-  `proof_pdf/_internal/pdfx/`, one table per flavour, with `pdfx/COVERAGE.md` showing what is implemented. `--pdfx-version x1a|x3` selects
-  another flavour, but those have no rules yet (the standard's text has not been to hand): they fail with a `pdfx-coverage` error rather than pass.
+  `proof_pdf/_internal/pdfx/x4.py`.
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
   For a book interior, `--binding-bleed-mm 0` (with `--binding left|right`, the bound edge of page 1; it alternates page by page) expects no bleed on the binding edge,
   so the sheet is wider by the outer bleed only; the centring check follows the asymmetry. Equal bleed on every side behaves as before.

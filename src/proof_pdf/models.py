@@ -37,15 +37,6 @@ class ColourMode(enum.StrEnum):
 
 
 @enum.unique
-class PdfxVersion(enum.StrEnum):
-    """The PDF/X flavour the structural layer holds a file to."""
-
-    X1A = "x1a"
-    X3 = "x3"
-    X4 = "x4"
-
-
-@enum.unique
 class Severity(enum.StrEnum):
     """Whether a finding fails the file or is only advisory."""
 
@@ -119,7 +110,6 @@ class Profile:
     *pages_multiple_of* are page-set rules. *require_bleed* turns on the artwork-bleed check: artwork that reaches the
     trim edge must run on to the bleed edge. *no_marks* turns on the outside-bleed check: nothing may be painted
     beyond the bleed region (printer's marks, slug text).
-    *pdfx_version* is the PDF/X flavour the structural layer holds the file to (``x4``, ``x1a`` or ``x3``).
     *colour_mode* is the colour model the job is held to: ``RGB`` flags CMYK artwork and skips the ink checks (TAC,
     overprint, rich black); ``GRAY`` allows only the gray family and skips them too. *allow_k_only* (gray only) also
     accepts DeviceCMYK that uses the K plate alone.
@@ -158,7 +148,6 @@ class Profile:
     require_bleed: bool = False
     allow_k_only: bool = False
     no_marks: bool = False
-    pdfx_version: PdfxVersion = PdfxVersion.X4
 
 
 @dataclasses.dataclass

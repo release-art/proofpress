@@ -36,7 +36,6 @@ from .models import (
     FileReport,
     Finding,
     PageGeometry,
-    PdfxVersion,
     Profile,
     Severity,
 )
@@ -134,13 +133,6 @@ def verify_cmd(
     ] = "2b",
     pdfa: typing.Annotated[bool, typer.Option("--pdfa/--no-pdfa", help="Run the veraPDF PDF/A layer.")] = True,
     pdfx: typing.Annotated[bool, typer.Option("--pdfx/--no-pdfx", help="Check the PDF/X-4 identity.")] = True,
-    pdfx_version: typing.Annotated[
-        PdfxVersion,
-        typer.Option(
-            "--pdfx-version",
-            help="PDF/X flavour for the structural layer. x1a and x3 have no rules yet, so they fail, saying so.",
-        ),
-    ] = PdfxVersion.X4,
     colour: typing.Annotated[
         bool, typer.Option("--colour/--no-colour", help="Check ink, overprint, RGB, rich black and image DPI.")
     ] = True,
@@ -576,7 +568,6 @@ def build_profile(options: typing.Mapping[str, typing.Any]) -> Profile:
         flavour=o["flavour"],
         pdfa=o["pdfa"],
         pdfx=o["pdfx"],
-        pdfx_version=PdfxVersion(o["pdfx_version"]),
         colour=o["colour"],
         geometry=_page_geometry(o["trim_mm"], o["bleed_mm"], o["tolerance_mm"], o["binding_bleed_mm"], o["binding"])
         if o["trim_mm"]

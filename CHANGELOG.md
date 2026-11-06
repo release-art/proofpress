@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- `--pdfx-version`, `Profile.pdfx_version`, `PdfxVersion` and the config key `pdfx-version`: x1a and x3 had no checks, so
+  selecting them could only fail. The x4 rule table is unchanged; `pdfx/COVERAGE.md` and its generator are gone too.
+
 ## [0.3.8] - 2026-11-06
 
 ### Added

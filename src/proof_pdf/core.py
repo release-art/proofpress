@@ -119,7 +119,7 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
     try:
         with pikepdf.open(path) as pdf:
             if profile.pdfx:
-                findings += pdfx.check(pdf, profile.pdfx_version)
+                findings += pdfx.check(pdf)
             if profile.geometry is not None:
                 findings += structure.check_geometry(pdf, profile.geometry)
             findings += _structure_rules(pdf, profile)
