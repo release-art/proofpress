@@ -10,6 +10,7 @@ overprint = "correct: the page enables overprint (advisory); its white overprint
 colour-space = "correct: RGB image patches are in the suite on purpose"
 image-dpi = "correct: 1x9 px tint-ramp strips (2 dpi) and 72/75 dpi patches are below 300 dpi by design"
 tac = "correct: the full-ink patch peaks at 363%"
+icc-profile = "correct: the suite embeds a second CMYK profile (AME07) beside the ISO Coated v2 output intent"
 
 ["eci_altona-test-suite-v2_technical2_one-patch-per-page_x4.pdf"]
 bleedbox = "correct: no BleedBox on the test pages"
@@ -18,3 +19,4 @@ overprint = "correct: overprint patches"
 colour-space = "correct: RGB image patches"
 image-dpi = "correct: coarse raster patches"
 tac = "correct: full-ink patches"
+icc-profile = "correct: the suite embeds a second CMYK profile (AME07) beside the ISO Coated v2 output intent"

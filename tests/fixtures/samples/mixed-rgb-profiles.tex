@@ -1,0 +1,11 @@
+% Two RGB images tagged with two different RGB profiles: mixed working spaces.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfProfile{srgb}{srgb.icc}{3}
+\PdfProfile{other}{rgb-other.icc}{3}
+\PdfImage{/Im1}{2}{2}{8}{\PdfICC{srgb}}{ff0000 00ff00 0000ff ffff00}
+\PdfImage{/Im2}{2}{2}{8}{\PdfICC{other}}{ff0000 00ff00 0000ff ffff00}
+\begin{document}
+\PdfDraw{q 140 0 0 140 100 500 cm /Im1 Do Q q 140 0 0 140 300 500 cm /Im2 Do Q}
+\end{document}

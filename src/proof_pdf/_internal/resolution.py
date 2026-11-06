@@ -43,7 +43,7 @@ def check_image_dpi(pdf: pikepdf.Pdf, min_dpi: float) -> list[Finding]:
     for i, page in enumerate(pdf.pages, start=1):
         worst: dict[str, float] = {}
         for op in content.iter_operations(page):
-            if op.operator != "Do":
+            if op.operator not in ("Do", "INLINE IMAGE"):
                 continue
             measured = _effective_dpi(op)
             if measured is None:
@@ -66,9 +66,12 @@ def check_image_dpi(pdf: pikepdf.Pdf, min_dpi: float) -> list[Finding]:
 
 def _effective_dpi(op: content.Operation) -> tuple[str, float] | None:
     """``(name, dpi)`` for the image this ``Do`` paints, or ``None`` if not measurable."""
-    xobject = content.lookup_xobject(op.resources, op.operands)
-    if xobject is None or str(xobject.get("/Subtype")) != "/Image":
-        return None
+    if op.operator == "INLINE IMAGE":
+        xobject, name = op.operands[0].obj, "(inline)"
+    else:
+        xobject, name = content.lookup_xobject(op.resources, op.operands), str(op.operands[0])
+        if xobject is None or str(xobject.get("/Subtype")) != "/Image":
+            return None
     pixels = _pixel_size(xobject)
     if pixels is None:
         return None
@@ -78,7 +81,7 @@ def _effective_dpi(op: content.Operation) -> tuple[str, float] | None:
         return None
     dpi_x = pixels[0] / (width_pt / PT_PER_IN)
     dpi_y = pixels[1] / (height_pt / PT_PER_IN)
-    return (str(op.operands[0]), min(dpi_x, dpi_y))
+    return (name, min(dpi_x, dpi_y))
 
 
 def _pixel_size(xobject: pikepdf.Object) -> tuple[int, int] | None:

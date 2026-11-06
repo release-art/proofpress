@@ -1,0 +1,8 @@
+% Inline (BI/EI) images: one RGB, one CMYK, and a 1-bit stencil mask painted in a CMYK fill.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\begin{document}
+\PdfDraw{q 100 0 0 100 100 500 cm BI /W 1 /H 1 /CS /RGB /BPC 8 /F /AHx ID ff0000> EI Q
+         q 100 0 0 100 300 500 cm BI /W 1 /H 1 /CS /CMYK /BPC 8 /F /AHx ID 00ff0000> EI Q}
+\end{document}

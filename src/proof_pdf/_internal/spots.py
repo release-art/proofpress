@@ -29,14 +29,14 @@ def find(objects: typing.Iterable[pikepdf.Object]) -> list[SpotColour]:
     for obj in objects:
         if isinstance(obj, pikepdf.Array) and len(obj) >= 4 and str(obj[0]) in ("/Separation", "/DeviceN"):
             try:
-                spot = _read(obj)
+                spot = read(obj)
             except IndexError, KeyError, TypeError, ValueError, pikepdf.PdfError:
                 continue
             found.setdefault((spot.names, spot.alternate_space), spot)
     return list(found.values())
 
 
-def _read(space: pikepdf.Array) -> SpotColour:
+def read(space: pikepdf.Array) -> SpotColour:
     separation = str(space[0]) == "/Separation"
     names = (str(space[1]).lstrip("/"),) if separation else tuple(str(n).lstrip("/") for n in space[1])
     alternate = space[2]

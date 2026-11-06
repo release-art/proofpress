@@ -1,0 +1,44 @@
+% pdfraw.tex -- LuaLaTeX helpers that put exact PDF colour objects in a page, which LaTeX packages cannot:
+% ICC-tagged images, Separation inks, output intents, inline images. \input it in the preamble.
+%
+%   \PdfProfile{key}{file.icc}{N}              embed an ICC profile (N components) under a name
+%   \PdfImage{/Im1}{w}{h}{bpc}{\PdfICC{key}}{hex}   an image XObject; the colour space is any PDF text
+%   \PdfSpot{/CS1}{Ink}{c m y k}               a Separation space named /CS1 whose 100% tint is that CMYK
+%   \PdfResource{/Shading}{/Sh1}{<< ... >>}    any direct resource: a shading, a colour space
+%   \PdfPattern{/P1}{bbox}{attrs}{operators}   a tiling pattern (attrs: PaintType etc.) and its content
+%   \PdfIntent{key}{Condition}                 a PDF/X output intent using a profile
+%   \PdfDraw{operators}                        content stream operators, in page coordinates
+%
+% The sources are for tests/fixtures/samples/build.py, which supplies the profiles in the working directory.
+\directlua{
+  pdfraw = {profiles = {}, res = {}}
+  function pdfraw.file(name)
+    local f = assert(io.open(name, "rb")); local d = f:read("*a"); f:close(); return d
+  end
+  function pdfraw.resource(kind, name, value)
+    pdfraw.res[kind] = (pdfraw.res[kind] or "") .. " " .. name .. " " .. value
+    local all = {}
+    for k, v in pairs(pdfraw.res) do table.insert(all, k .. " << " .. v .. " >>") end  % no #: TeX doubles it here
+    pdf.setpageresources(table.concat(all, " "))
+  end
+}
+\newcommand\PdfProfile[3]{\directlua{
+  pdfraw.profiles["#1"] = pdf.immediateobj("stream", pdfraw.file("#2"), "/N #3")}}
+\newcommand\PdfICC[1]{[/ICCBased \directlua{tex.sprint(pdfraw.profiles["#1"])}\space 0 R]}
+\newcommand\PdfImage[6]{\directlua{
+  local n = pdf.immediateobj("stream", "#6>",
+    "/Type /XObject /Subtype /Image /Width #2 /Height #3 /BitsPerComponent #4 /ColorSpace #5 /Filter /ASCIIHexDecode")
+  pdfraw.resource("/XObject", "#1", n .. " 0 R")}}
+\newcommand\PdfSpot[3]{\directlua{
+  pdfraw.resource("/ColorSpace", "#1",
+    "[/Separation /#2 /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [#3] /N 1 >>]")}}
+\newcommand\PdfIntent[2]{\directlua{
+  local i = pdf.immediateobj("<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (#2) /Info (#2) "
+    .. "/DestOutputProfile " .. pdfraw.profiles["#1"] .. " 0 R >>")
+  pdf.setcatalog("/OutputIntents [" .. i .. " 0 R]")}}
+\newcommand\PdfDraw[1]{\mbox{}\pdfextension literal page{#1}}
+\newcommand\PdfResource[3]{\directlua{pdfraw.resource("#1", "#2", "#3")}}
+\newcommand\PdfPattern[4]{\directlua{
+  local n = pdf.immediateobj("stream", "#4",
+    "/Type /Pattern /PatternType 1 /TilingType 1 /BBox [#2] /XStep 10 /YStep 10 /Resources << >> #3")
+  pdfraw.resource("/Pattern", "#1", n .. " 0 R")}}

@@ -1,0 +1,10 @@
+% A CMYK raster tagged with the same CMYK profile the output intent carries: nothing for a RIP to second-guess.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfProfile{cmyk}{cmyk.icc}{4}
+\PdfImage{/Im1}{2}{2}{8}{\PdfICC{cmyk}}{ff000000 00ff0000 0000ff00 000000ff}
+\PdfIntent{cmyk}{Sample CMYK}
+\begin{document}
+\PdfDraw{q 140 0 0 140 100 500 cm /Im1 Do Q}
+\end{document}

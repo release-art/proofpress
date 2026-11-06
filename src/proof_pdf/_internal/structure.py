@@ -17,6 +17,7 @@ from PIL import ImageCms
 
 from ..models import Finding, PageGeometry, Severity, mm_to_pt, pt_to_mm
 from .paint import paint_events
+from .spaces import output_intents
 
 # A box that should sit inside another may exceed it by this many points before
 # it is a real error -- guards against rounding in the millipoint box values.
@@ -165,10 +166,7 @@ def _xmp_bytes(pdf: pikepdf.Pdf) -> bytes:
 
 
 def _has_pdfx_output_intent(pdf: pikepdf.Pdf) -> bool:
-    intents = pdf.Root.get("/OutputIntents")
-    if intents is None:
-        return False
-    return any(str(intent.get("/S")) == "/GTS_PDFX" for intent in intents)
+    return any(str(intent.get("/S")) == "/GTS_PDFX" for intent in output_intents(pdf))
 
 
 def check_geometry(pdf: pikepdf.Pdf, geometry: PageGeometry) -> list[Finding]:
@@ -289,7 +287,7 @@ def _short_sides(page: pikepdf.Page, trim: Rect, zones: list[float]) -> list[dic
     fills = [
         (n, p.visible)
         for n, p in enumerate(paint_events(page))
-        if p.visible is not None and (p.kind in ("image", "shading") or p.filled)
+        if p.visible is not None and (p.kind in ("image", "inline-image", "shading") or p.filled)
     ]
     return [_short_on_side(fills, trim, side, zone) for side, zone in enumerate(zones)]
 
@@ -356,7 +354,7 @@ def check_output_condition(pdf: pikepdf.Pdf, expected: str) -> list[Finding]:
     Matched against each intent's identifier, condition and info strings and its ICC profile's description, so
     ``FOGRA51`` matches an identifier that says so, or a profile called "PSO Coated v3 (FOGRA51)".
     """
-    intents = list(pdf.Root.get("/OutputIntents", []))
+    intents = output_intents(pdf)
     if not intents:
         return [
             Finding("output-condition", Severity.ERROR, f"no output intent to compare with the expected {expected!r}")

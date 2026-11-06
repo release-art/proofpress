@@ -24,6 +24,9 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
   overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged,
   and **white that overprints is an error** (it adds no ink, so it vanishes on press). A page that uses transparency must blend
   in the output intent's colour space (a mismatch is an error, an undeclared space a warning).
+- **Spot inks and ICC profiles**: one ink defined two ways in the same space is an error (`spot-definition`); an invalid ICC profile, or a
+  profile that disagrees with its colour space, is an error, and so is a mix of RGB profiles in an RGB job (`icc-profile`); a CMYK
+  profile other than the output intent's is a warning.
 - **RGB proofing** (opt-in, `--colour-mode rgb`): for a screen job, CMYK images, fills, strokes, shadings and patterns and a CMYK output intent are errors, spot colours a warning;
   total ink, overprint and rich-black checks are skipped. Save it as a profile: `[profiles.web.verify]` with `colour-mode = "rgb"` and `pdfx = false`, chosen with `proof-pdf --profile web verify`.
 - **K-only text** (opt-in, `--k-only-text`): text painted with any ink but K (a four-colour build, RGB, a spot or a pattern) is an error.

@@ -1,0 +1,8 @@
+% A spot ink that appears only inside an image's colour space, never in the page's own operators.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfImage{/Im1}{2}{2}{8}{[/Separation /Foil /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0.6 1 0] /N 1 >>]}{ff 80 40 00}
+\begin{document}
+\PdfDraw{q 140 0 0 140 100 500 cm /Im1 Do Q}
+\end{document}

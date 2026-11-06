@@ -1,0 +1,10 @@
+% Filled and stroked artwork in RGB.
+\documentclass{article}
+\usepackage{xcolor,tikz}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \fill[color={rgb,255:red,200;green,40;blue,30}] (0,0) rectangle (3,2);
+  \draw[line width=3pt,color={rgb,255:red,20;green,60;blue,200}] (4,0) -- (7,2);
+\end{tikzpicture}
+\end{document}

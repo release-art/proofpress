@@ -136,3 +136,11 @@ class TestEffectiveDpi:
         pdf.save(path)
         with pikepdf.open(path) as opened:
             assert resolution.check_image_dpi(opened, 300.0) == []
+
+
+def test_inline_images_are_measured_too(tmp_path):
+    pdf = pikepdf.new()
+    stream = b"q 72 0 0 72 0 0 cm BI /W 100 /H 100 /CS /G /BPC 8 ID " + b"\x00" * 10000 + b" EI Q"
+    _one_page(pdf, stream, pikepdf.Dictionary())
+    [finding] = resolution.check_image_dpi(pdf, 300)
+    assert finding.severity is Severity.ERROR and "(inline)" in finding.message and "100 dpi" in finding.message

@@ -1,0 +1,12 @@
+% A CMYK raster tagged with a different CMYK profile (cmyk-other.icc) than the output intent's: legal in PDF/X-4, but
+% the RIP converts it.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfProfile{cmyk}{cmyk.icc}{4}
+\PdfProfile{other}{cmyk-other.icc}{4}
+\PdfImage{/Im1}{2}{2}{8}{\PdfICC{other}}{ff000000 00ff0000 0000ff00 000000ff}
+\PdfIntent{cmyk}{Sample CMYK}
+\begin{document}
+\PdfDraw{q 140 0 0 140 100 500 cm /Im1 Do Q}
+\end{document}

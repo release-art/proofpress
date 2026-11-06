@@ -41,7 +41,14 @@ from ._internal import (
 )
 from ._internal.paint import Fill, Paint, Walker
 from ._internal.previews import build as build_previews
-from ._internal.spaces import CMYK, GRAY, RGB, classify_colour_space
+from ._internal.spaces import (
+    CMYK,
+    GRAY,
+    RGB,
+    classify_colour_space,
+    output_intents,
+    reachable as _objects,
+)
 from ._internal.vector import INVISIBLE, Group, artwork
 from .inventory import inspect_pdf
 from .layout import Figure, Layout, Line, Table, analyse
@@ -515,7 +522,7 @@ class _Recovery:
             return written[digest]
 
         intents = []
-        for intent in self.pdf.Root.get("/OutputIntents", []):
+        for intent in output_intents(self.pdf):
             profile = intent.get("/DestOutputProfile")
             saved = save(profile, "output intent") if profile is not None else None
             intents.append(
@@ -671,25 +678,6 @@ def _number(value: typing.Any) -> float | None:
         return float(value)
     except TypeError, ValueError:
         return None
-
-
-def _objects(pdf: pikepdf.Pdf) -> collections.abc.Iterator[pikepdf.Object]:
-    """Every object reachable from the catalog, direct ones included (an ICCBased array is usually inside a dict)."""
-    stack: list[pikepdf.Object] = [pdf.Root]
-    seen: set[tuple[int, int]] = set()
-    while stack:
-        obj = stack.pop()
-        if not isinstance(obj, pikepdf.Object):  # a number, bool or null comes back as a Python value
-            continue
-        if obj.objgen != (0, 0):
-            if obj.objgen in seen:
-                continue
-            seen.add(obj.objgen)
-        yield obj
-        if isinstance(obj, (pikepdf.Dictionary, pikepdf.Stream)):
-            stack += [value for key, value in obj.items() if key != "/Parent"]
-        elif isinstance(obj, pikepdf.Array):
-            stack += list(obj)
 
 
 def _metadata(pdf: pikepdf.Pdf, out_dir: pathlib.Path, failures: list[str]) -> dict[str, typing.Any]:

@@ -132,6 +132,8 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
             findings += _text_checks(pdf, profile)
             if profile.colour:
                 findings += colour.check_transparency(pdf)
+                findings += colour.check_spot_definitions(pdf)
+                findings += colour.check_icc_profiles(pdf, profile.colour_mode)
                 if profile.colour_mode is ColourMode.RGB:
                     findings += colour.check_rgb_only(pdf)
                 else:

@@ -1,0 +1,9 @@
+% An RGB raster tagged with an sRGB ICC profile (ICCBased), no output intent.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfProfile{srgb}{srgb.icc}{3}
+\PdfImage{/Im1}{2}{2}{8}{\PdfICC{srgb}}{ff0000 00ff00 0000ff ffff00}
+\begin{document}
+\PdfDraw{q 140 0 0 140 100 500 cm /Im1 Do Q}
+\end{document}

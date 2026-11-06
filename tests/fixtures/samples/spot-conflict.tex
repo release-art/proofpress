@@ -1,0 +1,9 @@
+% The same ink name defined two ways (different CMYK alternates), as when two workflows' pages are merged.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfSpot{/CS1}{Foil}{0 0.6 1 0}
+\PdfSpot{/CS2}{Foil}{0 0.3 1 0}
+\begin{document}
+\PdfDraw{/CS1 cs 1 scn 100 500 100 100 re f /CS2 cs 1 scn 300 500 100 100 re f}
+\end{document}

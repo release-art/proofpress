@@ -6,6 +6,8 @@ alternate space is a rendering hint for a spot ink, and treating it as the artwo
 on entirely correct print files.
 """
 
+import collections.abc
+
 import pikepdf
 
 RGB = "rgb"
@@ -112,9 +114,36 @@ def spot_names(space: object, resources: pikepdf.Object | None, *, depth: int = 
     return []
 
 
+def reachable(pdf: pikepdf.Pdf) -> collections.abc.Iterator[pikepdf.Object]:
+    """Every object reachable from the catalog, direct ones included (an ICCBased array is usually inside a dict)."""
+    stack: list[pikepdf.Object] = [pdf.Root]
+    seen: set[tuple[int, int]] = set()
+    while stack:
+        obj = stack.pop()
+        if not isinstance(obj, pikepdf.Object):  # a number, bool or null comes back as a Python value
+            continue
+        if obj.objgen != (0, 0):
+            if obj.objgen in seen:
+                continue
+            seen.add(obj.objgen)
+        yield obj
+        if isinstance(obj, (pikepdf.Dictionary, pikepdf.Stream)):
+            stack += [value for key, value in obj.items() if key != "/Parent"]
+        elif isinstance(obj, pikepdf.Array):
+            stack += list(obj)
+
+
+def output_intents(pdf: pikepdf.Pdf) -> list[pikepdf.Object]:
+    """The catalog's output intents that are dictionaries; a null or stray entry in the array is not one."""
+    intents = pdf.Root.get("/OutputIntents")
+    if not isinstance(intents, pikepdf.Array):
+        return []
+    return [intent for intent in intents if isinstance(intent, pikepdf.Dictionary)]
+
+
 def intent_family(pdf: pikepdf.Pdf) -> str | None:
     """The colour family of the PDF's first output-intent profile (by its ``/N``), or ``None`` without one."""
-    for intent in pdf.Root.get("/OutputIntents", []):
+    for intent in output_intents(pdf):
         profile = intent.get("/DestOutputProfile")
         if profile is not None and "/N" in profile:
             return _ICC_COMPONENTS.get(int(profile["/N"]))

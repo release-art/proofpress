@@ -1,0 +1,9 @@
+% An axial shading in DeviceCMYK, painted with sh (pgf can only make RGB shadings).
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfResource{/Shading}{/Sh1}{<< /ShadingType 2 /ColorSpace /DeviceCMYK /Coords [100 0 300 0]
+  /Function << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [1 0 0 0] /N 1 >> >>}
+\begin{document}
+\PdfDraw{q 100 500 200 100 re W n /Sh1 sh Q}
+\end{document}

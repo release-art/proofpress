@@ -2,8 +2,6 @@
 
 import io
 import pathlib
-import shutil
-import subprocess
 
 import pikepdf
 import pytest
@@ -12,6 +10,8 @@ from PIL import ImageCms
 from proof_pdf._internal import contrast
 from proof_pdf._internal.paint import Fill
 from proof_pdf.models import Severity
+
+from ._samples import build
 
 
 def _page(tmp_path: pathlib.Path, stream: bytes, *, xobjects=None) -> pikepdf.Pdf:
@@ -45,23 +45,7 @@ def _model() -> contrast.ColourModel:
     return contrast.ColourModel(cmyk=None)
 
 
-def _cmyk_profile() -> pathlib.Path | None:
-    candidates = [
-        pathlib.Path("/usr/share/color/icc/ghostscript/default_cmyk.icc"),
-        pathlib.Path("/System/Library/ColorSync/Profiles/Generic CMYK Profile.icc"),
-    ]
-    if gs := shutil.which("gs"):
-        root = pathlib.Path(gs).resolve().parent.parent
-        candidates += list(root.glob("share/ghostscript/*/iccprofiles/default_cmyk.icc"))
-        try:  # Homebrew keeps the install elsewhere than the symlink
-            prefix = subprocess.run([gs, "-h"], capture_output=True, text=True).stdout
-        except OSError:
-            prefix = ""
-        candidates += [pathlib.Path(p) / "default_cmyk.icc" for p in prefix.split() if p.endswith("iccprofiles")]
-    return next((c for c in candidates if c.is_file()), None)
-
-
-CMYK_PROFILE = _cmyk_profile()
+CMYK_PROFILE = build.cmyk_profile()
 needs_cmyk_profile = pytest.mark.skipif(CMYK_PROFILE is None, reason="no CMYK ICC profile on this machine")
 
 

@@ -1,0 +1,8 @@
+% A coloured tiling pattern whose cell is painted in RGB.
+\documentclass{article}
+\input{pdfraw}
+\pagestyle{empty}
+\PdfPattern{/P1}{0 0 10 10}{/PaintType 1}{0.8 0.2 0.1 rg 0 0 5 5 re f}
+\begin{document}
+\PdfDraw{/Pattern cs /P1 scn 100 500 200 100 re f}
+\end{document}

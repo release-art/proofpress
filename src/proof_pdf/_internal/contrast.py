@@ -21,7 +21,7 @@ from PIL import Image, ImageCms
 from ..models import Finding, Severity
 from . import deltae
 from .paint import Fill, Rect, paint_events
-from .spaces import CMYK, GRAY, RGB
+from .spaces import CMYK, GRAY, RGB, output_intents
 
 Lab = tuple[float, float, float]
 
@@ -90,7 +90,7 @@ def _load(data: bytes) -> ImageCms.ImageCmsProfile:
 
 def _intent_profiles(pdf: pikepdf.Pdf) -> list[bytes]:
     profiles: list[bytes] = []
-    for intent in pdf.Root.get("/OutputIntents", []):
+    for intent in output_intents(pdf):
         stream = intent.get("/DestOutputProfile")
         if stream is not None:
             profiles.append(stream.read_bytes())
@@ -118,7 +118,7 @@ def measure(pdf: pikepdf.Pdf, model: ColourModel) -> list[ContrastPair]:
         found: dict[tuple[Fill, Fill | None, bool], list[float]] = {}
         grounds: list[tuple[Rect, Fill | None]] = []
         for p in paint_events(page):
-            if p.kind in ("image", "shading"):
+            if p.kind in ("image", "inline-image", "shading"):
                 grounds.append((p.bbox or _UNBOUNDED, None))
             elif p.kind == "path" and p.filled and p.bbox is not None:
                 grounds.append((p.bbox, p.fill if p.fill.family != "other" else None))

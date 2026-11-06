@@ -1,0 +1,9 @@
+% A stroke in CMYK and nothing filled: a check that reads fill colours alone would miss it.
+\documentclass{article}
+\usepackage{xcolor,tikz}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \draw[line width=3pt,color={cmyk,1:cyan,1;magenta,0.5;yellow,0;black,0}] (0,0) rectangle (3,2);
+\end{tikzpicture}
+\end{document}

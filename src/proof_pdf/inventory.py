@@ -14,7 +14,6 @@ import pikepdf
 
 from ._internal import contrast, fonts, structure
 from ._internal.paint import Paint, Walker
-from ._internal.spaces import classify_colour_space
 from .models import PT_PER_IN, pt_to_mm
 
 
@@ -96,7 +95,12 @@ def inspect_pdf(
             fonts=_font_facts(walks),
             text_colours=_text_colours(walks),
             spot_inks=sorted({name for _, _, spots in walks for name in spots}),
-            images=[_image_fact(number, e) for number, events, _ in walks for e in events if e.kind == "image"],
+            images=[
+                _image_fact(number, e)
+                for number, events, _ in walks
+                for e in events
+                if e.kind in ("image", "inline-image")
+            ],
             contrast=contrast_facts,
             contrast_error=error,
         )
@@ -186,7 +190,7 @@ def _image_fact(page: int, event: Paint) -> ImageFact:
     return ImageFact(
         page=page,
         name=event.name,
-        colour_space=classify_colour_space(xobject.get("/ColorSpace"), None),
+        colour_space=event.colour_space or "other",
         pixels=(width, height),
         dpi=dpi,
     )

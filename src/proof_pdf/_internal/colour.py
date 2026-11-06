@@ -26,18 +26,19 @@ a failure by the caller, not silently skipped); the rest read the
 
 import asyncio
 import collections.abc
+import io
 import logging
 import pathlib
 import shutil
 import tempfile
 
 import pikepdf
-from PIL import Image, ImageMath
+from PIL import Image, ImageCms, ImageMath
 
-from ..models import Finding, Severity
-from . import proc
+from ..models import ColourMode, Finding, Severity
+from . import proc, spots
 from .paint import Fill, Walker, paint_events
-from .spaces import CMYK, GRAY, RGB, classify_colour_space, intent_family
+from .spaces import CMYK, GRAY, RGB, classify_colour_space, intent_family, output_intents, reachable
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +326,145 @@ def _paint_in(page: pikepdf.Page, family: str) -> tuple[set[str], set[str], set[
     return images, colours, spots
 
 
+# --------------------------------------------------------- spot definitions ----
+def check_spot_definitions(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Flag a spot ink defined more than one way: same name, different alternate space or full-tint look.
+
+    The name is what a printer matches to an ink, but the alternate is what proofs and the screen show. Two
+    definitions of PANTONE 165 C mean two different oranges in the proof, and usually mean one file came from another
+    workflow. Only definitions whose tint transform could be evaluated are compared, to within 1%, and only against
+    definitions in the same alternate space.
+    """
+    # ponytail: alternates in different spaces (Black as Gray 0 vs CMYK 0/0/0/100) are not compared, as that needs a
+    # conversion; add one if mixed-space definitions turn out to matter.
+    definitions: dict[tuple[tuple[str, ...], str | None], dict[tuple, str]] = {}
+    for obj in reachable(pdf):
+        if not (isinstance(obj, pikepdf.Array) and len(obj) >= 4 and str(obj[0]) in ("/Separation", "/DeviceN")):
+            continue
+        try:
+            spot = spots.read(obj)
+        except IndexError, KeyError, TypeError, ValueError, pikepdf.PdfError:
+            continue
+        if spot.alternate is None or any(n in ("All", "None") for n in spot.names):
+            continue
+        look = (spot.alternate_space, tuple(round(v, 2) for v in spot.alternate))
+        definitions.setdefault((spot.names, spot.alternate_space), {}).setdefault(look, f"{spot.alternate}")
+    return [
+        Finding(
+            "spot-definition",
+            Severity.ERROR,
+            f"spot ink {' + '.join(names)} is defined {len(looks)} different ways in {space}: "
+            f"{'; '.join(looks.values())}",
+        )
+        for (names, space), looks in sorted(definitions.items(), key=str)
+        if len(looks) > 1
+    ]
+
+
+# ------------------------------------------------------------ ICC profiles ----
+# The data colour space in an ICC header (bytes 16-20) and how many components it has.
+_ICC_SPACES = {b"GRAY": (GRAY, 1), b"RGB ": (RGB, 3), b"CMYK": (CMYK, 4), b"Lab ": ("lab", 3)}
+_ICC_HEADER = 128
+
+
+def check_icc_profiles(pdf: pikepdf.Pdf, mode: ColourMode) -> list[Finding]:
+    """Check the ICC profiles the file embeds for colour spaces: sound, and consistent with the job.
+
+    Every profile must be readable and its header must agree with the space's ``/N``. Then, by mode: in a CMYK job a
+    CMYK profile other than the output intent's is a warning (legal in PDF/X-4, but the RIP converts through it); in an
+    RGB job every RGB profile, the output intent's included, must be the same one, since mixed working spaces shift
+    colour between objects.
+    """
+    findings: list[Finding] = []
+    seen: dict[str, tuple[str, str]] = {}  # profile digest -> (family, description)
+    for obj in reachable(pdf):
+        if not (isinstance(obj, pikepdf.Array) and len(obj) > 1 and str(obj[0]) == "/ICCBased"):
+            continue
+        try:
+            data = bytes(obj[1].read_bytes())
+            components = int(obj[1].get("/N", 0))
+        except pikepdf.PdfError, AttributeError, TypeError, ValueError:
+            findings.append(
+                Finding("icc-profile", Severity.ERROR, "an ICCBased colour space has an unreadable profile")
+            )
+            continue
+        problem, family = _icc_problem(data, components)
+        label = _icc_label(data)
+        if problem:
+            findings.append(Finding("icc-profile", Severity.ERROR, f"ICC profile {label}: {problem}"))
+        elif family is not None:
+            seen.setdefault(_profile_key(data, label), (family, label))
+    return findings + _profile_consistency(seen, _intent_profile(pdf), mode)
+
+
+def _profile_consistency(
+    seen: dict[str, tuple[str, str]], intent: tuple[str, str, str] | None, mode: ColourMode
+) -> list[Finding]:
+    """The mode's rule over the distinct profiles *seen* and the output *intent*'s."""
+    if mode is ColourMode.RGB:
+        rgb = {d: v[1] for d, v in seen.items() if v[0] == RGB}
+        if intent is not None and intent[1] == RGB:
+            rgb.setdefault(intent[0], intent[2])
+        if len(rgb) > 1:
+            return [Finding("icc-profile", Severity.ERROR, f"the RGB job mixes {len(rgb)} RGB profiles: {_names(rgb)}")]
+    elif intent is not None and intent[1] == CMYK:
+        other = {d: v[1] for d, v in seen.items() if v[0] == CMYK and d != intent[0]}
+        if other:
+            return [
+                Finding(
+                    "icc-profile",
+                    Severity.WARN,
+                    f"CMYK profile(s) {_names(other)} differ from the output intent {intent[2]!r}: the RIP converts",
+                )
+            ]
+    return []
+
+
+def _icc_problem(data: bytes, components: int) -> tuple[str | None, str | None]:
+    """``(problem, family)``: what is wrong with the profile bytes against ``/N``, and the family it is for."""
+    if len(data) < _ICC_HEADER or data[36:40] != b"acsp":
+        return "is not a valid ICC profile", None
+    space = _ICC_SPACES.get(data[16:20])
+    if space is None:
+        return None, None
+    if space[1] != components:
+        return f"is a {data[16:20].decode().strip()} profile but the colour space declares /N {components}", None
+    return None, space[0]
+
+
+def _profile_key(data: bytes, label: str) -> str:
+    """Which profile this is: its description and size. The same profile is often embedded byte-different (a rewritten
+    header or profile ID), so a content hash would call it two."""
+    return f"{label}:{len(data)}"
+
+
+def _icc_label(data: bytes) -> str:
+    try:
+        return ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(data))).strip() or "(unnamed)"
+    except ImageCms.PyCMSError, OSError, AttributeError:
+        return "(unreadable)"
+
+
+def _intent_profile(pdf: pikepdf.Pdf) -> tuple[str, str, str] | None:
+    """``(digest, family, description)`` of the first output intent's profile, or ``None``."""
+    for intent in output_intents(pdf):
+        profile = intent.get("/DestOutputProfile")
+        if profile is None:
+            continue
+        try:
+            data = bytes(profile.read_bytes())
+        except pikepdf.PdfError:
+            continue
+        space = _ICC_SPACES.get(data[16:20])
+        if space is not None:
+            return _profile_key(data, _icc_label(data)), space[0], _icc_label(data)
+    return None
+
+
+def _names(profiles: dict[str, str]) -> str:
+    return ", ".join(sorted(profiles.values()))
+
+
 # ------------------------------------------------ rich-black small text ----
 def check_rich_black(pdf: pikepdf.Pdf, small_text_pt: float) -> list[Finding]:
     """Flag small text painted in a built (rich) black on any page (advisory)."""
@@ -333,7 +473,7 @@ def check_rich_black(pdf: pikepdf.Pdf, small_text_pt: float) -> list[Finding]:
         sizes = [
             p.size
             for p in paint_events(page)
-            if p.kind == "text" and _is_rich_black(p.fill) and p.size <= small_text_pt
+            if p.kind == "text" and any(_is_rich_black(c) for c in p.colours()) and p.size <= small_text_pt
         ]
         if sizes:
             findings.append(
@@ -360,7 +500,7 @@ def check_k_only_text(pdf: pikepdf.Pdf) -> list[Finding]:
     """Flag text painted with any ink but K: a four-colour build, RGB, or a spot or pattern."""
     findings: list[Finding] = []
     for i, page in enumerate(pdf.pages, start=1):
-        bad = [p.fill for p in paint_events(page) if p.kind == "text" and not _is_k_only(p.fill)]
+        bad = [c for p in paint_events(page) if p.kind == "text" for c in p.colours() if not _is_k_only(c)]
         if bad:
             more = f" (and {len(bad) - 1} more runs)" if len(bad) > 1 else ""
             findings.append(

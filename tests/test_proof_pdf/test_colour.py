@@ -5,10 +5,12 @@ import shutil
 
 import pikepdf
 import pytest
-from PIL import Image
+from PIL import Image, ImageCms
 
 from proof_pdf._internal import colour, proc
-from proof_pdf.models import Severity
+from proof_pdf.models import ColourMode, Severity
+
+from .test_contrast import CMYK_PROFILE, needs_cmyk_profile
 
 
 def _checks(findings) -> set[str]:
@@ -766,3 +768,173 @@ class TestTransparency:
     def test_no_output_intent_means_no_mismatch_to_report(self, tmp_path):
         with _transparent(tmp_path, group_cs="/DeviceRGB") as pdf:
             assert colour.check_transparency(pdf) == []
+
+
+def _tint(c1: list[float]) -> pikepdf.Dictionary:
+    return pikepdf.Dictionary(FunctionType=2, Domain=[0, 1], C0=[0] * len(c1), C1=c1, N=1)
+
+
+def _separation(ink: str, c1: list[float], alternate=pikepdf.Name.DeviceCMYK) -> pikepdf.Array:
+    return pikepdf.Array([pikepdf.Name.Separation, pikepdf.Name("/" + ink), alternate, _tint(c1)])
+
+
+class TestSpotSources:
+    """A spot ink counts wherever it is painted from: an image, a shading, a pattern, an inline image."""
+
+    def _spots(self, pdf, stream, **resources) -> list[str]:
+        _page_with(pdf, stream, pikepdf.Dictionary(**resources))
+        return [f.message for f in colour.check_spot_inks(pdf, [])]
+
+    def test_image_xobject(self, make_image):
+        pdf = pikepdf.new()
+        image = pdf.make_indirect(make_image(pdf, colorspace=_separation("Foil", [0, 0, 0, 1])))
+        found = self._spots(pdf, b"q 10 0 0 10 0 0 cm /Im1 Do Q", XObject=pikepdf.Dictionary(Im1=image))
+        assert "Foil" in found[0]
+
+    def test_inline_image(self):
+        pdf = pikepdf.new()
+        found = self._spots(
+            pdf, b"BI /W 1 /H 1 /CS /CS0 /BPC 8 ID \x00 EI", ColorSpace=pikepdf.Dictionary(CS0=_separation("Foil", [1]))
+        )
+        assert "Foil" in found[0]
+
+    def test_shading(self):
+        pdf = pikepdf.new()
+        shading = pdf.make_indirect(
+            pikepdf.Dictionary(
+                ShadingType=2, ColorSpace=_separation("Foil", [1]), Coords=[0, 0, 1, 1], Function=_tint([1])
+            )
+        )
+        assert "Foil" in self._spots(pdf, b"/Sh1 sh", Shading=pikepdf.Dictionary(Sh1=shading))[0]
+
+    def test_uncoloured_pattern_takes_its_base_ink(self):
+        pdf = pikepdf.new()
+        pattern = _tiling(pdf, b"0 0 1 1 re f", paint_type=2)
+        space = pikepdf.Array([pikepdf.Name.Pattern, _separation("Foil", [1])])
+        found = self._spots(
+            pdf,
+            b"/CS0 cs 1 /P1 scn 0 0 10 10 re f",
+            Pattern=pikepdf.Dictionary(P1=pattern),
+            ColorSpace=pikepdf.Dictionary(CS0=space),
+        )
+        assert "Foil" in found[0]
+
+    def test_a_tiling_pattern_s_content_inks_count(self):
+        pdf = pikepdf.new()
+        pattern = _tiling(pdf, b"/CS0 cs 1 scn 0 0 1 1 re f")
+        pattern.Resources = pikepdf.Dictionary(ColorSpace=pikepdf.Dictionary(CS0=_separation("Foil", [1])))
+        found = self._spots(pdf, _FILL_PATTERN, Pattern=pikepdf.Dictionary(P1=pattern))
+        assert "Foil" in found[0]
+
+
+class TestStrokedText:
+    @pytest.mark.parametrize(("mode", "flagged"), [(1, True), (2, True), (0, False)])
+    def test_k_only_text_looks_at_the_stroke_where_the_glyph_is_stroked(self, make_content_pdf, mode, flagged):
+        stream = b"BT /F1 12 Tr 1 0 0 RG 0 g (a) Tj ET".replace(b"12 Tr", b"12 Tf %d Tr" % mode)
+        with pikepdf.open(make_content_pdf(stream)) as pdf:
+            assert bool(colour.check_k_only_text(pdf)) is flagged
+
+
+class TestSpotDefinitions:
+    def _pdf(self, *spaces: pikepdf.Array) -> pikepdf.Pdf:
+        pdf = pikepdf.new()
+        _page_with(
+            pdf, b"", pikepdf.Dictionary(ColorSpace=pikepdf.Dictionary({f"/CS{i}": s for i, s in enumerate(spaces)}))
+        )
+        return pdf
+
+    def test_one_ink_defined_two_ways_is_an_error(self):
+        pdf = self._pdf(_separation("PANTONE 165 C", [0, 0.6, 1, 0]), _separation("PANTONE 165 C", [0, 0.5, 1, 0]))
+        [finding] = colour.check_spot_definitions(pdf)
+        assert finding.severity is Severity.ERROR and "PANTONE 165 C" in finding.message
+
+    def test_the_same_definition_twice_and_within_a_percent_is_fine(self):
+        pdf = self._pdf(_separation("Foil", [0, 0.6, 1, 0]), _separation("Foil", [0, 0.604, 1, 0]))
+        assert colour.check_spot_definitions(pdf) == []
+
+    def test_different_inks_do_not_clash(self):
+        assert (
+            colour.check_spot_definitions(self._pdf(_separation("A", [1, 0, 0, 0]), _separation("B", [0, 1, 0, 0])))
+            == []
+        )
+
+    def test_alternates_in_different_spaces_are_not_compared(self):
+        pdf = self._pdf(_separation("Black", [1], pikepdf.Name.DeviceGray), _separation("Black", [0, 0, 0, 1]))
+        assert colour.check_spot_definitions(pdf) == []
+
+
+_SRGB_NAME = "sRGB built-in".encode("utf-16-be")  # lcms writes v4 descriptions as UTF-16
+
+
+def _srgb() -> bytes:
+    return ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+
+
+def _renamed(data: bytes, old: bytes, new: bytes) -> bytes:
+    """The same profile under another description, so it counts as a different profile."""
+    assert len(old) == len(new)
+    return data.replace(old, new)
+
+
+def _icc_space(pdf: pikepdf.Pdf, data: bytes, components: int) -> pikepdf.Array:
+    return pikepdf.Array([pikepdf.Name.ICCBased, pdf.make_stream(data, N=components)])
+
+
+def _pdf_with_profiles(*spaces: tuple[bytes, int]) -> pikepdf.Pdf:
+    pdf = pikepdf.new()
+    table = pikepdf.Dictionary({f"/CS{i}": _icc_space(pdf, data, n) for i, (data, n) in enumerate(spaces)})
+    _page_with(pdf, b"", pikepdf.Dictionary(ColorSpace=table))
+    return pdf
+
+
+class TestIccProfiles:
+    def test_a_sound_profile_is_clean(self):
+        assert colour.check_icc_profiles(_pdf_with_profiles((_srgb(), 3)), ColourMode.CMYK) == []
+
+    def test_junk_is_not_a_profile(self):
+        [finding] = colour.check_icc_profiles(_pdf_with_profiles((b"x" * 200, 3)), ColourMode.CMYK)
+        assert finding.severity is Severity.ERROR and "not a valid ICC profile" in finding.message
+
+    def test_n_must_match_the_profile_header(self):
+        [finding] = colour.check_icc_profiles(_pdf_with_profiles((_srgb(), 4)), ColourMode.CMYK)
+        assert finding.severity is Severity.ERROR and "/N 4" in finding.message
+
+    def test_mixed_rgb_profiles_fail_an_rgb_job_only(self):
+        other = _renamed(_srgb(), _SRGB_NAME, "Odd RGB built".encode("utf-16-be"))
+        pdf = _pdf_with_profiles((_srgb(), 3), (other, 3))
+        [finding] = colour.check_icc_profiles(pdf, ColourMode.RGB)
+        assert finding.severity is Severity.ERROR and "mixes 2 RGB profiles" in finding.message
+        assert colour.check_icc_profiles(pdf, ColourMode.CMYK) == []
+
+    def test_the_same_rgb_profile_twice_is_one_profile(self):
+        pdf = _pdf_with_profiles((_srgb(), 3), (_srgb(), 3))
+        assert colour.check_icc_profiles(pdf, ColourMode.RGB) == []
+
+    @needs_cmyk_profile
+    def test_a_cmyk_profile_other_than_the_intent_is_a_warning(self):
+        cmyk = CMYK_PROFILE.read_bytes()
+        pdf = _pdf_with_profiles((cmyk, 4))
+        intent = pikepdf.Dictionary(
+            Type=pikepdf.Name.OutputIntent,
+            S=pikepdf.Name.GTS_PDFX,
+            DestOutputProfile=pdf.make_stream(_renamed_cmyk(cmyk), N=4),
+        )
+        pdf.Root.OutputIntents = pikepdf.Array([pdf.make_indirect(intent)])
+        [finding] = colour.check_icc_profiles(pdf, ColourMode.CMYK)
+        assert finding.severity is Severity.WARN and "differ from the output intent" in finding.message
+        # ...and the intent's own profile, embedded again, is not "another" profile.
+        pdf.Root.OutputIntents[0].DestOutputProfile = pdf.make_stream(cmyk, N=4)
+        assert colour.check_icc_profiles(pdf, ColourMode.CMYK) == []
+
+
+def _renamed_cmyk(data: bytes) -> bytes:
+    """*data* with a different description (and so identity), same length."""
+    label = colour._icc_label(data).encode()
+    return data.replace(label, label[::-1], 1) if len(label) > 1 else data + b"\x00"
+
+
+def test_a_malformed_output_intent_entry_is_ignored_not_a_crash():
+    pdf = _pdf_with_profiles((_srgb(), 3))
+    pdf.Root.OutputIntents = pikepdf.Array([None, 5])
+    assert colour.check_icc_profiles(pdf, ColourMode.RGB) == []
+    assert colour.intent_family(pdf) is None

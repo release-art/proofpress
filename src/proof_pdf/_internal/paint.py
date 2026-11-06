@@ -196,12 +196,12 @@ def _with_components(fill: Fill, args: list) -> Fill:
     return fill  # a tint in some other space: still not a device colour
 
 
-def _pattern_base(space: object, resources: pikepdf.Object | None) -> str | None:
-    """The base colour family of a ``[/Pattern base]`` space (for uncoloured patterns), else ``None``."""
+def _pattern_base(space: object, resources: pikepdf.Object | None) -> object | None:
+    """The base space of a ``[/Pattern base]`` space (for uncoloured patterns), else ``None``."""
     if isinstance(space, pikepdf.Name):
         space = lookup_resource(resources, "/ColorSpace", [space])
     if isinstance(space, pikepdf.Array) and len(space) > 1 and str(space[0]) == "/Pattern":
-        return classify_colour_space(space[1], resources)
+        return space[1]
     return None
 
 
@@ -261,46 +261,59 @@ class Walker:
             return self._paint_path(op, filled=False, stroked=True)
         if name in _FILL_STROKE_PATH:
             return self._paint_path(op, filled=True, stroked=True)
-        state = self.state
         if name == "sh":
-            # A shading fills the whole clip; unclipped, its extent is unknown (it covers the page).
-            shading = lookup_resource(op.resources, "/Shading", op.operands)
-            space = classify_colour_space(shading.get("/ColorSpace"), op.resources) if shading is not None else None
-            return Paint(
-                "shading",
-                state.fill,
-                state.overprint,
-                visible=_non_empty(state.clip),
-                colour_space=space,
-                name=str(op.operands[0]) if op.operands else "",
-            )
+            return self._shading(op)
         if name == "INLINE IMAGE":
             return self._inline_image(op)
         if name == "Do":
-            xobject = content.lookup_xobject(op.resources, op.operands)
-            if xobject is not None and str(xobject.get("/Subtype")) == "/Image":
-                if xobject.get("/SMask") is not None:
-                    self.transparency.add("soft mask")
-                bbox = _aabb(op.ctm, [(0, 0), (1, 0), (0, 1), (1, 1)])
-                return Paint(
-                    "image",
-                    state.fill,
-                    state.overprint,
-                    bbox=bbox,
-                    visible=self._visible(bbox),
-                    xobject=xobject,
-                    colour_space=classify_colour_space(xobject.get("/ColorSpace"), None),
-                    mask=truthy(xobject.get("/ImageMask")),
-                    name=str(op.operands[0]),
-                    matrix=op.ctm,
-                    mcid=self._mcid(),
-                    artifact=self._artifact(),
-                )
+            return self._image(op)
+        return None
+
+    def _shading(self, op: content.Operation) -> Paint:
+        """An ``sh``: it fills the whole clip; unclipped, its extent is unknown (it covers the page)."""
+        state = self.state
+        shading = lookup_resource(op.resources, "/Shading", op.operands)
+        space = classify_colour_space(shading.get("/ColorSpace"), op.resources) if shading is not None else None
+        if shading is not None:
+            self.spots.update(spot_names(shading.get("/ColorSpace"), op.resources))
+        return Paint(
+            "shading",
+            state.fill,
+            state.overprint,
+            visible=_non_empty(state.clip),
+            colour_space=space,
+            name=str(op.operands[0]) if op.operands else "",
+        )
+
+    def _image(self, op: content.Operation) -> Paint | None:
+        """A ``Do`` of an image XObject (a form is entered by the content walk, not painted here)."""
+        state = self.state
+        xobject = content.lookup_xobject(op.resources, op.operands)
+        if xobject is not None and str(xobject.get("/Subtype")) == "/Image":
+            if xobject.get("/SMask") is not None:
+                self.transparency.add("soft mask")
+            self.spots.update(spot_names(xobject.get("/ColorSpace"), None))
+            bbox = _aabb(op.ctm, [(0, 0), (1, 0), (0, 1), (1, 1)])
+            return Paint(
+                "image",
+                state.fill,
+                state.overprint,
+                bbox=bbox,
+                visible=self._visible(bbox),
+                xobject=xobject,
+                colour_space=classify_colour_space(xobject.get("/ColorSpace"), None),
+                mask=truthy(xobject.get("/ImageMask")),
+                name=str(op.operands[0]),
+                matrix=op.ctm,
+                mcid=self._mcid(),
+                artifact=self._artifact(),
+            )
         return None
 
     def _inline_image(self, op: content.Operation) -> Paint:
         """A ``BI ... EI`` image. pikepdf expands its abbreviated keys; its colour space may name a resource."""
         image = op.operands[0].obj
+        self.spots.update(spot_names(image.get("/ColorSpace"), op.resources))
         bbox = _aabb(op.ctm, [(0, 0), (1, 0), (0, 1), (1, 1)])
         return Paint(
             "inline-image",
@@ -308,6 +321,7 @@ class Walker:
             self.state.overprint,
             bbox=bbox,
             visible=self._visible(bbox),
+            xobject=image,
             colour_space=classify_colour_space(image.get("/ColorSpace"), op.resources),
             mask=truthy(image.get("/ImageMask")),
             name="(inline)",
@@ -496,7 +510,8 @@ class Walker:
         self.spots.update(names)
         fill = Fill(OTHER, (1.0,) * len(names), tuple(names)) if names else INITIAL_FILL[family]
         if (base := _pattern_base(space, op.resources)) is not None:
-            fill = Fill(OTHER, pattern=frozenset({base}))  # remembered for an uncoloured pattern's scn
+            self.spots.update(spot_names(base, op.resources))
+            fill = Fill(OTHER, pattern=frozenset({classify_colour_space(base, op.resources)}))  # for an uncoloured scn
         self._set(**{key: fill})
 
     def _components(self, op: content.Operation, key: str = "fill") -> None:
@@ -515,6 +530,8 @@ class Walker:
         if kind == 2:  # a shading pattern
             shading = pattern.get("/Shading")
             space = classify_colour_space(shading.get("/ColorSpace"), None) if shading is not None else None
+            if shading is not None:
+                self.spots.update(spot_names(shading.get("/ColorSpace"), None))
             return frozenset({space}) if space else frozenset()
         if kind != 1:
             return frozenset()
@@ -524,7 +541,9 @@ class Walker:
         if key in self._patterns or len(self._patterns) >= _MAX_PATTERN_DEPTH:
             return frozenset()
         inner = Walker(_patterns=self._patterns | {key})
-        return frozenset(f for p in inner.walk(pattern) for f in p.families())
+        families = frozenset(f for p in inner.walk(pattern) for f in p.families())
+        self.spots |= inner.spots
+        return families
 
     def _graphics_state(self, op: content.Operation) -> None:
         gs = _extgstate(op)

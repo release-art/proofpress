@@ -1,0 +1,83 @@
+# What `proof-pdf verify --no-pdfa --no-pdfx` must report for each sample, per colour mode, as "check/severity".
+# Each sample's .tex says what it is; this says what the checker must make of it. An empty list is a pass.
+# `options.allow_spots` is the spot-ink allowlist for that sample (spots are only judged against one).
+# Checked by tests/test_proof_pdf/test_samples.py.
+
+[rgb-image]
+cmyk = ["colour-space/error"]  # an RGB raster in a CMYK press job
+rgb = []
+
+[rgb-image-profile]
+cmyk = ["colour-space/error"]
+rgb = []
+
+[cmyk-image]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+[cmyk-image-profile]
+cmyk = []  # the image carries the output intent's own profile
+rgb = ["rgb-only/error"]  # the intent is CMYK, and so is the image
+
+[cmyk-profile-mismatch]
+cmyk = ["icc-profile/warn"]  # tagged with a second CMYK profile: legal, but the RIP converts
+rgb = ["rgb-only/error"]
+
+[gray-image]
+cmyk = []
+rgb = []
+
+[mixed-rgb-profiles]
+cmyk = ["colour-space/error"]  # RGB images either way; two profiles only matters in an RGB job
+rgb = ["icc-profile/error"]
+
+[rgb-vector]
+cmyk = ["colour-space/warn"]  # vector RGB is advisory: a RIP converts it
+rgb = []
+
+[cmyk-vector]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+[cmyk-stroke-only]
+cmyk = []
+rgb = ["rgb-only/error"]  # found by the stroke alone
+
+[inline-images]
+cmyk = ["colour-space/error"]  # the RGB one
+rgb = ["rgb-only/error"]  # the CMYK one
+
+[mask-image]
+cmyk = []
+rgb = ["rgb-only/error"]  # a stencil takes the CMYK fill
+
+[shading-pattern]
+cmyk = ["colour-space/warn"]  # pgf shades and patterns in RGB
+rgb = []
+
+[cmyk-shading]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+[cmyk-pattern]
+cmyk = []
+rgb = ["rgb-only/error"]
+
+[rgb-pattern]
+cmyk = ["colour-space/warn"]
+rgb = []
+
+[spot-colour]
+cmyk = []
+rgb = ["rgb-only/warn"]  # a spot has no RGB value
+options = { allow_spots = ["Foil"] }
+
+[spot-conflict]
+cmyk = ["spot-definition/error"]
+rgb = ["spot-definition/error", "rgb-only/warn"]
+options = { allow_spots = ["Foil"] }
+
+[spot-image]
+cmyk = ["spot-ink/error"]  # a spot used only inside an image's colour space
+rgb = ["spot-ink/error"]
+options = { allow_spots = [] }

@@ -1,0 +1,11 @@
+% A shading and a tiling pattern: pgf paints both through DeviceRGB.
+\documentclass{article}
+\usepackage{tikz}
+\usetikzlibrary{patterns}
+\pagestyle{empty}
+\begin{document}
+\begin{tikzpicture}
+  \shade[left color=red,right color=blue] (0,0) rectangle (3,2);
+  \fill[pattern=north east lines,pattern color=green!50!black] (4,0) rectangle (7,2);
+\end{tikzpicture}
+\end{document}

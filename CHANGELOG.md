@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `spot-definition` check: the same spot ink defined with different full-tint looks (same alternate space) is an error.
+- `icc-profile` check: every embedded ICC profile must be a valid profile whose header agrees with the colour space's
+  `/N`. In a CMYK job a CMYK profile other than the output intent's is a warning (the RIP converts through it); in an RGB
+  job (`--colour-mode rgb`) mixed RGB profiles are an error. Profiles are told apart by description and size, since the
+  same profile is often embedded byte-different.
+- Colour sample library, `tests/fixtures/samples`: LuaLaTeX sources (RGB, CMYK, gray and ICC-tagged images, inline
+  images, stencil masks, vector fills and strokes, shadings, patterns, spot inks) that `test_samples.py` runs
+  through `core.verify_file` in both colour modes against `expected.toml`. The sources and the built PDFs (`pdfs/`) are both
+  committed and the tests run on the PDFs, so CI needs no LaTeX; `build.py` rebuilds them, and a test fails when a `.tex`
+  changed without its PDF.
+
+### Changed
+
+- `--allow-spot` now sees spot inks used by images, shadings and patterns, not only by `cs`/`CS` colour operators.
+- K-only text and the rich-black check look at the stroke colour of stroked text as well as the fill.
+- Inline images (`BI ... EI`) count in the bleed, contrast, `inspect` and image-DPI checks.
+
+### Fixed
+
+- A null or non-dictionary entry in `/OutputIntents` no longer crashes `verify`, `inspect` or `extract`.
+
 ## [0.3.6] - 2026-11-06
 
 ### Added
