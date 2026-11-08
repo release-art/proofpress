@@ -28,4 +28,6 @@ bin/test.sh                           # pytest with coverage
   redistributed, so they are never committed) and `pdm run pytest tests/test_proof_pdf/test_suites.py` checks each file
   raises exactly the checks in `tests/fixtures/suites/expected.toml`. The tests skip without the files; CI runs them by
   manual dispatch. A new finding on these files is a false positive to fix, or a line in `expected.toml` saying why not.
+- Sample PDFs for trying the parser on files we did not make live in `corpus/`, which is git-ignored; `bin/suites/corpus.sh`
+  fetches the public sets. See `corpus/README.md`. No test may depend on them.
 - Image changes: `bin/docker/build.sh && bin/docker/smoke.sh`.

@@ -1,0 +1,46 @@
+--- /private/tmp/claude-501/-Users-ilo-Devel-Release-art-proofpress/b062d06a-1cb7-4dfc-afaf-b99cc5235d41/scratchpad/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hayro-syntax-0.9.0/src/xref.rs	2006-07-24 02:21:28
++++ vendor/hayro-syntax/src/xref.rs	2026-11-06 22:06:40
+@@ -348,6 +348,7 @@
+                     pages_ref: pages_ref.into(),
+                     root_ref: root_ref.into(),
+                     version,
++                    info_ref: trailer_dict.get_ref(INFO).map(Into::into),
+                 };
+ 
+                 (td, has_ocgs, metadata)
+@@ -360,6 +361,7 @@
+                     pages_ref: pages_ref.into(),
+                     root_ref,
+                     version: None,
++                    info_ref: None,
+                 };
+ 
+                 (td, false, Metadata::default())
+@@ -508,6 +510,11 @@
+         }
+     }
+ 
++    /// The trailer's /Info dictionary, if it has one.
++    pub fn info<'a>(&'a self) -> Option<Dict<'a>> {
++        self.get(self.trailer_data().info_ref?)
++    }
++
+     /// Return the object with the given identifier.
+     #[allow(private_bounds)]
+     pub fn get<'a, T>(&'a self, id: ObjectIdentifier) -> Option<T>
+@@ -667,6 +674,7 @@
+     pub(crate) pages_ref: ObjectIdentifier,
+     pub(crate) root_ref: ObjectIdentifier,
+     pub(crate) version: Option<PdfVersion>,
++    pub(crate) info_ref: Option<ObjectIdentifier>,
+ }
+ 
+ impl TrailerData {
+@@ -675,6 +683,7 @@
+             pages_ref: ObjectIdentifier::new(0, 0),
+             root_ref: ObjectIdentifier::new(0, 0),
+             version: None,
++            info_ref: None,
+         }
+     }
+ }

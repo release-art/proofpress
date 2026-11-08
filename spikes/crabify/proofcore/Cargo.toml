@@ -1,0 +1,18 @@
+[package]
+name = "proofcore"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+python = ["dep:pyo3"]
+
+[dependencies]
+hayro-syntax = { version = "0.9", features = ["unsafe"] }
+pyo3 = { version = "0.30", optional = true }
+
+[patch.crates-io]
+hayro-syntax = { path = "../vendor/hayro-syntax" }

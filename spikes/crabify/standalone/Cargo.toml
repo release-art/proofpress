@@ -1,0 +1,9 @@
+[package]
+name = "standalone"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+hayro = "0.9"
+pdfpurr = { version = "0.4", default-features = false }
