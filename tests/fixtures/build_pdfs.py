@@ -796,6 +796,65 @@ def _x4_key_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _with_oc(pdf: pikepdf.Pdf, default: pikepdf.Dictionary, configs: list[pikepdf.Dictionary] | None = None) -> None:
+    """Give ``pdf`` two optional content groups and the configurations ``default`` and ``configs``; the strings
+    "one" and "two" in an /Order are replaced by the groups."""
+    groups = [
+        pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG, Name=pikepdf.String(n))) for n in ("one", "two")
+    ]
+    if "/Order" in default:
+        default["/Order"] = pikepdf.Array([groups[0] if str(o) == "one" else groups[1] for o in default.Order])
+    props = pikepdf.Dictionary(OCGs=pikepdf.Array(groups), D=default)
+    if configs is not None:
+        props["/Configs"] = pikepdf.Array(configs)
+    pdf.Root["/OCProperties"] = props
+
+
+def _with_annot(pdf: pikepdf.Pdf, subtype: str, rect: list[float], **extra: pikepdf.Object) -> None:
+    annot = pikepdf.Dictionary(Type=pikepdf.Name.Annot, Subtype=pikepdf.Name(f"/{subtype}"), Rect=rect, F=4)
+    for key, value in extra.items():
+        annot[f"/{key}"] = value
+    pdf.pages[0].obj["/Annots"] = pikepdf.Array([pdf.make_indirect(annot)])
+
+
+def _trapped_true() -> pikepdf.Pdf:
+    """x4-good saying it is trapped, as a TrapNet annotation requires (6.9)."""
+    return _x4_meta(("<pdf:Trapped>False<", "<pdf:Trapped>True<"), info={"Trapped": pikepdf.Name("/True")})
+
+
+def _trapnet(pdf: pikepdf.Pdf, **extra: pikepdf.Object) -> pikepdf.Pdf:
+    """``pdf`` with a TrapNet annotation outside the media box, as trap networks are exempt from 6.17's placing."""
+    appearance = pdf.make_stream(b"", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Form, BBox=[0, 0, 1, 1])
+    appearance["/PCM"] = extra.pop("PCM", pikepdf.Name.DeviceCMYK)
+    entries = {
+        "LastModified": pikepdf.String("D:20261125120000Z"),
+        "AP": pikepdf.Dictionary(N=pdf.make_indirect(appearance)),
+    }
+    _with_annot(pdf, "TrapNet", [0.0, 0.0, 1.0, 1.0], **entries, **extra)
+    return pdf
+
+
+def _x4_page_object_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.24, 6.17 and 6.9's TrapNet rows (expected.toml says what each raises)."""
+    name, text = pikepdf.Name, pikepdf.String
+    inside = [100.0, 100.0, 120.0, 120.0]  # inside x4-good's trim and bleed boxes
+    return {
+        "x4-oc-unnamed": _x4_with(lambda p: _with_oc(p, pikepdf.Dictionary())),
+        "x4-oc-same-name": _x4_with(
+            lambda p: _with_oc(p, pikepdf.Dictionary(Name=text("Print")), [pikepdf.Dictionary(Name=text("Print"))])
+        ),
+        "x4-oc-order-incomplete": _x4_with(
+            lambda p: _with_oc(p, pikepdf.Dictionary(Name=text("Print"), Order=pikepdf.Array([text("one")])))
+        ),
+        "x4-oc-as": _x4_with(lambda p: _with_oc(p, pikepdf.Dictionary(Name=text("Print"), AS=pikepdf.Array()))),
+        "x4-annot-inside-bleed": _x4_with(lambda p: _with_annot(p, "Text", inside)),
+        "x4-printermark-inside-trim": _x4_with(lambda p: _with_annot(p, "PrinterMark", inside)),
+        "x4-trapnet-untrapped": _trapnet(_x4_good()),
+        "x4-trapnet-font-fauxing": _trapnet(_trapped_true(), FontFauxing=pikepdf.Array([name.Helvetica])),
+        "x4-trapnet-pcm-rgb": _trapnet(_trapped_true(), PCM=name.DeviceRGB),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -879,6 +938,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_intent_fixtures(),
         **_x4_box_fixtures(),
         **_x4_key_fixtures(),
+        **_x4_page_object_fixtures(),
     }
 
 

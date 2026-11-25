@@ -454,7 +454,7 @@ title = "TrapNet annotations need the trapped state True"
 clauses = ["iso-15930-7:6.9"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.trapped.truthful"
@@ -471,7 +471,7 @@ title = "TrapNet font fauxing is absent or empty"
 clauses = ["iso-15930-7:6.9"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.trapnet.pcm-matches-intent"
@@ -479,7 +479,7 @@ title = "TrapNet process colour model matches the intent"
 clauses = ["iso-15930-7:6.9"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.present"
@@ -833,7 +833,7 @@ title = "Annotations lie outside the bleed"
 clauses = ["iso-15930-7:6.17"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.annot.printermark-outside-trim"
@@ -841,7 +841,7 @@ title = "Printer's marks lie outside the trim"
 clauses = ["iso-15930-7:6.17"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.actions.absent"
@@ -929,7 +929,7 @@ title = "Optional-content configurations are named"
 clauses = ["iso-15930-7:6.24"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.oc.config-name-unique"
@@ -937,7 +937,7 @@ title = "Optional-content configuration names are unique"
 clauses = ["iso-15930-7:6.24"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.oc.order-complete"
@@ -945,7 +945,7 @@ title = "An Order lists every optional-content group, or none"
 clauses = ["iso-15930-7:6.24"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.oc.no-as"
@@ -953,7 +953,7 @@ title = "Optional-content configurations have no AS"
 clauses = ["iso-15930-7:6.24"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.limits.lexical"

@@ -361,3 +361,43 @@ expect = { "x4.page.no-pres-steps" = "a page with /PresSteps (6.22)" }
 [x4-xfa]
 levels = ["x4"]
 expect = { "x4.acroform.no-xfa" = "an interactive form with /XFA (6.26)" }
+
+# PDF/X-4 6.24, optional content.
+
+[x4-oc-unnamed]
+levels = ["x4"]
+expect = { "x4.oc.config-name-present" = "the default configuration has no /Name (6.24)" }
+
+[x4-oc-same-name]
+levels = ["x4"]
+expect = { "x4.oc.config-name-unique" = "two configurations are named Print (6.24)" }
+
+[x4-oc-order-incomplete]
+levels = ["x4"]
+expect = { "x4.oc.order-complete" = "/Order lists one of two groups (6.24, X4-Q13)" }
+
+[x4-oc-as]
+levels = ["x4"]
+expect = { "x4.oc.no-as" = "the default configuration has /AS (6.24)" }
+
+# PDF/X-4 6.17 and 6.9, annotations and trap networks.
+
+[x4-annot-inside-bleed]
+levels = ["x4"]
+expect = { "x4.annot.outside-bleed" = "a Text annotation inside the bleed box (6.17)" }
+
+[x4-printermark-inside-trim]
+levels = ["x4"]
+expect = { "x4.annot.printermark-outside-trim" = "a PrinterMark annotation inside the trim box (6.17)" }
+
+[x4-trapnet-untrapped]
+levels = ["x4"]
+expect = { "x4.trapped.trapnet-implies-true" = "a TrapNet annotation while pdf:Trapped is False (6.9)" }
+
+[x4-trapnet-font-fauxing]
+levels = ["x4"]
+expect = { "x4.trapnet.font-fauxing-empty" = "a TrapNet annotation with /FontFauxing (6.9)" }
+
+[x4-trapnet-pcm-rgb]
+levels = ["x4"]
+expect = { "x4.trapnet.pcm-matches-intent" = "a TrapNet appearance with /PCM /DeviceRGB under a CMYK intent (6.9)" }

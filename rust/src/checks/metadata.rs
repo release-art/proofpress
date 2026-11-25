@@ -123,6 +123,11 @@ fn document_xmp(doc: &Document) -> Option<Packet> {
     xmp::parse(&doc.stream_data(document_metadata(doc)?)?).ok()
 }
 
+/// The document's `pdf:Trapped` as text, when its XMP has one.
+pub(super) fn trapped(doc: &Document) -> Option<String> {
+    document_xmp(doc)?.get(PDF, "Trapped")?.text().map(str::to_owned)
+}
+
 /// The document information dictionary.
 fn info(doc: &Document) -> Option<&Dict> {
     doc.resolve(doc.trailer().get(b"Info")?)?.dict()
@@ -596,6 +601,16 @@ mod tests {
         <pdfxid:GTS_PDFXVersion>PDF/X-4p</pdfxid:GTS_PDFXVersion>";
 
     const INFO: &str = "<< /Title (T) /Author (A) /CreationDate (D:20261125130000+01'00') /Trapped /True >>";
+
+    #[test]
+    fn the_trapped_state() {
+        assert_eq!(
+            trapped(&open("2 0 R", &packet(FULL), INFO, "[]")).as_deref(),
+            Some("True")
+        );
+        assert_eq!(trapped(&open("2 0 R", &packet(""), INFO, "[]")), None);
+        assert_eq!(trapped(&open("5", b"", INFO, "[]")), None);
+    }
 
     #[test]
     fn a_complete_packet_passes_and_x4p_is_its_own_version() {

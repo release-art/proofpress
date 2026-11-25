@@ -3,10 +3,12 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+mod annots;
 mod boxes;
 mod intent;
 mod keys;
 mod metadata;
+mod optional;
 mod walk;
 mod x4;
 
@@ -95,6 +97,15 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_NAMES_NO_ALTERNATE_PRESENTATIONS, keys::no_alternate_presentations),
     (f::X4_PAGE_NO_PRES_STEPS, keys::no_pres_steps),
     (f::X4_ACROFORM_NO_XFA, keys::no_xfa),
+    (f::X4_OC_CONFIG_NAME_PRESENT, optional::name_present),
+    (f::X4_OC_CONFIG_NAME_UNIQUE, optional::name_unique),
+    (f::X4_OC_ORDER_COMPLETE, optional::order_complete),
+    (f::X4_OC_NO_AS, optional::no_as),
+    (f::X4_ANNOT_OUTSIDE_BLEED, annots::outside_bleed),
+    (f::X4_ANNOT_PRINTERMARK_OUTSIDE_TRIM, annots::printermark_outside_trim),
+    (f::X4_TRAPPED_TRAPNET_IMPLIES_TRUE, annots::trapnet_implies_true),
+    (f::X4_TRAPNET_FONT_FAUXING_EMPTY, annots::font_fauxing),
+    (f::X4_TRAPNET_PCM_MATCHES_INTENT, annots::pcm_matches_intent),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5

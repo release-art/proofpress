@@ -59,10 +59,10 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.image.jbig2-valid` | JBIG2 data is valid | iso-15930-7:6.8 | error | x4, x4p | todo |
 | `x4.trapped.present` | XMP states whether the file is trapped | iso-15930-7:6.9 | error | x4, x4p | implemented |
 | `x4.trapped.true-or-false` | The trapped state is True or False | iso-15930-7:6.9 | error | x4, x4p | implemented |
-| `x4.trapped.trapnet-implies-true` | TrapNet annotations need the trapped state True | iso-15930-7:6.9 | error | x4, x4p | todo |
+| `x4.trapped.trapnet-implies-true` | TrapNet annotations need the trapped state True | iso-15930-7:6.9 | error | x4, x4p | implemented |
 | `x4.trapped.truthful` | The trapped state is true of the whole file | iso-15930-7:6.9 | error | x4, x4p | skip: Whether a file is really trapped cannot be read from it |
-| `x4.trapnet.font-fauxing-empty` | TrapNet font fauxing is absent or empty | iso-15930-7:6.9 | error | x4, x4p | todo |
-| `x4.trapnet.pcm-matches-intent` | TrapNet process colour model matches the intent | iso-15930-7:6.9 | error | x4, x4p | todo |
+| `x4.trapnet.font-fauxing-empty` | TrapNet font fauxing is absent or empty | iso-15930-7:6.9 | error | x4, x4p | implemented |
+| `x4.trapnet.pcm-matches-intent` | TrapNet process colour model matches the intent | iso-15930-7:6.9 | error | x4, x4p | implemented |
 | `x4.xmp.present` | The catalog has document metadata | iso-15930-7:6.10.1 | error | x4, x4p | implemented |
 | `x4.xmp.conforms` | Document metadata is valid XMP | iso-15930-7:6.10.1 | error | x4, x4p | todo |
 | `x4.xmp.namespace-prefixes` | XMP uses the required prefixes for its namespaces | iso-15930-7:6.10.1, iso-15930-7:6.11 | error | x4, x4p | implemented |
@@ -106,8 +106,8 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.perms.ur-only` | Permissions hold only usage rights | iso-15930-7:6.15 | error | x4, x4p | implemented |
 | `x4.image.no-default-for-printing` | No image alternate is the default for printing | iso-15930-7:6.16 | error | x4, x4p | implemented |
 | `x4.image.alternates-same-content` | Image alternates show the same picture | iso-15930-7:6.16 | error | x4, x4p | todo |
-| `x4.annot.outside-bleed` | Annotations lie outside the bleed | iso-15930-7:6.17 | error | x4, x4p | todo |
-| `x4.annot.printermark-outside-trim` | Printer's marks lie outside the trim | iso-15930-7:6.17 | error | x4, x4p | todo |
+| `x4.annot.outside-bleed` | Annotations lie outside the bleed | iso-15930-7:6.17 | error | x4, x4p | implemented |
+| `x4.annot.printermark-outside-trim` | Printer's marks lie outside the trim | iso-15930-7:6.17 | error | x4, x4p | implemented |
 | `x4.actions.absent` | The file has no actions | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | implemented |
 | `x4.javascript.absent` | The file has no JavaScript | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | implemented |
 | `x4.content.known-operators` | Content uses only PDF 1.6 operators | iso-15930-7:6.19, iso-15930-7:B | error | x4, x4p | todo |
@@ -118,10 +118,10 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.names.no-alternate-presentations` | No alternate presentations | iso-15930-7:6.22 | error | x4, x4p | implemented |
 | `x4.page.no-pres-steps` | No page has presentation steps | iso-15930-7:6.22 | error | x4, x4p | implemented |
 | `x4.intent.known-values` | Rendering intents are standard | iso-15930-7:6.23, iso-15930-7:6.13 | error | x4, x4p | todo |
-| `x4.oc.config-name-present` | Optional-content configurations are named | iso-15930-7:6.24 | error | x4, x4p | todo |
-| `x4.oc.config-name-unique` | Optional-content configuration names are unique | iso-15930-7:6.24 | error | x4, x4p | todo |
-| `x4.oc.order-complete` | An Order lists every optional-content group, or none | iso-15930-7:6.24 | error | x4, x4p | todo |
-| `x4.oc.no-as` | Optional-content configurations have no AS | iso-15930-7:6.24 | error | x4, x4p | todo |
+| `x4.oc.config-name-present` | Optional-content configurations are named | iso-15930-7:6.24 | error | x4, x4p | implemented |
+| `x4.oc.config-name-unique` | Optional-content configuration names are unique | iso-15930-7:6.24 | error | x4, x4p | implemented |
+| `x4.oc.order-complete` | An Order lists every optional-content group, or none | iso-15930-7:6.24 | error | x4, x4p | implemented |
+| `x4.oc.no-as` | Optional-content configurations have no AS | iso-15930-7:6.24 | error | x4, x4p | implemented |
 | `x4.limits.lexical` | Numbers, strings and names stay within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | todo |
 | `x4.limits.objects` | The indirect-object count stays within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | implemented |
 | `x4.limits.graphics` | Graphics-state nesting, DeviceN and CIDs stay within limits | iso-15930-7:6.25 | error | x4, x4p | todo |

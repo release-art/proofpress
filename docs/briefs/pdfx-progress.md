@@ -11,8 +11,8 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 3** (document structure and metadata): 3.2 (XMP, 6.9-6.11), 3.3 (ICC header, 6.4.1-6.4.2.1) and the page
-  tree of 3.1 with the 6.12 rows, and the 3.5 rows on forbidden keys, done. Next: optional content (6.24),
-  annotations and TrapNet (6.17, 6.9), then the phase 3 gates and report.
+  tree of 3.1 and the 3.5 rows (6.12, the forbidden keys, 6.24, 6.17, the TrapNet rows of 6.9)
+  done. Next: the phase 3 gates and report, then phase 4 (content, page model and colour).
 
 ## Done
 
@@ -43,7 +43,8 @@ record it as not conforming to that one rule).
 | 3.2 | `bf5716a`; test-db `50ca948e` | XMP, date and text-string helpers in `common`; 25 metadata checks (6.9-6.11) with 25 fixtures and 3 feature files |
 | 3.3 | `d3f2f13`, `a3b7768`; test-db `650d1bf7` | ICC header helper; 11 output-intent checks (6.4.1, 6.4.2.1) with 12 fixtures |
 | 3.1 (part), 3.5 (6.12) | `2371597` | The page tree with inherited attributes; a rectangle helper; 6 box checks with 6 fixtures |
-| 3.5 (keys) | this commit | 19 checks on keys forbidden anywhere (6.7, 6.13, 6.14, 6.16, 6.18, 6.21, 6.22, 6.26) with 19 fixtures, on a walk of every dictionary with its place |
+| 3.5 (keys) | `c729133` | 19 checks on keys forbidden anywhere (6.7, 6.13, 6.14, 6.16, 6.18, 6.21, 6.22, 6.26) with 19 fixtures, on a walk of every dictionary with its place |
+| 3.5, 3.6 | this commit | 4 optional content checks (6.24), 2 annotation checks (6.17), 3 TrapNet checks (6.9), with 9 fixtures |
 
 ## Register coverage
 
@@ -51,7 +52,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 69 | 69 | 3 |
+| PDF/X-4 and X-4p | 78 | 60 | 3 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 16 | 37 | 1 (`internal`) |
 
@@ -118,6 +119,11 @@ X-4 reading except these, each explained:
   null, with an `object.dangling-reference` finding; the file is malformed, classified (b).
 Two fixes came from it: the obsolete `SetState` and `NOP` actions are actions, and an indirect `/AA` dictionary's actions
 are found (the walk gives an indirect object's entries the keys the object is referred to under).
+
+Task 3.6, GWG Processing Steps 1.0 (41 files, none claims PDF/X): the box and optional content checks give what
+test-db's `x4-test-material.md` predicts. 28 patches have both a TrimBox and an ArtBox, 8 have neither (and so does
+the suite's own document), 2 have the TrimBox outside the BleedBox, 2 more use an ArtBox alone (a warning); every
+optional content configuration passes. GWG151 and GWG152 now fail `x4.oc.order-complete` as expected.
 
 Oracle consultations:
 - Empty `/RegistryName ()` with `/OutputConditionIdentifier (Custom)` (12 Ghent positives, 6.4.2.1): no "shall" broken;

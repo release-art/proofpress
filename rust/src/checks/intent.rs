@@ -40,7 +40,7 @@ fn the_intent(doc: &Document) -> Option<&Dict> {
 }
 
 /// The header of the PDF/X intent's `/DestOutputProfile`, when it is a stream with an ICC header.
-fn profile(doc: &Document) -> Option<icc::Header> {
+pub(super) fn profile(doc: &Document) -> Option<icc::Header> {
     match the_intent(doc)?.get(b"DestOutputProfile")?.value {
         Value::Reference(num, _) => icc::header(&doc.stream_data(num)?),
         _ => None,
