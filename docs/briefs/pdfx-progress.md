@@ -20,6 +20,11 @@ and `x4.icc.profile-version`; ISO 15930-7, 6.4.2.1 p.19 and 6.4.3.3 p.20, page m
   2. **Major version 2 or 4, any minor** (the oracle's suggestion). Passes every positive in reach, including 4.3 and 4.4,
      which the clause does not name.
   3. **The exact four versions.** Fails Ghent, Altona and `x4-good`; contradicted by the Acrobat records.
+- *Evidence that would settle it (2026-11-25):* the owner installed a pdfToolbox 17 trial. The desktop app has no command
+  line, and macOS has not granted the session Accessibility and Screen Recording, so the run cannot drive it. Six probes
+  were built: `x4-good` with only the output profile's version field set to 2.1 (as built), 2.4, 4.2, 4.3, 4.4 and 5.0.
+  pdfToolbox's "PDF/X-4 compliant" verdict on each shows which reading a commercial preflight takes. They are rebuilt by
+  patching bytes 8-11 of the `DestOutputProfile` of `tests/fixtures/pdfs/x4-good.pdf`.
 - *Recommendation:* option 1. It reads the clause and its notes together, passes every known positive, and fails only
   profiles newer than any edition the standard names. If a real job with a 4.3 profile turns up, revisit.
 - *What I do once answered:* log the decision, note it in the register-derived `checks.toml` entries when task 1.1 creates
