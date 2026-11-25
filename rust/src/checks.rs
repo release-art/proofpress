@@ -5,6 +5,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 mod annots;
 mod boxes;
+mod contents;
 mod intent;
 mod keys;
 mod metadata;
@@ -120,6 +121,12 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_TRAPPED_TRAPNET_IMPLIES_TRUE, annots::trapnet_implies_true),
     (f::X4_TRAPNET_FONT_FAUXING_EMPTY, annots::font_fauxing),
     (f::X4_TRAPNET_PCM_MATCHES_INTENT, annots::pcm_matches_intent),
+    (f::CONTENT_DAMAGED, contents::damaged),
+    (f::CONTENT_OPERATOR, contents::operator),
+    (f::CONTENT_COMPATIBILITY, contents::compatibility),
+    (f::X4_CONTENT_KNOWN_OPERATORS, contents::known_operators),
+    (f::X4_CONTENT_NO_BX_EX, contents::no_bx_ex),
+    (f::X4_INTENT_KNOWN_VALUES, contents::known_intents),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5
@@ -309,7 +316,12 @@ mod tests {
             "/../tests/fixtures/pdfs/x4-good.pdf"
         ))
         .unwrap();
-        assert_eq!(verify("x4-good.pdf", &bytes, Level::X5g).checks, []);
+        let x5g = verify("x4-good.pdf", &bytes, Level::X5g).checks;
+        assert!(x5g.iter().all(|c| c.id.applies.contains(&Level::X5g)), "{x5g:?}");
+        assert_eq!(
+            x5g.len(),
+            RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count()
+        );
         assert_eq!(verify("x4-good.pdf", &bytes, Level::X4).checks.len(), RUNS.len() + 1);
     }
 

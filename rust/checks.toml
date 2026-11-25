@@ -866,7 +866,7 @@ title = "Content uses only PDF 1.6 operators"
 clauses = ["iso-15930-7:6.19", "iso-15930-7:B"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.content.no-bx-ex"
@@ -874,7 +874,7 @@ title = "Content avoids BX and EX"
 clauses = ["iso-15930-7:6.19"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.transparency.group-cs-restricted"
@@ -922,7 +922,7 @@ title = "Rendering intents are standard"
 clauses = ["iso-15930-7:6.23", "iso-15930-7:6.13"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.oc.config-name-present"
@@ -1999,6 +1999,30 @@ status = "implemented"
 id = "stream.filter"
 title = "Every stream names filters ISO 32000 defines"
 clauses = ["iso-32000-2:7.4.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+status = "implemented"
+
+[[check]]
+id = "content.damaged"
+title = "Every content stream can be read to its end"
+clauses = ["iso-32000-2:7.8.2", "iso-32000-2:8.9.7"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+status = "implemented"
+
+[[check]]
+id = "content.operator"
+title = "Undefined operators appear only inside BX and EX"
+clauses = ["iso-32000-2:7.8.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+status = "implemented"
+
+[[check]]
+id = "content.compatibility"
+title = "BX and EX pair up"
+clauses = ["iso-32000-2:7.8.2"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
 status = "implemented"

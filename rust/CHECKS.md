@@ -110,14 +110,14 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.annot.printermark-outside-trim` | Printer's marks lie outside the trim | iso-15930-7:6.17 | error | x4, x4p | implemented |
 | `x4.actions.absent` | The file has no actions | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | implemented |
 | `x4.javascript.absent` | The file has no JavaScript | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | implemented |
-| `x4.content.known-operators` | Content uses only PDF 1.6 operators | iso-15930-7:6.19, iso-15930-7:B | error | x4, x4p | todo |
-| `x4.content.no-bx-ex` | Content avoids BX and EX | iso-15930-7:6.19 | warning | x4, x4p | todo |
+| `x4.content.known-operators` | Content uses only PDF 1.6 operators | iso-15930-7:6.19, iso-15930-7:B | error | x4, x4p | implemented |
+| `x4.content.no-bx-ex` | Content avoids BX and EX | iso-15930-7:6.19 | warning | x4, x4p | implemented |
 | `x4.transparency.group-cs-restricted` | Transparency group colour spaces follow the colour rules | iso-15930-7:6.20 | error | x4, x4p | todo |
 | `x4.transparency.blend-modes` | Blend modes are standard | iso-15930-7:6.20 | error | x4, x4p | todo |
 | `x4.viewer-prefs.areas` | Viewer areas and clips are MediaBox or BleedBox | iso-15930-7:6.21 | error | x4, x4p | implemented |
 | `x4.names.no-alternate-presentations` | No alternate presentations | iso-15930-7:6.22 | error | x4, x4p | implemented |
 | `x4.page.no-pres-steps` | No page has presentation steps | iso-15930-7:6.22 | error | x4, x4p | implemented |
-| `x4.intent.known-values` | Rendering intents are standard | iso-15930-7:6.23, iso-15930-7:6.13 | error | x4, x4p | todo |
+| `x4.intent.known-values` | Rendering intents are standard | iso-15930-7:6.23, iso-15930-7:6.13 | error | x4, x4p | implemented |
 | `x4.oc.config-name-present` | Optional-content configurations are named | iso-15930-7:6.24 | error | x4, x4p | implemented |
 | `x4.oc.config-name-unique` | Optional-content configuration names are unique | iso-15930-7:6.24 | error | x4, x4p | implemented |
 | `x4.oc.order-complete` | An Order lists every optional-content group, or none | iso-15930-7:6.24 | error | x4, x4p | implemented |
@@ -250,5 +250,8 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `syntax.duplicate-key` | No dictionary gives a key twice | iso-32000-2:7.3.7 | warning | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `stream.eol` | Stream data is followed by an end of line before endstream | iso-32000-2:7.3.8.1 | warning | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `stream.filter` | Every stream names filters ISO 32000 defines | iso-32000-2:7.4.1 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
+| `content.damaged` | Every content stream can be read to its end | iso-32000-2:7.8.2, iso-32000-2:8.9.7 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
+| `content.operator` | Undefined operators appear only inside BX and EX | iso-32000-2:7.8.2 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
+| `content.compatibility` | BX and EX pair up | iso-32000-2:7.8.2 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `object.damaged` | Every object reachable from the trailer can be read | iso-32000-2:7.3, iso-32000-2:7.3.8.1, iso-32000-2:7.3.10, iso-32000-2:7.5.7 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `object.dangling-reference` | References point at objects that exist | iso-32000-2:7.3.10 | warning | x4, x4p, x5g, x5pg, x5n, print | implemented |

@@ -529,6 +529,36 @@ def _x4_content(filters: list[str], data: bytes, parms: pikepdf.Dictionary | Non
     return pdf
 
 
+def _x4_page(extra: bytes) -> pikepdf.Pdf:
+    """x4-good with ``extra`` appended to its page content, unfiltered: one content defect per fixture."""
+    pdf = _x4_good()
+    pdf.pages[0].obj["/Contents"] = pdf.make_indirect(pdf.make_stream(GOOD_X4_CONTENT + b"\n" + extra))
+    return pdf
+
+
+def _x4_content_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of the content-stream checks: ISO 32000-2 7.8.2 and 8.9.7, PDF/X-4 6.19 and 6.23."""
+    gstate = _x4_good()
+    _gstate(gstate, RI=pikepdf.Name.Vivid)
+    return {
+        # 7.8.2: an operator neither ISO 32000 nor the PDF 1.6 Reference defines, outside BX/EX.
+        "x4-unknown-operator": _x4_page(b"1 2 frob"),
+        # 6.19 recommends against BX/EX; here the section is empty.
+        "x4-bx-ex": _x4_page(b"BX EX"),
+        # 6.19: an undefined operator, even inside BX/EX.
+        "x4-operator-in-bx": _x4_page(b"BX frob EX"),
+        # 7.8.2: a BX with no EX.
+        "x4-bx-open": _x4_page(b"BX"),
+        # 8.9.7: an inline JPEG with no end-of-image marker and no /L: its end cannot be known.
+        "x4-inline-image-unknown-end": _x4_page(b"q BI /W 1 /H 1 /BPC 8 /CS /G /F /DCT ID x EI Q"),
+        # 7.8.2: content that cannot be read on.
+        "x4-content-unreadable": _x4_page(b"q (unterminated"),
+        # 6.23: the ri operator, and an ExtGState's /RI, with an intent the PDF Reference does not define.
+        "x4-ri-unknown": _x4_page(b"/Vivid ri"),
+        "x4-gstate-ri-unknown": gstate,
+    }
+
+
 def _x4_crypt() -> pikepdf.Pdf:
     """x4-good with its page content under the Identity Crypt filter (6.8 forbids Crypt), keyed /Xilter until saved."""
     pdf = _x4_good()
@@ -956,6 +986,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_box_fixtures(),
         **_x4_key_fixtures(),
         **_x4_page_object_fixtures(),
+        **_x4_content_fixtures(),
     }
 
 

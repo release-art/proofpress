@@ -25,10 +25,6 @@ pub(crate) enum Mode {
     /// Objects in a file or an object stream.
     Objects,
     /// A content stream.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "tier 6 reads content streams in phase 4; tested here already")
-    )]
     Content,
 }
 
@@ -130,6 +126,7 @@ enum Open {
 }
 
 /// A pull parser over one buffer; see the module documentation.
+#[derive(Clone)]
 pub(crate) struct Parser<'a> {
     buf: &'a [u8],
     pos: usize,

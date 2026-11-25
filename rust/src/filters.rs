@@ -5,7 +5,9 @@
 //! reason, never a guess. Image filters are not decoded here: a stream ending in one stays encoded until a check reads
 //! the image.
 
+use miniz_oxide::inflate::stream::{InflateState, inflate};
 use miniz_oxide::inflate::{TINFLStatus, decompress_to_vec_zlib_with_limit};
+use miniz_oxide::{DataFormat, MZFlush, MZStatus};
 
 /// A filter, by the name the stream gives it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,7 +100,7 @@ pub(crate) fn decode(data: &[u8], chain: &[(Filter, Params)], budget: usize) -> 
             Filter::Ascii85 => ascii85(&bytes)?,
             Filter::RunLength => run_length(&bytes, budget)?,
             Filter::Flate => predict(flate(&bytes, budget)?, params)?,
-            Filter::Lzw => predict(lzw(&bytes, params.early_change != 0, budget)?, params)?,
+            Filter::Lzw => predict(lzw(&bytes, params.early_change != 0, budget)?.0, params)?,
         };
         if bytes.len() > budget {
             return Err(Damage::OverBudget(budget));
@@ -205,8 +207,9 @@ fn run_length(data: &[u8], budget: usize) -> Result<Vec<u8>, Damage> {
     }
 }
 
-/// 7.4.4: LZW with 9- to 12-bit codes, 256 clears the table, 257 ends the data. `early` is `EarlyChange`.
-fn lzw(data: &[u8], early: bool, budget: usize) -> Result<Vec<u8>, Damage> {
+/// 7.4.4: LZW with 9- to 12-bit codes, 256 clears the table, 257 ends the data. `early` is `EarlyChange`. With the
+/// data, the number of bytes up to the end-of-data code, when there was one.
+fn lzw(data: &[u8], early: bool, budget: usize) -> Result<(Vec<u8>, Option<usize>), Damage> {
     let corrupt = Damage::Corrupt(Filter::Lzw);
     let mut table: Vec<Vec<u8>> = Vec::new();
     let reset = |table: &mut Vec<Vec<u8>>| {
@@ -226,7 +229,9 @@ fn lzw(data: &[u8], early: bool, budget: usize) -> Result<Vec<u8>, Damage> {
             _ => 12,
         };
         while bits < width {
-            let Some(&byte) = data.get(pos) else { return Ok(out) };
+            let Some(&byte) = data.get(pos) else {
+                return Ok((out, None));
+            };
             held = held << 8 | u32::from(byte);
             bits += 8;
             pos += 1;
@@ -242,7 +247,7 @@ fn lzw(data: &[u8], early: bool, budget: usize) -> Result<Vec<u8>, Damage> {
                 previous = None;
                 continue;
             }
-            257 => return Ok(out),
+            257 => return Ok((out, Some(pos))),
             _ => {}
         }
         let entry = match (table.get(code), &previous) {
@@ -261,6 +266,125 @@ fn lzw(data: &[u8], early: bool, budget: usize) -> Result<Vec<u8>, Damage> {
             return Err(Damage::OverBudget(budget));
         }
         previous = Some(entry);
+    }
+}
+
+/// How many bytes of `data` the filter reads, up to and including its end-of-data marker, decoding within `budget`;
+/// `None` when the data has no such marker or the filter is an image filter, whose end cannot be found this way. This
+/// measures an inline image without `/L` (ISO 32000-2, 8.9.7), where the first filter's data ends the image.
+pub(crate) fn encoded_len(data: &[u8], filter: Filter, early_change: bool, budget: usize) -> Option<usize> {
+    match filter {
+        Filter::AsciiHex => data.iter().position(|&b| b == b'>').map(|i| i + 1),
+        Filter::Ascii85 => data.windows(2).position(|w| w == b"~>").map(|i| i + 2),
+        Filter::RunLength => run_length_len(data),
+        Filter::Lzw => lzw(data, early_change, budget).ok()?.1,
+        Filter::Flate => flate_len(data, budget),
+        Filter::Image | Filter::Crypt => None,
+    }
+}
+
+/// CCITT fax parameters (ISO 32000-2, 7.4.6, Table 11) as a decoder needs them.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Fax {
+    /// `K`: below 0 is Group 4, 0 is Group 3 one-dimensional, above 0 Group 3 two-dimensional.
+    pub(crate) k: i64,
+    pub(crate) columns: u32,
+    pub(crate) rows: u32,
+    pub(crate) end_of_block: bool,
+    pub(crate) byte_align: bool,
+    pub(crate) end_of_line: bool,
+}
+
+/// The bytes of CCITT fax data the decoder reads to fill `fax.rows` rows or reach its end-of-block code.
+pub(crate) fn fax_len(data: &[u8], fax: &Fax) -> Option<usize> {
+    use hayro_ccitt::{DecodeSettings, Decoder, DecoderContext, EncodingMode};
+    struct Rows;
+    impl Decoder for Rows {
+        fn push_row(&mut self, _: &[u32]) {}
+    }
+    let encoding = match fax.k {
+        ..0 => EncodingMode::Group4,
+        0 => EncodingMode::Group3_1D,
+        _ => EncodingMode::Group3_2D,
+    };
+    let settings = DecodeSettings {
+        columns: fax.columns,
+        rows: fax.rows,
+        end_of_block: fax.end_of_block,
+        end_of_line: fax.end_of_line,
+        rows_are_byte_aligned: fax.byte_align,
+        encoding,
+        strict: true,
+    };
+    hayro_ccitt::decode(data, &mut Rows, &mut DecoderContext::new(settings))
+        .ok()
+        .filter(|&n| n > 0)
+}
+
+/// The bytes of a JPEG (ITU-T T.81) up to and including its end-of-image marker, found by walking its segments; the
+/// entropy-coded data after a start-of-scan runs to the next marker that is not a restart or a stuffed byte.
+pub(crate) fn dct_len(data: &[u8]) -> Option<usize> {
+    if !data.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut at = 2;
+    loop {
+        // Fill bytes (0xFF) may come before a marker.
+        while data.get(at + 1) == Some(&0xFF) && data.get(at) == Some(&0xFF) {
+            at += 1;
+        }
+        let (0xFF, marker) = (*data.get(at)?, *data.get(at + 1)?) else {
+            return None;
+        };
+        match marker {
+            0xD9 => return Some(at + 2),
+            0x01 | 0xD0..=0xD7 => at += 2,
+            _ => {
+                let len = usize::from(u16::from_be_bytes([*data.get(at + 2)?, *data.get(at + 3)?]));
+                at += 2 + len;
+                if marker == 0xDA {
+                    at += data
+                        .get(at..)?
+                        .windows(2)
+                        .position(|w| matches!(w, [0xFF, b] if !matches!(b, 0x00 | 0xD0..=0xD7)))?;
+                }
+            }
+        }
+    }
+}
+
+/// The bytes of run-length data up to and including its end-of-data byte, 128.
+fn run_length_len(data: &[u8]) -> Option<usize> {
+    let mut at = 0;
+    loop {
+        match *data.get(at)? {
+            128 => return Some(at + 1),
+            n @ 0..=127 => at += usize::from(n) + 2,
+            _ => at += 2,
+        }
+    }
+}
+
+/// The bytes of zlib data up to the end of its deflate stream, inflating at most `budget` bytes on the way.
+fn flate_len(data: &[u8], budget: usize) -> Option<usize> {
+    let mut state = InflateState::new_boxed(DataFormat::Zlib);
+    let mut out = vec![0; 32 * 1024];
+    let (mut consumed, mut written) = (0, 0_usize);
+    loop {
+        let result = inflate(
+            &mut state,
+            data.get(consumed..).unwrap_or_default(),
+            &mut out,
+            MZFlush::None,
+        );
+        consumed += result.bytes_consumed;
+        written = written.saturating_add(result.bytes_written);
+        match result.status {
+            _ if written > budget => return None,
+            Ok(MZStatus::StreamEnd) => return Some(consumed),
+            Ok(_) if result.bytes_consumed + result.bytes_written > 0 => {}
+            _ => return None,
+        }
     }
 }
 
@@ -694,5 +818,110 @@ mod tests {
         let codes = [(65, 9), (66, 9), (67, 9), (68, 9), (69, 9), (70, 9), (71, 9), (257, 9)];
         assert_eq!(lzw_codes(&codes).len(), 9);
         assert_eq!(plain(&lzw_codes(&codes), &one(Filter::Lzw)), Ok(b"ABCDEFG".to_vec()));
+    }
+
+    #[test]
+    fn encoded_lengths_end_at_the_end_of_data_marker() {
+        let tail = b" EI Q";
+        let with = |data: &[u8]| [data, tail].concat();
+        assert_eq!(encoded_len(&with(b"68 69>"), Filter::AsciiHex, true, 9), Some(6));
+        assert_eq!(encoded_len(b"6869", Filter::AsciiHex, true, 9), None);
+        assert_eq!(
+            encoded_len(&with(b"BOu!rD]j7BEbo80~>"), Filter::Ascii85, true, 9),
+            Some(17)
+        );
+        assert_eq!(
+            encoded_len(&with(&[1, b'a', b'b', 255, b'c', 128]), Filter::RunLength, true, 9),
+            Some(6)
+        );
+        assert_eq!(encoded_len(&[1, b'a'], Filter::RunLength, true, 9), None);
+        let flate = compress_to_vec_zlib(b"hello hello hello", 6);
+        assert_eq!(encoded_len(&with(&flate), Filter::Flate, true, 99), Some(flate.len()));
+        assert_eq!(
+            encoded_len(flate.get(..4).unwrap(), Filter::Flate, true, 99),
+            None,
+            "cut short"
+        );
+        assert_eq!(encoded_len(&flate, Filter::Flate, true, 3), None, "over budget");
+        assert_eq!(encoded_len(b"\x00\x00", Filter::Flate, true, 99), None, "not zlib");
+        // LZW: a clear code, "A" (65) and the end-of-data code are 27 bits in 9-bit codes, so 4 bytes; then two more.
+        let lzw_data = [0x80, 0x10, 0x60, 0x20, 0xFF, 0xFF];
+        assert_eq!(encoded_len(&lzw_data, Filter::Lzw, true, 9), Some(4));
+        assert_eq!(encoded_len(lzw_data.get(..2).unwrap(), Filter::Lzw, true, 9), None);
+        assert_eq!(
+            encoded_len(&[0xFF, 0xFF, 0xFF], Filter::Lzw, true, 9),
+            None,
+            "a code not in the table"
+        );
+        assert_eq!(encoded_len(b"x", Filter::Image, true, 9), None);
+        assert_eq!(encoded_len(b"x", Filter::Crypt, true, 9), None);
+    }
+
+    #[test]
+    fn a_jpeg_ends_at_its_end_of_image_marker() {
+        // SOI, an APP0 segment of 2 payload bytes, a fill byte, SOS (header of 2), entropy data with a stuffed 0xFF and
+        // a restart marker, a standalone TEM marker, EOI; then whatever follows.
+        let jpeg = [
+            0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 1, 2, 0xFF, 0xFF, 0xDA, 0x00, 0x02, 7, 0xFF, 0x00, 8, 0xFF, 0xD0, 9,
+            0xFF, 0x01, 0xFF, 0xD9, b'E', b'I',
+        ];
+        assert_eq!(dct_len(&jpeg), Some(24));
+        assert_eq!(dct_len(b"JFIF"), None, "no start-of-image marker");
+        assert_eq!(dct_len(jpeg.get(..12).unwrap()), None, "cut short in the scan header");
+        assert_eq!(dct_len(&[0xFF, 0xD8, 0x00]), None, "not a marker");
+        assert_eq!(
+            dct_len(&[0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x02, 1, 2]),
+            None,
+            "a scan with no marker after it"
+        );
+        assert_eq!(dct_len(&[0xFF, 0xD8]), None, "nothing after the start");
+        assert_eq!(
+            dct_len(&[0xFF, 0xD8, 0x00, 0x00]),
+            None,
+            "a byte where a marker should be"
+        );
+        assert_eq!(dct_len(&[0xFF, 0xD8, 0xFF, 0xE0]), None, "a segment with no length");
+        assert_eq!(
+            dct_len(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00]),
+            None,
+            "a segment length cut short"
+        );
+        assert_eq!(
+            dct_len(&[0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x09]),
+            None,
+            "a scan header longer than the data"
+        );
+    }
+
+    #[test]
+    fn fax_data_ends_where_its_rows_do() {
+        // Group 4: an all-white row against an all-white reference is one V0 code, a single 1 bit; 8 rows, 1 byte.
+        let g4 = Fax {
+            k: -1,
+            columns: 8,
+            rows: 8,
+            end_of_block: true,
+            byte_align: false,
+            end_of_line: false,
+        };
+        // Then the end-of-block code, two EOLs (000000000001 twice), is part of the data too.
+        assert_eq!(fax_len(&[0xFF, 0x00, 0x10, 0x01, b'E', b'I'], &g4), Some(4));
+        assert_eq!(
+            fax_len(
+                &[0xFF, b' ', b'E', b'I'],
+                &Fax {
+                    end_of_block: false,
+                    ..g4
+                }
+            ),
+            Some(1)
+        );
+        assert_eq!(
+            fax_len(&[0xFF], &Fax { columns: 0, ..g4 }),
+            None,
+            "no columns, nothing read"
+        );
+        assert_eq!(fax_len(&[0x00, 0x00], &Fax { k: 0, ..g4 }), None);
+        assert_eq!(fax_len(&[0x00, 0x00], &Fax { k: 2, ..g4 }), None);
     }
 }

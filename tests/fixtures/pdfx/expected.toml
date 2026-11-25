@@ -15,7 +15,7 @@ expect = { "x4.filter.no-lzw" = "the page content is LZW-encoded (6.8)" }
 
 [x4-crypt-filter]
 levels = ["x4"]
-expect = { "x4.filter.no-crypt" = "the page content uses the Identity Crypt filter (6.8)" }
+expect = { "x4.filter.no-crypt" = "the page content uses the Identity Crypt filter (6.8)", "content.damaged" = "and so the page content, under Crypt, cannot be decoded and read (ISO 32000-2 7.8.2)" }
 
 [x4-filter-abbreviated]
 levels = ["x4"]
@@ -425,3 +425,37 @@ expect = { "x4.output-intent.registry-name-color-org" = "FOGRA39 under https://w
 [x4-intent-not-in-registry]
 levels = ["x4"]
 expect = { "x4.output-intent.identifier-in-registry" = "Little-CMS test1 under the ICC registry, which does not list it; a warning by decision (6.4.2.1)" }
+
+# Content streams: ISO 32000-2 7.8.2 and 8.9.7, PDF/X-4 6.19 and 6.23. Each appends to x4-good's page content.
+
+[x4-unknown-operator]
+levels = ["x4"]
+expect = { "content.operator" = "frob, outside BX/EX (ISO 32000-2 7.8.2)", "x4.content.known-operators" = "and not in the PDF 1.6 Reference (6.19)" }
+
+[x4-bx-ex]
+levels = ["x4"]
+expect = { "x4.content.no-bx-ex" = "an empty BX/EX section, a warning (6.19)" }
+
+[x4-operator-in-bx]
+levels = ["x4"]
+expect = { "x4.content.known-operators" = "frob inside BX/EX (6.19)", "x4.content.no-bx-ex" = "in a BX/EX section, a warning (6.19)" }
+
+[x4-bx-open]
+levels = ["x4"]
+expect = { "content.compatibility" = "BX with no EX (ISO 32000-2 7.8.2)", "x4.content.no-bx-ex" = "a BX section, a warning (6.19)" }
+
+[x4-inline-image-unknown-end]
+levels = ["x4"]
+expect = { "content.damaged" = "an inline JPEG with no end-of-image marker and no /L (ISO 32000-2 8.9.7)" }
+
+[x4-content-unreadable]
+levels = ["x4"]
+expect = { "content.damaged" = "an unterminated string in the page content (ISO 32000-2 7.8.2)" }
+
+[x4-ri-unknown]
+levels = ["x4"]
+expect = { "x4.intent.known-values" = "/Vivid ri (6.23)" }
+
+[x4-gstate-ri-unknown]
+levels = ["x4"]
+expect = { "x4.intent.known-values" = "an ExtGState with /RI /Vivid (6.23, 6.13)" }

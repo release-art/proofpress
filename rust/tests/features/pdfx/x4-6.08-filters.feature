@@ -10,5 +10,10 @@ Feature: PDF/X-4 6.8, filters
     Examples:
       | fixture               | check                   |
       | x4-lzw                | x4.filter.no-lzw        |
-      | x4-crypt-filter       | x4.filter.no-crypt      |
       | x4-filter-abbreviated | x4.filter.standard-only |
+
+  Scenario: Content under the Crypt filter fails 6.8 and cannot be read
+    Given the fixture "x4-crypt-filter"
+    When it is verified as PDF/X-4
+    Then check "x4.filter.no-crypt" fails
+    And check "content.damaged" fails

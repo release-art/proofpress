@@ -15,8 +15,9 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 3** (document structure and metadata) finished; stage report below. Next: phase 4, content, page model and
-  colour (the brief's stage 3; tiers 6 and 7), starting with task 4.1.
+- **Phase 4** (content, page model and colour): task 4.1, tier 6, in progress. The content reader is done (inline
+  images measured, never guessed), with the 6.19 and 6.23 rows and three house content checks. Next: forms with one
+  ancestor set and the page's resources as their fallback, then tier 7 (task 4.2).
 
 ## Done
 
@@ -51,6 +52,7 @@ record it as not conforming to that one rule).
 | 3.5, 3.6 | `4f2c410` | 4 optional content checks (6.24), 2 annotation checks (6.17), 3 TrapNet checks (6.9), with 9 fixtures |
 | 3.2 (rest) | `3820c19` | `x4.xmp.conforms` (value types of the predefined schemas) and `x4.info.unlisted-not-in-predefined-schema`; `x4.image.alternates-same-content` is a `skip` |
 | 3.3 (registry) | `d63e3d9`; test-db `61b8b555` | The three ICC registry rows, with the registry's 73 reference names built in; 3 fixtures |
+| 4.1 (part) | this commit; test-db | Tier 6 reads content streams: operands across streams, BX/EX, inline images ended by /L, their size, or the first filter's end-of-data marker (JPEG walked, CCITT decoded with hayro-ccitt); 6.19, 6.23 and 3 house content checks with 9 fixtures |
 
 ## Register coverage
 
@@ -58,15 +60,15 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 83 | 54 | 4 |
+| PDF/X-4 and X-4p | 86 | 51 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 16 | 37 | 1 (`internal`) |
+| House and structure checks | 19 | 37 | 1 (`internal`) |
 
 ## Gates
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green at `d63e3d9`, 2026-11-25 (100% lines, regions, functions) |
+| `bin/rust/check.sh` | green, 2026-11-25 (100% lines, regions, functions) |
 | Python (ruff, pyright, pytest) | green, 2026-11-25: 1156 passed |
 | `bin/docker/test.sh` | green at the end of phase 3, 2026-11-25: 1156 passed |
 | `bin/suites/pdfx.sh` | 2026-11-25: 39 files, 39 accepted, 0 problems (nothing judged yet) |
@@ -196,6 +198,11 @@ Oracle consultations:
   `x4.icc.profile-version`, which follow print elements (X4-Q3) and so belong to phase 4's colour evaluator.
   The ICC registry rows came later in phase 3, with the registry's names built in.
 - `x4.output-intent.identifier-in-registry` is a warning, not the clause's error (owner, 2026-11-25).
+- Task 4.1: the content streams of a page are read as one buffer joined by white space, since 7.7.3.3 lets an array
+  span two streams (Ghent GWG161 does). A token split across streams therefore reads as two tokens and is not reported.
+  After `ID`, CR LF is accepted as the one white-space byte only when the data then ends exactly at `EI` and the
+  one-byte reading does not. Over 4,484 corpus files the reader leaves 13 contents unread, each a broken test file
+  (bomb, JPX tests, deliberate syntax errors, a wrong `/L`).
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 
