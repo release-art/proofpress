@@ -47,6 +47,10 @@ bin/test.sh                           # pytest with coverage
   redistributed, so they are never committed) and `pdm run pytest tests/test_proof_pdf/test_suites.py` checks each file
   raises exactly the checks in `tests/fixtures/suites/expected.toml`. The tests skip without the files; CI runs them by
   manual dispatch. A new finding on these files is a false positive to fix, or a line in `expected.toml` saying why not.
+- `bin/suites/pdfx.sh` runs the Rust engine over `proof-pdf-test-db` (its `expectations/pdfx.toml`, plus any `--set`), each
+  file in its own process, ranks the outcomes (crash, timeout, refused, read with gaps, accepted), compares the checks
+  that are implemented with the expectations, and writes a results file stamped with the engine version to
+  `rust/target/pdfx-corpus/`. Local only: the sets are private.
 - Sample PDFs for trying the parser on files we did not make live in the private `proof-pdf-test-db` repository, checked out
   next to this one at `../proof-pdf-test-db`; see its `README.md`. No test may depend on them.
 - Image changes: `bin/docker/build.sh && bin/docker/smoke.sh`.

@@ -3,8 +3,8 @@
     python3 bin/rust/clauses.py ../proof-pdf-test-db
 
 Reads the Markdown copies in the test-db's standards/iso/, where each clause heading starts a line with its number in
-bold (``**6.4.3.3**``), and each annex is named ``**Annex B**``; a bold number alone is a clause only up to the last numbered clause, since
-page folios look the same. No title or text is kept: the lists exist so that
+bold (``**6.4.3.3**``), and each annex is named ``**Annex B**``. A bold number alone is a clause only up to the last
+numbered clause, since page folios look the same. No title or text is kept: the lists exist so that
 rust/build.rs can refuse a check that cites a clause the standard does not have.
 """
 

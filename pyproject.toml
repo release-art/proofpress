@@ -46,6 +46,7 @@ line-ending = "lf"
 "cli.py" = ["B008"] # typer.Option() as default arg
 "deltae.py" = ["N803", "N806"] # the formula's published symbols (kL, dLp, T, ...)
 "tests/fixtures/*.py" = ["T201"] # the fixture builder is a script
+"bin/**/*.py" = ["T201"] # command-line scripts report by printing
 
 [tool.ruff.lint.isort]
 order-by-type = true
