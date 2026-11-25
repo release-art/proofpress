@@ -1,7 +1,7 @@
 //! PDF/X-4 (ISO 15930-7) 6.4.3.4, spot colours, and 6.20's blend modes.
 //!
-//! Rows the clause states for the whole file ("all Separation arrays within a single PDF/X-4 file", all `PrintingOrder`
-//! arrays, all `Solidities`) read every object; the rest read the spaces that print elements use (X4-Q3).
+//! The `PrintingOrder` and `Solidities` rows read every object, as the clause states them for the whole file. The rest
+//! read the spaces that print elements use (X4-Q3), the same-name rule for Separations included (owner, 2026-11-25).
 
 use std::collections::BTreeMap;
 
@@ -59,7 +59,10 @@ fn used_device_n(doc: &Document) -> Vec<(Vec<Object>, Vec<Location>)> {
         let Event::Paint { uses, frames } = event else { continue };
         for used in uses {
             let mut stack = vec![used.space];
-            while let Some(space) = stack.pop() {
+            // Bounded: a space may name itself as its own base.
+            let mut steps = 0;
+            while let Some(space) = stack.pop().filter(|_| steps < 64) {
+                steps += 1;
                 let Some(items) = doc.resolve(&space).and_then(Object::array).map(<[Object]>::to_vec) else {
                     continue;
                 };
@@ -184,46 +187,59 @@ pub(super) fn confusing_names(doc: &Document, _: Level) -> Vec<Finding> {
             }
         }
     }
-    for (name, _, _, num) in separations(doc) {
-        let name = text(name);
+    for (name, _, _, frames) in separations(doc) {
+        let name = text(&name);
         if CONFUSING.iter().any(|c| c.eq_ignore_ascii_case(&name)) {
             let message = format!("the spot name {name} may be taken for a process or primary colour");
             out.push(
                 Finding::new(X4_SPOT_CONFUSING_NAMES, message)
                     .citing("6.4.3.4")
-                    .at(vec![Location::Object(num, 0)]),
+                    .at(frames),
             );
         }
     }
     dedup(out)
 }
 
-/// Every `Separation` array in the file: its name, alternate, tint transform and the object it is in.
-fn separations(doc: &Document) -> Vec<(&[u8], &Object, &Object, u32)> {
-    fn visit<'a>(object: &'a Object, num: u32, out: &mut Vec<(&'a [u8], &'a Object, &'a Object, u32)>) {
-        match &object.value {
-            Value::Array(items) => {
-                if let [first, name, alternate, tint, ..] = items.as_slice()
-                    && first.name() == Some(b"Separation")
-                    && let Some(name) = name.name()
-                {
-                    out.push((name, alternate, tint, num));
-                }
-                for item in items {
-                    visit(item, num, out);
-                }
-            }
-            Value::Dict(dict) => {
-                for (_, value) in &dict.entries {
-                    visit(value, num, out);
-                }
-            }
-            _ => {}
-        }
-    }
+/// Every `Separation` array print elements use (owner's decision, 2026-11-25: X4-Q3 governs 6.4.3.4 too): reached from
+/// the spaces of paints through `Indexed` and `Pattern` bases and `DeviceN` `/Colorants`, with its name, alternate,
+/// tint transform and where it was painted.
+fn separations(doc: &Document) -> Vec<(Vec<u8>, Object, Object, Vec<Location>)> {
     let mut out = Vec::new();
-    for (num, object, _, _) in doc.objects() {
-        visit(object, num, &mut out);
+    for event in graphics::walk(doc) {
+        let Event::Paint { uses, frames } = event else { continue };
+        let mut stack: Vec<Object> = uses.into_iter().map(|u| u.space).collect();
+        // Bounded: each step goes one level into a colour space, and real ones nest two or three levels.
+        let mut steps = 0;
+        while let Some(space) = stack.pop().filter(|_| steps < 64) {
+            steps += 1;
+            let Some(items) = doc.resolve(&space).and_then(Object::array) else {
+                continue;
+            };
+            match items {
+                [first, name, alternate, tint, ..] if first.name() == Some(b"Separation") => {
+                    if let Some(name) = name.name() {
+                        out.push((name.to_vec(), alternate.clone(), tint.clone(), frames.clone()));
+                    }
+                }
+                [first, base, ..] if matches!(first.name(), Some(b"Indexed" | b"I" | b"Pattern")) => {
+                    stack.push(base.clone());
+                }
+                [first, ..] if first.name() == Some(b"DeviceN") => {
+                    let colorants = items
+                        .get(4)
+                        .and_then(|a| doc.resolve(a))
+                        .and_then(Object::dict)
+                        .and_then(|a| a.get(b"Colorants"))
+                        .and_then(|c| doc.resolve(c))
+                        .and_then(Object::dict);
+                    stack.extend(
+                        colorants.map_or_default(|c| c.entries.iter().map(|(_, v)| v.clone()).collect::<Vec<_>>()),
+                    );
+                }
+                _ => {}
+            }
+        }
     }
     out
 }
@@ -293,12 +309,14 @@ fn same(doc: &Document, left: &Object, right: &Object, depth: usize) -> bool {
     }
 }
 
-/// 6.4.3.4: every `Separation` array of one name has the same alternate and tint transform.
+/// 6.4.3.4: every `Separation` array of one name that print elements use has the same alternate and tint transform,
+/// whatever the name, process inks included (oracle, 2026-11-25).
 pub(super) fn consistent_definitions(doc: &Document, _: Level) -> Vec<Finding> {
+    let used = separations(doc);
     let mut first: BTreeMap<&[u8], (&Object, &Object)> = BTreeMap::new();
     let mut out = Vec::new();
-    for (name, alternate, tint, num) in separations(doc) {
-        match first.get(name) {
+    for (name, alternate, tint, frames) in &used {
+        match first.get(name.as_slice()) {
             None => {
                 first.insert(name, (alternate, tint));
             }
@@ -311,7 +329,7 @@ pub(super) fn consistent_definitions(doc: &Document, _: Level) -> Vec<Finding> {
                 out.push(
                     Finding::new(X4_SPOT_CONSISTENT_DEFINITION, message)
                         .citing("6.4.3.4")
-                        .at(vec![Location::Object(num, 0)]),
+                        .at(frames.clone()),
                 );
             }
         }
@@ -491,7 +509,12 @@ mod tests {
             (12, b"<< /Length 1 >>\nstream\na\nendstream"),
             (13, b"<< /Length 1 >>\nstream\nb\nendstream"),
         ];
-        let got = ids(&cmyk, spaces, "/A cs f /B cs f /C cs f /D cs f /H cs f /G cs f", &more);
+        let got = ids(
+            &cmyk,
+            spaces,
+            "/A cs f /B cs f /C cs f /D cs f /E cs f /F cs f /G cs f /H cs f /I cs f /J cs f /K cs f /L cs f /M cs f /N cs f",
+            &more,
+        );
         assert_eq!(
             got,
             [
@@ -550,9 +573,16 @@ mod tests {
         let group = "<< /Type /Page /Group << /S /Transparency >> >>";
         let more: [(u32, &[u8]); 1] = [(5, group.as_bytes())];
         assert_eq!(
-            ids(&profile(b"CMYK"), &spaces, "/A cs f", &more),
+            ids(&profile(b"CMYK"), &spaces, "/A cs f /B cs f", &more),
             ["x4.spot.consistent-definition"],
             "deeper than compared"
+        );
+        let looped: [(u32, &[u8]); 1] = [(7, b"[/Indexed 7 0 R 0 <00>]")];
+        let spaces = "<< /ColorSpace << /Z 7 0 R /Y [/CalRGB << >>] >> >>";
+        assert_eq!(
+            ids(&profile(b"CMYK"), spaces, "/Z cs f /Y cs f", &looped),
+            Vec::<&str>::new(),
+            "a space that is its own base"
         );
     }
 
@@ -562,7 +592,7 @@ mod tests {
             /MixingHints << /DotGain << >> >> >>] /O [/Separation /S2 /DeviceCMYK 99 0 R] /P [/Separation /S2 /DeviceCMYK 99 0 R] >> \
             /ExtGState << /G << >> /H << /BM [/Normal /Screen] >> >> /X << /MixingHints << >> >> >>";
         let more: [(u32, &[u8]); 1] = [(9, b"<< /FunctionType 2 >>")];
-        let got = ids(&profile(b"CMYK"), spaces, "/A cs f", &more);
+        let got = ids(&profile(b"CMYK"), spaces, "/A cs f /O cs f /P cs f", &more);
         assert_eq!(
             got,
             [
