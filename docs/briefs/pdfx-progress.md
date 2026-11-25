@@ -5,7 +5,22 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
-None open. Answered 2026-11-25: the ICC version reading (by pdfToolbox's verdicts) and Altona under 6.4.3.3 (owner:
+**Open, 2026-11-25 (oracle escalation, task 3.3/3.5, ISO 15930-7 6.4.2.1 p.18):** 14 of the 35 Ghent X-4 positives
+(GWG130, GWG150-152, GWG205/206, GWG220/221 and others; all Adobe output) give `/RegistryName (http://www.color.org)`
+with `/OutputConditionIdentifier (ISO Coated v2 300% (ECI))`. That is an ECI profile name, not a reference name in
+the ICC registry (registry.color.org lists 56 CMYK names such as FOGRA39, plus 17 three-component encodings).
+6.4.2.1 says that when `/RegistryName` is present, the identifier *shall* match a registry entry exactly. Read as
+written, these 14 files fail `x4.output-intent.identifier-in-registry`, though pdfToolbox 17.1 passes them and the
+plan counts them as conforming. Which do you want?
+- (a) Fail them as the text says: record the 14 as not conforming to this one rule (as with Altona and 6.4.3.3) and
+  record it in the plan's positives. The oracle's choice.
+- (b) Report it as a warning only: a logged deviation from a "shall", matching what pdfToolbox does in practice.
+- (c) Leave the row unchecked (`skip`): registry membership not judged.
+
+The other two registry rows follow from your answer: a misspelled ICC URL fails, another registry passes, and an
+identifier of "Custom" gets a warning (12 Ghent files). None of the three is written yet; the rest of phase 3 is done.
+
+Earlier questions, answered 2026-11-25: none open before this one. Answered 2026-11-25: the ICC version reading (by pdfToolbox's verdicts) and Altona under 6.4.3.3 (owner:
 record it as not conforming to that one rule).
 
 ## Status
@@ -44,7 +59,8 @@ record it as not conforming to that one rule).
 | 3.3 | `d3f2f13`, `a3b7768`; test-db `650d1bf7` | ICC header helper; 11 output-intent checks (6.4.1, 6.4.2.1) with 12 fixtures |
 | 3.1 (part), 3.5 (6.12) | `2371597` | The page tree with inherited attributes; a rectangle helper; 6 box checks with 6 fixtures |
 | 3.5 (keys) | `c729133` | 19 checks on keys forbidden anywhere (6.7, 6.13, 6.14, 6.16, 6.18, 6.21, 6.22, 6.26) with 19 fixtures, on a walk of every dictionary with its place |
-| 3.5, 3.6 | this commit | 4 optional content checks (6.24), 2 annotation checks (6.17), 3 TrapNet checks (6.9), with 9 fixtures |
+| 3.5, 3.6 | `4f2c410` | 4 optional content checks (6.24), 2 annotation checks (6.17), 3 TrapNet checks (6.9), with 9 fixtures |
+| 3.2 (rest) | this commit | `x4.xmp.conforms` (value types of the predefined schemas) and `x4.info.unlisted-not-in-predefined-schema`; `x4.image.alternates-same-content` is a `skip` |
 
 ## Register coverage
 
@@ -52,7 +68,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 78 | 60 | 3 |
+| PDF/X-4 and X-4p | 80 | 57 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 16 | 37 | 1 (`internal`) |
 
@@ -126,6 +142,10 @@ the suite's own document), 2 have the TrimBox outside the BleedBox, 2 more use a
 optional content configuration passes. GWG151 and GWG152 now fail `x4.oc.order-complete` as expected.
 
 Oracle consultations:
+- The ICC registry rows of 6.4.2.1 (2026-11-25): escalated; see "Stop questions". Its other verdicts: an absent
+  `/RegistryName` passes; another registry's URL with an ICC name is a warning at most; a misspelled color.org URL with
+  an ICC name fails; "Custom" (trimmed, any case) or an empty identifier is a warning. Aside, for test-db: 43 generated
+  mutants pair `http://www.color.org` with "sRGB IEC61966-2.1", which is not a registry name.
 - Empty `/RegistryName ()` with `/OutputConditionIdentifier (Custom)` (12 Ghent positives, 6.4.2.1): no "shall" broken;
   empty reads as absent; medium-high confidence; no escalation. The "should not use Custom" recommendation is
   `x4.output-intent.identifier-registered`, still `todo`: count its hits on the Ghent set before implementing it.

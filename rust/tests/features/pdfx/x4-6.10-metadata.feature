@@ -25,8 +25,9 @@ Feature: PDF/X-4 6.10, metadata and file identifiers
       | x4-info-version-utf16 | x4.info.pdfx-version-pdfdoc |
       | x4-info-title-differs | x4.info.xmp-analogue-equal |
       | x4-info-no-analogue | x4.info.xmp-analogue-present |
-      | x4-author-bag | x4.info.author-single-creator |
       | x4-no-trailer-id | x4.trailer.id |
+      | x4-xmp-wrong-type | x4.xmp.conforms |
+      | x4-info-in-pdf-schema | x4.info.unlisted-not-in-predefined-schema |
 
   Scenario: Without document XMP, every property it must hold is missing
     Given the fixture "x4-no-xmp"
@@ -40,3 +41,9 @@ Feature: PDF/X-4 6.10, metadata and file identifiers
     When it is verified as PDF/X-4
     Then check "x4.xmp.create-date" fails
     And check "x4.info.xmp-analogue-equal" fails
+
+  Scenario: With Info /Author, dc:creator is a one-item rdf:Seq, which XMP requires anyway
+    Given the fixture "x4-author-bag"
+    When it is verified as PDF/X-4
+    Then check "x4.info.author-single-creator" fails
+    And check "x4.xmp.conforms" fails

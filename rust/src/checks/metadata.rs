@@ -12,10 +12,11 @@ use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
     Check, Finding, Level, Location, X4_IDENTITY_NO_INFO_CONFORMANCE, X4_IDENTITY_PDFXID_ONLY_VERSION,
     X4_IDENTITY_VERSION_PRESENT, X4_IDENTITY_VERSION_VALUE, X4_INFO_AUTHOR_SINGLE_CREATOR, X4_INFO_PDFX_VERSION_PDFDOC,
-    X4_INFO_XMP_ANALOGUE_EQUAL, X4_INFO_XMP_ANALOGUE_PRESENT, X4_TRAILER_ID, X4_TRAPPED_PRESENT,
-    X4_TRAPPED_TRUE_OR_FALSE, X4_XMP_AGENT_NAMES, X4_XMP_CREATE_DATE, X4_XMP_DOCUMENT_ID, X4_XMP_DOCUMENT_ID_UUID,
-    X4_XMP_METADATA_DATE, X4_XMP_MODIFY_DATE, X4_XMP_NAMESPACE_PREFIXES, X4_XMP_NO_BYTES_ENCODING_ATTRS,
-    X4_XMP_PRESENT, X4_XMP_RENDITION_CLASS, X4_XMP_TITLE, X4_XMP_UNFILTERED, X4_XMP_VERSION_ID, X4_XMP_WELL_FORMED,
+    X4_INFO_UNLISTED_NOT_IN_PREDEFINED_SCHEMA, X4_INFO_XMP_ANALOGUE_EQUAL, X4_INFO_XMP_ANALOGUE_PRESENT, X4_TRAILER_ID,
+    X4_TRAPPED_PRESENT, X4_TRAPPED_TRUE_OR_FALSE, X4_XMP_AGENT_NAMES, X4_XMP_CONFORMS, X4_XMP_CREATE_DATE,
+    X4_XMP_DOCUMENT_ID, X4_XMP_DOCUMENT_ID_UUID, X4_XMP_METADATA_DATE, X4_XMP_MODIFY_DATE, X4_XMP_NAMESPACE_PREFIXES,
+    X4_XMP_NO_BYTES_ENCODING_ATTRS, X4_XMP_PRESENT, X4_XMP_RENDITION_CLASS, X4_XMP_TITLE, X4_XMP_UNFILTERED,
+    X4_XMP_VERSION_ID, X4_XMP_WELL_FORMED,
 };
 
 const DC: &str = "http://purl.org/dc/elements/1.1/";
@@ -531,6 +532,173 @@ pub(super) fn author_single_creator(doc: &Document, _: Level) -> Vec<Finding> {
     }
 }
 
+/// The XMP Rights Management namespace (XMP Part 1, 8.5).
+const RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/";
+
+/// The form a predefined property's value takes (XMP Part 1, 8.2 and Tables 4 to 7; Part 2, Table 30).
+#[derive(Clone, Copy)]
+enum Form {
+    /// Simple text of any of the text types (Text, `AgentName`, GUID, `MIMEType`, URI, `RenditionClass` ...).
+    Text,
+    Date,
+    Boolean,
+    Integer,
+    Real,
+    /// A language alternative: an `rdf:Alt` whose items each have `xml:lang`.
+    LangAlt,
+    Alt,
+    Seq,
+    Bag,
+    Struct,
+}
+
+/// The predefined properties of the namespaces PDF/X-4 names (Table 2) and of XMP Rights Management, with their forms.
+const SCHEMA: &[(&str, &str, Form)] = &[
+    (DC, "contributor", Form::Bag),
+    (DC, "coverage", Form::Text),
+    (DC, "creator", Form::Seq),
+    (DC, "date", Form::Seq),
+    (DC, "description", Form::LangAlt),
+    (DC, "format", Form::Text),
+    (DC, "identifier", Form::Text),
+    (DC, "language", Form::Bag),
+    (DC, "publisher", Form::Bag),
+    (DC, "relation", Form::Bag),
+    (DC, "rights", Form::LangAlt),
+    (DC, "source", Form::Text),
+    (DC, "subject", Form::Bag),
+    (DC, "title", Form::LangAlt),
+    (DC, "type", Form::Bag),
+    (XMP, "Advisory", Form::Bag),
+    (XMP, "BaseURL", Form::Text),
+    (XMP, "CreateDate", Form::Date),
+    (XMP, "CreatorTool", Form::Text),
+    (XMP, "Identifier", Form::Bag),
+    (XMP, "Label", Form::Text),
+    (XMP, "MetadataDate", Form::Date),
+    (XMP, "ModifyDate", Form::Date),
+    (XMP, "Nickname", Form::Text),
+    (XMP, "Rating", Form::Real),
+    (XMP, "Thumbnails", Form::Alt),
+    (MM, "DerivedFrom", Form::Struct),
+    (MM, "DocumentID", Form::Text),
+    (MM, "History", Form::Seq),
+    (MM, "Ingredients", Form::Bag),
+    (MM, "InstanceID", Form::Text),
+    (MM, "ManagedFrom", Form::Struct),
+    (MM, "Manager", Form::Text),
+    (MM, "ManageTo", Form::Text),
+    (MM, "ManageUI", Form::Text),
+    (MM, "ManagerVariant", Form::Text),
+    (MM, "OriginalDocumentID", Form::Text),
+    (MM, "Pantry", Form::Bag),
+    (MM, "RenditionClass", Form::Text),
+    (MM, "RenditionParams", Form::Text),
+    (MM, "SaveID", Form::Integer),
+    (MM, "VersionID", Form::Text),
+    (MM, "Versions", Form::Seq),
+    (PDF, "Keywords", Form::Text),
+    (PDF, "PDFVersion", Form::Text),
+    (PDF, "Producer", Form::Text),
+    // Text in the XMP Specification of 2005 that PDF/X-4 cites; its values are x4.trapped.true-or-false's.
+    (PDF, "Trapped", Form::Text),
+    (PDFXID, "GTS_PDFXVersion", Form::Text),
+    (RIGHTS, "Certificate", Form::Text),
+    (RIGHTS, "Marked", Form::Boolean),
+    (RIGHTS, "Owner", Form::Bag),
+    (RIGHTS, "UsageTerms", Form::LangAlt),
+    (RIGHTS, "WebStatement", Form::Text),
+];
+
+/// Whether `value` has `form`.
+fn has_form(value: &Xmp, form: Form) -> bool {
+    match (form, value) {
+        (Form::Date, Xmp::Text(t)) => date::parse_xmp(t).is_some(),
+        (Form::Boolean, Xmp::Text(t)) => t == "True" || t == "False",
+        (Form::Integer, Xmp::Text(t)) => t.parse::<i64>().is_ok(),
+        (Form::Real, Xmp::Text(t)) => t.parse::<f64>().is_ok(),
+        (Form::LangAlt, Xmp::Array(Kind::Alt, items)) => items.iter().all(|(lang, _)| lang.is_some()),
+        (Form::Text, Xmp::Text(_))
+        | (Form::Alt, Xmp::Array(Kind::Alt, _))
+        | (Form::Seq, Xmp::Array(Kind::Seq, _))
+        | (Form::Bag, Xmp::Array(Kind::Bag, _))
+        | (Form::Struct, Xmp::Struct(_)) => true,
+        _ => false,
+    }
+}
+
+/// 6.10.1: the document's XMP conforms to the XMP Specification: every predefined property it uses has its defined
+/// value type. Properties the tables do not list are not judged.
+pub(super) fn conforms(doc: &Document, _: Level) -> Vec<Finding> {
+    let Some(packet) = document_xmp(doc) else {
+        return Vec::new();
+    };
+    packet
+        .properties
+        .iter()
+        .filter(|p| {
+            SCHEMA
+                .iter()
+                .any(|(ns, name, form)| *ns == p.ns && *name == p.name && !has_form(&p.value, *form))
+        })
+        .map(|p| {
+            let prefix = PREFIXES
+                .iter()
+                .find(|(n, _)| *n == p.ns)
+                .map_or("xmpRights", |(_, pre)| pre);
+            Finding::new(
+                X4_XMP_CONFORMS,
+                format!("{prefix}:{} does not have the value type XMP defines", p.name),
+            )
+            .citing("6.10.1")
+        })
+        .collect()
+}
+
+/// The namespaces of the schemas the XMP Specification predefines (Part 1, 8; Part 2, 3), by URI.
+const PREDEFINED: [&str; 13] = [
+    DC,
+    XMP,
+    RIGHTS,
+    MM,
+    PDF,
+    "http://ns.adobe.com/xap/1.0/bj/",
+    "http://ns.adobe.com/xap/1.0/t/pg/",
+    "http://ns.adobe.com/xmp/1.0/DynamicMedia/",
+    "http://ns.adobe.com/photoshop/1.0/",
+    "http://ns.adobe.com/camera-raw-settings/1.0/",
+    "http://ns.adobe.com/tiff/1.0/",
+    "http://ns.adobe.com/exif/1.0/",
+    "http://ns.adobe.com/exif/1.0/aux/",
+];
+
+/// 6.10.2: an Info entry outside Table 3 is not written into a predefined schema. Found by name: a property of a
+/// predefined namespace named as the Info key is. A mapping under another name (`/Copyright` as `dc:rights`) cannot
+/// be told from the property's own use.
+pub(super) fn unlisted_not_predefined(doc: &Document, _: Level) -> Vec<Finding> {
+    let (Some(info), Some(packet)) = (info(doc), document_xmp(doc)) else {
+        return Vec::new();
+    };
+    info.entries
+        .iter()
+        .map(|(key, _)| String::from_utf8_lossy(key).into_owned())
+        .filter(|key| !CROSSWALK.iter().any(|(listed, ..)| listed == key))
+        .filter(|key| {
+            packet
+                .properties
+                .iter()
+                .any(|p| p.name == *key && PREDEFINED.contains(&p.ns.as_str()))
+        })
+        .map(|key| {
+            Finding::new(
+                X4_INFO_UNLISTED_NOT_IN_PREDEFINED_SCHEMA,
+                format!("Info /{key}, which Table 3 does not list, is written into a predefined XMP schema"),
+            )
+            .citing("6.10.2")
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -601,6 +769,55 @@ mod tests {
         <pdfxid:GTS_PDFXVersion>PDF/X-4p</pdfxid:GTS_PDFXVersion>";
 
     const INFO: &str = "<< /Title (T) /Author (A) /CreationDate (D:20261125130000+01'00') /Trapped /True >>";
+
+    #[test]
+    fn value_types() {
+        let r = r#"xmlns:xmpRights="http://ns.adobe.com/xap/1.0/rights/""#;
+        let good = format!(
+            "<xmp:Rating>4.5</xmp:Rating><xmpMM:SaveID>3</xmpMM:SaveID><xmp:Thumbnails><rdf:Alt/></xmp:Thumbnails>\
+             <xmpMM:History><rdf:Seq/></xmpMM:History><xmpMM:DerivedFrom rdf:parseType=\"Resource\"><xmpMM:x>1</xmpMM:x></xmpMM:DerivedFrom>\
+             <dc:subject><rdf:Bag/></dc:subject><xmpRights:Marked {r}>True</xmpRights:Marked><pdf:Other>x</pdf:Other>"
+        );
+        let doc = open("2 0 R", &packet(&format!("{FULL}{good}")), INFO, "[(a) (b)]");
+        assert_eq!(conforms(&doc, Level::X4), []);
+        let bad = format!(
+            "<xmp:Rating>high</xmp:Rating><xmpMM:SaveID>3.5</xmpMM:SaveID><xmp:Thumbnails><rdf:Bag/></xmp:Thumbnails>\
+             <dc:rights><rdf:Alt><rdf:li>R</rdf:li></rdf:Alt></dc:rights><xmpRights:Marked {r}>yes</xmpRights:Marked>\
+             <xmp:Label><rdf:Bag/></xmp:Label><xmp:Nickname rdf:parseType=\"Resource\"/>"
+        );
+        let doc = open("2 0 R", &packet(&format!("{FULL}{bad}")), INFO, "[(a) (b)]");
+        let messages: Vec<String> = conforms(&doc, Level::X4).into_iter().map(|f| f.message).collect();
+        assert_eq!(
+            messages,
+            [
+                "xmp:Rating",
+                "xmpMM:SaveID",
+                "xmp:Thumbnails",
+                "dc:rights",
+                "xmpRights:Marked",
+                "xmp:Label",
+                "xmp:Nickname",
+            ]
+            .map(|p| format!("{p} does not have the value type XMP defines"))
+        );
+        assert_eq!(conforms(&open("5", b"", INFO, "[]"), Level::X4), []);
+    }
+
+    #[test]
+    fn info_entries_in_predefined_schemas() {
+        let info = "<< /Company (A) /Department (B) /Title (T) >>";
+        let body = format!("{FULL}<pdf:Company>A</pdf:Company><pdfxid:Department>B</pdfxid:Department>");
+        let doc = open("2 0 R", &packet(&body), info, "[]");
+        let found: Vec<String> = unlisted_not_predefined(&doc, Level::X4)
+            .into_iter()
+            .map(|f| f.message)
+            .collect();
+        assert_eq!(
+            found,
+            ["Info /Company, which Table 3 does not list, is written into a predefined XMP schema"]
+        );
+        assert_eq!(unlisted_not_predefined(&open("5", b"", info, "[]"), Level::X4), []);
+    }
 
     #[test]
     fn the_trapped_state() {

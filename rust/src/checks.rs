@@ -58,6 +58,11 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_IDENTITY_VERSION_VALUE, metadata::version_value),
     (f::X4_IDENTITY_PDFXID_ONLY_VERSION, metadata::pdfxid_only_version),
     (f::X4_IDENTITY_NO_INFO_CONFORMANCE, metadata::no_info_conformance),
+    (f::X4_XMP_CONFORMS, metadata::conforms),
+    (
+        f::X4_INFO_UNLISTED_NOT_IN_PREDEFINED_SCHEMA,
+        metadata::unlisted_not_predefined,
+    ),
     (f::X4_OUTPUT_INTENT_PRESENT, intent::present),
     (f::X4_OUTPUT_INTENT_UNIQUE, intent::unique),
     (f::X4_OUTPUT_INTENT_IDENTIFIER_PRESENT, intent::identifier_present),

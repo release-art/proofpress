@@ -495,7 +495,7 @@ title = "Document metadata is valid XMP"
 clauses = ["iso-15930-7:6.10.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.namespace-prefixes"
@@ -535,7 +535,7 @@ title = "Other Info entries stay out of predefined schemas"
 clauses = ["iso-15930-7:6.10.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.info.pdfx-version-pdfdoc"
@@ -825,7 +825,8 @@ title = "Image alternates show the same picture"
 clauses = ["iso-15930-7:6.16"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "skip"
+reason = "Whether two images show the same area of one master image, at another resolution or in another colour space, needs a similarity judgement, not a reading of the file"
 
 [[check]]
 id = "x4.annot.outside-bleed"

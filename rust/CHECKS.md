@@ -64,12 +64,12 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.trapnet.font-fauxing-empty` | TrapNet font fauxing is absent or empty | iso-15930-7:6.9 | error | x4, x4p | implemented |
 | `x4.trapnet.pcm-matches-intent` | TrapNet process colour model matches the intent | iso-15930-7:6.9 | error | x4, x4p | implemented |
 | `x4.xmp.present` | The catalog has document metadata | iso-15930-7:6.10.1 | error | x4, x4p | implemented |
-| `x4.xmp.conforms` | Document metadata is valid XMP | iso-15930-7:6.10.1 | error | x4, x4p | todo |
+| `x4.xmp.conforms` | Document metadata is valid XMP | iso-15930-7:6.10.1 | error | x4, x4p | implemented |
 | `x4.xmp.namespace-prefixes` | XMP uses the required prefixes for its namespaces | iso-15930-7:6.10.1, iso-15930-7:6.11 | error | x4, x4p | implemented |
 | `x4.xmp.unfiltered` | Metadata streams are not filtered | iso-15930-7:6.10.1 | error | x4, x4p | implemented |
 | `x4.info.xmp-analogue-present` | Info entries with an XMP equivalent are in XMP | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
 | `x4.info.xmp-analogue-equal` | Info entries equal their XMP equivalents | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
-| `x4.info.unlisted-not-in-predefined-schema` | Other Info entries stay out of predefined schemas | iso-15930-7:6.10.2 | error | x4, x4p | todo |
+| `x4.info.unlisted-not-in-predefined-schema` | Other Info entries stay out of predefined schemas | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
 | `x4.info.pdfx-version-pdfdoc` | Info GTS_PDFXVersion is PDFDocEncoded | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
 | `x4.info.author-single-creator` | With Info Author, dc:creator has one item | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
 | `x4.xmp.no-bytes-encoding-attrs` | XMP packet headers have no bytes or encoding attribute | iso-15930-7:6.10.3 | error | x4, x4p | implemented |
@@ -105,7 +105,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.encrypt.absent` | The file is not encrypted | iso-15930-7:6.15 | error | x4, x4p | implemented |
 | `x4.perms.ur-only` | Permissions hold only usage rights | iso-15930-7:6.15 | error | x4, x4p | implemented |
 | `x4.image.no-default-for-printing` | No image alternate is the default for printing | iso-15930-7:6.16 | error | x4, x4p | implemented |
-| `x4.image.alternates-same-content` | Image alternates show the same picture | iso-15930-7:6.16 | error | x4, x4p | todo |
+| `x4.image.alternates-same-content` | Image alternates show the same picture | iso-15930-7:6.16 | error | x4, x4p | skip: Whether two images show the same area of one master image, at another resolution or in another colour space, needs a similarity judgement, not a reading of the file |
 | `x4.annot.outside-bleed` | Annotations lie outside the bleed | iso-15930-7:6.17 | error | x4, x4p | implemented |
 | `x4.annot.printermark-outside-trim` | Printer's marks lie outside the trim | iso-15930-7:6.17 | error | x4, x4p | implemented |
 | `x4.actions.absent` | The file has no actions | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | implemented |

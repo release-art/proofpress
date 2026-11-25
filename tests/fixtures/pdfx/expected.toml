@@ -190,7 +190,7 @@ expect = { "x4.info.xmp-analogue-present" = "Info /Subject has no dc:description
 
 [x4-author-bag]
 levels = ["x4"]
-expect = { "x4.info.author-single-creator" = "with Info /Author, dc:creator is an rdf:Bag, not an rdf:Seq (6.10.2, X4-Q6)" }
+expect = { "x4.info.author-single-creator" = "with Info /Author, dc:creator is an rdf:Bag, not an rdf:Seq (6.10.2, X4-Q6)", "x4.xmp.conforms" = "and XMP defines dc:creator as an ordered array (6.10.1)" }
 
 [x4-no-trailer-id]
 levels = ["x4"]
@@ -198,11 +198,11 @@ expect = { "x4.trailer.id" = "the trailer's /ID key is renamed (6.10.4)" }
 
 [x4-xmp-bad-create-date]
 levels = ["x4"]
-expect = { "x4.xmp.create-date" = "xmp:CreateDate has month 13 (6.10.4, X4-Q7)", "x4.info.xmp-analogue-equal" = "so it cannot equal Info /CreationDate (6.10.2)" }
+expect = { "x4.xmp.create-date" = "xmp:CreateDate has month 13 (6.10.4, X4-Q7)", "x4.xmp.conforms" = "so it is not an XMP Date (6.10.1)", "x4.info.xmp-analogue-equal" = "so it cannot equal Info /CreationDate (6.10.2)" }
 
 [x4-xmp-bad-modify-date]
 levels = ["x4"]
-expect = { "x4.xmp.modify-date" = "xmp:ModifyDate has hour 25 (6.10.4, X4-Q7)", "x4.info.xmp-analogue-equal" = "so it cannot equal Info /ModDate (6.10.2)" }
+expect = { "x4.xmp.modify-date" = "xmp:ModifyDate has hour 25 (6.10.4, X4-Q7)", "x4.xmp.conforms" = "so it is not an XMP Date (6.10.1)", "x4.info.xmp-analogue-equal" = "so it cannot equal Info /ModDate (6.10.2)" }
 
 [x4-no-xmp]
 levels = ["x4"]
@@ -401,3 +401,13 @@ expect = { "x4.trapnet.font-fauxing-empty" = "a TrapNet annotation with /FontFau
 [x4-trapnet-pcm-rgb]
 levels = ["x4"]
 expect = { "x4.trapnet.pcm-matches-intent" = "a TrapNet appearance with /PCM /DeviceRGB under a CMYK intent (6.9)" }
+
+# PDF/X-4 6.10.1 and 6.10.2: XMP value types and unlisted Info entries.
+
+[x4-xmp-wrong-type]
+levels = ["x4"]
+expect = { "x4.xmp.conforms" = "dc:subject is plain text, not an rdf:Bag (6.10.1)" }
+
+[x4-info-in-pdf-schema]
+levels = ["x4"]
+expect = { "x4.info.unlisted-not-in-predefined-schema" = "Info /Company is written as pdf:Company (6.10.2)" }

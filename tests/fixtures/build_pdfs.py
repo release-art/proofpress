@@ -615,6 +615,13 @@ def _x4_metadata_fixtures() -> dict[str, pikepdf.Pdf]:
         ),
         "x4-info-title-differs": _x4_meta(info={"Title": pikepdf.String("Another title")}),
         "x4-info-no-analogue": _x4_meta(info={"Subject": pikepdf.String("Not in XMP")}),
+        # 6.10.1: dc:subject is an unordered array in XMP; here it is plain text.
+        "x4-xmp-wrong-type": _x4_meta(("<dc:format>", "<dc:subject>proofing</dc:subject><dc:format>")),
+        # 6.10.2: an Info key outside Table 3 written into the predefined pdf: schema.
+        "x4-info-in-pdf-schema": _x4_meta(
+            ("<pdf:Producer>", "<pdf:Company>Acme</pdf:Company><pdf:Producer>"),
+            info={"Company": pikepdf.String("Acme")},
+        ),
         "x4-author-bag": _x4_meta(
             ("<dc:format>", "<dc:creator><rdf:Bag><rdf:li>A. Writer</rdf:li></rdf:Bag></dc:creator><dc:format>"),
             info={"Author": pikepdf.String("A. Writer")},
