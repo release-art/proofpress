@@ -6,6 +6,7 @@ so nothing is said twice.
 | Document | What it is |
 |---|---|
 | [`briefs/rust-port.md`](briefs/rust-port.md) | **The plan**: moving the core to Rust on a parser of our own. Decisions, stages, the parity gate, Python bugs to fix first, and a backlog of checks. It wins wherever documents disagree |
+| [`notes/rust-architecture.md`](notes/rust-architecture.md) | **The architecture** of the Rust engine: tiers, the listener pipeline, events, damage and findings |
 | [`notes/rust-feasibility.md`](notes/rust-feasibility.md) | **The feasibility summary** for planning: what is proven and how well, a module-by-module map, gotchas, risks and decision points |
 | [`notes/rust-port-spikes.md`](notes/rust-port-spikes.md) | **The evidence** behind that plan: what was measured, on which files, and the results, including the comparison with Kura |
 | [`briefs/bleed-and-suites.md`](briefs/bleed-and-suites.md) | An earlier brief: the bleed-coverage check and calibration against the Ghent and Altona suites |
@@ -17,6 +18,9 @@ Newest first. A decision changes only by a new line here.
 
 | Date | Decision | Where |
 |---|---|---|
+| 2026-11-25 | Findings cite a clause; each check declares the clauses it may cite, validated against a committed list of clause numbers | Architecture note |
+| 2026-11-25 | Only file-level damage refuses a file. Damaged objects and streams leave gaps, the file still fails, and reading inside a stream stops at the first damage | Architecture note |
+| 2026-11-25 | Eight tiers following ISO 32000-2, each publishing events to synchronous listeners: observers, one proxy, then readers | Architecture note |
 | 2026-11-07 | Private samples and licensed material live in a separate repository, `proof-pdf-test-db` (Azure DevOps, Git LFS), never in proofpress | Below |
 | 2026-11-07 | Total ink counts each spot colour as one ink, at its tint, measured with Ghostscript's `tiffsep` | Brief, bug 4 |
 | 2026-11-07 | From Kura (AGPL), ideas only: no code, no profile text, no thresholds. Run it, if at all, as an optional external tool | Brief, backlog |

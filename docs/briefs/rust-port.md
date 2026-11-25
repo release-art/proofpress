@@ -12,7 +12,7 @@ core. pikepdf, Pillow and typer stop being runtime dependencies.
 
 | Decision | Choice | Why |
 |---|---|---|
-| Reading PDFs | Our own strict parser, no repair and no encryption | A verifier reports a broken file, it does not fix it. A 808-line spike passed the tests below |
+| Reading PDFs | Our own strict parser, no repair and no encryption. Only file-level damage refuses a file; a damaged object or stream leaves a gap, and the file still fails | A verifier reports a broken file, it does not fix it. A 808-line spike passed the tests below. Gaps let the rest of the file be checked, without guessing at what is unreadable |
 | Writing PDFs | Our own small writer, on the same object model | `crop` and `vector.py` copy objects between files. `lopdf` stores reals as f32 and panicked on 3 hostile files. Fall back to it only if the writer spike fails |
 | Previews | `hayro`, unpatched | Renders 116/116 pages close to Ghostscript. Leniency is fine there. It brings its own `hayro-syntax`, which never reaches a check |
 | Images | `zune-jpeg`, `hayro-jpeg2000`, `hayro-jbig2`, `hayro-ccitt` | About 20,000 lines nobody should rewrite |
@@ -49,13 +49,24 @@ judgement, and needs its own brief.
 
 One crate until something forces a split; the spike's `proofcore` showed that one library can feed both targets.
 
+The architecture inside that crate is [`../notes/rust-architecture.md`](../notes/rust-architecture.md): eight tiers following
+ISO 32000-2, the listener pipeline around each, events, damage and findings. Read it before writing code. The modules follow the
+tiers; the names below are a starting point.
+
 ```text
 rust/
   Cargo.toml             features: python
   src/lib.rs             public: open a document, run checks, return findings
-  src/pdf/               parser, object model, filters, writer
-  src/content.rs         the content-stream walk
-  src/checks/            one file per check module, mirroring _internal/
+  src/pipeline.rs        listeners, the proxy slot, the side channel, event ids, the container table
+  src/syntax/            tiers 1-2: tokens and object events (7.2, 7.3)
+  src/filters/           tier 3 (7.4)
+  src/file.rs            tier 4: xref, trailer, refusal of encryption (7.5, 7.6)
+  src/document/          tier 5: objects on request, the page tree (7.7)
+  src/content/           tier 6: operators (7.8)
+  src/graphics/          tier 7: the page model and paint events (8)
+  src/checks/            tier 8: one file per check module, mirroring _internal/
+  src/common/            helpers: rectangles, dates, name and number trees, functions (7.9-7.12)
+  src/writer/            the writer
   src/python.rs          the PyO3 module, behind the feature
   src/bin/proof-pdf.rs   the CLI
 ```
@@ -66,27 +77,34 @@ file has millions.
 
 ## The parser
 
-Start from `spikes/crabify/parity/src/strict.rs`. It is spike code, so keep what works and do not treat it as finished.
+`spikes/crabify/parity/src/strict.rs` is the evidence that a strict parser works, not a design to inherit: the design is the
+architecture note. Reuse what fits it.
 
 **Accepts:** xref tables, xref streams, hybrid files, `/Prev` chains, object streams, Flate, LZW, ASCII85, ASCIIHex, RunLength,
 PNG and TIFF predictors, the page tree with inherited attributes, content streams and inline images. Image filters stay encoded
 until a check decodes them.
 
-**Refuses, with a reason:** anything else. It reads every object reachable from the trailer when it opens, because what nothing
-references cannot print.
+**Anything else is damage, reported with a reason.** Every object reachable from the trailer is read at open, because what nothing
+references cannot print. How much the damage takes depends on its scope:
 
-Each refusal becomes a finding under the existing `structure` check. These are the reasons the spike met on pdf.js and Altona:
+- **The file is refused** when nothing can be read: no `startxref`, an unreadable xref, encryption, no `/Root`.
+- **A gap is left** when an object or stream is damaged. Reading goes on elsewhere, the damage is a finding, and every check whose
+  scope holds the gap reports "not evaluated". The file still fails.
+- **Inside a stream, reading stops at the first damage.** There is no resynchronising; the rest of the stream is the gap.
 
-| Reason | Files |
-|---|---|
-| Encrypted | 11 |
-| `startxref` does not point at an xref section | 10 |
-| Stream `/Length` is wrong | 5 |
-| No `startxref` in the last 1024 bytes | 4 |
+Each refusal or gap becomes a finding under the existing `structure` check. These are the reasons the spike met on pdf.js and
+Altona, where the spike refused the whole file for each:
+
+| Reason | Files | Scope now |
+|---|---|---|
+| Encrypted | 11 | File |
+| `startxref` does not point at an xref section | 10 | File |
+| Stream `/Length` is wrong | 5 | Object |
+| No `startxref` in the last 1024 bytes | 4 | File |
 
 Others met at lower counts include a bad object offset, damaged Flate data, and a self-referencing object. The spike also refused a
 file whose `%PDF-` header is not at byte 0; that is wrong, see the to-do list.
-Every refusal must name the object or offset, so the file can be fixed.
+Every refusal and gap must name the object or offset, so the file can be fixed.
 
 **Decide error or warning for each reason during stage 2.** Start from error. Move a reason to warning only when a real file that
 prints correctly trips it, and say why in the code. Two likely first cases: a wrong trailer `/Size` (59 pdf.js files), and `stream`
@@ -111,7 +129,7 @@ Still to do:
   setting the limits.
 - Explain the 3 pdf.js files strict opens that pikepdf and Kura both refuse (`bug1811668_reduced`, `issue16091`, `issue4573`).
 - Make an unknown filter a finding wherever it appears. The `UnknownFilter` files in `samples/pdf-differences/` place one in each
-  kind of stream. One in an object stream refuses the file at open; one in a font, image or form only fails when something reads it.
+  kind of stream. One in an object stream leaves every object in it as a gap; one in a font, image or form only fails when something reads it.
 - Report an inline image that gives a key twice, in full and abbreviated. `InlineAbbreviations.pdf` does; it is read silently here,
   while today's `verify` calls the whole file "corrupt or encrypted" because pikepdf cannot parse it.
 - Compare an image's `/Width` and `/Height` with its data. `veraPDFHiResChangedHeight.pdf` passes everything today.
@@ -128,8 +146,8 @@ Every port is proved against the Python it replaces, on the same files, before t
 
 - `spikes/crabify/baseline.py` and `compare.py`: objects, streams, page boxes and the full walk with its CTM.
 - `spikes/crabify/check_parity.py`: findings, exact on check, severity, message and page. Extend it per check.
-- `spikes/crabify/oracle.py`: refusals against qpdf's own damage warnings. A refusal where qpdf saw nothing is a suspected false
-  reject and needs a reason.
+- `spikes/crabify/oracle.py`: refusals and gaps against qpdf's own damage warnings. A file read with gaps counts as damage
+  detected. A refusal or gap where qpdf saw nothing is a suspected false reject and needs a reason.
 - `spikes/crabify/fuzz.py`: mutated fixtures must never panic or hang.
 
 Corpus: `tests/fixtures/pdfs/`, both Altona files (`bin/suites/fetch.sh`), the private `proof-pdf-test-db` repository at
@@ -144,7 +162,7 @@ Differences that are expected, so do not chase them:
 
 - Objects pikepdf synthesises when it pushes inherited attributes onto pages.
 - Indirect `/Length` values, which qpdf inlines.
-- Files pikepdf repairs and we refuse. That is the behaviour change, listed in the changelog.
+- Files pikepdf repairs and we refuse or read with gaps. That is the behaviour change, listed in the changelog.
 - `--allow-k-only` on an image without `/Decode`, once bug 2 below is fixed.
 
 ## Traps
@@ -164,9 +182,9 @@ lines to 145), and `paint`, `colour` and `functions`, the bulk of the work, were
 
 | Stage | Work | Done when | Weeks |
 |---|---|---|---|
-| 0 | Fix the four Python bugs. Check the parser on recent InDesign and Illustrator output in `proof-pdf-test-db` | Bugs have tests. Refusals on those files are explained | under 1 |
+| 0 | Fix the four Python bugs. Check the parser on recent InDesign and Illustrator output in `proof-pdf-test-db` | Bugs have tests. Refusals and gaps on those files are explained | under 1 |
 | 1 | Rust project, maturin in CI, wheels for macOS and Linux, parity gate in CI | A wheel installs from CI on a clean machine | 1 |
-| 2 | The parser, finished against the list above | Oracle shows no unexplained refusal. Fuzz runs clean | 1-2 |
+| 2 | The parser, finished against the list above | Oracle shows no unexplained refusal or gap. Fuzz runs clean | 1-2 |
 | 3 | Content walk, paint, colour, spaces, functions, fonts, text, contrast, resolution, X-4 | Findings exact on the corpus. Python versions deleted | 3-4 |
 | 4 | Rust CLI for `verify`: clap, TOML profiles, tool orchestration, optional tools | Flags, config and output match. `test_cli.py` passes against the binary | 1 |
 | 5 | Writer, then `crop`, `inspect`, `extract`, `preview`, `layout`, `texlog` | Commands match. Crop pixel-identical. pikepdf and Pillow gone from runtime | 3-4 |
@@ -174,7 +192,7 @@ lines to 145), and `paint`, `colour` and `functions`, the bulk of the work, were
 
 Total: **about 10-14 weeks** for one experienced engineer, or about 6-8 to reach `verify` and its CLI (stages 0-4).
 
-Stop after stage 0 if the parser refuses real output that prints correctly, and tell the user what it was. That is the one result
+Stop after stage 0 if the parser refuses, or leaves gaps in, real output that prints correctly, and tell the user what it was. That is the one result
 that could change the decision.
 
 ## Packaging
@@ -192,7 +210,8 @@ None of this was tested beyond a local macOS arm64 wheel, so stage 1 proves it f
 
 ## Behaviour changes to announce
 
-- A file that pikepdf repaired silently now fails, with the reason.
+- A file that pikepdf repaired silently now fails, with the reason. A damaged object or stream no longer stops the whole file: the
+  rest is still checked, and the checks that needed the damaged part report "not evaluated".
 - An encrypted file now fails, even with an empty password.
 - With the default assumed above, PDF/A and peak ink become opt-in, so a bare `verify` works without the tools. A CI job relying on
   them today must turn them on. This is the biggest change for existing users: put it first in the changelog.
@@ -233,10 +252,10 @@ catalogue entries nobody has tested.
 
 | Idea | Stage | Why |
 |---|---|---|
-| Give each parser refusal a stable check id (`data-after-eof`, `broken-reference`, `unknown-operator`, `content-stream-error`, `damaged`) | 2 | Profiles can then choose error or warning per reason, which stage 2 has to decide anyway |
-| Exit codes: 0 pass, 1 findings, 2 input refused, 3 timeout, 64 usage error | 4 | Today a file that cannot be read and a file with findings both exit 1, so CI cannot tell them apart |
-| A "not evaluated" status in the JSON output, distinct from pass and fail | 4 | Makes "an unconfirmable check fails" visible and testable. Contrast already says "not measured" in prose |
-| The check list as data: id, title, value type, source clause, and a reason for any default | 4 | Generates the README's check table and a `--list-checks` command, so the docs cannot drift |
+| Give each reason for a refusal or a gap a stable check id (`data-after-eof`, `broken-reference`, `unknown-operator`, `content-stream-error`, `damaged`) | 2 | Profiles can then choose error or warning per reason, which stage 2 has to decide anyway |
+| Exit codes: 0 pass, 1 findings, 2 input refused, 3 timeout, 64 usage error. Only file-level damage refuses; a file read with gaps exits 1 | 4 | Today a file that cannot be read and a file with findings both exit 1, so CI cannot tell them apart |
+| A "not evaluated" status in the JSON output, distinct from pass and fail | 4 | Makes "an unconfirmable check fails" visible and testable, including a check whose scope holds a gap. Contrast already says "not measured" in prose |
+| The check list as data: id, title, value type, the clauses it may cite (see the architecture note), and a reason for any default | 4 | Generates the README's check table and a `--list-checks` command, so the docs cannot drift |
 
 **After the port, written once in Rust:**
 
@@ -244,7 +263,7 @@ catalogue entries nobody has tested.
 |---|---|
 | Compound press risks: a thin line in more than one ink, small text in more than one ink, small white text, rich black on small text | These smear or fill in when plates misregister. The parts (width, size, inks used) are already measured, so it is combination, not new measurement. Build named checks, not a rule language |
 | A separate resolution floor for 1-bit images | `resolution.py` has one floor for every image, so 400 ppi line art passes when it prints jagged. Another parameter with no default |
-| GWG 2022 presets as `[profiles.*]` in `proof-pdf.toml`, one per print process | The Ghent Workgroup spec is public, so the numbers come from it with clauses cited. Read the spec itself, not Kura's profiles |
+| GWG presets as `[profiles.*]` in `proof-pdf.toml`, one per print process | The numbers come from the Ghent Workgroup spec with clauses cited. GWG 2022 is not available to us; GWG 2015 is held in `proof-pdf-test-db`, so start from it. Read the spec itself, not Kura's profiles |
 | PDF/X-4 rules for document title, creation and modification dates, forbidden annotations and embedded files | Kura flagged all of these on a real report that `x4.py` passed. Fill the "the rest" row from ISO 15930, clause by clause |
 | Font embedding licence (`fsType`) | Embedding a font that forbids it is a legal problem, not a print one. It caused 139 of the refusals in Kura's own benchmark |
 | Registration colour (`All`) used outside the marks | Today `All` is mentioned only when a spot ink is disallowed |
@@ -327,5 +346,5 @@ built by the GWG, not client jobs, so real jobs from print shops in `proof-pdf-t
 
 ## When you finish a stage
 
-Report what changed, the toolchain results, the parity numbers, and anything refused that nobody expected. Note any place you
+Report what changed, the toolchain results, the parity numbers, and anything refused or left as a gap that nobody expected. Note any place you
 departed from this brief and why.
