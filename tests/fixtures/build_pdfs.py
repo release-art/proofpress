@@ -275,6 +275,23 @@ def _tint(name: str) -> pikepdf.Dictionary:
     return pikepdf.Dictionary(FunctionType=2, Domain=[0, 1], C0=[0, 0, 0, 0], C1=[0, 1, 1, 0], N=1)
 
 
+def _spot_overprint() -> pikepdf.Pdf:
+    """Full cyan, then a full spot ink overprinting it: two plates on press, 200%, though its alternate is magenta."""
+    space = pikepdf.Array(
+        [pikepdf.Name.Separation, pikepdf.Name("/PANTONE 185 C"), pikepdf.Name.DeviceCMYK, _tint("x")]
+    )
+    resources = pikepdf.Dictionary(
+        ColorSpace=pikepdf.Dictionary(CS1=space), ExtGState=pikepdf.Dictionary(GS1=pikepdf.Dictionary(OP=True, op=True))
+    )
+    content = GOOD_CONTENT + b" 1 0 0 0 k %f %f 80 80 re f /GS1 gs /CS1 cs 1 scn %f %f 80 80 re f" % (
+        BLEED + 150,
+        BLEED + 150,
+        BLEED + 150,
+        BLEED + 150,
+    )
+    return build(content, resources=resources)
+
+
 def _transparent(group_cs: str | None) -> pikepdf.Pdf:
     resources = pikepdf.Dictionary(ExtGState=pikepdf.Dictionary(GS1=pikepdf.Dictionary(ca=0.5, CA=0.5)))
     content = GOOD_CONTENT + b" /GS1 gs 0.5 g %f %f 80 80 re f" % (BLEED + 150, BLEED + 150)
@@ -519,6 +536,8 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         # A Pantone spot ink, and the registration colour used as if it were artwork.
         "spot-ink": _with_spot("PANTONE 185 C"),
         "registration-spot": _with_spot("All"),
+        # A spot overprinting full cyan: 200% of ink, which a CMYK raster of the alternate would miss.
+        "spot-overprint": _spot_overprint(),
         # Live transparency with the blend space declared RGB, matching the sRGB output intent; CMYK, mismatching it;
         # and not declared at all.
         "transparent-matching": _transparent("DeviceRGB"),

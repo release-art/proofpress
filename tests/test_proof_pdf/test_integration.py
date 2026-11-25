@@ -113,6 +113,17 @@ class TestOffendingFiles:
         assert _checks(record) == {"tac"}
         assert "exceeds the 300% limit" in _messages(record, "tac")[0]
 
+    @pytest.mark.parametrize(
+        ("name", "limit", "fails"),
+        [("spot-ink", "150", False), ("spot-overprint", "150", True), ("spot-overprint", "200", False)],
+    )
+    def test_a_spot_counts_as_one_ink_and_adds_when_it_overprints(self, runner, name, limit, fails):
+        """The brief's bug 4: one plate per spot at its tint, never its CMYK alternate (decided 2026-11-07)."""
+        code, [record] = _verify(
+            runner, PDFS / f"{name}.pdf", *A6, "--no-pdfa", "--max-tac", limit, "--allow-spot", "PANTONE 185 C"
+        )
+        assert ("tac" in _checks(record)) is fails
+
     def test_a_higher_ink_ceiling_lets_it_through(self, runner):
         code, [record] = _verify(runner, PDFS / "heavy-ink.pdf", *A6, "--no-pdfa", "--max-tac", "400")
         assert (code, record["findings"]) == (0, [])

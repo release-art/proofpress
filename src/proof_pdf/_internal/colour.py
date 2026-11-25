@@ -87,7 +87,11 @@ async def check_tac(
 
 
 async def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = None) -> list[float]:
-    """The peak TAC (0-400%) of each page, via a DeviceCMYK Ghostscript raster."""
+    """The peak total ink (100% per ink) of each page, from Ghostscript's ``tiffsep``: one plate per ink.
+
+    Each spot colour is its own plate at its tint, never its CMYK alternate, and a spot overprinting process ink adds to
+    it, as on press (decided 2026-11-07). ``tiff32nc`` converted spots to CMYK and dropped overprinted ones.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         pattern = str(pathlib.Path(tmp) / "page-%03d.tif")
         try:
@@ -98,7 +102,7 @@ async def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = Non
                     "-dNOPAUSE",
                     "-dBATCH",
                     "-dSAFER",
-                    "-sDEVICE=tiff32nc",
+                    "-sDEVICE=tiffsep",
                     f"-r{_TAC_DPI}",
                     f"-sOutputFile={pattern}",
                     path,
@@ -111,26 +115,28 @@ async def _page_tac_peaks(binary: str, path: str, *, timeout: float | None = Non
             message = result.stderr.strip() or "ghostscript failed"
             logger.error(f"ghostscript failed (rc={result.returncode}): {message}")
             raise GhostscriptError(message)
-        # Sort by the numeric page index, not lexicographically: `page-1000.tif`
-        # must not sort before `page-999.tif` (wrong page labels past 999).
-        pages = sorted(pathlib.Path(tmp).glob("page-*.tif"), key=lambda t: int(t.stem.rsplit("-", 1)[-1]))
+        # tiffsep writes page-NNN.tif (a composite, unused) and page-NNN(Ink).tif per plate. Sort by the numeric page
+        # index, not lexicographically: `page-1000` must not sort before `page-999`.
+        pages = sorted(pathlib.Path(tmp).glob("page-[0-9]*[0-9].tif"), key=lambda t: int(t.stem.rsplit("-", 1)[-1]))
         peaks: list[float] = []
-        for tif in pages:
-            peaks.append(await asyncio.to_thread(_peak_tac, tif))
-            # A 50-page file at 150 dpi is ~150 MB of TIFF if it all stays on
-            # disk; each raster is dead the moment its peak is read.
-            tif.unlink(missing_ok=True)
+        for composite in pages:
+            plates = sorted(composite.parent.glob(f"{composite.stem}(*).tif"))
+            peaks.append(await asyncio.to_thread(_peak_tac, plates))
+            # A 50-page file at 150 dpi is hundreds of MB of plates if it all stays on disk; each page's plates are
+            # dead the moment its peak is read.
+            for tif in (composite, *plates):
+                tif.unlink(missing_ok=True)
         return peaks
 
 
-def _peak_tac(tif: pathlib.Path) -> float:
-    """Peak C+M+Y+K over every pixel of a CMYK TIFF, as a percentage."""
-    with Image.open(tif) as img:
-        img.load()
-        c, m, y, k = (band.convert("I") for band in img.split())
-        total = ImageMath.lambda_eval(lambda a: a["cc"] + a["mm"] + a["yy"] + a["kk"], cc=c, mm=m, yy=y, kk=k)
-    peak = total.getextrema()[1]
-    return peak / 255.0 * 100.0
+def _peak_tac(plates: list[pathlib.Path]) -> float:
+    """Peak ink summed over every plate at each pixel, as a percentage. A ``tiffsep`` plate is 0 for full ink."""
+    total = None
+    for tif in plates:
+        with Image.open(tif) as img:
+            ink = ImageMath.lambda_eval(lambda a: 255 - a["v"], v=img.convert("I"))
+        total = ink if total is None else ImageMath.lambda_eval(lambda a: a["t"] + a["i"], t=total, i=ink)
+    return 0.0 if total is None else total.getextrema()[1] / 255.0 * 100.0
 
 
 # ------------------------------------------------------------- overprint ----

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Total ink (`tac`) counts each spot colour as one ink at its tint, measured with Ghostscript's `tiffsep` (one plate per
+  ink) instead of `tiff32nc`, which converted spots to their CMYK alternate and dropped a spot overprinting process ink.
+  Jobs with spot colours can read lower than before (a spot whose alternate was a CMYK mix), or higher (a spot
+  overprinting process ink now adds to it). New fixture `spot-overprint`.
 - In a CMYK job, a CMYK `ICCBased` colour space that uses the output intent's own profile (the same stream, or the
   same MD5 as ICC.1 7.2.18 computes it) is now an `icc-profile` error, as ISO 15930-7 6.4.3.3 requires. The old warning
   for a CMYK profile *different* from the intent's is gone: PDF/X-4 allows that. Both Altona test files now raise it:

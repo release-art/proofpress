@@ -52,10 +52,14 @@ class TestTotalAreaCoverage:
         mocker.patch.object(colour, "_page_tac_peaks", return_value=[250.0, 299.9])
         assert await colour.check_tac("gs", "x.pdf", 300.0) == []
 
-    def test_peak_tac_reads_a_real_cmyk_raster(self, tmp_path):
-        tif = tmp_path / "page.tif"
-        Image.new("CMYK", (4, 4), (255, 255, 0, 0)).save(tif)
-        assert colour._peak_tac(tif) == pytest.approx(200.0)
+    def test_peak_tac_sums_the_plates(self, tmp_path):
+        """A tiffsep plate is 0 where the ink is full; every plate, spots included, counts once."""
+        plates = []
+        for name, value in (("Cyan", 0), ("Magenta", 0), ("Yellow", 255), ("PANTONE 185 C", 128)):
+            plates.append(tmp_path / f"page-001({name}).tif")
+            Image.new("L", (4, 4), value).save(plates[-1])
+        assert colour._peak_tac(plates) == pytest.approx(200.0 + 127 / 255 * 100)
+        assert colour._peak_tac([]) == 0.0
 
     async def test_rasters_are_deleted_as_they_are_read(self, tmp_path, fake_run):
         """A 50-page deck must not keep every TIFF on disk at once."""
@@ -65,12 +69,13 @@ class TestTotalAreaCoverage:
             out = next(a for a in argv if a.startswith("-sOutputFile=")).removeprefix("-sOutputFile=")
             for i in (1, 2, 3):
                 Image.new("CMYK", (2, 2), (0, 0, 0, 0)).save(out % i)
+                Image.new("L", (2, 2), 255).save((out % i).replace(".tif", "(Black).tif"))
             seen.append(len(list(pathlib.Path(out).parent.glob("*.tif"))))
 
         fake_run(side_effect=_write_pages)
         peaks = await colour._page_tac_peaks("gs", str(tmp_path / "in.pdf"))
         assert len(peaks) == 3
-        assert seen == [3]  # all written by gs...
+        assert seen == [6]  # all written by gs...
         # ...and none left behind once each peak was read.
         assert not list(tmp_path.glob("**/page-*.tif"))
 
@@ -80,8 +85,9 @@ class TestTotalAreaCoverage:
         def _write(argv, **kwargs):
             out = next(a for a in argv if a.startswith("-sOutputFile=")).removeprefix("-sOutputFile=")
             base = pathlib.Path(out).parent
-            for i, ink in ((999, 0), (1000, 255)):
-                Image.new("CMYK", (2, 2), (0, 0, 0, ink)).save(base / f"page-{i}.tif")
+            for i, plate in ((999, 255), (1000, 0)):
+                Image.new("CMYK", (2, 2), (0, 0, 0, 0)).save(base / f"page-{i}.tif")
+                Image.new("L", (2, 2), plate).save(base / f"page-{i}(Black).tif")
 
         fake_run(side_effect=_write)
         peaks = await colour._page_tac_peaks("gs", "in.pdf")
