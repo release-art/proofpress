@@ -59,8 +59,8 @@ def password_pdf(tmp_path) -> pathlib.Path:
     return path
 
 
-def xmp_bytes(*, pdfx: bool = True) -> bytes:
-    """A well-formed XMP packet, optionally carrying the PDF/X version key.
+def xmp_bytes(*, pdfx: bool = True, trapped: str | None = "False") -> bytes:
+    """A well-formed XMP packet, optionally carrying the PDF/X version key and ``pdf:Trapped``.
 
     It has to be genuinely well-formed: pikepdf parses /Metadata on save and
     silently replaces anything it cannot read with an empty packet, so a
@@ -71,8 +71,10 @@ def xmp_bytes(*, pdfx: bool = True) -> bytes:
         '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>'
         '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
         '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
-        '<rdf:Description rdf:about="" xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/">'
+        '<rdf:Description rdf:about="" xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/"'
+        ' xmlns:pdf="http://ns.adobe.com/pdf/1.3/">'
         f"{version}"
+        f"{'' if trapped is None else f'<pdf:Trapped>{trapped}</pdf:Trapped>'}"
         "</rdf:Description></rdf:RDF></x:xmpmeta>"
         '<?xpacket end="w"?>'
     ).encode()

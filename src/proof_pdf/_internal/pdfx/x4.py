@@ -8,6 +8,7 @@ check ids, messages and severities are the original ones; the clause each comes 
 import pikepdf
 
 from ...models import Finding, Severity
+from .. import xmp
 from ..spaces import output_intents
 from ..structure import _contains, media_box, own_box
 from .rule import IMPLEMENTED, PARTIAL, TODO, Rule
@@ -66,14 +67,27 @@ def check_page_boxes(pdf: pikepdf.Pdf) -> list[Finding]:
 
 
 def check_trapped(pdf: pikepdf.Pdf) -> list[Finding]:
-    """PDF/X requires ``/Trapped`` in the Info dict to be True or False."""
-    info = pdf.docinfo
-    trapped = info.get("/Trapped") if info is not None else None
-    if trapped is None:
-        return [Finding("trapped", Severity.ERROR, "/Trapped missing from Info -- PDF/X requires True or False")]
-    value = str(trapped)
-    if value not in ("/True", "/False"):
-        return [Finding("trapped", Severity.ERROR, f"/Trapped is {value.lstrip('/')} -- PDF/X requires True or False")]
+    """ISO 15930-7, 6.9: the document XMP says ``pdf:Trapped`` True or False; an Info ``/Trapped`` must agree (6.10.2).
+
+    The XMP property is the requirement; Info's key is optional and judged only when present (decision X4-Q1).
+    """
+    try:
+        trapped = xmp.parse(_xmp_bytes(pdf)).get("pdf:Trapped")
+    except ValueError:
+        trapped = None
+    if not isinstance(trapped, str) or not trapped:
+        return [Finding("trapped", Severity.ERROR, "pdf:Trapped missing from XMP -- PDF/X requires True or False")]
+    if trapped not in ("True", "False"):
+        return [Finding("trapped", Severity.ERROR, f"pdf:Trapped is {trapped} -- PDF/X requires True or False")]
+    info = pdf.docinfo.get("/Trapped") if pdf.docinfo is not None else None
+    if info is not None and str(info).lstrip("/") != trapped:
+        return [
+            Finding(
+                "trapped",
+                Severity.ERROR,
+                f"Info /Trapped is {str(info).lstrip('/')} but XMP pdf:Trapped is {trapped} -- they must agree",
+            )
+        ]
     return []
 
 
@@ -115,7 +129,14 @@ RULES = (
         PARTIAL,
         check_page_boxes,
     ),
-    Rule("trapped", "/Trapped in the Info dictionary is True or False", X4, Severity.ERROR, IMPLEMENTED, check_trapped),
+    Rule(
+        "trapped",
+        "XMP pdf:Trapped is True or False, and an Info /Trapped, if present, agrees",
+        X4,
+        Severity.ERROR,
+        IMPLEMENTED,
+        check_trapped,
+    ),
     Rule(
         "identity",
         "XMP carries pdfxid:GTS_PDFXVersion and an output intent of subtype GTS_PDFX is present",

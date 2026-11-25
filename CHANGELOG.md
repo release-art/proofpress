@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The PDF/X `trapped` check reads `pdf:Trapped` from the document XMP, where ISO 15930-7 6.9 puts it. A file that sets
+  `/Trapped` only in the Info dictionary now fails; an Info `/Trapped` is still read, and must agree with the XMP value
+  (6.10.2). The test fixtures declare `pdf:Trapped` in their PDF/A extension schema, since PDF/A-2 does not predefine it.
+
 ### Removed
 
 - `--pdfx-version`, `Profile.pdfx_version`, `PdfxVersion` and the config key `pdfx-version`: x1a and x3 had no checks, so

@@ -7,7 +7,7 @@ endobj
 << /Trapped /False >>
 endobj
 3 0 obj
-<< /Subtype /XML /Type /Metadata /Length 1683 >>
+<< /Subtype /XML /Type /Metadata /Length 2614 >>
 stream
 <?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
@@ -15,6 +15,9 @@ stream
     <rdf:Description xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/" rdf:about="">
       <pdfaid:part>2</pdfaid:part>
       <pdfaid:conformance>B</pdfaid:conformance>
+    </rdf:Description>
+    <rdf:Description xmlns:pdf="http://ns.adobe.com/pdf/1.3/" rdf:about="">
+      <pdf:Trapped>False</pdf:Trapped>
     </rdf:Description>
     <rdf:Description xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/" rdf:about="">
       <pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion>
@@ -35,4 +38,11 @@ stream
                   <pdfaProperty:description>ID of PDF/X standard</pdfaProperty:description>
                 </rdf:li>
               </rdf:Seq>
-            </pdfaSchema:proper
+            </pdfaSchema:property>
+          </rdf:li>
+          <rdf:li rdf:parseType="Resource">
+            <pdfaSchema:schema>Adobe PDF Schema</pdfaSchema:schema>
+            <pdfaSchema:namespaceURI>http://ns.adobe.com/pdf/1.3/</pdfaSchema:namespaceURI>
+            <pdfaSchema:prefix>pdf</pdfaSchema:prefix>
+            <pdfaSchema:property>
+          

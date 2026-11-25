@@ -96,22 +96,35 @@ class TestPageBoxes:
 
 
 class TestTrapped:
-    @pytest.mark.parametrize(
-        ("value", "expect_finding"),
-        [(pikepdf.Name("/True"), False), (pikepdf.Name("/False"), False), (pikepdf.Name("/Unknown"), True)],
-    )
-    def test_values(self, make_pdf, value, expect_finding):
-        path = make_pdf()
-        with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-            pdf.docinfo["/Trapped"] = value
-            pdf.save(path)
-        with pikepdf.open(path) as pdf:
-            assert bool(x4.check_trapped(pdf)) is expect_finding
+    """ISO 15930-7, 6.9 and 6.10.2: trapping is stated in XMP; Info may repeat it, and must then agree."""
 
-    def test_missing(self, make_pdf):
-        with pikepdf.open(make_pdf()) as pdf:
-            findings = x4.check_trapped(pdf)
-        assert findings and "missing" in findings[0].message
+    @staticmethod
+    def _check(*, xmp: bytes | None, info: str | None = None):
+        pdf = pikepdf.new()
+        pdf.add_blank_page()
+        if xmp is not None:
+            pdf.Root.Metadata = pdf.make_stream(xmp)
+        if info is not None:
+            pdf.docinfo["/Trapped"] = pikepdf.Name(f"/{info}")
+        return x4.check_trapped(pdf)
+
+    @pytest.mark.parametrize("value", ["True", "False"])
+    def test_true_or_false_in_xmp_passes(self, value):
+        assert self._check(xmp=xmp_bytes(trapped=value)) == []
+        assert self._check(xmp=xmp_bytes(trapped=value), info=value) == []
+
+    def test_unknown_fails(self):
+        [finding] = self._check(xmp=xmp_bytes(trapped="Unknown"))
+        assert "Unknown" in finding.message
+
+    @pytest.mark.parametrize("xmp", [None, xmp_bytes(trapped=None), xmp_bytes(trapped=""), b"not xml"])
+    def test_missing_from_xmp_fails_even_with_info(self, xmp):
+        [finding] = self._check(xmp=xmp, info="False")
+        assert "missing from XMP" in finding.message
+
+    def test_info_that_disagrees_fails(self):
+        [finding] = self._check(xmp=xmp_bytes(trapped="False"), info="True")
+        assert "must agree" in finding.message
 
 
 class TestPdfxIdentity:
