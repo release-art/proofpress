@@ -1,4 +1,5 @@
-% Transparency in a CMYK document: PDF/X-4 wants the page's blend colour space declared.
+% Transparency in a CMYK document with no blend colour space declared. proof-pdf warns; PDF/X-4 allows it (6.20: the
+% output intent is then the blend space).
 \documentclass{article}
 \usepackage[cmyk]{xcolor}
 \usepackage{tikz}

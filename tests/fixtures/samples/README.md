@@ -25,4 +25,5 @@ Things the samples established about the tools (each is a test):
 - Transparency (`opacity`, soft masks) leaves the page without a blend colour space unless the document sets one.
 - hyperref link boxes are annotations (`/C` is RGB) without the Print flag: they do not print and are not checked.
 - `pdfx` gives a real PDF/X-4 (FOGRA39 intent, page boxes, XMP identity) or PDF/A-2b (sRGB intent) that passes the
-  tool's standards layers.
+  tool's standards layers, unless the content breaks the standard: `pdfx-x4-rgb-image` claims X-4 with a DeviceRGB image,
+  which X-4 forbids.
