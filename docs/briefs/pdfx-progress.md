@@ -15,9 +15,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 3** (document structure and metadata): 3.2 (XMP, 6.9-6.11), 3.3 (ICC header, 6.4.1-6.4.2.1) and the page
-  tree of 3.1 and the 3.5 rows (6.12, the forbidden keys, 6.24, 6.17, the TrapNet rows of 6.9)
-  done. Next: the phase 3 gates and report, then phase 4 (content, page model and colour).
+- **Phase 3** (document structure and metadata) finished; stage report below. Next: phase 4, content, page model and
+  colour (the brief's stage 3; tiers 6 and 7), starting with task 4.1.
 
 ## Done
 
@@ -51,7 +50,7 @@ record it as not conforming to that one rule).
 | 3.5 (keys) | `c729133` | 19 checks on keys forbidden anywhere (6.7, 6.13, 6.14, 6.16, 6.18, 6.21, 6.22, 6.26) with 19 fixtures, on a walk of every dictionary with its place |
 | 3.5, 3.6 | `4f2c410` | 4 optional content checks (6.24), 2 annotation checks (6.17), 3 TrapNet checks (6.9), with 9 fixtures |
 | 3.2 (rest) | `3820c19` | `x4.xmp.conforms` (value types of the predefined schemas) and `x4.info.unlisted-not-in-predefined-schema`; `x4.image.alternates-same-content` is a `skip` |
-| 3.3 (registry) | this commit; test-db | The three ICC registry rows, with the registry's 73 reference names built in; 3 fixtures |
+| 3.3 (registry) | `d63e3d9`; test-db `61b8b555` | The three ICC registry rows, with the registry's 73 reference names built in; 3 fixtures |
 
 ## Register coverage
 
@@ -67,9 +66,9 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green at `95ebfa3`, 2026-11-25 (100% lines, regions, functions) |
+| `bin/rust/check.sh` | green at `d63e3d9`, 2026-11-25 (100% lines, regions, functions) |
 | Python (ruff, pyright, pytest) | green, 2026-11-25: 1156 passed |
-| `bin/docker/test.sh` | green at the end of phase 2, 2026-11-25: 1156 passed |
+| `bin/docker/test.sh` | green at the end of phase 3, 2026-11-25: 1156 passed |
 | `bin/suites/pdfx.sh` | 2026-11-25: 39 files, 39 accepted, 0 problems (nothing judged yet) |
 
 ## Corpus and oracle
@@ -279,3 +278,25 @@ Oracle consultations:
   shared `/XRefStm` sections, and `/Length` stored in an object stream.
 - **Departures.** 6.25's lexical row moves to phase 4; `x4.pdf-reference.conforms` stays `todo`; no `cargo fuzz`
   target (stable mutation test instead); `bomb_giant.pdf` waits for an image decoder. See "Deviations from the plan".
+
+### Phase 3 (document structure and metadata), finished 2026-11-25
+
+- **What changed.** Tier 5 gained the page tree with inheritance and stream data on request; `common` gained the XMP
+  reader (prefixes kept), PDF and XMP dates, text strings, ICC headers and rectangles. 75 PDF/X-4 rows were implemented
+  in this phase, each with a fixture that fails it: metadata and identification (6.9-6.11), the output intent and the
+  ICC registry (6.4.1, 6.4.2.1), boxes (6.12), keys forbidden anywhere (6.7, 6.13, 6.14, 6.16, 6.18, 6.21, 6.22, 6.26),
+  optional content (6.24), annotations and trap networks (6.17, 6.9). PDF/X-4 stands at 83 implemented, 54 todo,
+  4 skip.
+- **Toolchains.** `bin/rust/check.sh` green at 100% coverage; Python green (1156); Docker green (1156);
+  `bin/suites/pdfx.sh` 39 files, 39 accepted, no problems, with every warning on the Ghent and Altona positives
+  classified and recorded in test-db.
+- **Test material.** The veraPDF and BFO "same rule" files agree with the X-4 reading or differ for a recorded reason;
+  GWG Processing Steps gives the box and optional content results test-db predicts; GWG151 and GWG152 fail 6.24.
+- **Unexpected.** The fuzz timeouts came from the reader decoding 8.4 million cross-reference entries before checking
+  the object limit; it now refuses first. Two oracle questions: an empty `/RegistryName` reads as absent, and the
+  registry rule went to the owner, who chose a warning. 38 of the 39 positives carry non-uuid document IDs, which 6.10.4
+  recommends against.
+- **Departures.** Tier 5's Python mapping and the Arlington typed views wait for a caller; the ICC MD5 and description
+  wait for the phase 4 colour rows; image alternates' sameness is a `skip`; the registry rule is a warning by decision.
+  See "Deviations from the plan" and the decision log.
+
