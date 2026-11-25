@@ -146,6 +146,5 @@ RULES = (
         check_pdfx_identity,
     ),
     Rule("info-version", "GTS_PDFXVersion / GTS_PDFXConformance in the Info dictionary", X4, Severity.ERROR, TODO),
-    Rule("pdf-version", "the PDF version does not exceed the flavour's ceiling", X4, Severity.ERROR, TODO),
     Rule("the-rest", "everything else the standard requires has not been enumerated", X4, Severity.ERROR, TODO),
 )
