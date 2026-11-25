@@ -10,8 +10,7 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 1**: tasks 1.1-1.6 done. Next: 1.7, the brief's stage 1 (maturin, wheels, parity gate in CI, `catch_unwind`,
-  licence and shared-library checks).
+- **Phase 2** (reading the file): task 2.1, the parser. Phase 1 is done; its report is under "Stage reports".
 
 ## Done
 
@@ -29,6 +28,7 @@ record it as not conforming to that one rule).
 | 1.4 | `730bbec` | `findings` module: catalogue, `Finding`, outcomes, `Report`, JSON schema 1 with an insta snapshot |
 | 1.5 | `a8ebbac` | `checks::verify` (judges nothing yet), Gherkin steps, `x4-base.feature` on `x4-good` |
 | 1.6 | `08c3e64`; test-db `a7422dcc` | `bin/suites/pdfx.sh`, `expectations/pdfx.toml` (39 files) |
+| 1.7 | `c2aa73a` | maturin, `proof_pdf._internal._core`, release wheels, wheel checks, `checks::guarded` |
 
 ## Register coverage
 
@@ -38,15 +38,15 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 0 | 138 | 3 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House print checks | 0 | 37 | 0 |
+| House print checks | 0 | 37 | 1 (`internal`) |
 
 ## Gates
 
 | Gate | Last result |
 |---|---|
 | `bin/rust/check.sh` | green, 2026-11-25 |
-| Python (ruff, pyright, pytest) | green, 2026-11-25: 1154 passed |
-| `bin/docker/test.sh` | green at the end of phase 0 (`766fcef`), 2026-11-25: 1154 passed with real veraPDF and Ghostscript |
+| Python (ruff, pyright, pytest) | green, 2026-11-25: 1156 passed |
+| `bin/docker/test.sh` | green at the end of phase 1 (`c2aa73a`, the Rust extension built in the image), 2026-11-25: 1156 passed |
 | `bin/suites/pdfx.sh` | 2026-11-25: 39 files, 39 accepted, 0 problems (nothing judged yet) |
 
 ## Decisions taken
@@ -131,4 +131,21 @@ Oracle consultations:
   ISO 15930-8 has a 2011 corrigendum that is not held.
 - **Departures.** See "Deviations from the plan". A third-party PDF/X-4 oracle is now in reach (pdfToolbox CLI, trial to
   2026-12-09).
+
+### Phase 1 (infrastructure), finished 2026-11-25
+
+- **What changed.** `rust/checks.toml` lists 232 checks as data (every register row, the X-5 reader rules as skips,
+  the house checks, `internal`), validated at build time against clause lists taken from the standards (numbers only)
+  and generated into constants and `rust/CHECKS.md`. A completeness gate counts them and holds `implemented` to a
+  passing and a failing fixture. Findings, per-check outcomes and the JSON report (schema 1) live in a new base module,
+  `findings`. Gherkin steps verify a fixture at a PDF/X level; `x4-good` runs end to end. `bin/suites/pdfx.sh` runs the
+  engine over test-db's PDF/X sets against `expectations/pdfx.toml`. The Python package builds with maturin and carries
+  the Rust core as `proof_pdf._internal._core`; releases build per-platform wheels and check them.
+- **Toolchains.** `bin/rust/check.sh` green at 100% coverage; Python green (1156); Docker green (1156, extension built in
+  the image); `bin/suites/pdfx.sh` 39 files, 39 accepted, no problems.
+- **Parity and corpus.** Nothing is judged yet, so no parity numbers; the corpus run proves the harness only.
+- **Unexpected.** pdfToolbox settled the Ghent positives at exactly the plan's 35 of 39. maturin runs cargo from the
+  repository root, so the pinned toolchain had to become rustup's default in CI and Docker.
+- **Departures.** The CI wheel matrix is unverified until pushed; the parity gate in CI waits for the first port; the
+  extension lives in `_internal`. See "Deviations from the plan".
 
