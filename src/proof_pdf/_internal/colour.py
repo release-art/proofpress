@@ -26,6 +26,7 @@ a failure by the caller, not silently skipped); the rest read the
 
 import asyncio
 import collections.abc
+import hashlib
 import io
 import logging
 import pathlib
@@ -521,9 +522,9 @@ def check_icc_profiles(pdf: pikepdf.Pdf, mode: ColourMode) -> list[Finding]:
     """Check the ICC profiles the file embeds for colour spaces: sound, and consistent with the job.
 
     Every profile must be readable and its header must agree with the space's ``/N``. Then, by mode: in a CMYK job a
-    CMYK profile other than the output intent's is a warning (legal in PDF/X-4, but the RIP converts through it); in an
-    RGB job every RGB profile, the output intent's included, must be the same one, since mixed working spaces shift
-    colour between objects.
+    CMYK profile that is the output intent's own is an error (ISO 15930-7, 6.4.3.3: such colour belongs in DeviceCMYK,
+    compared by MD5 as ICC.1 7.2.18 computes the profile ID); in an RGB job every RGB profile, the output intent's
+    included, must be the same one, since mixed working spaces shift colour between objects.
     """
     findings: list[Finding] = []
     seen: dict[str, tuple[str, str]] = {}  # profile digest -> (family, description)
@@ -543,7 +544,7 @@ def check_icc_profiles(pdf: pikepdf.Pdf, mode: ColourMode) -> list[Finding]:
         if problem:
             findings.append(Finding("icc-profile", Severity.ERROR, f"ICC profile {label}: {problem}"))
         elif family is not None:
-            seen.setdefault(_profile_key(data, label), (family, label))
+            seen.setdefault(_profile_key(data, label) if family != CMYK else _icc_md5(data), (family, label))
     return findings + _profile_consistency(seen, _intent_profile(pdf), mode)
 
 
@@ -564,13 +565,17 @@ def _profile_consistency(
                 )
             ]
     elif intent is not None and intent[1] == CMYK:
-        other = {d: v[1] for d, v in seen.items() if v[0] == CMYK and d != intent[0]}
-        if other:
+        # ponytail: judges every reachable ICCBased space, so an unused one (or a DefaultCMYK nothing paints through)
+        # also fails, where 6.4.3.3 with decision X4-Q3 means print elements only; the Rust colour evaluator (plan 4.3)
+        # judges spaces as painted.
+        same = [label for digest, (family, label) in seen.items() if family == CMYK and digest == intent[0]]
+        if same:
             return [
                 Finding(
                     "icc-profile",
-                    Severity.WARN,
-                    f"CMYK profile(s) {_names(other)} differ from the output intent {intent[2]!r}: the RIP converts",
+                    Severity.ERROR,
+                    f"a CMYK ICCBased colour space uses the output intent's own profile {same[0]!r} -- PDF/X-4 "
+                    "requires DeviceCMYK for colour already in the printing condition (ISO 15930-7, 6.4.3.3)",
                 )
             ]
     return []
@@ -594,6 +599,15 @@ def _profile_key(data: bytes, label: str) -> str:
     return f"{label}:{len(data)}"
 
 
+def _icc_md5(data: bytes) -> str:
+    """The profile's identity as ICC.1:2022 7.2.18 computes its profile ID: the MD5 of the profile with the flags
+    (bytes 44-47), rendering intent (64-67) and profile ID (84-99) fields set to zero."""
+    zeroed = bytearray(data)
+    for start, end in ((44, 48), (64, 68), (84, 100)):
+        zeroed[start:end] = bytes(end - start)
+    return hashlib.md5(zeroed, usedforsecurity=False).hexdigest()
+
+
 def _icc_label(data: bytes) -> str:
     try:
         return ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(data))).strip() or "(unnamed)"
@@ -613,7 +627,8 @@ def _intent_profile(pdf: pikepdf.Pdf) -> tuple[str, str, str] | None:
             continue
         space = _ICC_SPACES.get(data[16:20])
         if space is not None:
-            return _profile_key(data, _icc_label(data)), space[0], _icc_label(data)
+            label = _icc_label(data)
+            return (_icc_md5(data) if space[0] == CMYK else _profile_key(data, label)), space[0], label
     return None
 
 

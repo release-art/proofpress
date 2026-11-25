@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- In a CMYK job, a CMYK `ICCBased` colour space that uses the output intent's own profile (the same stream, or the
+  same MD5 as ICC.1 7.2.18 computes it) is now an `icc-profile` error, as ISO 15930-7 6.4.3.3 requires. The old warning
+  for a CMYK profile *different* from the intent's is gone: PDF/X-4 allows that. Both Altona test files now raise it:
+  they remap a DeviceCMYK image through a DefaultCMYK that is the intent profile, and pdfToolbox fails them for it too.
 - The PDF/X `trapped` check reads `pdf:Trapped` from the document XMP, where ISO 15930-7 6.9 puts it. A file that sets
   `/Trapped` only in the Info dictionary now fails; an Info `/Trapped` is still read, and must agree with the XMP value
   (6.10.2). The test fixtures declare `pdf:Trapped` in their PDF/A extension schema, since PDF/A-2 does not predefine it.

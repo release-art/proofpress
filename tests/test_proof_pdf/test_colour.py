@@ -925,7 +925,8 @@ class TestIccProfiles:
         assert colour.check_icc_profiles(pdf, ColourMode.RGB) == []
 
     @needs_cmyk_profile
-    def test_a_cmyk_profile_other_than_the_intent_is_a_warning(self):
+    def test_the_intent_profile_on_an_element_fails_a_cmyk_job(self):
+        """ISO 15930-7, 6.4.3.3: a CMYK ICCBased space may not use the output intent's profile; another one is fine."""
         cmyk = CMYK_PROFILE.read_bytes()
         pdf = _pdf_with_profiles((cmyk, 4))
         intent = pikepdf.Dictionary(
@@ -934,11 +935,14 @@ class TestIccProfiles:
             DestOutputProfile=pdf.make_stream(_renamed_cmyk(cmyk), N=4),
         )
         pdf.Root.OutputIntents = pikepdf.Array([pdf.make_indirect(intent)])
-        [finding] = colour.check_icc_profiles(pdf, ColourMode.CMYK)
-        assert finding.severity is Severity.WARN and "differ from the output intent" in finding.message
-        # ...and the intent's own profile, embedded again, is not "another" profile.
-        pdf.Root.OutputIntents[0].DestOutputProfile = pdf.make_stream(cmyk, N=4)
         assert colour.check_icc_profiles(pdf, ColourMode.CMYK) == []
+        # The same profile, even as a separate stream whose ID, flags and rendering intent differ, is the intent's.
+        same = bytearray(cmyk)
+        same[44:48], same[64:68], same[84:100] = b"\x00\x00\x00\x01", b"\x00\x00\x00\x01", b"\x11" * 16
+        pdf.Root.OutputIntents[0].DestOutputProfile = pdf.make_stream(bytes(same), N=4)
+        [finding] = colour.check_icc_profiles(pdf, ColourMode.CMYK)
+        assert finding.severity is Severity.ERROR and "output intent's own profile" in finding.message
+        assert colour.check_icc_profiles(pdf, ColourMode.RGB) == []
 
 
 def _renamed_cmyk(data: bytes) -> bytes:

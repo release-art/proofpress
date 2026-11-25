@@ -23,12 +23,12 @@ rgb = ["rgb-only/error"]
 gray = ["gray-only/error"]
 
 [cmyk-image-profile]
-cmyk = []  # the image carries the output intent's own profile
+cmyk = ["icc-profile/error"]  # the output intent's own profile on an ICCBased space: ISO 15930-7, 6.4.3.3 forbids it
 rgb = ["rgb-only/error"]  # the intent is CMYK, and so is the image
 gray = ["gray-only/error"]
 
 [cmyk-profile-mismatch]
-cmyk = ["icc-profile/warn"]  # tagged with a second CMYK profile: legal, but the RIP converts
+cmyk = []  # tagged with a second CMYK profile: allowed by PDF/X-4; the RIP converts it
 rgb = ["rgb-only/error"]
 gray = ["gray-only/error"]
 
