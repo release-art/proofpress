@@ -10,7 +10,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 1**: tasks 1.1-1.4 done. Next: 1.5, the fixture and scenario harness (a scenario on `x4-good`), then 1.6 and 1.7.
+- **Phase 1**: tasks 1.1-1.6 done. Next: 1.7, the brief's stage 1 (maturin, wheels, parity gate in CI, `catch_unwind`,
+  licence and shared-library checks).
 
 ## Done
 
@@ -26,6 +27,8 @@ record it as not conforming to that one rule).
 | 1.1, 1.2 | `82b4f31` | `rust/checks.toml` (231 checks), `build.rs`, `rust/CHECKS.md`, `rust/clauses/` |
 | 1.3 | `d98660b` | Completeness gate, `tests/fixtures/pdfx/expected.toml` |
 | 1.4 | `730bbec` | `findings` module: catalogue, `Finding`, outcomes, `Report`, JSON schema 1 with an insta snapshot |
+| 1.5 | `a8ebbac` | `checks::verify` (judges nothing yet), Gherkin steps, `x4-base.feature` on `x4-good` |
+| 1.6 | `08c3e64`; test-db `a7422dcc` | `bin/suites/pdfx.sh`, `expectations/pdfx.toml` (39 files) |
 
 ## Register coverage
 
@@ -44,12 +47,14 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 | `bin/rust/check.sh` | green, 2026-11-25 |
 | Python (ruff, pyright, pytest) | green, 2026-11-25: 1154 passed |
 | `bin/docker/test.sh` | green at the end of phase 0 (`766fcef`), 2026-11-25: 1154 passed with real veraPDF and Ghostscript |
-| `bin/suites/pdfx.sh` | does not exist yet (task 1.6) |
+| `bin/suites/pdfx.sh` | 2026-11-25: 39 files, 39 accepted, 0 problems (nothing judged yet) |
 
 ## Decisions taken
 
 Decision log in [`../README.md`](../README.md), 2026-11-25:
 - PDF/X 6.25 is the PDF 1.6 Reference's Table C.1 only: no array or dictionary limit, no page size (task 0.2).
+- Ghent's X-4 positives are the 35 of 39 claims pdfToolbox passes; GWG151 and GWG152 fail 6.24 (oracle agreed, no
+  escalation).
 - Altona fails 6.4.3.3 only (two hits per file) and stays a positive otherwise; owner approved; plan edited.
 - X4-Q6 stands: no corrigendum to ISO 15930-7:2010 found; 15930-8 Cor 1:2011 exists and is not held (task 0.2).
 - ICC profile version (6.4.2.1, 6.4.3.3): major version 2 or 4 passes, any minor; 5 fails. From pdfToolbox's verdicts on
@@ -64,6 +69,8 @@ Third-party preflight (pdfToolbox Server 17.1 CLI, trial, "Verify compliance wit
   (6.10.2) that nobody had listed.
 
 Oracle consultations:
+- GWG151 and GWG152 under 6.24: do not conform (their `/D /Order` leaves out content OCGs); high confidence; classified
+  (b) without escalation. veraPDF's PDF/A-2 rule 6.9-3 fails them too.
 - Altona under 6.4.3.3: does not conform (DefaultCMYK equal to the intent profile remaps a painted DeviceCMYK
   image); high confidence; escalated because the plan lists Altona as a positive; the owner approved recording it.
 - Task 0.4, `x4-good` against every X-4 row: conforms, high confidence; escalated the ICC version reading, which
