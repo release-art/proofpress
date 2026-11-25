@@ -8,7 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::file::{self, Entry, ObjectDamage, Refusal, Xref};
 use crate::filters::Decoded;
-use crate::findings::{Finding, Location, OBJECT_DANGLING_REFERENCE};
+use crate::filters::Filter;
+use crate::findings::{Finding, Location, OBJECT_DANGLING_REFERENCE, STREAM_FILTER};
 use crate::pipeline::Limits;
 use crate::syntax::{self, Mode, Note, Parser, Read};
 pub(crate) use crate::syntax::{Dict, Object, Value};
@@ -169,6 +170,17 @@ impl Document {
                 out.push(file::damage_finding(*num, damage));
             }
         }
+        for (num, name) in self.unknown_filters() {
+            let name = String::from_utf8_lossy(&name);
+            out.push(
+                Finding::new(
+                    STREAM_FILTER,
+                    format!("object {num} names the filter /{name}, which no standard defines"),
+                )
+                .citing("7.4.1")
+                .at(vec![Location::Object(num, 0)]),
+            );
+        }
         for (num, generation, why) in &self.dangling {
             let reason = match why {
                 Dangling::NotListed => "no cross-reference section lists it".to_owned(),
@@ -184,6 +196,30 @@ impl Document {
                 .citing("7.3.10")
                 .at(vec![Location::Object(*num, *generation)]),
             );
+        }
+        out
+    }
+
+    /// Every filter name a stream gives that no standard defines, wherever the stream is; decoding it waits until
+    /// something reads it.
+    fn unknown_filters(&self) -> Vec<(u32, Vec<u8>)> {
+        let mut out = Vec::new();
+        for (num, object, stream, _) in self.objects() {
+            let (Some(dict), Some(_)) = (object.dict(), stream) else {
+                continue;
+            };
+            let names: Vec<&Object> = match dict.get(b"Filter").and_then(|f| self.resolve(f)) {
+                Some(Object {
+                    value: Value::Array(items),
+                    ..
+                }) => items.iter().filter_map(|i| self.resolve(i)).collect(),
+                other => other.into_iter().collect(),
+            };
+            let unknown = names
+                .into_iter()
+                .filter_map(Object::name)
+                .filter(|n| Filter::from_name(n).is_none());
+            out.extend(unknown.map(|n| (num, n.to_vec())));
         }
         out
     }
@@ -667,5 +703,19 @@ mod tests {
             object_stream_damage(text.replace("/First 4", "").as_bytes(), &[(2, 5, 0)]),
             Some(ObjectDamage::ObjectStream(5))
         );
+    }
+
+    #[test]
+    fn an_unknown_filter_is_a_finding_wherever_it_is() {
+        let doc = open(&classic(
+            &[
+                (1, b"<< /A 2 0 R /B 3 0 R >>"),
+                (2, b"<< /Filter /Rot13 /Length 1 >>\nstream\nx\nendstream"),
+                (3, b"<< /Filter [/FlateDecode 4 0 R] /Length 1 >>\nstream\nx\nendstream"),
+                (4, b"/Nope"),
+            ],
+            "<< /Size SIZE /Root 1 0 R >>",
+        ));
+        assert_eq!(ids(&doc), ["stream.filter", "stream.filter"]);
     }
 }

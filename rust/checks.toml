@@ -1995,6 +1995,14 @@ applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
 status = "todo"
 
 [[check]]
+id = "stream.filter"
+title = "Every stream names filters ISO 32000 defines"
+clauses = ["iso-32000-2:7.4.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+status = "todo"
+
+[[check]]
 id = "object.damaged"
 title = "Every object reachable from the trailer can be read"
 clauses = ["iso-32000-2:7.3", "iso-32000-2:7.3.8.1", "iso-32000-2:7.3.10", "iso-32000-2:7.5.7"]

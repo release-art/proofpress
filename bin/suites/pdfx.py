@@ -1,9 +1,10 @@
 """Run the Rust engine over proof-pdf-test-db and compare with its expectations. Local only: never in public CI.
 
-    python3 bin/suites/pdfx.py [--set NAME ...] [--level x4] [--timeout 60] [--jobs N]
+    python3 bin/suites/pdfx.py [--set NAME ... | --all] [--level x4] [--timeout 60] [--jobs N]
 
 Without --set it runs the files named in proof-pdf-test-db/expectations/pdfx.toml; each --set adds every distinct PDF of
-that folder under samples/ (from samples/index.jsonl; files marked malicious are left out). Each file runs in its own
+that folder under samples/ (from samples/index.jsonl), and --all every folder; files marked malicious are always
+left out, since they belong in a sandbox. Each file runs in its own
 process, so a crash or a hang is an outcome, not the end of the run. Outcomes are ranked, worst first: crash, timeout,
 refused, read with gaps, accepted. A file in the expectations must fail exactly the expected checks among those the
 engine evaluated; a check not yet implemented is not compared. Results go to rust/target/pdfx-corpus/, stamped with the
@@ -57,6 +58,7 @@ def compare(expected: dict, report: dict) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--set", action="append", default=[], help="a folder under samples/ to run whole")
+    parser.add_argument("--all", action="store_true", help="every folder under samples/")
     parser.add_argument("--level", default="x4")
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 4)
@@ -64,10 +66,10 @@ def main() -> int:
 
     expectations = tomllib.loads((TESTDB / "expectations" / "pdfx.toml").read_text())
     files = {path: expectations[path] for path in expectations}
-    if args.set:
+    if args.set or args.all:
         index = [json.loads(line) for line in (TESTDB / "samples" / "index.jsonl").read_text().splitlines()]
         for record in index:
-            wanted = record["set"] in args.set and record["kind"] == "pdf"
+            wanted = (args.all or record["set"] in args.set) and record["kind"] == "pdf"
             if wanted and record["duplicate_of"] is None and not record["malicious"]:
                 files.setdefault(record["path"], None)
 

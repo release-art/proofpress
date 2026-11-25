@@ -249,5 +249,6 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `syntax.name-escape` | Escapes in names are two hex digits, never 00 | iso-32000-2:7.3.5 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
 | `syntax.duplicate-key` | No dictionary gives a key twice | iso-32000-2:7.3.7 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
 | `stream.eol` | Stream data is followed by an end of line before endstream | iso-32000-2:7.3.8.1 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `stream.filter` | Every stream names filters ISO 32000 defines | iso-32000-2:7.4.1 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
 | `object.damaged` | Every object reachable from the trailer can be read | iso-32000-2:7.3, iso-32000-2:7.3.8.1, iso-32000-2:7.3.10, iso-32000-2:7.5.7 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
 | `object.dangling-reference` | References point at objects that exist | iso-32000-2:7.3.10 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
