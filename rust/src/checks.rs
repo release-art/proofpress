@@ -8,6 +8,7 @@ mod boxes;
 mod colour;
 mod contents;
 mod intent;
+mod jpx;
 mod keys;
 mod metadata;
 mod optional;
@@ -143,6 +144,12 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_SPOT_PRINTING_ORDER_CONSISTENT, spots::printing_order),
     (f::X4_SPOT_SOLIDITIES_CONSISTENT, spots::solidities),
     (f::X4_TRANSPARENCY_BLEND_MODES, spots::blend_modes),
+    (f::X4_JPX_CHANNELS, jpx::channels),
+    (f::X4_JPX_ONE_COLOUR_SPACE, jpx::one_colour_space),
+    (f::X4_JPX_NO_CIEJAB, jpx::no_ciejab),
+    (f::X4_JPX_BIT_DEPTH, jpx::bit_depth),
+    (f::X4_JPX_UNIFORM_DEPTH, jpx::uniform_depth),
+    (f::X4_JPX_CMYK_AS_DEVICE, jpx::cmyk_as_device),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5

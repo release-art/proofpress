@@ -667,6 +667,60 @@ def _x4_spot_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _jp2_box(kind: bytes, content: bytes) -> bytes:
+    return (len(content) + 8).to_bytes(4, "big") + kind + content
+
+
+def _jpx(depths: list[int], colours: list[int]) -> bytes:
+    """JPEG 2000 data in the JPX file format with only its header: a signature box, an `ihdr` for ``depths`` (one depth
+    for all, or 255 and a `bpcc` box when they differ), one `colr` box per enumerated colour space in ``colours``, and a
+    codestream holding just SOC and SIZ. Nothing decodes it; the 6.27 checks read headers only."""
+    same = len(set(depths)) == 1
+    header = (1).to_bytes(4, "big") * 2 + len(depths).to_bytes(2, "big")
+    header += bytes([depths[0] - 1 if same else 255, 7, 0, 0])
+    boxes = _jp2_box(b"ihdr", header)
+    if not same:
+        boxes += _jp2_box(b"bpcc", bytes(d - 1 for d in depths))
+    for colour in colours:
+        boxes += _jp2_box(b"colr", bytes([1, 0, 0]) + colour.to_bytes(4, "big"))
+    siz = (
+        b"\xff\x4f\xff\x51"
+        + bytes(36)
+        + len(depths).to_bytes(2, "big")
+        + b"".join(bytes([d - 1, 1, 1]) for d in depths)
+    )
+    return (
+        _jp2_box(b"jP  ", b"\x0d\x0a\x87\x0a")
+        + _jp2_box(b"ftyp", b"jpx \0\0\0\0jpx ")
+        + _jp2_box(b"jp2h", boxes)
+        + _jp2_box(b"jp2c", siz)
+    )
+
+
+def _x4_jpx(data: bytes, *, space: bool = True, rgb_intent: bool = False) -> pikepdf.Pdf:
+    """x4-good with a JPEG 2000 image XObject holding ``data`` in its resources, with a DeviceCMYK /ColorSpace unless
+    ``space`` is false; with ``rgb_intent`` the output profile's header says RGB."""
+    pdf = _x4_intent("", header=(16, b"RGB ")) if rgb_intent else _x4_good()
+    image = pdf.make_stream(data, Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image, Width=1, Height=1)
+    image["/Filter"] = pikepdf.Name.JPXDecode
+    if space:
+        image["/ColorSpace"] = pikepdf.Name.DeviceCMYK
+    _resource(pdf, "XObject", pdf.make_indirect(image))
+    return pdf
+
+
+def _x4_jpx_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.27 (expected.toml says what each raises)."""
+    return {
+        "x4-jpx-five-channels": _x4_jpx(_jpx([8] * 5, [12])),
+        "x4-jpx-two-colours": _x4_jpx(_jpx([8] * 4, [12, 12])),
+        "x4-jpx-ciejab": _x4_jpx(_jpx([8] * 3, [19])),
+        "x4-jpx-depth-12": _x4_jpx(_jpx([12] * 4, [12])),
+        "x4-jpx-mixed-depths": _x4_jpx(_jpx([8, 8, 16, 16], [12])),
+        "x4-jpx-cmyk-as-device": _x4_jpx(_jpx([8] * 4, [12]), space=False, rgb_intent=True),
+    }
+
+
 def _x4_content_fixtures() -> dict[str, pikepdf.Pdf]:
     """The negatives of the content-stream checks: ISO 32000-2 7.8.2 and 8.9.7, PDF/X-4 6.19 and 6.23."""
     gstate = _x4_good()
@@ -1120,6 +1174,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_content_fixtures(),
         **_x4_colour_fixtures(),
         **_x4_spot_fixtures(),
+        **_x4_jpx_fixtures(),
     }
 
 

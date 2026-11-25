@@ -152,6 +152,22 @@ impl Document {
     /// Stream `num`'s data with every filter applied, when it is a stream the walk read and its filters decode it; not
     /// for image data, which stays encoded here. The tiers below report a stream that cannot be decoded.
     pub(crate) fn stream_data(&self, num: u32) -> Option<Vec<u8>> {
+        match self.decoded(num)? {
+            Decoded::Plain(data) => Some(data),
+            Decoded::Encoded(_) => None,
+        }
+    }
+
+    /// Image stream `num`'s data as its image filter (`DCTDecode`, `JPXDecode`, `JBIG2Decode`, `CCITTFaxDecode`) reads
+    /// it: every filter before that one applied. `None` when the stream has no image filter or cannot be decoded.
+    pub(crate) fn image_data(&self, num: u32) -> Option<Vec<u8>> {
+        match self.decoded(num)? {
+            Decoded::Encoded(data) => Some(data),
+            Decoded::Plain(_) => None,
+        }
+    }
+
+    fn decoded(&self, num: u32) -> Option<Decoded> {
         let Some(Slot::Loaded {
             object: Object {
                 value: Value::Dict(dict),
@@ -164,10 +180,7 @@ impl Document {
             return None;
         };
         let resolve = |o: &Object| self.resolve(o).cloned();
-        match file::decode(self.bytes(*buffer), dict, *range, &self.limits, &resolve) {
-            Ok(Decoded::Plain(data)) => Some(data),
-            _ => None,
-        }
+        file::decode(self.bytes(*buffer), dict, *range, &self.limits, &resolve).ok()
     }
 
     /// Every page in order, from the catalog's `/Pages` (7.7.3), with its inheritable attributes resolved (7.7.3.4).
@@ -544,6 +557,9 @@ mod tests {
         ));
         assert_eq!(doc.stream_data(2).as_deref(), Some(b"hi".as_slice()));
         assert_eq!(doc.stream_data(3), None, "an image filter stays encoded");
+        assert_eq!(doc.image_data(3).as_deref(), Some(b"JPEG".as_slice()));
+        assert_eq!(doc.image_data(2), None, "no image filter");
+        assert_eq!(doc.image_data(9), None);
         assert_eq!(doc.stream_data(4), None, "data the filter cannot decode");
         assert_eq!(doc.stream_data(6), None, "not a stream");
         assert_eq!(doc.stream_data(9), None, "not read");

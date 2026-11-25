@@ -523,3 +523,29 @@ expect = { "x4.transparency.group-cs-restricted" = "a page group with /CS /Devic
 [x4-blend-mode-unknown]
 levels = ["x4"]
 expect = { "x4.transparency.blend-modes" = "an ExtGState with /BM /Funky (6.20, X4-Q19)" }
+
+# PDF/X-4 6.27: JPEG 2000 images. Each adds an image XObject to x4-good.
+
+[x4-jpx-five-channels]
+levels = ["x4"]
+expect = { "x4.jpx.channels" = "five channels (6.27)" }
+
+[x4-jpx-two-colours]
+levels = ["x4"]
+expect = { "x4.jpx.one-colour-space" = "two colour specification boxes (6.27)" }
+
+[x4-jpx-ciejab]
+levels = ["x4"]
+expect = { "x4.jpx.no-ciejab" = "the CIEJab enumerated colour space, 19 (6.27)" }
+
+[x4-jpx-depth-12]
+levels = ["x4"]
+expect = { "x4.jpx.bit-depth" = "12 bits per channel (6.27)" }
+
+[x4-jpx-mixed-depths]
+levels = ["x4"]
+expect = { "x4.jpx.uniform-depth" = "channels of 8 and 16 bits (6.27)" }
+
+[x4-jpx-cmyk-as-device]
+levels = ["x4"]
+expect = { "x4.jpx.cmyk-as-device" = "profile-less CMYK JPEG 2000 with no /ColorSpace under an RGB intent (6.27)", "x4.colour.device-space-matches-intent" = "and the page's own DeviceCMYK under that intent (6.4.3.2)" }
