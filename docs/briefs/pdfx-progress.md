@@ -5,7 +5,23 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
-None open. Answered 2026-11-25:
+**Open, 2026-11-26 (oracle escalation, task 4.4, ISO 15930-7 6.27 p.31; ITU-T T.801 M.8, M.9.2, M.11.1):** 6.27 asks for
+"the JPX file format" and "only the JPX baseline set of features". T.801 says a JPX file lists `jpx ` among its compatible
+brands, a baseline file lists `jpxb`, and a Reader Requirements box (`rreq`) follows the File Type box. Many producers
+write plain JP2 files instead: brand `jp2 `, no `jpx `/`jpxb`, no `rreq`. Do those fail `x4.jpx.baseline`?
+- **Fail them** (the oracle's recommendation, as the text reads). Adobe's output lists `jp2 `, `jpxb` and `jpx ` and has
+  an `rreq` box, so every Altona and Ghent JPEG 2000 stream passes; 8 of 38 web samples and every veraPDF 6-2-8-3 file
+  would fail. ISO 32000-1's informative note calling JP2 a subset of JPX baseline, and veraPDF's PDF/A-2 practice, lean
+  the other way.
+- **Pass them**, reading JP2 as baseline-compatible: logged as a departure from the text.
+
+Settled without escalation: a bare codestream fails `x4.jpx.baseline` (ISO 32000 7.4.9 wants the JPX file structure);
+`x4.jpx.baseline` also checks the image header's compression type, the codestream's capabilities (Rsiz), the colour
+specification and approximation, and box order; `x4.image.jpx-valid` becomes a header-level structural check. Neither
+row is written yet. Aside from the oracle, to fix with them: a palette image's channel count is the palette's, not
+the header's.
+
+Answered 2026-11-25:
 - 6.4.3.4's same-name rule for Separations (oracle escalation): the owner chose (a), print elements only, as X4-Q3
   says. Every name counts, process inks included. Altona keeps failing 6.4.3.3 only.
 
@@ -59,7 +75,7 @@ record it as not conforming to that one rule).
 | 4.2, 4.3 (part) | `b5742dc` | Tier 7 walks pages with a graphics state: paint events with colour space, role, overprint and OPM, `Default` spaces applied, forms and coloured patterns walked with one ancestor set; 5 colour rows (6.4.3.2, 6.4.3.3, 6.4.3.4's alternates) with 6 fixtures; `md5` crate for profile identity |
 | 4.3 (spots), 6.20 | `a82f79a`, `ea2c86c` (scope) | 7 spot rows of 6.4.3.4 and both 6.20 rows with 9 fixtures; `x4.spot.colorants-match-devicen` waits for function evaluation |
 | 4.4 (part) | `81362d4` | JPEG 2000 header reader (JPX boxes, codestream SIZ); 6 of 6.27's rows with 6 fixtures, agreeing with veraPDF's 6.2.8.3 files |
-| 4.5 | this commit | Pre-separated files (6.1.2, X4-Q2): every painting page one colorant, differing between pages; 1 fixture; none in Ghent, Altona or GWG Processing Steps |
+| 4.5 | `cd26fbf` | Pre-separated files (6.1.2, X4-Q2): every painting page one colorant, differing between pages; 1 fixture; none in Ghent, Altona or GWG Processing Steps |
 
 ## Register coverage
 
@@ -235,9 +251,8 @@ Oracle consultations:
 
 ## Owner actions
 
-- **JPEG 2000 standards:** ISO/IEC 15444-1 and 15444-2 (identical to ITU-T T.800 and T.801, which ITU publishes free
-  of charge) for test-db's `standards/`, so `x4.jpx.baseline` and `x4.image.jpx-valid` can be written. Fetching them is a
-  download, which I have not done without your word.
+- **JPEG 2000 standards:** done 2026-11-26 on the owner's word: ITU-T T.800 and T.801 (08/2002), test-db `580f8e51`. The
+  in-force editions need an ITU TIES account; the 2002 texts are those of ISO/IEC 15444-1 and 15444-2:2003.
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.
