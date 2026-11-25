@@ -84,7 +84,8 @@ Each refusal becomes a finding under the existing `structure` check. These are t
 | Stream `/Length` is wrong | 5 |
 | No `startxref` in the last 1024 bytes | 4 |
 
-Others met at lower counts include a bad object offset, no `%PDF-` at byte 0, damaged Flate data, and a self-referencing object.
+Others met at lower counts include a bad object offset, damaged Flate data, and a self-referencing object. The spike also refused a
+file whose `%PDF-` header is not at byte 0; that is wrong, see the to-do list.
 Every refusal must name the object or offset, so the file can be fixed.
 
 **Decide error or warning for each reason during stage 2.** Start from error. Move a reason to warning only when a real file that
@@ -95,10 +96,21 @@ Still to do:
 
 - Accept references to missing objects, which are legal and read as null, and keep the finding from bug 3 below working: a `Do`
   on a missing XObject is a hole in the page.
+- Accept a header that does not start at byte 0. PDF 2.0 allows other data before `%PDF-`, and xref offsets then count from the
+  header, not from the start of the file: `samples/pdf20examples/PDF 2.0 with offset start.pdf` is the PDF Association's example,
+  which qpdf reads without a warning. Report the offset as a warning. PDF/A forbids it (veraPDF fails clause 6.1.2-1), and some
+  RIPs may not cope.
+- Read the version from the catalog's `/Version` as well as the header. An incremental update can raise it there while the header
+  still says 1.7, as in `PDF 2.0 via incremental save.pdf`.
 - Check for an end of line before `endstream`, not only after `stream`. veraPDF rule 6.1.7.1-2 requires both, and a real office
   report had 21 of 22 streams without it. Strict and Kura both missed it. Treat it as a finding, not a refusal.
+- Explain the 4 refusals qpdf finds nothing wrong with: `cc-main-2021-31-sample/0676584.pdf` (xref offset outside the file),
+  `govdocs1-sample/740790.pdf` (no `%%EOF`, likely a warning), and two JHOVE error files in `opf-format-corpus/jhove-errors/PDF-HUL-29/`
+  (page tree node not a dictionary).
+- Speed up the worst case. A 34 MB, 40-page UNSAFE-DOCS file took 24 s, against a 30 s limit in the safety run. Profile it before
+  setting the limits.
 - Explain the 3 pdf.js files strict opens that pikepdf and Kura both refuse (`bug1811668_reduced`, `issue16091`, `issue4573`).
-- Make an unknown filter a finding wherever it appears. The `UnknownFilter` files in `corpus/pdf-differences/` place one in each
+- Make an unknown filter a finding wherever it appears. The `UnknownFilter` files in `samples/pdf-differences/` place one in each
   kind of stream. One in an object stream refuses the file at open; one in a font, image or form only fails when something reads it.
 - Report an inline image that gives a key twice, in full and abbreviated. `InlineAbbreviations.pdf` does; it is read silently here,
   while today's `verify` calls the whole file "corrupt or encrypted" because pikepdf cannot parse it.
@@ -120,11 +132,13 @@ Every port is proved against the Python it replaces, on the same files, before t
   reject and needs a reason.
 - `spikes/crabify/fuzz.py`: mutated fixtures must never panic or hang.
 
-Corpus: `tests/fixtures/pdfs/`, both Altona files (`bin/suites/fetch.sh`), `corpus/` (`bin/suites/corpus.sh`, see
-`corpus/README.md`), the private `proof-pdf-test-db` repository cloned to `corpus/local/test-db`, `test/pdfs` from `mozilla/pdf.js`,
-and read-only `/Users/ilo/Devel/BrainyBoo/educational-cards/decks/*/*.pdf`. Never copy those decks or anything from
-`proof-pdf-test-db` into the repo, never quote their contents in public, and never redistribute `corpus/stillhq-pdfdb/`, which has no
-licence.
+Corpus: `tests/fixtures/pdfs/`, both Altona files (`bin/suites/fetch.sh`), the private `proof-pdf-test-db` repository at
+`../proof-pdf-test-db` (its `samples/` holds the public sets, pdf.js's `test/pdfs` among them, and private jobs), and read-only
+`/Users/ilo/Devel/BrainyBoo/educational-cards/decks/*/*.pdf`. Never copy those decks or anything from `proof-pdf-test-db` into
+the repo, never quote their contents in public, and never redistribute `samples/stillhq-pdfdb/`, which has no licence.
+
+The evidence below says `corpus/` for the public sets that were once fetched into this repository. They are now in test-db's
+`samples/` under the same names, except `py-pdf-samples` (now `py-pdf`) and `pdf-cabinet-of-horrors` (now `cabinet-of-horrors`).
 
 Differences that are expected, so do not chase them:
 
@@ -194,7 +208,7 @@ Fix these in the Python, or the parity gate will carry them into Rust.
 2. **`--allow-k-only` can pass an image that prints full CMY.** `_cmy_problem` reads Pillow's inverted pixels and ignores `/Decode`.
    Removing `/Decode` from `gray-k-only-image.pdf` makes Ghostscript print `(255, 255, 255, 75)` while the check reports nothing.
 3. **A page that paints a missing image passes.** `content.lookup_xobject` returns `None` for a name with no object behind it, and
-   every check skips it. `corpus/pdf-cabinet-of-horrors/veraPDFHiResWrongObjectID.pdf` points `/Im0` at an object that does not
+   every check skips it. `samples/cabinet-of-horrors/veraPDFHiResWrongObjectID.pdf` points `/Im0` at an object that does not
    exist: veraPDF passes it, and `verify` reports one finding fewer than for the intact file. Add a finding for a `Do` whose
    resource is missing or not an XObject. Kura calls this `page.resources_missing`; ISO 32000-2 7.8.3.
 4. **Total ink misjudges spot colours.** Ghostscript's `tiff32nc`, which `_page_tac_peaks` uses, converts each spot to its CMYK
@@ -235,7 +249,7 @@ catalogue entries nobody has tested.
 | Font embedding licence (`fsType`) | Embedding a font that forbids it is a legal problem, not a print one. It caused 139 of the refusals in Kura's own benchmark |
 | Registration colour (`All`) used outside the marks | Today `All` is mentioned only when a spot ink is disallowed |
 | Hidden optional content that would print or would not | Optional content is read only by `inspect` today |
-| Negative font size | `corpus/pdf-differences/NegativeFontSize` is a ready test file |
+| Negative font size | `samples/pdf-differences/NegativeFontSize` is a ready test file |
 | Barcode quiet zone (ISO/IEC 15416) | Packaging and labels only. Lowest priority |
 
 **From a read of Kura's source.** Three read-only passes over v1.3.0, with the main claims checked against the code and the
@@ -255,7 +269,7 @@ warnings for the word "reconstruct".
 | `schema = 1` in `proof-pdf.toml`, and errors that name the profile and key | 4 | Cheap now, costly once the Rust CLI fixes the format |
 | Cap what we read from Ghostscript and veraPDF, kill the whole process group on timeout, and keep partial progress in the timeout report | 4 | Kura kills only the direct child and sets no memory limit |
 | Fail the release job on any shared library outside the OS: `otool -L`, `ldd`, `auditwheel`, `delocate`. Add `cargo deny` for licences, so an AGPL dependency cannot slip in, and one check that versions agree | 1 | The single binary needs proving, not assuming |
-| A SHA-256 manifest for every `corpus/` folder, verified by `corpus.sh`. Rank run outcomes crash, timeout, refused, accepted, and put the engine version in every results file | 2 | The Cabinet mirror has no pin; Kura's own benchmark page names an old version |
+| A SHA-256 manifest for every folder in test-db's `samples/`. Rank run outcomes crash, timeout, refused, accepted, and put the engine version in every results file | 2 | The Cabinet mirror has no pin; Kura's own benchmark page names an old version |
 
 After the port:
 
@@ -288,6 +302,9 @@ everything; profile errors and error-level hits that still exit 0; and a general
 | Walk on accepted pdf.js and Altona files | 3.09M operators, 5 page walks differ |
 | `corpus/`: 644 files, 59,604 pages | 544 accepted, no crash. One walk error, on a form with an unknown filter, which pikepdf fails too. Of the 100 refused, 56 are encrypted, 37 draw a qpdf warning, 6 pikepdf refuses too, and 1 has junk after its trailer (`000293.pdf`) |
 | Mutation fuzz | 4,000 of 4,000 answered, no panic or hang |
+| Public corpora, 14,721 PDFs (2026-11-08): veraPDF, IUST, GovDocs1, CC-MAIN and 1,000 UNSAFE-DOCS samples, Ghent, Isartor and more | No crash, no timeout, each file sandboxed with network denied. 13,935 accepted. Of the 786 refused, 325 are encrypted and 77 are the header-offset rule above; qpdf also refuses or warns on 380 of the rest, and is silent on 4 |
+| Ghent Output Suite 5.0: 76 InDesign, 15 Illustrator, 5 Acrobat PDF/X files | All 98 accepted |
+| Kura's benchmark, 29,711 web PDFs, against Kura's own verdicts | No crash or timeout; 28,571 accepted. Every file Kura could not parse (55) or open without a password (19), we refuse too. The 1,066 we refuse that Kura converted are encrypted files we refuse even with an empty password, and damaged files Kura repaired |
 
 Accepted and refused in `corpus/` by producer, encrypted files left out. Producer comes from `/Creator` and `/Producer`:
 
@@ -305,8 +322,8 @@ Accepted and refused in `corpus/` by producer, encrypted files left out. Produce
 
 A further 6 are refused by both parsers and have no producer to read.
 
-Still thin: 2 InDesign and 4 Illustrator files, and the stillhq set is old. Recent InDesign and Illustrator jobs belong in
-`proof-pdf-test-db`, with a row each in its `samples/PROVENANCE.csv`.
+Better since 2026-11-08: the Ghent Output Suite adds 76 InDesign and 15 Illustrator PDF/X files, all accepted. They are test files
+built by the GWG, not client jobs, so real jobs from print shops in `proof-pdf-test-db` are still the strongest test.
 
 ## When you finish a stage
 

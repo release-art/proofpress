@@ -10,7 +10,6 @@ so nothing is said twice.
 | [`notes/rust-port-spikes.md`](notes/rust-port-spikes.md) | **The evidence** behind that plan: what was measured, on which files, and the results, including the comparison with Kura |
 | [`briefs/bleed-and-suites.md`](briefs/bleed-and-suites.md) | An earlier brief: the bleed-coverage check and calibration against the Ghent and Altona suites |
 | [`notes/cover-checks.md`](notes/cover-checks.md) | Notes on checks for book covers |
-| [`../corpus/README.md`](../corpus/README.md) | Public sample PDFs: what each set is, its licence, how to fetch it |
 
 ## Decisions
 
@@ -33,7 +32,7 @@ for colour; one crate with a `python` feature.
 |---|---|---|
 | Do veraPDF and Ghostscript become optional, so PDF/A and total ink are opt-in? | Yes. Replacing them instead is about 12-20 more weeks, by judgement | Brief, decisions |
 | Which parser refusals are errors and which are warnings? | Error, until a real file that prints correctly trips one | Brief, stage 2 |
-| Does the parser refuse real InDesign and Illustrator output that prints correctly? | Unknown, and the one result that could change the plan. Needs recent jobs in `proof-pdf-test-db` | Brief, stage 0 |
+| Does the parser refuse real InDesign and Illustrator output that prints correctly? | Probably not: all 91 InDesign and Illustrator files in the Ghent Output Suite pass. Client jobs would settle it | Brief, stage 0 |
 | Can `moxcms` replace `lcms2`, making the core pure Rust? | No; two attempts failed, but its README claims CMYK to Lab | Note |
 | Why do 5 files pass the parser when qpdf had to rebuild their xref, and 3 pass that pikepdf and Kura refuse? | Unexplained | Brief, parser to-do |
 | Is Kura worth running as a third opinion, next to veraPDF and qpdf, when judging a parser refusal? | Not set up | Ideas, below |
@@ -44,8 +43,7 @@ for colour; one crate with a `python` feature.
 |---|---|---|
 | Built fixtures | `tests/fixtures/pdfs/` | Committed. Tests depend on them |
 | Altona test suite | `tests/fixtures/suites/.cache/`, by `bin/suites/fetch.sh` | Not redistributable, so fetched and never committed |
-| Public sample sets | `corpus/`, by `bin/suites/corpus.sh` | Git-ignored. No test may depend on them |
-| Private jobs, standards, private notes | `proof-pdf-test-db`, cloned to `corpus/local/test-db` | Never copied out. Every sample gets a row in its `samples/PROVENANCE.csv` |
+| Every other sample, standards, private notes | `proof-pdf-test-db`, a sibling checkout at `../proof-pdf-test-db` (`/Users/ilo/Devel/Release.art/proof-pdf-test-db`) | Never copied out. Every sample gets a row in its `samples/PROVENANCE.csv`. No test may depend on it |
 
 Standards (ISO 32000, ISO 15930 for PDF/X, ISO 19005 for PDF/A, the GWG 2022 specification) go in that repository's `standards/`,
 if their licence allows a shared copy. The PDF/X rules in `x4.py` and the GWG presets in the backlog are written from them,
@@ -71,7 +69,7 @@ Worth keeping, but not scheduled. Move one into the brief's backlog when it is w
   SafeDocs crawl, each with source URL and SHA-256. That is the large set of real-world files the parser has not met. They are web
   documents, not print jobs.
 - Run Kura as a third opinion in `spikes/crabify/oracle.py`. Where veraPDF, qpdf and Kura agree a file is damaged, a refusal is fair.
-- Use the cases in `corpus/pdf-differences/` as tests when porting the checks: `DefaultColorSpaces` and `IndexedColor` for colour,
+- Use the cases in test-db's `samples/pdf-differences/` as tests when porting the checks: `DefaultColorSpaces` and `IndexedColor` for colour,
   `NegativeFontSize` and `TextClipModeChanges` for text, `Inline-Image-Abbreviations` for the parser.
 
 **Checks, lower priority than the brief's backlog**

@@ -26,9 +26,9 @@ themselves are in [`rust-port-spikes.md`](rust-port-spikes.md); the step-by-step
 
 | Claim | Evidence | Strength |
 |---|---|---|
-| A strict parser of our own reads valid PDFs as pikepdf does | 114 clean fixtures, 992 of 1,044 pdf.js and Altona files, 544 of 644 `corpus/` files, all 84 real card decks (10 GB, 4,037 pages). Every refusal checked against qpdf's own damage warnings: none where qpdf saw nothing wrong, except our deliberate "`%PDF-` at byte 0" rule | Measured |
-| It survives hostile input | No crash or hang on 1,074 pdf.js and Altona files or on 4,000 mutated fixtures, after one fix for self-referencing objects | Measured, but no long fuzzing |
-| It reads InDesign and Illustrator output | 2 InDesign, 4 Illustrator and 27 QuarkXPress files, all accepted. Few, and the stillhq set they mostly come from is old | Partial: the main gap |
+| A strict parser of our own reads valid PDFs as pikepdf does | 114 clean fixtures, 992 of 1,044 pdf.js and Altona files, 544 of 644 `corpus/` files, all 84 real card decks (10 GB, 4,037 pages). Every refusal checked against qpdf's own damage warnings: none where qpdf saw nothing wrong, except a header not at byte 0. PDF 2.0 allows that, so the rule must become a warning | Measured |
+| It survives hostile input | No crash or hang on 1,074 pdf.js and Altona files, 4,000 mutated fixtures, 14,721 public-corpus files including 1,000 malicious UNSAFE-DOCS samples, and Kura's 29,711-file benchmark, where it refused every file Kura could not parse. The slowest took 24 s | Measured, but no long fuzzing and no limits yet |
+| It reads InDesign and Illustrator output | All 98 files of the Ghent Output Suite 5.0 (76 InDesign, 15 Illustrator PDF/X), plus older InDesign, Illustrator and QuarkXPress files, accepted. Test files, not client jobs | Measured on test files; client jobs still to come |
 | The content walk matches Python exactly, CTM included | 3.09M operators; 5 page walks differ, on damaged files or the inline-image case | Measured |
 | A ported check gives identical findings | `x4.py`: 1,194 of 1,196 files identical, 5,299 findings | Measured, one check |
 | ICC colour matches Pillow | `lcms2`: 1296 of 1296 grid colours exact, on two real CMYK profiles | Measured |
@@ -139,7 +139,7 @@ Lines are today's Python. "Read" means the module only reads PDF objects, which 
 
 | Risk | Likelihood | Impact | Mitigation | Early signal |
 |---|---|---|---|---|
-| The strict parser refuses real InDesign or Illustrator output that prints correctly | Medium | High: it changes the parser decision | Stage 0: run recent jobs from `proof-pdf-test-db` through the oracle | Any refusal that qpdf does not also call damaged |
+| The strict parser refuses real InDesign or Illustrator output that prints correctly | Low-medium: Ghent's 91 InDesign and Illustrator files all pass | High: it changes the parser decision | Stage 0: run recent jobs from `proof-pdf-test-db` through the oracle | Any refusal that qpdf does not also call damaged |
 | `paint` and `colour` take far longer than estimated | Medium | High | Port `paint.py` first and measure lines per day after a week | At the end of week one, `paint.py` is too far from done to fit the 3-4 weeks for stage 3 |
 | Parity noise: pikepdf quirks look like port bugs | Medium | Medium | The list of expected differences in the brief; classify before fixing | Many small differences on clean files |
 | Packaging: manylinux, static Linux, `cp315`-only wheels | Medium | Medium | Do it in stage 1, before any port | A wheel that will not install on a clean machine |
@@ -177,6 +177,6 @@ Decide at these points, each with what would change the plan:
 - `spikes/crabify/proofcore/`: the X-4 port as a PyO3 module and a CLI.
 - `spikes/crabify/codecs/`: ICC, TIFF ink, image decoding and crop experiments.
 - The parity gate: `baseline.py`, `compare.py`, `check_parity.py`, `oracle.py`, `fuzz.py`.
-- Sample files: `tests/fixtures/pdfs/`, `corpus/` via `bin/suites/corpus.sh`, Altona via `bin/suites/fetch.sh`, and private jobs in
-  `proof-pdf-test-db`.
+- Sample files: `tests/fixtures/pdfs/`, Altona via `bin/suites/fetch.sh`, and everything else, public sets and private jobs, in
+  `proof-pdf-test-db` at `../proof-pdf-test-db`. Where this note says `corpus/`, those sets now live in its `samples/`.
 - Rust is not installed on this machine; the spikes used a temporary toolchain. Install `rustup` first.

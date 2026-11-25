@@ -249,6 +249,3 @@ tmp/
 .vscode/
 .pdm-python
 
-# Sample PDFs: fetched or dropped in locally, never committed (see corpus/README.md)
-corpus/*
-!corpus/README.md
