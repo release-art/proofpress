@@ -550,6 +550,18 @@ expect = { "x4.jpx.uniform-depth" = "channels of 8 and 16 bits (6.27)" }
 levels = ["x4"]
 expect = { "x4.jpx.cmyk-as-device" = "profile-less CMYK JPEG 2000 with no /ColorSpace under an RGB intent (6.27)", "x4.colour.device-space-matches-intent" = "and the page's own DeviceCMYK under that intent (6.4.3.2)" }
 
+[x4-jpx-plain-jp2]
+levels = ["x4"]
+expect = { "x4.jpx.baseline" = "a plain JP2 file: no jpx or jpxb brand, no Reader Requirements box (6.27, T.801 M.9.2; owner's answer)" }
+
+[x4-jpx-bare-codestream]
+levels = ["x4"]
+expect = { "x4.jpx.baseline" = "a bare codestream, not the JPX file format (6.27)" }
+
+[x4-jpx-not-jpeg2000]
+levels = ["x4"]
+expect = { "x4.image.jpx-valid" = "JPXDecode data that is not JPEG 2000 (6.8)" }
+
 # PDF/X-4 6.1.2: pre-separated pages (X4-Q2).
 
 [x4-pre-separated]

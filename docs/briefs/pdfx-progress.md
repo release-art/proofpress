@@ -5,21 +5,10 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
-**Open, 2026-11-26 (oracle escalation, task 4.4, ISO 15930-7 6.27 p.31; ITU-T T.801 M.8, M.9.2, M.11.1):** 6.27 asks for
-"the JPX file format" and "only the JPX baseline set of features". T.801 says a JPX file lists `jpx ` among its compatible
-brands, a baseline file lists `jpxb`, and a Reader Requirements box (`rreq`) follows the File Type box. Many producers
-write plain JP2 files instead: brand `jp2 `, no `jpx `/`jpxb`, no `rreq`. Do those fail `x4.jpx.baseline`?
-- **Fail them** (the oracle's recommendation, as the text reads). Adobe's output lists `jp2 `, `jpxb` and `jpx ` and has
-  an `rreq` box, so every Altona and Ghent JPEG 2000 stream passes; 8 of 38 web samples and every veraPDF 6-2-8-3 file
-  would fail. ISO 32000-1's informative note calling JP2 a subset of JPX baseline, and veraPDF's PDF/A-2 practice, lean
-  the other way.
-- **Pass them**, reading JP2 as baseline-compatible: logged as a departure from the text.
-
-Settled without escalation: a bare codestream fails `x4.jpx.baseline` (ISO 32000 7.4.9 wants the JPX file structure);
-`x4.jpx.baseline` also checks the image header's compression type, the codestream's capabilities (Rsiz), the colour
-specification and approximation, and box order; `x4.image.jpx-valid` becomes a header-level structural check. Neither
-row is written yet. Aside from the oracle, to fix with them: a palette image's channel count is the palette's, not
-the header's.
+Answered 2026-11-26:
+- 6.27's JPX baseline (oracle escalation, ITU-T T.801 M.9.2, M.11.1): the owner chose to fail plain JP2 files (no `jpx `
+  or `jpxb` brand, no Reader Requirements box), as the text reads. Every Altona and Ghent JPEG 2000 stream passes;
+  every veraPDF 6-2-8-3 file fails `x4.jpx.baseline`.
 
 Answered 2026-11-25:
 - 6.4.3.4's same-name rule for Separations (oracle escalation): the owner chose (a), print elements only, as X4-Q3
@@ -34,8 +23,7 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 4** (content, page model and colour): 4.1 to 4.5 done but for 6.27's baseline rows (they wait for ISO/IEC
-  15444-2). Next: task 4.6, porting today's print checks under the parity gate, where the brief's pace checkpoint for
+- **Phase 4** (content, page model and colour): 4.1 to 4.5 done. Next: task 4.6, porting today's print checks under the parity gate, where the brief's pace checkpoint for
   `paint.py` applies.
 
 ## Done
@@ -75,6 +63,7 @@ record it as not conforming to that one rule).
 | 4.2, 4.3 (part) | `b5742dc` | Tier 7 walks pages with a graphics state: paint events with colour space, role, overprint and OPM, `Default` spaces applied, forms and coloured patterns walked with one ancestor set; 5 colour rows (6.4.3.2, 6.4.3.3, 6.4.3.4's alternates) with 6 fixtures; `md5` crate for profile identity |
 | 4.3 (spots), 6.20 | `a82f79a`, `ea2c86c` (scope) | 7 spot rows of 6.4.3.4 and both 6.20 rows with 9 fixtures; `x4.spot.colorants-match-devicen` waits for function evaluation |
 | 4.4 (part) | `81362d4` | JPEG 2000 header reader (JPX boxes, codestream SIZ); 6 of 6.27's rows with 6 fixtures, agreeing with veraPDF's 6.2.8.3 files |
+| 4.4 | the commit after `7beca2f`; test-db `a2661129` | `x4.jpx.baseline` (T.801 M.9.2) and `x4.image.jpx-valid` (header only); fixtures now baseline JPX; 3 more fixtures |
 | 4.5 | `cd26fbf` | Pre-separated files (6.1.2, X4-Q2): every painting page one colorant, differing between pages; 1 fixture; none in Ghent, Altona or GWG Processing Steps |
 
 ## Register coverage
@@ -83,7 +72,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 107 | 30 | 4 |
+| PDF/X-4 and X-4p | 109 | 28 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 19 | 37 | 1 (`internal`) |
 
@@ -237,9 +226,11 @@ Oracle consultations:
   needs tint transforms evaluated and stays `todo`.
 - Task 4.3, found while testing the scope change: a colour space whose `Indexed` base is itself made the DeviceN scan
   loop forever. Every walk through colour spaces is now bounded, and a test holds a self-referring space.
-- Task 4.4: `x4.jpx.baseline` and `x4.image.jpx-valid` need ISO/IEC 15444-2's JPX baseline (M.9.2), which test-db does
-  not hold; they stay `todo` (see "Owner actions"). The six other 6.27 rows read only the JPX header boxes and the
-  codestream's SIZ marker, and give the verdicts veraPDF's 6.2.8.3 test files expect.
+- Task 4.4: every 6.27 row reads only the JPX header boxes and the codestream's SIZ marker; nothing is decoded, so
+  `x4.image.jpx-valid` judges the header's structure and says so. `x4.jpx.baseline` judges T.801 M.9.2 as the oracle
+  read it: brands, Reader Requirements, compression type, `Rsiz`, a usable colour specification, box order; files with
+  fragment tables or data references fail as not verified. M.9.2.4's colour list keeps CIEJab, so a CIEJab file raises
+  only `x4.jpx.no-ciejab`. The 2021 T.801 changes nothing in M.9.2's baseline.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 
@@ -251,8 +242,8 @@ Oracle consultations:
 
 ## Owner actions
 
-- **JPEG 2000 standards:** done 2026-11-26 on the owner's word: ITU-T T.800 and T.801 (08/2002), test-db `580f8e51`. The
-  in-force editions need an ITU TIES account; the 2002 texts are those of ISO/IEC 15444-1 and 15444-2:2003.
+- **JPEG 2000 standards:** done 2026-11-26 on the owner's word: ITU-T T.800 and T.801 (08/2002), test-db `580f8e51`;
+  the owner then supplied T.800 (06/2019) and T.801 (06/2021), test-db `a2661129`.
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.

@@ -421,7 +421,7 @@ title = "JPEG 2000 data is valid"
 clauses = ["iso-15930-7:6.8", "iso-15930-7:6.27"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.image.jbig2-valid"
@@ -994,7 +994,7 @@ title = "JPEG 2000 uses the JPX format, baseline features only"
 clauses = ["iso-15930-7:6.27"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.jpx.channels"

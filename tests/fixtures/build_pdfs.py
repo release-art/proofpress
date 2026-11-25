@@ -671,10 +671,25 @@ def _jp2_box(kind: bytes, content: bytes) -> bytes:
     return (len(content) + 8).to_bytes(4, "big") + kind + content
 
 
-def _jpx(depths: list[int], colours: list[int]) -> bytes:
-    """JPEG 2000 data in the JPX file format with only its header: a signature box, an `ihdr` for ``depths`` (one depth
-    for all, or 255 and a `bpcc` box when they differ), one `colr` box per enumerated colour space in ``colours``, and a
-    codestream holding just SOC and SIZ. Nothing decodes it; the 6.27 checks read headers only."""
+def _j2c(depths: list[int]) -> bytes:
+    """A JPEG 2000 codestream holding just SOC and SIZ, 1 by 1 pixels, one component per entry in ``depths``."""
+    size = (1).to_bytes(4, "big") * 2
+    return (
+        b"\xff\x4f\xff\x51"
+        + bytes(4)
+        + size
+        + bytes(24)
+        + len(depths).to_bytes(2, "big")
+        + b"".join(bytes([d - 1, 1, 1]) for d in depths)
+    )
+
+
+def _jpx(depths: list[int], colours: list[int], *, jp2_only: bool = False) -> bytes:
+    """JPEG 2000 data in the JPX file format with only its header, the way Adobe writes baseline JPX: brand jp2,
+    compatible with jpxb and jpx, a Reader Requirements box, an `ihdr` for ``depths`` (one depth for all, or 255 and a
+    `bpcc` box when they differ), one `colr` box per enumerated colour space in ``colours``, and a codestream holding
+    just SOC and SIZ. With ``jp2_only`` it is a plain JP2 file instead: no jpx or jpxb brand, no Reader Requirements.
+    Nothing decodes it; the 6.27 checks read headers only."""
     same = len(set(depths)) == 1
     header = (1).to_bytes(4, "big") * 2 + len(depths).to_bytes(2, "big")
     header += bytes([depths[0] - 1 if same else 255, 7, 0, 0])
@@ -682,18 +697,15 @@ def _jpx(depths: list[int], colours: list[int]) -> bytes:
     if not same:
         boxes += _jp2_box(b"bpcc", bytes(d - 1 for d in depths))
     for colour in colours:
-        boxes += _jp2_box(b"colr", bytes([1, 0, 0]) + colour.to_bytes(4, "big"))
-    siz = (
-        b"\xff\x4f\xff\x51"
-        + bytes(36)
-        + len(depths).to_bytes(2, "big")
-        + b"".join(bytes([d - 1, 1, 1]) for d in depths)
-    )
+        boxes += _jp2_box(b"colr", bytes([1, 0, 1]) + colour.to_bytes(4, "big"))
+    brands = b"jp2 \0\0\0\0jp2 " if jp2_only else b"jp2 \0\0\0\0jp2 jpxbjpx "
+    requirements = b"" if jp2_only else _jp2_box(b"rreq", bytes([1, 0xFF, 0xFF, 0, 0, 0, 0]))
     return (
         _jp2_box(b"jP  ", b"\x0d\x0a\x87\x0a")
-        + _jp2_box(b"ftyp", b"jpx \0\0\0\0jpx ")
+        + _jp2_box(b"ftyp", brands)
+        + requirements
         + _jp2_box(b"jp2h", boxes)
-        + _jp2_box(b"jp2c", siz)
+        + _jp2_box(b"jp2c", _j2c(depths))
     )
 
 
@@ -718,6 +730,9 @@ def _x4_jpx_fixtures() -> dict[str, pikepdf.Pdf]:
         "x4-jpx-depth-12": _x4_jpx(_jpx([12] * 4, [12])),
         "x4-jpx-mixed-depths": _x4_jpx(_jpx([8, 8, 16, 16], [12])),
         "x4-jpx-cmyk-as-device": _x4_jpx(_jpx([8] * 4, [12]), space=False, rgb_intent=True),
+        "x4-jpx-plain-jp2": _x4_jpx(_jpx([8] * 4, [12], jp2_only=True)),
+        "x4-jpx-bare-codestream": _x4_jpx(_j2c([8] * 4)),
+        "x4-jpx-not-jpeg2000": _x4_jpx(b"not JPEG 2000 data"),
     }
 
 
