@@ -103,6 +103,11 @@ fn verified(world: &mut Pipeline, level: String) {
     world.report = Some(verify(&world.fixture.0, &world.fixture.1, level));
 }
 
+#[when("it is verified for print")]
+fn verified_for_print(world: &mut Pipeline) {
+    world.report = Some(verify(&world.fixture.0, &world.fixture.1, Level::Print));
+}
+
 fn report(world: &Pipeline) -> &Report {
     world.report.as_ref().expect("a When step verifies the fixture first")
 }

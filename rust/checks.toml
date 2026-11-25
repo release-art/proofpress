@@ -1802,9 +1802,9 @@ status = "todo"
 id = "outside-media"
 title = "Nothing is painted wholly off the page"
 clauses = []
-severity = "error"
+severity = "warning"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "xobject-missing"
@@ -1812,7 +1812,7 @@ title = "Painted XObjects exist"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "bleedbox"

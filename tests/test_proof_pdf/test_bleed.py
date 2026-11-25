@@ -6,7 +6,7 @@ import re
 import pikepdf
 import pytest
 
-from proof_pdf._internal import paint, structure
+from proof_pdf._internal import paint, ported, structure
 from proof_pdf.models import PageGeometry, Severity
 
 from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W
@@ -240,8 +240,7 @@ class TestOutsideBleed:
 
 class TestOutsideMedia:
     def _media(self, path):
-        with pikepdf.open(path) as pdf:
-            return structure.check_outside_media(pdf)
+        return ported.check(path)
 
     def test_an_object_wholly_beyond_the_page_is_a_warning(self, tmp_path):
         [finding] = self._media(_pdf(tmp_path, b"BT /F1 6 Tf 400 380 Td (hidden) Tj ET", boxes=SHEET))
@@ -270,13 +269,15 @@ class TestMissingXObjects:
     """The brief's bug 3: a ``Do`` whose name resolves to nothing is a hole in the page, not a pass."""
 
     @staticmethod
-    def _check(xobject):
+    def _check(tmp_path, xobject):
         pdf = pikepdf.new()
         pdf.add_blank_page()
         pdf.pages[0].Contents = pdf.make_stream(b"q 10 0 0 10 0 0 cm /Im0 Do Q")
         if xobject is not None:
             pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=xobject(pdf)))
-        return structure.check_missing_xobjects(pdf)
+        path = tmp_path / "xobject.pdf"
+        pdf.save(path)
+        return ported.check(path)
 
     @pytest.mark.parametrize(
         "xobject",
@@ -286,8 +287,8 @@ class TestMissingXObjects:
         ],
         ids=["no-resource", "not-a-stream"],
     )
-    def test_a_name_with_nothing_behind_it_fails(self, xobject):
-        [finding] = self._check(xobject)
+    def test_a_name_with_nothing_behind_it_fails(self, tmp_path, xobject):
+        [finding] = self._check(tmp_path, xobject)
         assert (finding.check, finding.severity, finding.page) == ("xobject-missing", Severity.ERROR, 1)
         assert "/Im0" in finding.message
 
@@ -299,14 +300,21 @@ class TestMissingXObjects:
         pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=pdf.make_indirect(image(pdf))))
         path = tmp_path / "dangling.pdf"
         pdf.save(path, qdf=True)
-        # Point /Im0 at an object number the file does not have, as veraPDFHiResWrongObjectID.pdf does.
-        data, count = re.subn(rb"/Im0 \d+ 0 R", b"/Im0 999 0 R", path.read_bytes())
+        # Point /Im0 at an object number the file does not have, as veraPDFHiResWrongObjectID.pdf does, keeping the
+        # reference's length so the cross-reference offsets stay right.
+        data, count = re.subn(rb"/Im0 (\d+) 0 R", lambda m: b"/Im0 " + b"9" * len(m[1]) + b" 0 R", path.read_bytes())
         assert count == 1
         path.write_bytes(data)
-        with pikepdf.open(path) as broken:
-            [finding] = structure.check_missing_xobjects(broken)
+        [finding] = ported.check(path)
         assert finding.check == "xobject-missing"
 
-    def test_a_real_image_passes(self):
+    def test_a_real_image_passes(self, tmp_path):
         image = lambda pdf: pdf.make_stream(b"\x80", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image)  # noqa: E731
-        assert self._check(image) == []
+        assert self._check(tmp_path, image) == []
+
+    def test_a_file_the_core_cannot_read_fails_rather_than_passes(self, tmp_path):
+        path = tmp_path / "junk.pdf"
+        path.write_bytes(b"%PDF-1.4 not a PDF")
+        assert {(f.check, f.severity, f.message) for f in ported.check(path)} == {
+            (check, Severity.ERROR, "could not be checked: the file was refused") for check in ported.PORTED
+        }

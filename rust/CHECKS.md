@@ -225,8 +225,8 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `centring` | The trim is centred in the bleed |  | error | print | todo |
 | `artwork-bleed` | Artwork reaches into the bleed |  | error | print | todo |
 | `outside-bleed` | Nothing is painted beyond the bleed |  | error | print | todo |
-| `outside-media` | Nothing is painted wholly off the page |  | error | print | todo |
-| `xobject-missing` | Painted XObjects exist |  | error | print | todo |
+| `outside-media` | Nothing is painted wholly off the page |  | warning | print | implemented |
+| `xobject-missing` | Painted XObjects exist |  | error | print | implemented |
 | `bleedbox` | Pages with a trim have a BleedBox |  | error | print | todo |
 | `boxes` | Each page has a MediaBox |  | error | print | todo |
 | `page-size` | Pages share one size |  | error | print | todo |

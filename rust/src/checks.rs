@@ -12,6 +12,7 @@ mod jpx;
 mod keys;
 mod metadata;
 mod optional;
+mod painted;
 mod spots;
 mod walk;
 mod x4;
@@ -153,6 +154,8 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_JPX_BIT_DEPTH, jpx::bit_depth),
     (f::X4_JPX_UNIFORM_DEPTH, jpx::uniform_depth),
     (f::X4_JPX_CMYK_AS_DEVICE, jpx::cmyk_as_device),
+    (f::XOBJECT_MISSING, painted::xobject_missing),
+    (f::OUTSIDE_MEDIA, painted::outside_media),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5
@@ -348,7 +351,8 @@ mod tests {
             x5g.len(),
             RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count()
         );
-        assert_eq!(verify("x4-good.pdf", &bytes, Level::X4).checks.len(), RUNS.len() + 1);
+        let x4 = RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X4)).count();
+        assert_eq!(verify("x4-good.pdf", &bytes, Level::X4).checks.len(), x4 + 1);
     }
 
     #[test]

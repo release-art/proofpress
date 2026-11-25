@@ -17,7 +17,7 @@ import pathlib
 
 import pikepdf
 
-from ._internal import colour, contrast, pdfx, resolution, structure, text, verapdf
+from ._internal import colour, contrast, pdfx, ported, resolution, structure, text, verapdf
 from .models import ColourMode, FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)
@@ -123,8 +123,7 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
             if profile.geometry is not None:
                 findings += structure.check_geometry(pdf, profile.geometry)
             findings += _structure_rules(pdf, profile)
-            findings += structure.check_outside_media(pdf)
-            findings += structure.check_missing_xobjects(pdf)
+            findings += ported.check(path)
             if profile.require_bleed:
                 findings += structure.check_artwork_bleed(pdf)
             if profile.no_marks:

@@ -1,24 +1,40 @@
 //! Tier 7: the page model and its paint events (ISO 32000-2, clause 8).
 //!
 //! `walk` interprets each page's content with a graphics state and reports what is painted: for every fill, stroke,
-//! text, image, image mask and shading, the colour space each part of it uses and whether that part overprints, and
-//! for every transparency group its blend space. Forms and coloured tiling patterns are walked where they are used,
-//! with one set of ancestors, so a form that draws itself is a cycle and a gap; a form without `/Resources` uses the
-//! page's (7.8.3), with a problem noted.
+//! text run, image, image mask and shading, what kind of paint it is, the colour space each part of it uses and
+//! whether that part overprints, and where it lands on the page; and for every transparency group its blend space.
+//! Forms and coloured tiling patterns are walked where they are used, with one set of ancestors, so a form that draws
+//! itself is a cycle and a gap; a form without `/Resources` uses the page's (7.8.3), with a problem noted.
+//!
+//! A form starts from the graphics state of the `Do` that paints it, its `/Matrix` added to the CTM (8.10.1); a
+//! tiling pattern's cell starts from the default state, and what it paints is not placed on the page.
 //!
 //! A device colour space with a matching `Default` space in the resources in effect is reported as that default
-//! (8.6.5.6), since PDF/X-4 6.4.3.1 judges it so. Geometry (the CTM, bounding boxes, clips) comes with the print checks
-//! that need it.
+//! (8.6.5.6), since PDF/X-4 6.4.3.1 judges it so.
+//!
+//! Where a paint lands is its bounding box in default user space: a path's points (control points included), a text
+//! run's advance by its font's ascent and descent, an image's unit square, each through the CTM. A clip (`W`, `W*`)
+//! is kept as the bounding box of its path, cut to the clip before it, and narrows what a paint shows but not where
+//! it is.
 //
-// ponytail: geometry, clips, soft-mask content, Type 3 glyph procedures and annotation appearances are not walked yet;
-// they come with the checks that read them (tasks 4.6 and phase 5).
+// ponytail: clips are bounding boxes, not paths, and text render modes 4 to 7, a form's `/BBox`, soft-mask content,
+// Type 3 glyph procedures and annotation appearances are not walked; exact clip geometry comes with the checks that
+// need it (the architecture note's "Clipping").
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 
-use crate::content::{self, Item};
+use crate::common::font::{self, Font};
+use crate::common::rect::Rect;
+use crate::content::{self, Item, Op};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::Location;
 use crate::pipeline::Limits;
+
+/// A 2-D affine matrix as PDF writes it, `[a b c d e f]` (8.3.4).
+pub(crate) type Matrix = [f64; 6];
+
+const IDENTITY: Matrix = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
 /// What a colour space is used for in a paint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,16 +64,43 @@ pub(crate) struct Use {
     pub(crate) opm: i64,
 }
 
+/// What kind of thing a paint is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Kind {
+    /// A filled or stroked path.
+    Path,
+    /// A text run in its render mode (9.3.6); modes 3 and 7 paint nothing.
+    Text(i64),
+    /// An image `XObject`, sampled or a mask.
+    Image,
+    /// An inline image, sampled or a mask.
+    InlineImage,
+    /// `sh`: a shading over the whole clip.
+    Shading,
+}
+
 /// What tier 7 reports.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Event {
     /// Something painted, and where: the page, then each form or pattern on the way.
-    Paint { uses: Vec<Use>, frames: Vec<Location> },
+    Paint {
+        kind: Kind,
+        /// The colour spaces it paints with; none for invisible text or an image with no `/ColorSpace`.
+        uses: Vec<Use>,
+        /// Where it is, in the page's default user space; `None` for a shading, an empty path, or anything inside a
+        /// tiling pattern's cell.
+        bbox: Option<Rect>,
+        /// `bbox` cut to the clip, `None` when the clip leaves nothing of it; for a shading, the clip itself.
+        visible: Option<Rect>,
+        frames: Vec<Location>,
+    },
     /// A transparency group, with its `/CS` when it has one.
     Group {
         space: Option<Object>,
         frames: Vec<Location>,
     },
+    /// A `Do` whose name gives no `XObject` stream in the resources in effect: nothing is painted there.
+    Missing { name: Vec<u8>, frames: Vec<Location> },
     /// Something that kept part of a page from being walked, or that the walk had to stand in for.
     Problem { problem: Problem, frames: Vec<Location> },
 }
@@ -73,7 +116,7 @@ pub(crate) enum Problem {
     NoResources,
 }
 
-/// The graphics state tier 7 keeps.
+/// The graphics state tier 7 keeps, text state included.
 #[derive(Clone)]
 struct State {
     fill: Object,
@@ -82,6 +125,18 @@ struct State {
     op_fill: bool,
     op_stroke: bool,
     opm: i64,
+    /// The CTM; `None` inside a tiling pattern's cell.
+    ctm: Option<Matrix>,
+    /// The clip's extent on the page, once one is set; an empty one keeps its corners crossed.
+    clip: Option<Rect>,
+    font: Rc<Font>,
+    size: f64,
+    char_spacing: f64,
+    word_spacing: f64,
+    /// `Tz` as a factor.
+    scale: f64,
+    rise: f64,
+    leading: f64,
     text_mode: i64,
 }
 
@@ -99,9 +154,27 @@ impl Default for State {
             op_fill: false,
             op_stroke: false,
             opm: 0,
+            ctm: Some(IDENTITY),
+            clip: None,
+            font: Rc::new(Font::default()),
+            size: 0.0,
+            char_spacing: 0.0,
+            word_spacing: 0.0,
+            scale: 1.0,
+            rise: 0.0,
+            leading: 0.0,
             text_mode: 0,
         }
     }
+}
+
+/// What one content's walk keeps outside the graphics state: the text and line matrices (9.4.2), the path being
+/// built, and whether a clip waits for the path's end.
+struct Cursor {
+    text: Matrix,
+    line: Matrix,
+    path: Vec<(f64, f64)>,
+    clip: bool,
 }
 
 /// A walk in progress.
@@ -111,6 +184,8 @@ struct Walker<'a> {
     events: Vec<Event>,
     /// The forms and patterns being walked, by object number.
     ancestors: BTreeSet<u32>,
+    /// Fonts read so far, by object number.
+    fonts: BTreeMap<u32, Rc<Font>>,
 }
 
 /// Every page's events, in page order.
@@ -120,6 +195,7 @@ pub(crate) fn walk(doc: &Document) -> Vec<Event> {
         limits: Limits::default(),
         events: Vec::new(),
         ancestors: BTreeSet::new(),
+        fonts: BTreeMap::new(),
     };
     for (i, page) in doc.pages().iter().enumerate() {
         let frames = vec![Location::Page(u32::try_from(i + 1).unwrap_or(u32::MAX))];
@@ -141,6 +217,84 @@ pub(crate) fn walk(doc: &Document) -> Vec<Event> {
     }
     walker.events
 }
+
+/// `m1` then `m2`: the product `m1 × m2` (8.3.4).
+fn mul(m1: &Matrix, m2: &Matrix) -> Matrix {
+    let [a1, b1, c1, d1, e1, f1] = *m1;
+    let [a2, b2, c2, d2, e2, f2] = *m2;
+    [
+        a1 * a2 + b1 * c2,
+        a1 * b2 + b1 * d2,
+        c1 * a2 + d1 * c2,
+        c1 * b2 + d1 * d2,
+        e1 * a2 + f1 * c2 + e2,
+        e1 * b2 + f1 * d2 + f2,
+    ]
+}
+
+fn translation(tx: f64, ty: f64) -> Matrix {
+    [1.0, 0.0, 0.0, 1.0, tx, ty]
+}
+
+fn real(object: &Object) -> Option<f64> {
+    match object.value {
+        #[expect(clippy::cast_precision_loss, reason = "operands far below 2^53")]
+        Value::Integer(n) => Some(n as f64),
+        Value::Real(r) => Some(r),
+        _ => None,
+    }
+}
+
+/// An operand as a number; 0 when it is missing or not a number.
+fn number(operand: Option<&Object>) -> f64 {
+    operand.and_then(real).unwrap_or(0.0)
+}
+
+/// Six numbers as a matrix; the identity when there are not exactly six.
+fn matrix(numbers: impl Iterator<Item = Option<f64>>) -> Matrix {
+    let numbers: Option<Vec<f64>> = numbers.collect();
+    numbers.and_then(|n| <Matrix>::try_from(n).ok()).unwrap_or(IDENTITY)
+}
+
+/// The bounding box of `points` through `m`; `None` without a matrix or points.
+fn bounds(m: Option<&Matrix>, points: &[(f64, f64)]) -> Option<Rect> {
+    let [sx, ry, rx, sy, tx, ty] = *m?;
+    let mut mapped = points
+        .iter()
+        .map(|p| (sx * p.0 + rx * p.1 + tx, ry * p.0 + sy * p.1 + ty));
+    let (x, y) = mapped.next()?;
+    Some(mapped.fold(
+        Rect {
+            x0: x,
+            y0: y,
+            x1: x,
+            y1: y,
+        },
+        |r, (x, y)| Rect {
+            x0: r.x0.min(x),
+            y0: r.y0.min(y),
+            x1: r.x1.max(x),
+            y1: r.y1.max(y),
+        },
+    ))
+}
+
+/// `rect` cut to `clip` (none is unbounded); an empty result keeps crossed corners, which stay empty when cut again.
+fn intersect(clip: Option<Rect>, rect: Rect) -> Rect {
+    clip.map_or(rect, |c| Rect {
+        x0: c.x0.max(rect.x0),
+        y0: c.y0.max(rect.y0),
+        x1: c.x1.min(rect.x1),
+        y1: c.y1.min(rect.y1),
+    })
+}
+
+fn non_empty(rect: Option<Rect>) -> Option<Rect> {
+    rect.filter(|r| r.x0 <= r.x1 && r.y0 <= r.y1)
+}
+
+/// The unit square an image fills (8.9.4).
+const UNIT_SQUARE: [(f64, f64); 4] = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)];
 
 /// The object numbers of the streams `contents` names: one stream, or an array of them, direct or by reference.
 pub(crate) fn stream_numbers(doc: &Document, contents: Option<&Object>) -> Vec<u32> {
@@ -202,6 +356,115 @@ fn resource_ref<'a>(
     Some((num, doc.resolve(entry)?.dict()?))
 }
 
+impl Cursor {
+    /// `Td`, `TD` and `T*`: start a new line `tx`, `ty` from the current line's start.
+    fn move_line(&mut self, tx: f64, ty: f64) {
+        self.line = mul(&translation(tx, ty), &self.line);
+        self.text = self.line;
+    }
+
+    /// End the path: a pending clip takes its extent, `bbox` when the paint already measured it.
+    fn end(&mut self, state: &mut State, bbox: Option<Rect>) {
+        if std::mem::take(&mut self.clip)
+            && let Some(extent) = bbox.or_else(|| bounds(state.ctm.as_ref(), &self.path))
+        {
+            state.clip = Some(intersect(state.clip, extent));
+        }
+        self.path.clear();
+    }
+}
+
+/// Apply a path construction operator (8.5.2.1); `false` when `op` is not one.
+fn path(op: &Op, cursor: &mut Cursor) -> bool {
+    let n = |i: usize| number(op.operands.get(i));
+    let count = match op.name.as_slice() {
+        b"m" | b"l" => 1,
+        b"c" => 3,
+        b"v" | b"y" => 2,
+        b"re" => {
+            let (x, y) = (n(0), n(1));
+            cursor.path.extend([(x, y), (x + n(2), y + n(3))]);
+            return true;
+        }
+        _ => return false,
+    };
+    cursor.path.extend((0..count).map(|i| (n(2 * i), n(2 * i + 1))));
+    true
+}
+
+/// Apply a text state or positioning operator (9.3, 9.4.2), `Tf` aside; `false` when `op` is not one.
+fn text_state(op: &Op, state: &mut State, cursor: &mut Cursor) -> bool {
+    let n = |i: usize| number(op.operands.get(i));
+    match op.name.as_slice() {
+        b"BT" => {
+            cursor.text = IDENTITY;
+            cursor.line = IDENTITY;
+        }
+        b"Tm" => {
+            cursor.line = matrix(op.operands.iter().map(real));
+            cursor.text = cursor.line;
+        }
+        b"Td" => cursor.move_line(n(0), n(1)),
+        b"TD" => {
+            state.leading = -n(1);
+            cursor.move_line(n(0), n(1));
+        }
+        b"T*" => cursor.move_line(0.0, -state.leading),
+        b"TL" => state.leading = n(0),
+        b"Tc" => state.char_spacing = n(0),
+        b"Tw" => state.word_spacing = n(0),
+        b"Tz" => state.scale = n(0) / 100.0,
+        b"Ts" => state.rise = n(0),
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a render mode is a small integer; a real is truncated"
+        )]
+        b"Tr" => state.text_mode = n(0) as i64,
+        _ => return false,
+    }
+    true
+}
+
+/// Show a text run (9.4.3): where it lands on the page, with the text matrix moved past it.
+fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Option<Rect> {
+    let name = op.name.as_slice();
+    if name == b"\"" {
+        state.word_spacing = number(op.operands.first());
+        state.char_spacing = number(op.operands.get(1));
+    }
+    if matches!(name, b"'" | b"\"") {
+        cursor.move_line(0.0, -state.leading);
+    }
+    let items: &[Object] = if name == b"TJ" {
+        op.operands.first().and_then(Object::array).unwrap_or_default()
+    } else {
+        op.operands.last().map_or_default(std::slice::from_ref)
+    };
+    let (font, size, scale) = (&state.font, state.size, state.scale);
+    let mut advance = 0.0;
+    for item in items {
+        if let Value::String(bytes, _) = &item.value {
+            for code in font.codes(bytes) {
+                advance += (font.width(code) / 1000.0 * size + state.char_spacing) * scale;
+                if font.code_bytes == 1 && code == 32 {
+                    advance += state.word_spacing * scale;
+                }
+            }
+        } else {
+            advance -= number(Some(item)) / 1000.0 * size * scale;
+        }
+    }
+    let low = font.descent / 1000.0 * size + state.rise;
+    let high = font.ascent / 1000.0 * size + state.rise;
+    let trm = state.ctm.map(|ctm| mul(&cursor.text, &ctm));
+    let bbox = bounds(
+        trm.as_ref(),
+        &[(0.0, low), (advance, low), (0.0, high), (advance, high)],
+    );
+    cursor.text = mul(&translation(advance, 0.0), &cursor.text);
+    bbox
+}
+
 impl Walker<'_> {
     /// A transparency group dictionary's event.
     fn group(&mut self, group: &Dict, frames: &[Location]) {
@@ -261,14 +524,37 @@ impl Walker<'_> {
         }
     }
 
-    /// Paint with the current fill or stroke colour; a fill with a pattern also paints what the pattern does.
+    /// Report a paint of `kind` at `bbox`.
+    fn push(&mut self, kind: Kind, uses: Vec<Use>, bbox: Option<Rect>, state: &State, frames: &[Location]) {
+        let visible = if kind == Kind::Shading {
+            non_empty(state.clip)
+        } else {
+            non_empty(bbox.map(|b| intersect(state.clip, b)))
+        };
+        self.events.push(Event::Paint {
+            kind,
+            uses,
+            bbox,
+            visible,
+            frames: frames.to_vec(),
+        });
+    }
+
+    /// Paint `kind` at `bbox` with the current fill or stroke colour for each of `roles`; a fill with a pattern also
+    /// paints what the pattern does.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the walk's context, passed down as the other paint methods take it"
+    )]
     fn paint(
         &mut self,
         resources: Option<&Dict>,
+        kind: Kind,
         roles: &[Role],
         state: &State,
         frames: &[Location],
         page: Option<&Dict>,
+        bbox: Option<Rect>,
     ) {
         let mut uses = Vec::new();
         for &role in roles {
@@ -286,12 +572,7 @@ impl Walker<'_> {
                 self.pattern(num, dict, resources, state, frames, page, &mut uses);
             }
         }
-        if !uses.is_empty() {
-            self.events.push(Event::Paint {
-                uses,
-                frames: frames.to_vec(),
-            });
-        }
+        self.push(kind, uses, bbox, state, frames);
     }
 
     /// Whether `space` is the Pattern family, alone or with an underlying space.
@@ -332,15 +613,19 @@ impl Walker<'_> {
             }
             Some(1) if dict.get(b"PaintType").and_then(Object::integer) == Some(1) => {
                 if let Some(num) = num {
-                    self.nested(num, dict, frames, page);
+                    let cell = State {
+                        ctm: None,
+                        ..State::default()
+                    };
+                    self.nested(num, dict, frames, page, cell);
                 }
             }
             _ => {}
         }
     }
 
-    /// Walk the form or coloured tiling pattern `num`, whose dictionary is `dict`.
-    fn nested(&mut self, num: u32, dict: &Dict, frames: &[Location], page: Option<&Dict>) {
+    /// Walk the form or coloured tiling pattern `num`, whose dictionary is `dict`, from `initial`.
+    fn nested(&mut self, num: u32, dict: &Dict, frames: &[Location], page: Option<&Dict>, initial: State) {
         let mut inner = frames.to_vec();
         inner.push(Location::Object(num, 0));
         if self.ancestors.contains(&num) {
@@ -370,11 +655,11 @@ impl Walker<'_> {
         }
         let data: Vec<Vec<u8>> = self.doc.stream_data(num).into_iter().collect();
         self.ancestors.insert(num);
-        self.content(&data, resources, page, &inner, State::default());
+        self.content(&data, resources, page, &inner, initial);
         self.ancestors.remove(&num);
     }
 
-    /// Interpret one content with `resources` in effect.
+    /// Interpret one content with `resources` in effect, from the graphics state `initial`.
     fn content(
         &mut self,
         data: &[Vec<u8>],
@@ -388,95 +673,155 @@ impl Walker<'_> {
         let named = |n: &[u8]| components(doc, resource(doc, resources, b"ColorSpace", n)?);
         let content = content::read(&slices, &self.limits, &named);
         let mut stack: Vec<State> = Vec::new();
+        let base = initial.ctm;
         let mut state = initial;
+        let mut cursor = Cursor {
+            text: IDENTITY,
+            line: IDENTITY,
+            path: Vec::new(),
+            clip: false,
+        };
         for item in &content.items {
             let op = match item {
                 Item::Image(image) => {
+                    let bbox = bounds(state.ctm.as_ref(), &UNIT_SQUARE);
                     let mask = matches!(image.dict.get(b"ImageMask").map(|v| &v.value), Some(Value::Bool(true)));
                     if mask {
-                        self.paint(resources, &[Role::ImageMask], &state, frames, page);
-                    } else if let Some(space) = image
-                        .dict
-                        .get(b"ColorSpace")
-                        .and_then(|cs| self.inline_space(resources, cs))
-                    {
-                        let used = self.use_of(resources, Role::Image, &space, &state);
-                        self.events.push(Event::Paint {
-                            uses: vec![used],
-                            frames: frames.to_vec(),
-                        });
+                        self.paint(
+                            resources,
+                            Kind::InlineImage,
+                            &[Role::ImageMask],
+                            &state,
+                            frames,
+                            page,
+                            bbox,
+                        );
+                    } else {
+                        let space = image
+                            .dict
+                            .get(b"ColorSpace")
+                            .and_then(|cs| self.inline_space(resources, cs));
+                        let uses = space.map(|s| self.use_of(resources, Role::Image, &s, &state));
+                        self.push(Kind::InlineImage, uses.into_iter().collect(), bbox, &state, frames);
                     }
                     continue;
                 }
                 Item::Op(op) => op,
             };
-            let first = op.operands.first();
+            if self.colour(op, resources, &mut state)
+                || text_state(op, &mut state, &mut cursor)
+                || path(op, &mut cursor)
+            {
+                continue;
+            }
             let last = op.operands.last();
             match op.name.as_slice() {
                 b"q" => stack.push(state.clone()),
-                b"Q" => state = stack.pop().unwrap_or_default(),
-                b"CS" => state.stroke = self.space(resources, last).unwrap_or_else(|| state.stroke.clone()),
-                b"cs" => {
-                    state.fill = self.space(resources, last).unwrap_or_else(|| state.fill.clone());
-                    state.fill_pattern = None;
-                }
-                b"G" | b"g" | b"RG" | b"rg" | b"K" | b"k" => {
-                    let family: &[u8] = match op.name.as_slice() {
-                        b"G" | b"g" => b"DeviceGray",
-                        b"RG" | b"rg" => b"DeviceRGB",
-                        _ => b"DeviceCMYK",
+                // An unbalanced `Q` keeps the state but puts the CTM back to where this content began.
+                b"Q" => match stack.pop() {
+                    Some(saved) => state = saved,
+                    None => state.ctm = base,
+                },
+                b"cm" => state.ctm = state.ctm.map(|ctm| mul(&matrix(op.operands.iter().map(real)), &ctm)),
+                b"Tf" => self.font(op, resources, &mut state),
+                b"f" | b"F" | b"f*" | b"S" | b"s" | b"B" | b"B*" | b"b" | b"b*" => {
+                    let roles: &[Role] = match op.name.as_slice() {
+                        b"f" | b"F" | b"f*" => &[Role::Fill],
+                        b"S" | b"s" => &[Role::Stroke],
+                        _ => &[Role::Fill, Role::Stroke],
                     };
-                    let space = Object {
-                        value: Value::Name(family.to_vec()),
-                        start: 0,
-                        end: 0,
-                    };
-                    if op.name.first().is_some_and(u8::is_ascii_uppercase) {
-                        state.stroke = space;
-                    } else {
-                        state.fill = space;
-                    }
+                    let bbox = bounds(state.ctm.as_ref(), &cursor.path);
+                    self.paint(resources, Kind::Path, roles, &state, frames, page, bbox);
+                    cursor.end(&mut state, bbox);
                 }
-                b"scn" => state.fill_pattern = last.and_then(Object::name).map(<[u8]>::to_vec),
-                b"gs" => {
-                    if let Some(gs) = last
-                        .and_then(Object::name)
-                        .and_then(|n| resource(self.doc, resources, b"ExtGState", n))
-                        .and_then(Object::dict)
-                    {
-                        self.ext_gstate(gs, &mut state);
-                    }
-                }
-                b"Tr" => state.text_mode = first.and_then(Object::integer).unwrap_or(0),
-                b"f" | b"F" | b"f*" => self.paint(resources, &[Role::Fill], &state, frames, page),
-                b"S" | b"s" => self.paint(resources, &[Role::Stroke], &state, frames, page),
-                b"B" | b"B*" | b"b" | b"b*" => self.paint(resources, &[Role::Fill, Role::Stroke], &state, frames, page),
+                b"n" => cursor.end(&mut state, None),
+                b"W" | b"W*" => cursor.clip = true,
                 b"Tj" | b"TJ" | b"'" | b"\"" => {
+                    let bbox = show(op, &mut state, &mut cursor);
                     let roles: &[Role] = match state.text_mode {
                         0 | 4 => &[Role::Fill],
                         1 | 5 => &[Role::Stroke],
                         2 | 6 => &[Role::Fill, Role::Stroke],
                         _ => &[],
                     };
-                    self.paint(resources, roles, &state, frames, page);
+                    self.paint(
+                        resources,
+                        Kind::Text(state.text_mode),
+                        roles,
+                        &state,
+                        frames,
+                        page,
+                        bbox,
+                    );
                 }
                 b"sh" => {
                     let shading = last
                         .and_then(Object::name)
                         .and_then(|n| resource(self.doc, resources, b"Shading", n))
                         .and_then(Object::dict);
-                    if let Some(space) = shading.and_then(|s| s.get(b"ColorSpace")) {
-                        let used = self.use_of(resources, Role::Shading, space, &state);
-                        self.events.push(Event::Paint {
-                            uses: vec![used],
-                            frames: frames.to_vec(),
-                        });
-                    }
+                    let space = shading.and_then(|s| s.get(b"ColorSpace"));
+                    let uses = space.map(|s| self.use_of(resources, Role::Shading, s, &state));
+                    self.push(Kind::Shading, uses.into_iter().collect(), None, &state, frames);
                 }
                 b"Do" => self.xobject(resources, last, &state, frames, page),
                 _ => {}
             }
         }
+    }
+
+    /// Apply a colour or graphics state parameter operator; `false` when `op` is not one.
+    fn colour(&self, op: &Op, resources: Option<&Dict>, state: &mut State) -> bool {
+        let last = op.operands.last();
+        match op.name.as_slice() {
+            b"CS" => state.stroke = self.space(resources, last).unwrap_or_else(|| state.stroke.clone()),
+            b"cs" => {
+                state.fill = self.space(resources, last).unwrap_or_else(|| state.fill.clone());
+                state.fill_pattern = None;
+            }
+            b"G" | b"g" | b"RG" | b"rg" | b"K" | b"k" => {
+                let family: &[u8] = match op.name.as_slice() {
+                    b"G" | b"g" => b"DeviceGray",
+                    b"RG" | b"rg" => b"DeviceRGB",
+                    _ => b"DeviceCMYK",
+                };
+                let space = Object {
+                    value: Value::Name(family.to_vec()),
+                    start: 0,
+                    end: 0,
+                };
+                if op.name.first().is_some_and(u8::is_ascii_uppercase) {
+                    state.stroke = space;
+                } else {
+                    state.fill = space;
+                }
+            }
+            b"scn" => state.fill_pattern = last.and_then(Object::name).map(<[u8]>::to_vec),
+            b"gs" => {
+                if let Some(gs) = last
+                    .and_then(Object::name)
+                    .and_then(|n| resource(self.doc, resources, b"ExtGState", n))
+                    .and_then(Object::dict)
+                {
+                    self.ext_gstate(gs, state);
+                }
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// `Tf`: the font, read once per font object, and the size.
+    fn font(&mut self, op: &Op, resources: Option<&Dict>, state: &mut State) {
+        let doc = self.doc;
+        state.size = number(op.operands.get(1));
+        let named = op.operands.first().and_then(Object::name);
+        state.font = match named.and_then(|n| resource_ref(doc, resources, b"Font", n)) {
+            Some((Some(num), dict)) => {
+                Rc::clone(self.fonts.entry(num).or_insert_with(|| Rc::new(font::load(doc, dict))))
+            }
+            Some((None, dict)) => Rc::new(font::load(doc, dict)),
+            None => Rc::new(Font::default()),
+        };
     }
 
     /// An inline image's colour space: abbreviated names, a resource, or an array.
@@ -518,7 +863,8 @@ impl Walker<'_> {
         }
     }
 
-    /// `Do`: an image paints its colour space (or the fill colour, for a mask); a form is walked.
+    /// `Do`: an image paints its unit square in its colour space (or the fill colour, for a mask); a form is walked
+    /// from the current state with its `/Matrix`; a name that gives no `XObject` stream is missing (7.8.3).
     fn xobject(
         &mut self,
         resources: Option<&Dict>,
@@ -530,42 +876,50 @@ impl Walker<'_> {
         let Some(name) = operand.and_then(Object::name) else {
             return;
         };
-        let Some(entries) = resources
+        let found = resources
             .and_then(|r| r.get(b"XObject"))
             .and_then(|x| self.doc.resolve(x))
             .and_then(Object::dict)
-        else {
-            return;
-        };
-        let Some(reference) = entries.get(name) else { return };
-        let Some(dict) = self.doc.resolve(reference).and_then(Object::dict) else {
+            .and_then(|entries| entries.get(name))
+            .and_then(|entry| match entry.value {
+                Value::Reference(num, _) => Some((num, self.doc.stream_dict(num)?)),
+                _ => None,
+            });
+        let Some((num, dict)) = found else {
+            self.events.push(Event::Missing {
+                name: name.to_vec(),
+                frames: frames.to_vec(),
+            });
             return;
         };
         match dict.get(b"Subtype").and_then(Object::name) {
             Some(b"Image") => {
+                let bbox = bounds(state.ctm.as_ref(), &UNIT_SQUARE);
                 if matches!(
                     dict.get(b"ImageMask")
                         .and_then(|v| self.doc.resolve(v))
                         .map(|v| &v.value),
                     Some(Value::Bool(true))
                 ) {
-                    self.paint(resources, &[Role::ImageMask], state, frames, page);
-                } else if let Some(space) = dict.get(b"ColorSpace") {
-                    let used = self.use_of(resources, Role::Image, space, state);
+                    self.paint(resources, Kind::Image, &[Role::ImageMask], state, frames, page, bbox);
+                } else {
+                    let uses = dict
+                        .get(b"ColorSpace")
+                        .map(|space| self.use_of(resources, Role::Image, space, state));
                     let mut inner = frames.to_vec();
-                    if let Value::Reference(num, _) = reference.value {
-                        inner.push(Location::Object(num, 0));
-                    }
-                    self.events.push(Event::Paint {
-                        uses: vec![used],
-                        frames: inner,
-                    });
+                    inner.push(Location::Object(num, 0));
+                    self.push(Kind::Image, uses.into_iter().collect(), bbox, state, &inner);
                 }
             }
             Some(b"Form") => {
-                if let Value::Reference(num, _) = reference.value {
-                    self.nested(num, dict, frames, page);
-                }
+                let doc = self.doc;
+                let numbers = dict.get(b"Matrix").and_then(|m| doc.resolve(m)).and_then(Object::array);
+                let form = numbers.map_or(IDENTITY, |n| matrix(n.iter().map(|i| doc.resolve(i).and_then(real))));
+                let inner = State {
+                    ctm: state.ctm.map(|ctm| mul(&form, &ctm)),
+                    ..state.clone()
+                };
+                self.nested(num, dict, frames, page, inner);
             }
             _ => {}
         }
@@ -594,7 +948,7 @@ mod tests {
         events
             .iter()
             .filter_map(|e| match e {
-                Event::Paint { uses, .. } => Some(
+                Event::Paint { uses, .. } if !uses.is_empty() => Some(
                     uses.iter()
                         .map(|u| {
                             let space = u.space.array().and_then(|a| a.first()).unwrap_or(&u.space);
@@ -898,11 +1252,8 @@ mod tests {
         );
         assert_eq!(
             paints(&got),
-            [
-                vec![use_of(Role::Image, "DeviceCMYK")],
-                vec![use_of(Role::Fill, "Pattern")],
-                vec![use_of(Role::Fill, "Pattern")]
-            ]
+            [vec![use_of(Role::Fill, "Pattern")], vec![use_of(Role::Fill, "Pattern")]],
+            "a direct dictionary is no XObject: an XObject is a stream"
         );
         let other = run(
             "<< >>",
@@ -910,5 +1261,141 @@ mod tests {
             &[(3, b"<< /Type /Page /Contents 4 0 R /Group << /S /Other >> >>".to_vec())],
         );
         assert_eq!(other, []);
+    }
+
+    /// Each paint as its kind, uses count, and bbox and visible box as `[x0, y0, x1, y1]`.
+    type Place = (Kind, usize, Option<[f64; 4]>, Option<[f64; 4]>);
+
+    fn places(events: &[Event]) -> Vec<Place> {
+        let corners = |r: &Option<Rect>| r.map(|r| [r.x0, r.y0, r.x1, r.y1]);
+        events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Paint {
+                    kind,
+                    uses,
+                    bbox,
+                    visible,
+                    ..
+                } => Some((*kind, uses.len(), corners(bbox), corners(visible))),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn where_paths_images_and_shadings_land() {
+        let resources = "<< /XObject << /Fm 6 0 R /Im 7 0 R /Bare 9 0 R /Odd 10 0 R >> \
+            /Shading << /Sh << /ColorSpace /DeviceGray >> >> /Pattern << /T 8 0 R >> >>";
+        let data = "10 20 m 30 40 l 50 0 60 10 70 5 c 1 1 2 2 v 3 3 4 4 y S \
+            q 2 0 0 2 0 0 cm 0 0 5 5 re f Q \
+            q 0 0 4 4 re W n 0 0 10 10 re f Q \
+            q 0 0 1 1 re W n 5 5 1 1 re W n 0 0 1 1 re f Q \
+            W n f 1 2 3 4 5 cm \
+            q 2 0 0 2 0 0 cm /Fm Do Q /Odd Do /Im Do /Bare Do \
+            BI /W 1 /H 1 /BPC 8 /CS /G ID a EI BI /IM true /W 1 /H 1 ID a EI \
+            q 0 0 3 3 re W n /Sh sh Q /Sh sh /Pattern cs /T scn 0 0 1 1 re f /Nope Do 5 Do";
+        let more = [
+            (
+                6,
+                stream(
+                    "/Subtype /Form /Matrix [1 0 0 1 1000 0] /Resources << >>",
+                    "5 0 0 5 0 0 cm Q 0 0 1 1 re f",
+                ),
+            ),
+            (7, stream("/Subtype /Image /ColorSpace /DeviceGray", "")),
+            (
+                8,
+                stream(
+                    "/PatternType 1 /PaintType 1 /Resources << >>",
+                    "2 0 0 2 0 0 cm 0 0 1 1 re f",
+                ),
+            ),
+            (9, stream("/Subtype /Image", "")),
+            (
+                10,
+                stream("/Subtype /Form /Matrix [1 2] /Resources << >>", "0 0 1 1 re f"),
+            ),
+        ];
+        let got = run(resources, data, &more);
+        let unit = Some([0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(
+            places(&got),
+            [
+                (
+                    Kind::Path,
+                    1,
+                    Some([1.0, 0.0, 70.0, 40.0]),
+                    Some([1.0, 0.0, 70.0, 40.0])
+                ),
+                (
+                    Kind::Path,
+                    1,
+                    Some([0.0, 0.0, 10.0, 10.0]),
+                    Some([0.0, 0.0, 10.0, 10.0])
+                ),
+                (Kind::Path, 1, Some([0.0, 0.0, 10.0, 10.0]), Some([0.0, 0.0, 4.0, 4.0])),
+                (Kind::Path, 1, unit, None),
+                (Kind::Path, 1, None, None),
+                (
+                    Kind::Path,
+                    1,
+                    Some([2000.0, 0.0, 2002.0, 2.0]),
+                    Some([2000.0, 0.0, 2002.0, 2.0])
+                ),
+                (Kind::Path, 1, Some([0.0, 0.0, 1.0, 1.0]), unit),
+                (Kind::Image, 1, unit, unit),
+                (Kind::Image, 0, unit, unit),
+                (Kind::InlineImage, 1, unit, unit),
+                (Kind::InlineImage, 1, unit, unit),
+                (Kind::Shading, 1, None, Some([0.0, 0.0, 3.0, 3.0])),
+                (Kind::Shading, 1, None, None),
+                (Kind::Path, 1, None, None),
+                (Kind::Path, 1, unit, unit),
+            ]
+        );
+        let missing: Vec<&[u8]> = got
+            .iter()
+            .filter_map(|e| match e {
+                Event::Missing { name, .. } => Some(name.as_slice()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(missing, [b"Nope".as_slice()]);
+    }
+
+    #[test]
+    fn where_text_lands() {
+        let resources = "<< /Font << /F 5 0 R /D << /Subtype /Type1 /FirstChar 33 /Widths [400] >> /B 6 >> >>";
+        let data = "BT /F 10 Tf 12 TL 100 100 Td ( !) Tj (!) ' 1 2 (!) \" [(!) -1000 (!)] TJ \
+            1 0 0 1 200 200 Tm 0 Tc 0 Tw 50 Tz 3 Ts (!) Tj 0 -5 TD T* 3 Tr (!) Tj 0 Tr 0 Ts 100 Tz \
+            /D 10 Tf 0 0 Td (!) Tj /F 10 Tf 500 Tj 5 TJ Tj /Nope 10 Tf (!) Tj /B 10 Tf (!) Tj ET";
+        let more = [(
+            5,
+            b"<< /Subtype /Type1 /FirstChar 32 /Widths [250 600] /FontDescriptor << /Ascent 700 /Descent -200 >> >>"
+                .to_vec(),
+        )];
+        let got: Vec<(Kind, Option<[f64; 4]>)> = places(&run(resources, data, &more))
+            .into_iter()
+            .map(|(kind, _, bbox, _)| (kind, bbox))
+            .collect();
+        let text = |x0: f64, y0: f64, x1: f64, y1: f64| (Kind::Text(0), Some([x0, y0, x1, y1]));
+        assert_eq!(
+            got,
+            [
+                text(100.0, 98.0, 108.5, 107.0),
+                text(100.0, 86.0, 106.0, 95.0),
+                text(100.0, 74.0, 108.0, 83.0),
+                text(108.0, 74.0, 134.0, 83.0),
+                text(200.0, 201.0, 203.0, 210.0),
+                (Kind::Text(3), Some([200.0, 191.0, 203.0, 200.0])),
+                text(200.0, 188.0, 204.0, 198.0),
+                text(199.0, 188.0, 204.0, 197.0),
+                text(199.0, 188.0, 199.0, 197.0),
+                text(199.0, 188.0, 199.0, 197.0),
+                text(199.0, 188.0, 204.0, 198.0),
+                text(204.0, 188.0, 209.0, 198.0),
+            ]
+        );
     }
 }

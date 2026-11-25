@@ -736,6 +736,14 @@ def _x4_jpx_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _print_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of the print checks ported to the Rust core (expected.toml says what each raises)."""
+    return {
+        "print-outside-media": _x4_page(b"0 0 0 1 k 2000 2000 10 10 re f"),
+        "print-xobject-missing": _x4_page(b"q 10 0 0 10 0 0 cm /Nothing Do Q"),
+    }
+
+
 def _x4_pre_separated() -> pikepdf.Pdf:
     """x4-good as two pages, each painting a single colorant, Cyan then Magenta: a pre-separated file (6.1.2)."""
     pdf = _x4_good()
@@ -1200,6 +1208,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_colour_fixtures(),
         **_x4_spot_fixtures(),
         **_x4_jpx_fixtures(),
+        **_print_fixtures(),
         "x4-pre-separated": _x4_pre_separated(),
     }
 

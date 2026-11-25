@@ -158,6 +158,21 @@ impl Document {
         }
     }
 
+    /// Stream `num`'s dictionary, when `num` is a stream the walk read.
+    pub(crate) fn stream_dict(&self, num: u32) -> Option<&Dict> {
+        match self.slots.get(&num) {
+            Some(Slot::Loaded {
+                object: Object {
+                    value: Value::Dict(dict),
+                    ..
+                },
+                stream: Some(_),
+                ..
+            }) => Some(dict),
+            _ => None,
+        }
+    }
+
     /// Image stream `num`'s data as its image filter (`DCTDecode`, `JPXDecode`, `JBIG2Decode`, `CCITTFaxDecode`) reads
     /// it: every filter before that one applied. `None` when the stream has no image filter or cannot be decoded.
     pub(crate) fn image_data(&self, num: u32) -> Option<Vec<u8>> {

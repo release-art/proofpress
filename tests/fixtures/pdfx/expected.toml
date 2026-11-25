@@ -5,7 +5,7 @@
 
 # Genuine PDF/X-4, the base every negative is built from. pdfToolbox 17.1 "Verify compliance with PDFX-4" passes it.
 [x4-good]
-levels = ["x4"]
+levels = ["x4", "print"]
 expect = {}
 
 # ---- One-defect negatives of x4-good (tests/fixtures/build_pdfs.py).
@@ -567,3 +567,13 @@ expect = { "x4.image.jpx-valid" = "JPXDecode data that is not JPEG 2000 (6.8)" }
 [x4-pre-separated]
 levels = ["x4"]
 expect = { "x4.pre-separated.absent" = "two pages painting only Cyan and only Magenta (6.1.2, X4-Q2)" }
+
+# proof-pdf's own print checks, ported from the Python under the parity gate. Each adds one defect to x4-good's page.
+
+[print-outside-media]
+levels = ["print"]
+expect = { "outside-media" = "a 10 pt square at (2000, 2000), wholly beyond the MediaBox (warning)" }
+
+[print-xobject-missing]
+levels = ["print"]
+expect = { "xobject-missing" = "the page paints /Nothing, which its resources do not name (ISO 32000-2 7.8.3)" }

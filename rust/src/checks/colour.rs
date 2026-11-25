@@ -83,7 +83,7 @@ fn family(space: &Object) -> &[u8] {
 fn uses(doc: &Document) -> Vec<(Use, Vec<Location>)> {
     let mut out = Vec::new();
     for event in graphics::walk(doc) {
-        if let Event::Paint { uses, frames } = event {
+        if let Event::Paint { uses, frames, .. } = event {
             out.extend(uses.into_iter().map(|u| (u, frames.clone())));
         }
     }
@@ -352,7 +352,9 @@ pub(super) fn pre_separated(doc: &Document, _: Level) -> Vec<Finding> {
     // Paints grouped by the page they are on, the first of their frames.
     let mut pages: Vec<(Option<Location>, Inks)> = Vec::new();
     for event in graphics::walk(doc) {
-        let Event::Paint { uses, frames } = event else { continue };
+        let Event::Paint { uses, frames, .. } = event else {
+            continue;
+        };
         let page = frames.into_iter().next();
         let inks: Inks = uses.iter().map(|u| single_ink(doc, &u.space, 0)).collect();
         match pages.iter_mut().find(|(p, _)| *p == page) {

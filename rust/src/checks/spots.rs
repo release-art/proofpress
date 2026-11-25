@@ -56,7 +56,9 @@ fn text(name: &[u8]) -> String {
 fn used_device_n(doc: &Document) -> Vec<(Vec<Object>, Vec<Location>)> {
     let mut out = Vec::new();
     for event in graphics::walk(doc) {
-        let Event::Paint { uses, frames } = event else { continue };
+        let Event::Paint { uses, frames, .. } = event else {
+            continue;
+        };
         for used in uses {
             let mut stack = vec![used.space];
             // Bounded: a space may name itself as its own base.
@@ -207,7 +209,9 @@ pub(super) fn confusing_names(doc: &Document, _: Level) -> Vec<Finding> {
 fn separations(doc: &Document) -> Vec<(Vec<u8>, Object, Object, Vec<Location>)> {
     let mut out = Vec::new();
     for event in graphics::walk(doc) {
-        let Event::Paint { uses, frames } = event else { continue };
+        let Event::Paint { uses, frames, .. } = event else {
+            continue;
+        };
         let mut stack: Vec<Object> = uses.into_iter().map(|u| u.space).collect();
         // Bounded: each step goes one level into a colour space, and real ones nest two or three levels.
         let mut steps = 0;

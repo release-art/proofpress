@@ -23,8 +23,11 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 4** (content, page model and colour): 4.1 to 4.5 done. Next: task 4.6, porting today's print checks under the parity gate, where the brief's pace checkpoint for
-  `paint.py` applies.
+- **Phase 4** (content, page model and colour): 4.1 to 4.5 done; 4.6 under way. The walk now places what it paints
+  (CTM, clip, path, text and image extents), and the first two print checks run in Rust: `outside-media` and
+  `xobject-missing`. Next in 4.6: the paint-state checks (overprint, white overprint, rich black, K-only text, colour
+  modes), then text size and hairlines, resolution, and the page geometry checks. The brief's pace checkpoint for
+  `paint.py` falls on 2026-12-02, one week into phase 4.
 
 ## Done
 
@@ -63,8 +66,9 @@ record it as not conforming to that one rule).
 | 4.2, 4.3 (part) | `b5742dc` | Tier 7 walks pages with a graphics state: paint events with colour space, role, overprint and OPM, `Default` spaces applied, forms and coloured patterns walked with one ancestor set; 5 colour rows (6.4.3.2, 6.4.3.3, 6.4.3.4's alternates) with 6 fixtures; `md5` crate for profile identity |
 | 4.3 (spots), 6.20 | `a82f79a`, `ea2c86c` (scope) | 7 spot rows of 6.4.3.4 and both 6.20 rows with 9 fixtures; `x4.spot.colorants-match-devicen` waits for function evaluation |
 | 4.4 (part) | `81362d4` | JPEG 2000 header reader (JPX boxes, codestream SIZ); 6 of 6.27's rows with 6 fixtures, agreeing with veraPDF's 6.2.8.3 files |
-| 4.4 | the commit after `7beca2f`; test-db `a2661129` | `x4.jpx.baseline` (T.801 M.9.2) and `x4.image.jpx-valid` (header only); fixtures now baseline JPX; 3 more fixtures |
+| 4.4 | `a7499b9`; test-db `a2661129` | `x4.jpx.baseline` (T.801 M.9.2) and `x4.image.jpx-valid` (header only); fixtures now baseline JPX; 3 more fixtures |
 | 4.5 | `cd26fbf` | Pre-separated files (6.1.2, X4-Q2): every painting page one colorant, differing between pages; 1 fixture; none in Ghent, Altona or GWG Processing Steps |
+| 4.6 (part) | the commit after `a7499b9` | Tier 7 geometry and font metrics; `outside-media` and `xobject-missing` ported, parity-proved and their Python deleted; `bin/parity/print.py`; 2 fixtures |
 
 ## Register coverage
 
@@ -74,7 +78,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 109 | 28 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 19 | 37 | 1 (`internal`) |
+| House and structure checks | 21 | 35 | 1 (`internal`) |
 
 ## Gates
 
@@ -231,6 +235,20 @@ Oracle consultations:
   read it: brands, Reader Requirements, compression type, `Rsiz`, a usable colour specification, box order; files with
   fragment tables or data references fail as not verified. M.9.2.4's colour list keeps CIEJab, so a CIEJab file raises
   only `x4.jpx.no-ciejab`. The 2021 T.801 changes nothing in M.9.2's baseline.
+- Task 4.6, the first port (`outside-media`, `xobject-missing`). Parity on 10,013 files (every test-db sample set but
+  `kura-bench` and `iust-pdfcorpus`, and the private decks; the fixtures separately, 244 identical): 9,249 identical, 1,242 findings among
+  them, 2 different, both Rust's way. pdf.js `issue6541` paints `/R41` inside a tiling pattern whose own resources do
+  not name it; the Python never walks patterns. An `unsafe-docs` file's `/Resources` object reads as empty in qpdf and
+  whole here, so the Python called its eleven images missing. The rest were apart, as the brief expects: 465 files the
+  core refuses and pikepdf repairs (all but at most the 26 that task 2.3 explained are files `qpdf --check` reports
+  damaged), 61 read with gaps, 220 pikepdf cannot open,
+  and 20 on which the Python walk crashes (a colour space name that is not UTF-8, a `TypeError` or `IndexError` in
+  `paint.py`), an exception `core._check_pdf` does not catch, so `verify` fails on those files today.
+- Task 4.6: the walk now starts a form from the graphics state of its `Do`, colour and overprint included (8.10.1),
+  where it used to start from the default; an unbalanced `Q` keeps the state and restores only the CTM, as the Python
+  does; an `XObject` entry that is not a stream is missing (7.8.3), not an image. Ghent and Altona are unchanged.
+- A check the core cannot judge because it refused the file or read it with gaps now fails in `verify` ("could not be
+  checked"), where the Python checked whatever pikepdf repaired: the behaviour change the brief lists.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 
