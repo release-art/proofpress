@@ -40,3 +40,64 @@ expect = { "x4.encrypt.absent" = "the file is encrypted with an empty password (
 [x4-too-many-objects]
 levels = ["x4"]
 expect = { "x4.limits.objects" = "an update lists 8,388,608 objects in use, one more than Table C.1 of PDF 1.6 allows (6.25)" }
+
+# ---- Damage to the file's own structure: ISO 32000-2 rules every level checks (same-length edits of x4-good).
+[x4-no-header]
+levels = ["x4"]
+expect = { "file.header" = "%PDF- is spelt %PXF-, so the file is refused (7.5.2)" }
+
+[x4-header-offset]
+levels = ["x4"]
+expect = { "file.header-offset" = "five bytes before %PDF-: allowed, offsets count from the header, but PDF/A forbids it (7.5.2)" }
+
+[x4-truncated]
+levels = ["x4"]
+expect = { "file.startxref" = "cut in half, so no startxref (7.5.5)" }
+
+[x4-bad-xref]
+levels = ["x4"]
+expect = { "file.xref" = "startxref points at xreg, not a cross-reference section (7.5.4)" }
+
+[x4-no-root]
+levels = ["x4"]
+expect = { "file.trailer" = "the trailer's /Root is spelt /Rooo (7.5.5)" }
+
+[x4-after-eof]
+levels = ["x4"]
+expect = { "file.eof" = "bytes after %%EOF (7.5.5)" }
+
+[x4-many-updates]
+levels = ["x4"]
+expect = { "file.limit" = "1,001 empty incremental updates, more cross-reference sections than the reader's limit" }
+
+[x4-odd-hex]
+levels = ["x4"]
+expect = { "syntax.hex-digits" = "the trailer /ID's second string has 31 hex digits (7.3.4.3)" }
+
+[x4-octal-overflow]
+levels = ["x4"]
+expect = { "syntax.octal-escape" = "the output condition's text starts with the escape \\777, above 255 (7.3.4.2)" }
+
+[x4-bad-name-escape]
+levels = ["x4"]
+expect = { "syntax.name-escape" = "the font name /Proof#GG has an escape that is not two hex digits (7.3.5)" }
+
+[x4-duplicate-key]
+levels = ["x4"]
+expect = { "syntax.duplicate-key" = "the Info dictionary gives /ModDate twice (7.3.7)" }
+
+[x4-no-eol-before-endstream]
+levels = ["x4"]
+expect = { "stream.eol" = "the page content's data runs straight into a space and endstream (7.3.8.1)" }
+
+[x4-unknown-filter]
+levels = ["x4"]
+expect = { "stream.filter" = "a stream names the filter /FlateDecodX (7.4.1)", "x4.filter.standard-only" = "the same name is not one of PDF 1.6's filters (6.8)" }
+
+[x4-damaged-object]
+levels = ["x4"]
+expect = { "object.damaged" = "the Info dictionary starts [<, which cannot be read; every other check is then not evaluated" }
+
+[x4-dangling-reference]
+levels = ["x4"]
+expect = { "object.dangling-reference" = "the trailer's /Info points at generation 5 of an object that has generation 0 (7.3.10)" }

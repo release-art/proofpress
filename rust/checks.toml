@@ -1894,7 +1894,7 @@ title = "The file starts with a %PDF- header in its first 1024 bytes"
 clauses = ["iso-32000-2:7.5.2"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "file.header-offset"
@@ -1902,7 +1902,7 @@ title = "The header is at the very start of the file"
 clauses = ["iso-32000-2:7.5.2"]
 severity = "warning"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "file.startxref"
@@ -1910,7 +1910,7 @@ title = "The file ends with startxref and the offset of its cross-reference"
 clauses = ["iso-32000-2:7.5.5"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "file.xref"
@@ -1918,7 +1918,7 @@ title = "Every cross-reference section can be read"
 clauses = ["iso-32000-2:7.5.4", "iso-32000-2:7.5.8"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "file.trailer"
@@ -1926,7 +1926,7 @@ title = "The trailer names the document catalog"
 clauses = ["iso-32000-2:7.5.5"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "file.encrypted"
@@ -1934,7 +1934,7 @@ title = "The file is not encrypted"
 clauses = ["iso-32000-2:7.6"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "file.eof"
@@ -1942,7 +1942,7 @@ title = "The file ends with %%EOF and nothing after it"
 clauses = ["iso-32000-2:7.5.5"]
 severity = "warning"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "file.limit"
@@ -1950,7 +1950,7 @@ title = "The file stays within proof-pdf's safety limits"
 clauses = []
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "syntax.hex-digits"
@@ -1958,7 +1958,7 @@ title = "Hex strings have an even number of digits"
 clauses = ["iso-32000-2:7.3.4.3"]
 severity = "warning"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "syntax.octal-escape"
@@ -1966,7 +1966,7 @@ title = "Octal escapes in strings stay within one byte"
 clauses = ["iso-32000-2:7.3.4.2"]
 severity = "warning"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "syntax.name-escape"
@@ -1974,7 +1974,7 @@ title = "Escapes in names are two hex digits, never 00"
 clauses = ["iso-32000-2:7.3.5"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "syntax.duplicate-key"
@@ -1984,7 +1984,7 @@ clauses = ["iso-32000-2:7.3.7"]
 # correctly; qpdf warns, and pdfToolbox does not object (decision of 2026-11-25).
 severity = "warning"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "stream.eol"
@@ -1992,7 +1992,7 @@ title = "Stream data is followed by an end of line before endstream"
 clauses = ["iso-32000-2:7.3.8.1"]
 severity = "warning"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "stream.filter"
@@ -2000,7 +2000,7 @@ title = "Every stream names filters ISO 32000 defines"
 clauses = ["iso-32000-2:7.4.1"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "object.damaged"
@@ -2008,7 +2008,7 @@ title = "Every object reachable from the trailer can be read"
 clauses = ["iso-32000-2:7.3", "iso-32000-2:7.3.8.1", "iso-32000-2:7.3.10", "iso-32000-2:7.5.7"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "object.dangling-reference"
@@ -2016,4 +2016,4 @@ title = "References point at objects that exist"
 clauses = ["iso-32000-2:7.3.10"]
 severity = "warning"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
-status = "todo"
+status = "implemented"

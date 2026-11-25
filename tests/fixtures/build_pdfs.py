@@ -670,7 +670,41 @@ def _x4_variants(good: bytes, scratch: pathlib.Path) -> dict[str, bytes]:
         "x4-name-unescaped": good.replace(b"/ProofBox", "/Pr\u00e9fBox".encode()),
         "x4-encrypted": encrypted,
         "x4-too-many-objects": _too_many_objects(good),
+        # Damage to the file's own structure, each a same-length edit (ISO 32000-2 rules, checked at every level).
+        "x4-no-header": _edit(good, b"%PDF-", b"%PXF-"),
+        "x4-header-offset": b"junk\n" + good,
+        "x4-truncated": good[: len(good) // 2],
+        "x4-bad-xref": _edit(good, b"\nxref\n0 ", b"\nxreg\n0 "),
+        "x4-no-root": _edit(good, b"/Root 1 0 R", b"/Rooo 1 0 R"),
+        "x4-after-eof": good + b"<html>",
+        "x4-many-updates": _many_updates(good, 1001),
+        "x4-odd-hex": _edit(good, b"><b21aaa", b">< 21aaa"),
+        "x4-octal-overflow": _edit(good, b"(Little-CMS testbed", b"(\\777le-CMS testbed", times=2),
+        "x4-bad-name-escape": _edit(good, b"/ProofBox", b"/Proof#GG", times=2, every=True),
+        "x4-duplicate-key": _edit(good, b"/CreationDate", b"/ModDate     "),
+        "x4-no-eol-before-endstream": _edit(good, b"(PDF/X-4) Tj ET\nendstream", b"(PDF/X-4) Tj ET endstream"),
+        "x4-unknown-filter": _edit(good, b"/FlateDecode", b"/FlateDecodX", times=2),
+        "x4-damaged-object": _edit(good, b"2 0 obj\n<<", b"2 0 obj\n[<"),
+        "x4-dangling-reference": _edit(good, b"/Info 2 0 R", b"/Info 2 5 R"),
     }
+
+
+def _edit(good: bytes, old: bytes, new: bytes, *, times: int = 1, every: bool = False) -> bytes:
+    """``good`` with ``old`` (found exactly ``times`` times) replaced by same-length ``new``, once or every time."""
+    assert len(old) == len(new) and good.count(old) == times, (old, good.count(old))
+    return good.replace(old, new, -1 if every else 1)
+
+
+def _many_updates(good: bytes, count: int) -> bytes:
+    """``good`` followed by ``count`` empty incremental updates, each a table with no entries and a /Prev."""
+    out = bytearray(good)
+    trailer = good[good.rindex(b"trailer") + 7 : good.rindex(b"startxref")].strip()
+    prev = int(good[good.rindex(b"startxref") + 9 :].split()[0])
+    for _ in range(count):
+        here = len(out)
+        out += b"xref\n0 0\ntrailer\n" + trailer[:-2] + b" /Prev %d >>\nstartxref\n%d\n%%%%EOF\n" % (prev, here)
+        prev = here
+    return bytes(out)
 
 
 def _too_many_objects(good: bytes) -> bytes:
