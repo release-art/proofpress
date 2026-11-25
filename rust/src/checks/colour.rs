@@ -13,6 +13,7 @@ use crate::document::{Document, Object, Value};
 use crate::findings::{
     Check, Finding, Level, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
     X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
+    X4_TRANSPARENCY_GROUP_CS_RESTRICTED,
 };
 use crate::graphics::{self, Event, Role, Use};
 
@@ -157,6 +158,51 @@ pub(super) fn device_spaces(doc: &Document, _: Level) -> Vec<Finding> {
 /// 6.4.3.4 (X4-Q4): the alternates of spot colours obey 6.4 too.
 pub(super) fn alternate_spaces(doc: &Document, _: Level) -> Vec<Finding> {
     device_rule(doc, X4_SPOT_ALTERNATE_SPACE_RESTRICTED, &|v| v == Via::Alternate)
+}
+
+/// 6.20: a transparency group's `/CS` obeys 6.4.3: a device space matches the intent, a profile is version 2 or 4.
+pub(super) fn group_spaces(doc: &Document, _: Level) -> Vec<Finding> {
+    let intent = intent::profile(doc)
+        .map(|h| h.space)
+        .filter(|s| matches!(s, b"GRAY" | b"RGB " | b"CMYK"));
+    let mut out = Vec::new();
+    for event in graphics::walk(doc) {
+        let Event::Group {
+            space: Some(space),
+            frames,
+        } = event
+        else {
+            continue;
+        };
+        let mut found = Vec::new();
+        leaves(doc, &space, Via::Direct, 0, &mut found);
+        for leaf in &found {
+            let family = family(leaf.space);
+            let device = family.starts_with(b"Device") && family != b"DeviceN";
+            let bad_device = device && intent.is_some_and(|i| !device_allowed(family, i));
+            let version = (family == b"ICCBased")
+                .then(|| leaf.space.array().and_then(|a| a.get(1)))
+                .flatten()
+                .and_then(|s| match s.value {
+                    Value::Reference(n, _) => doc.stream_data(n),
+                    _ => None,
+                })
+                .and_then(|d| icc::header(&d))
+                .map(|h| h.version.0);
+            if bad_device || version.is_some_and(|v| !matches!(v, 2 | 4)) {
+                let message = format!(
+                    "a transparency group's /CS uses {}, which 6.4.3 does not allow here",
+                    String::from_utf8_lossy(family)
+                );
+                out.push(
+                    Finding::new(X4_TRANSPARENCY_GROUP_CS_RESTRICTED, message)
+                        .citing("6.20")
+                        .at(frames.clone()),
+                );
+            }
+        }
+    }
+    distinct(out)
 }
 
 /// An `ICCBased` leaf of a use: its profile stream's number and data, its channels, the use, how it was reached and
@@ -385,5 +431,41 @@ mod tests {
             Vec::<&str>::new(),
             "deeper than the flattening goes"
         );
+    }
+
+    #[test]
+    fn group_spaces_follow_the_colour_rules() {
+        let groups = |cs: &str| -> Vec<String> {
+            let catalog = b"<< /Pages 2 0 R /OutputIntents [<< /S /GTS_PDFX /DestOutputProfile 8 0 R >>] >>";
+            let page = format!("<< /Type /Page /Group << /S /Transparency /CS {cs} >> /Contents 4 0 R >>");
+            let objects: [(u32, &[u8]); 6] = [
+                (1, catalog),
+                (2, b"<< /Type /Pages /Kids [3 0 R] >>"),
+                (3, page.as_bytes()),
+                (4, b"<< /Length 0 >>\nstream\n\nendstream"),
+                (7, &profile(b"CMYK", 5)),
+                (8, &profile(b"CMYK", 2)),
+            ];
+            let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
+            group_spaces(&doc, Level::X4).into_iter().map(|f| f.message).collect()
+        };
+        assert_eq!(groups("/DeviceCMYK"), Vec::<String>::new());
+        assert_eq!(groups("/DeviceGray"), Vec::<String>::new());
+        assert_eq!(groups("[/ICCBased 8 0 R]"), Vec::<String>::new());
+        assert_eq!(
+            groups("[/ICCBased 7 0 R]"),
+            ["a transparency group's /CS uses ICCBased, which 6.4.3 does not allow here"]
+        );
+        assert_eq!(
+            groups("[/ICCBased << /N 4 >>]"),
+            Vec::<String>::new(),
+            "a profile that is not a stream"
+        );
+        assert_eq!(groups("[/ICCBased]"), Vec::<String>::new());
+        assert_eq!(
+            groups("/DeviceRGB"),
+            ["a transparency group's /CS uses DeviceRGB, which 6.4.3 does not allow here"]
+        );
+        assert_eq!(groups("/Lab"), Vec::<String>::new());
     }
 }

@@ -11,6 +11,7 @@ mod intent;
 mod keys;
 mod metadata;
 mod optional;
+mod spots;
 mod walk;
 mod x4;
 
@@ -133,6 +134,15 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_ICC_PROFILE_VERSION, colour::profile_version),
     (f::X4_ICC_OVERPRINT_MODE_ZERO, colour::overprint_mode),
     (f::X4_ICC_CMYK_NOT_INTENT_PROFILE, colour::not_intent_profile),
+    (f::X4_TRANSPARENCY_GROUP_CS_RESTRICTED, colour::group_spaces),
+    (f::X4_SPOT_COLORANTS_ENTRY, spots::colorants_entry),
+    (f::X4_SPOT_PROCESS_COLORSPACE, spots::process_space),
+    (f::X4_SPOT_NO_DOTGAIN, spots::no_dot_gain),
+    (f::X4_SPOT_CONFUSING_NAMES, spots::confusing_names),
+    (f::X4_SPOT_CONSISTENT_DEFINITION, spots::consistent_definitions),
+    (f::X4_SPOT_PRINTING_ORDER_CONSISTENT, spots::printing_order),
+    (f::X4_SPOT_SOLIDITIES_CONSISTENT, spots::solidities),
+    (f::X4_TRANSPARENCY_BLEND_MODES, spots::blend_modes),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5

@@ -485,3 +485,41 @@ expect = { "x4.icc.cmyk-not-intent-profile" = "an ICCBased fill on the output in
 [x4-icc-intent-copy]
 levels = ["x4"]
 expect = { "x4.icc.cmyk-not-intent-profile" = "an ICCBased fill on a copy of the intent's profile, equal by MD5 (6.4.3.3)" }
+
+# PDF/X-4 6.4.3.4 and 6.20: spot colours and transparency.
+
+[x4-devicen-no-colorants]
+levels = ["x4"]
+expect = { "x4.spot.colorants-entry" = "a DeviceN spot with no /Colorants entry (6.4.3.4)" }
+
+[x4-devicen-process-rgb]
+levels = ["x4"]
+expect = { "x4.spot.process-colorspace" = "/Process /ColorSpace /DeviceRGB under a CMYK intent (6.4.3.4, X4-Q5)" }
+
+[x4-nchannel-dotgain]
+levels = ["x4"]
+expect = { "x4.spot.no-dotgain" = "NChannel /MixingHints with /DotGain (6.4.3.4)" }
+
+[x4-spot-confusing-name]
+levels = ["x4"]
+expect = { "x4.spot.confusing-names" = "a spot named Red, a warning (6.4.3.4)" }
+
+[x4-spot-two-definitions]
+levels = ["x4"]
+expect = { "x4.spot.consistent-definition" = "two Separation arrays named Spot1 with different tint transforms (6.4.3.4)" }
+
+[x4-printing-order-clash]
+levels = ["x4"]
+expect = { "x4.spot.printing-order-consistent" = "PrintingOrder [/A /B] and [/B /A] (6.4.3.4)" }
+
+[x4-solidities-clash]
+levels = ["x4"]
+expect = { "x4.spot.solidities-consistent" = "Solidities for A of 1.0 and 0.5 (6.4.3.4)" }
+
+[x4-group-rgb]
+levels = ["x4"]
+expect = { "x4.transparency.group-cs-restricted" = "a page group with /CS /DeviceRGB under a CMYK intent (6.20)" }
+
+[x4-blend-mode-unknown]
+levels = ["x4"]
+expect = { "x4.transparency.blend-modes" = "an ExtGState with /BM /Funky (6.20, X4-Q19)" }

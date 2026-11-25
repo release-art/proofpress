@@ -26,14 +26,14 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.icc.profile-version` | ICCBased profiles are ICC version 2 or 4 | iso-15930-7:6.4.3.3 | error | x4, x4p | implemented |
 | `x4.icc.overprint-mode-zero` | Overprinted four-channel ICC colour uses overprint mode 0 | iso-15930-7:6.4.3.3 | error | x4, x4p | implemented |
 | `x4.icc.cmyk-not-intent-profile` | Four-channel ICC colour does not reuse the intent profile | iso-15930-7:6.4.3.3 | error | x4, x4p | implemented |
-| `x4.spot.colorants-entry` | Every DeviceN spot has a Colorants entry | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
-| `x4.spot.consistent-definition` | A spot name has one definition throughout | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
+| `x4.spot.colorants-entry` | Every DeviceN spot has a Colorants entry | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
+| `x4.spot.consistent-definition` | A spot name has one definition throughout | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
 | `x4.spot.colorants-match-devicen` | Colorants entries agree with their DeviceN space | iso-15930-7:6.4.3.4 | warning | x4, x4p | todo |
-| `x4.spot.confusing-names` | Spot names do not imitate process or RGB inks | iso-15930-7:6.4.3.4 | warning | x4, x4p | todo |
-| `x4.spot.process-colorspace` | A DeviceN process space matches the output intent | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
-| `x4.spot.no-dotgain` | NChannel mixing hints carry no dot gain | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
-| `x4.spot.printing-order-consistent` | Printing orders agree across the file | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
-| `x4.spot.solidities-consistent` | Each ink has one solidity across the file | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
+| `x4.spot.confusing-names` | Spot names do not imitate process or RGB inks | iso-15930-7:6.4.3.4 | warning | x4, x4p | implemented |
+| `x4.spot.process-colorspace` | A DeviceN process space matches the output intent | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
+| `x4.spot.no-dotgain` | NChannel mixing hints carry no dot gain | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
+| `x4.spot.printing-order-consistent` | Printing orders agree across the file | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
+| `x4.spot.solidities-consistent` | Each ink has one solidity across the file | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
 | `x4.spot.mixing-hints-informed` | Mixing hints omit default values | iso-15930-7:6.4.3.4 | warning | x4, x4p | skip: Whether a value was chosen with care cannot be read from the file |
 | `x4.spot.alternate-space-restricted` | Spot alternate spaces follow the colour rules | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
 | `x4.font.embedded` | Fonts used for text are embedded | iso-15930-7:6.5.1, iso-15930-7:6.24 | error | x4, x4p | todo |
@@ -112,8 +112,8 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.javascript.absent` | The file has no JavaScript | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | implemented |
 | `x4.content.known-operators` | Content uses only PDF 1.6 operators | iso-15930-7:6.19, iso-15930-7:B | error | x4, x4p | implemented |
 | `x4.content.no-bx-ex` | Content avoids BX and EX | iso-15930-7:6.19 | warning | x4, x4p | implemented |
-| `x4.transparency.group-cs-restricted` | Transparency group colour spaces follow the colour rules | iso-15930-7:6.20 | error | x4, x4p | todo |
-| `x4.transparency.blend-modes` | Blend modes are standard | iso-15930-7:6.20 | error | x4, x4p | todo |
+| `x4.transparency.group-cs-restricted` | Transparency group colour spaces follow the colour rules | iso-15930-7:6.20 | error | x4, x4p | implemented |
+| `x4.transparency.blend-modes` | Blend modes are standard | iso-15930-7:6.20 | error | x4, x4p | implemented |
 | `x4.viewer-prefs.areas` | Viewer areas and clips are MediaBox or BleedBox | iso-15930-7:6.21 | error | x4, x4p | implemented |
 | `x4.names.no-alternate-presentations` | No alternate presentations | iso-15930-7:6.22 | error | x4, x4p | implemented |
 | `x4.page.no-pres-steps` | No page has presentation steps | iso-15930-7:6.22 | error | x4, x4p | implemented |

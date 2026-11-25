@@ -591,6 +591,82 @@ def _x4_colour_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _black_tint(pdf: pikepdf.Pdf, inks: int = 1, black: float = 1) -> pikepdf.Object:
+    """A tint transform from ``inks`` inputs to CMYK with only black varying: enough to define a space."""
+    return pdf.make_indirect(
+        pikepdf.Dictionary(FunctionType=2, Domain=[0, 1] * inks, C0=[0, 0, 0, 0], C1=[0, 0, 0, black], N=1)
+    )
+
+
+def _separation(pdf: pikepdf.Pdf, ink: str, black: float = 1) -> pikepdf.Array:
+    return pikepdf.Array(
+        [pikepdf.Name.Separation, pikepdf.Name(f"/{ink}"), pikepdf.Name.DeviceCMYK, _black_tint(pdf, black=black)]
+    )
+
+
+def _hints(**entries: object) -> pikepdf.Dictionary:
+    return pikepdf.Dictionary({f"/{k}": v for k, v in entries.items()})
+
+
+def _device_n(inks: list[str], **attributes: object) -> Callable[[pikepdf.Pdf], pikepdf.Object]:
+    """A DeviceN space over ``inks``; with ``attributes``, an attributes dictionary that has a /Colorants entry per ink
+    unless one is given."""
+
+    def make(pdf: pikepdf.Pdf) -> pikepdf.Object:
+        names = pikepdf.Array([pikepdf.Name(f"/{i}") for i in inks])
+        space = [pikepdf.Name.DeviceN, names, pikepdf.Name.DeviceCMYK, _black_tint(pdf, len(inks))]
+        if attributes:
+            attrs = _hints(**attributes)
+            if "/Colorants" not in attrs:
+                attrs["/Colorants"] = pikepdf.Dictionary({f"/{i}": _separation(pdf, i) for i in inks})
+            space.append(attrs)
+        return pikepdf.Array(space)
+
+    return make
+
+
+def _nchannel(order: list[str] | None = None, solidity: float | None = None) -> Callable[[pikepdf.Pdf], pikepdf.Object]:
+    """An NChannel space over inks A and B with the given /PrintingOrder or /Solidities for A."""
+    mixing = _hints()
+    if order is not None:
+        mixing["/PrintingOrder"] = pikepdf.Array([pikepdf.Name(f"/{i}") for i in order])
+    if solidity is not None:
+        mixing["/Solidities"] = _hints(A=solidity)
+    return _device_n(["A", "B"], Subtype=pikepdf.Name.NChannel, MixingHints=mixing)
+
+
+def _x4_spot_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.4.3.4's spot rows and of 6.20 (expected.toml says what each raises)."""
+    name = pikepdf.Name
+    fill = b"q /S cs 1 sc 0 0 10 10 re f Q"
+    group = _x4_good()
+    group.pages[0].obj["/Group"] = pikepdf.Dictionary(S=name.Transparency, CS=name.DeviceRGB)
+    blend = pikepdf.Dictionary(Type=name.ExtGState, BM=name.Funky)
+    two = b"q /S cs 1 sc 0 0 10 10 re f /T cs 1 sc 0 0 10 10 re f Q"
+    return {
+        "x4-devicen-no-colorants": _x4_painted(fill, {"S": _device_n(["Spot1"])}),
+        "x4-devicen-process-rgb": _x4_painted(
+            fill,
+            {
+                "S": _device_n(
+                    ["Spot1"], Process=_hints(ColorSpace=name.DeviceRGB, Components=[name.Red, name.Green, name.Blue])
+                )
+            },
+        ),
+        "x4-nchannel-dotgain": _x4_painted(
+            fill, {"S": _device_n(["Spot1"], Subtype=name.NChannel, MixingHints=_hints(DotGain=_hints()))}
+        ),
+        "x4-spot-confusing-name": _x4_painted(fill, {"S": lambda p: _separation(p, "Red")}),
+        "x4-spot-two-definitions": _x4_painted(
+            two, {"S": lambda p: _separation(p, "Spot1"), "T": lambda p: _separation(p, "Spot1", black=0.5)}
+        ),
+        "x4-printing-order-clash": _x4_painted(two, {"S": _nchannel(["A", "B"]), "T": _nchannel(["B", "A"])}),
+        "x4-solidities-clash": _x4_painted(two, {"S": _nchannel(solidity=1.0), "T": _nchannel(solidity=0.5)}),
+        "x4-group-rgb": group,
+        "x4-blend-mode-unknown": _x4_painted(b"q /GS gs Q", {}, blend),
+    }
+
+
 def _x4_content_fixtures() -> dict[str, pikepdf.Pdf]:
     """The negatives of the content-stream checks: ISO 32000-2 7.8.2 and 8.9.7, PDF/X-4 6.19 and 6.23."""
     gstate = _x4_good()
@@ -1043,6 +1119,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_page_object_fixtures(),
         **_x4_content_fixtures(),
         **_x4_colour_fixtures(),
+        **_x4_spot_fixtures(),
     }
 
 

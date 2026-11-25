@@ -5,7 +5,22 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
-None open. Answered 2026-11-25:
+**Open, 2026-11-25 (oracle escalation, task 4.3, ISO 15930-7 6.4.3.4 p.21):** "All Separation arrays within a single
+PDF/X-4 file ... that have the same name shall have the same tintTransform and alternateSpace." Altona's
+one-patch-per-page file has 13 `/Black` Separations with a DeviceGray alternate and one with DeviceCMYK; that one sits
+only in a vendor thumbnail (page → `/HDAG_Tools` → `/Thumbs` → `/Im3`), which no page paints. pdfToolbox passes it.
+- **(a) Scope.** Does X4-Q3 ("colour rows follow print elements only") govern this row, though the clause says
+  "within a single file"? If yes, Altona keeps failing 6.4.3.3 only and the row checks the spaces print elements use.
+  If no (the whole file, as written and as the check now does), Altona also fails `x4.spot.consistent-definition` and
+  its recorded expectation changes. The oracle leans to the clause as written but defers to X4-Q3; pdfToolbox agrees
+  with print elements.
+- **(b) Names.** The oracle reads the rule as covering every name, process inks such as Black included (unlike the
+  `/Colorants` rule, which says "spot" and uses X4-Q20's list). The check does so now. Confirm.
+
+Committed as it stands: the whole-file reading, so `bin/suites/pdfx.sh` shows that one Altona difference until you
+answer.
+
+Answered 2026-11-25:
 - The ICC registry rule of 6.4.2.1 (oracle escalation): the owner chose (b), a warning. 14 Ghent X-4 positives write an
   ECI profile name under `/RegistryName (http://www.color.org)`; they get `x4.output-intent.identifier-in-registry` as a
   warning and stay positives. Recorded in test-db's expectations with the 12 "Custom" warnings.
@@ -52,7 +67,8 @@ record it as not conforming to that one rule).
 | 3.2 (rest) | `3820c19` | `x4.xmp.conforms` (value types of the predefined schemas) and `x4.info.unlisted-not-in-predefined-schema`; `x4.image.alternates-same-content` is a `skip` |
 | 3.3 (registry) | `d63e3d9`; test-db `61b8b555` | The three ICC registry rows, with the registry's 73 reference names built in; 3 fixtures |
 | 4.1 (part) | `d15e3a9`; test-db `1117700d` | Tier 6 reads content streams: operands across streams, BX/EX, inline images ended by /L, their size, or the first filter's end-of-data marker (JPEG walked, CCITT decoded with hayro-ccitt); 6.19, 6.23 and 3 house content checks with 9 fixtures |
-| 4.2, 4.3 (part) | this commit | Tier 7 walks pages with a graphics state: paint events with colour space, role, overprint and OPM, `Default` spaces applied, forms and coloured patterns walked with one ancestor set; 5 colour rows (6.4.3.2, 6.4.3.3, 6.4.3.4's alternates) with 6 fixtures; `md5` crate for profile identity |
+| 4.2, 4.3 (part) | `b5742dc` | Tier 7 walks pages with a graphics state: paint events with colour space, role, overprint and OPM, `Default` spaces applied, forms and coloured patterns walked with one ancestor set; 5 colour rows (6.4.3.2, 6.4.3.3, 6.4.3.4's alternates) with 6 fixtures; `md5` crate for profile identity |
+| 4.3 (spots), 6.20 | this commit | 7 spot rows of 6.4.3.4 and both 6.20 rows with 9 fixtures; `x4.spot.colorants-match-devicen` waits for function evaluation |
 
 ## Register coverage
 
@@ -60,7 +76,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 91 | 46 | 4 |
+| PDF/X-4 and X-4p | 100 | 37 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 19 | 37 | 1 (`internal`) |
 
@@ -208,6 +224,10 @@ Oracle consultations:
   again; the suite stays at about a second for the 39 positives, so a shared walk waits until it matters.
 - Task 4.3: Altona's two `x4.icc.cmyk-not-intent-profile` hits each now come from the Rust evaluator (`DefaultCMYK` on
   the intent's profile), matching test-db's expectations; no Ghent positive raises a colour finding.
+- Task 4.3: `PrintingOrder` arrays are consistent when the names two arrays share come in the same order in both (the
+  clause does not define it). `x4.spot.confusing-names` knows Red, Green, Blue, Gray and the process inks in five
+  languages; the clause's "any translated names" has no complete list. `x4.spot.colorants-match-devicen` (a should)
+  needs tint transforms evaluated and stays `todo`.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 

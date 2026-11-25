@@ -188,7 +188,7 @@ title = "Every DeviceN spot has a Colorants entry"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.consistent-definition"
@@ -196,7 +196,7 @@ title = "A spot name has one definition throughout"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.colorants-match-devicen"
@@ -212,7 +212,7 @@ title = "Spot names do not imitate process or RGB inks"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.process-colorspace"
@@ -220,7 +220,7 @@ title = "A DeviceN process space matches the output intent"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.no-dotgain"
@@ -228,7 +228,7 @@ title = "NChannel mixing hints carry no dot gain"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.printing-order-consistent"
@@ -236,7 +236,7 @@ title = "Printing orders agree across the file"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.solidities-consistent"
@@ -244,7 +244,7 @@ title = "Each ink has one solidity across the file"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.mixing-hints-informed"
@@ -882,7 +882,7 @@ title = "Transparency group colour spaces follow the colour rules"
 clauses = ["iso-15930-7:6.20"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.transparency.blend-modes"
@@ -890,7 +890,7 @@ title = "Blend modes are standard"
 clauses = ["iso-15930-7:6.20"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.viewer-prefs.areas"
