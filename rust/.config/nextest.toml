@@ -1,0 +1,6 @@
+[profile.default]
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+# CI runs every test and reports all failures, not just the first.
+[profile.ci]
+fail-fast = false

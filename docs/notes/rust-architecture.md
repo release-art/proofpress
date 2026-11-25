@@ -381,6 +381,34 @@ Our own, on the object model, as the brief decided:
 - **Every output is read back** by our own parser and passed through `qpdf --check` in the parity gate.
 - `pdf-writer` (typst) stores numbers as `f32` only, so it cannot be the copy path; it is fine for building test fixtures.
 
+## Code conventions
+
+Agreed 2026-11-25, for the crate in `rust/`.
+
+- **Public means "crosses the crate".** The crate is not published, and the Python module lives inside it, so it can use
+  `pub(crate)` items. Only the CLI binary, the tests in `rust/tests/` and the docs are outside. Default to private or
+  `pub(crate)` (the `unreachable_pub` lint enforces this inside private modules). `pub` is for what the binary and the
+  behaviour-level tests need: opening a document, running a profile, findings, events, the listener traits. An internal item is
+  tested by a unit test next to it, never made `pub` for a test's sake. There is no semver promise; `#[non_exhaustive]` goes
+  only on the event enums, so a listener must handle variants added later.
+- **Tiers depend only downwards,** enforced by `rust/tests/architecture.rs`, which reads every `crate::` path and fails on an
+  edge not in its map. A new module must be added to the map. Two consequences of the map:
+  - A tier's own validators live in its module, next to the code they watch (tier 2's byte-level findings in `syntax`).
+    `checks` holds the print checks on tiers 5 to 7, and never reaches `syntax`, `filters` or `file`.
+  - `document` and `common` may use each other: a page needs rectangles, and rectangles are read from objects.
+- **Errors.** A problem in the input is damage and findings, returned as values, never an `Err`. `Result` is only for the
+  environment (I/O, configuration, a missing tool), with one typed error enum; never `Result<_, String>`.
+- **British spelling in identifiers,** as in the Python code and the user-facing check ids: `colour_space`, not `color_space`.
+  Otherwise the two halves drift apart during the port.
+- **No logging in the library.** Printing is denied by lint; everything observable goes through findings and the side channel.
+  Debug tracing can come later, behind a feature, if it is ever needed.
+- **Test fixtures.** Rust tests read the existing `tests/fixtures/pdfs/`, not a copy. Event streams and findings get snapshot
+  tests (`insta`) once they exist. The corpus in `proof-pdf-test-db` stays out of CI.
+
+To settle in stage 1: whether PyO3's generated code is compatible with `forbid(unsafe_code)` (it may need `deny`, which can
+be overridden locally; not verified); keeping the code generated from `checks.toml` free of branches, since every generated
+branch must be covered; and the maturin layout (the extension's module name, `crate-type = ["cdylib", "rlib"]`).
+
 ## Taken from other tools
 
 From a survey on 2026-11-25. Direction agreed; details open.

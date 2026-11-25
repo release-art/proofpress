@@ -1,0 +1,53 @@
+[package]
+name = "proof-pdf"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.100"
+license = "Apache-2.0"
+description = "The Rust core of proof-pdf: a strict PDF reader and the print checks"
+repository = "https://github.com/release-art/proofpress"
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+cucumber = "0.23.0"
+futures = "0.3.34"
+mockall = "0.15.0"
+pretty_assertions = "1.4.1"
+proptest = "1.12.0"
+
+# Gherkin scenarios in tests/features. cucumber brings its own harness, which cargo-nextest cannot list, so the target is
+# left out of `cargo test` and run explicitly by bin/rust/check.sh.
+[[test]]
+name = "bdd"
+harness = false
+test = false
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+unreachable_pub = "deny"
+unused_qualifications = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+# A malformed PDF produces a finding, never a panic (house rule), so nothing in the library may panic on input.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+[lints.rustdoc]
+broken_intra_doc_links = "deny"
+
+[profile.release]
+# An overflow on hostile input panics (and becomes an internal finding) instead of wrapping into a wrong answer.
+overflow-checks = true

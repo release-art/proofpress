@@ -6,6 +6,7 @@ so nothing is said twice.
 | Document | What it is |
 |---|---|
 | [`briefs/rust-port.md`](briefs/rust-port.md) | **The plan**: moving the core to Rust on a parser of our own. Decisions, stages, the parity gate, Python bugs to fix first, and a backlog of checks. It wins wherever documents disagree |
+| [`briefs/pdfx-plan.md`](briefs/pdfx-plan.md) | **The implementation plan** to a feature-complete PDF/X verifier (X-4, X-4p, X-5g, X-5pg, X-5n): phases 0-10 with tasks, the register rows each owns, test material and done criteria. The requirement registers it cites are private, in `proof-pdf-test-db/docs/pdfx/` |
 | [`notes/rust-architecture.md`](notes/rust-architecture.md) | **The architecture** of the Rust engine: tiers, the listener pipeline, events, damage and findings |
 | [`notes/rust-feasibility.md`](notes/rust-feasibility.md) | **The feasibility summary** for planning: what is proven and how well, a module-by-module map, gotchas, risks and decision points |
 | [`notes/rust-port-spikes.md`](notes/rust-port-spikes.md) | **The evidence** behind that plan: what was measured, on which files, and the results, including the comparison with Kura |
@@ -18,6 +19,7 @@ Newest first. A decision changes only by a new line here.
 
 | Date | Decision | Where |
 |---|---|---|
+| 2026-11-25 | Feature-complete means every file requirement of PDF/X-4, X-4p (ISO 15930-7) and X-5g, X-5pg, X-5n (ISO 15930-8), plus today's print checks | Plan |
 | 2026-11-25 | Content streams, the page model, checks and reports, limits, the PyO3 and CLI boundaries and the writer settled from a survey of qpdf, pdf.js, PDFBox, MuPDF, hayro, veraPDF, SARIF, ruff and ESLint. Checks report a status separate from severity; a form without `/Resources` uses the page's | Architecture note |
 | 2026-11-25 | Reversed the line below: PDF/A stays veraPDF's verdict. Rules must come from the ISO texts, and ISO 19005-1, -3 and -4 are not held | Brief, non-goals |
 | 2026-11-25 | proof-pdf validates PDF/A (every part and level) and PDF/UA with its own rules, proved against veraPDF, which stays available as an optional tool | Brief, decisions |

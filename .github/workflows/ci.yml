@@ -27,6 +27,22 @@ jobs:
       - run: pdm run pyright
       - run: pdm run pytest
 
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup toolchain install # the version pinned in rust/rust-toolchain.toml
+        working-directory: rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov,cargo-deny
+      - run: bin/rust/check.sh
+        env:
+          NEXTEST_PROFILE: ci
+
   suites:
     # Opt-in: runs the Ghent/Altona calibration over files fetched at run time (they cannot be committed).
     if: github.event_name == 'workflow_dispatch'

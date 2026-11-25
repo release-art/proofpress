@@ -10,6 +10,17 @@ bin/test.sh                           # pytest with coverage
 ```
 
 - Code is formatted and linted with ruff, type-checked with pyright (0 errors), and runs on Python 3.15.
+- The Rust core lives in `rust/`, the port described in `docs/briefs/rust-port.md`. Install `rustup` (the toolchain version is
+  pinned in `rust/rust-toolchain.toml`) and `cargo-nextest`, `cargo-llvm-cov` and `cargo-deny`, then run `bin/rust/check.sh`
+  (`--fix` formats first). It runs rustfmt, clippy with the pedantic set denied, `cargo doc`, cargo-deny (licences,
+  advisories, sources), the tests, and a **100% coverage gate** on lines, regions and functions, with no exclusions.
+  - Unit and property tests (`proptest`) sit next to the code, in `#[cfg(test)]` modules.
+  - Tests with mocks (`mockall`) go in `rust/tests/`, which coverage does not count, so generated mock code cannot dilute it.
+  - Behaviour is described in Gherkin under `rust/tests/features/`, run by cucumber (`rust/tests/bdd.rs`).
+  - The library may not panic on input: `unwrap`, `expect`, `panic!` and slice indexing are denied outside tests.
+  - Tiers depend only downwards; `rust/tests/architecture.rs` holds the map of which module may use which, and a new module
+    must be added to it. The other conventions (what is `pub`, errors, British spelling, no logging, fixtures) are under
+    "Code conventions" in `docs/notes/rust-architecture.md`.
 - Public API is the top-level modules of `src/proof_pdf`; everything else lives in `proof_pdf/_internal/` and may change
   freely. A new module goes in `_internal` unless it is meant to be imported by users (then add it to `PUBLIC` in
   `tests/test_proof_pdf/test_public_api.py` and document it).

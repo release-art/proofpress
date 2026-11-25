@@ -1,0 +1,2 @@
+# The same line length as ruff on the Python side.
+max_width = 120

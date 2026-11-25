@@ -1,0 +1,22 @@
+# cargo-deny: licences, advisories, duplicate crates and where crates come from.
+# Ghostscript, MuPDF and Kura are AGPL; nothing copyleft may be linked into this Apache-2.0 crate.
+
+[graph]
+all-features = true
+
+[advisories]
+ignore = []
+
+[licenses]
+allow = ["Apache-2.0", "Apache-2.0 WITH LLVM-exception", "MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "Unicode-3.0"]
+confidence-threshold = 0.9
+# The list is the policy for what may be linked, not an inventory of what is linked today.
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

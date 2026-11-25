@@ -5,6 +5,8 @@ Apache-2.0), on branch `dev/crabify`. Read `README.md`, `CONTRIBUTING.md`, `CHAN
 first. The note holds the evidence; this brief holds the decisions and the plan. Where they disagree, this brief wins.
 `docs/README.md` is the index: the decision log, open questions, and ideas not yet scheduled.
 
+[`pdfx-plan.md`](pdfx-plan.md) turns these stages into a step-by-step plan, adding every PDF/X-4 and PDF/X-5 requirement.
+
 The end state: a Rust core that reads PDFs and runs the checks, a Rust `proof-pdf` CLI, and a Python module that calls the same
 core. pikepdf, Pillow and typer stop being runtime dependencies.
 
@@ -42,7 +44,8 @@ judgement, and needs its own brief.
 - Match the surrounding code. Lazy and small beats clever; no speculative abstractions.
 - Python toolchain, all must pass: `pdm run ruff format src tests`, `pdm run ruff check src tests`, `pdm run pyright` (0 errors),
   `pdm run pytest`, then `bin/docker/test.sh`.
-- Rust toolchain, all must pass: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`.
+- Rust toolchain, all must pass: `bin/rust/check.sh` (format, clippy, docs, cargo-deny, the tests and the BDD scenarios, and
+  100% coverage). `CONTRIBUTING.md` says where each kind of test goes.
 - Docs move with code: `README.md`, `CHANGELOG.md` (under `[Unreleased]`) and `CONTRIBUTING.md`.
 - Ask the user only when genuinely blocked. Otherwise pick the sensible default, state it, and continue.
 
@@ -70,7 +73,11 @@ rust/
   src/writer/            the writer
   src/python.rs          the PyO3 module, behind the feature
   src/bin/proof-pdf.rs   the CLI
+  tests/                 integration tests with mocks; tests/features/ holds the Gherkin scenarios, run by tests/bdd.rs
 ```
+
+The crate exists, with one file per tier (`src/syntax.rs` and so on); a tier becomes a directory when it gets a second file.
+`src/python.rs`, the `python` feature and the binary are added with the stages that give them something to do (1 and 4).
 
 `proof_pdf.core`, `models` and the other public modules stay as thin Python over the extension, so the public API holds. Open a
 document once in a `Document` pyclass and move whole checks across the boundary. Never expose single operators to Python: a large
