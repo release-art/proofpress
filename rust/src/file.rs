@@ -24,6 +24,8 @@ pub(crate) enum Entry {
     Direct { offset: usize, generation: u16 },
     /// The `index`-th object of object stream `stream` (generation 0).
     Compressed { stream: u32, index: usize },
+    /// Listed as in use with a generation above 65535, which no reference can name: a gap if anything refers to it.
+    Invalid,
 }
 
 /// A file that opened: where its objects are, and its trailer.
@@ -118,7 +120,7 @@ pub(crate) fn open(buf: &[u8], limits: &Limits) -> Result<Xref, Refusal> {
     let mut queue = vec![start];
     let mut seen = BTreeSet::new();
     while let Some(offset) = queue.pop() {
-        let mut read = |offset: usize| {
+        let mut read = |offset: usize, seen: &mut BTreeSet<usize>| {
             if !seen.insert(offset) {
                 return Err(Refusal::XrefLoop(offset));
             }
@@ -128,12 +130,13 @@ pub(crate) fn open(buf: &[u8], limits: &Limits) -> Result<Xref, Refusal> {
             let at = header.saturating_add(offset);
             section(buf, at, limits, &mut notes).map_err(|problem| Refusal::BadXref(at, problem))
         };
-        let section = read(offset)?;
+        let section = read(offset, &mut seen)?;
         // A hybrid file's /XRefStm is read before its own table, whose entries for compressed objects are free
         // placeholders (7.5.8.4). Then newest first: an entry already known wins.
+        // Microsoft Word names one /XRefStm from several trailers: a stream already read adds nothing new.
         let hidden = match offset_of(&section.trailer, b"XRefStm") {
-            Some(stm) => read(stm)?.entries,
-            None => Vec::new(),
+            Some(stm) if !seen.contains(&stm) => read(stm, &mut seen)?.entries,
+            _ => Vec::new(),
         };
         for (num, entry) in hidden.into_iter().chain(section.entries) {
             entries.entry(num).or_insert(entry);
@@ -270,13 +273,17 @@ fn entry(raw: &[u8; 20]) -> Option<Entry> {
     let whole = |field: &[u8]| digits(field).filter(|(_, left)| left.is_empty()).map(|(v, _)| v);
     let (offset, generation) = (
         usize::try_from(whole(offset)?).unwrap_or(usize::MAX),
-        u16::try_from(whole(generation)?).ok()?,
+        whole(generation)?,
     );
     if space != b" " || space2 != b" " || !matches!(eol, b" \r" | b" \n" | b"\r\n") {
         return None;
     }
+    // A free entry's generation is never used, and writers put 65536 in the head of the free list. An object in use
+    // needs one that fits; one that does not is a damaged entry, not an unreadable table.
     match kind {
-        b"n" => Some(Entry::Direct { offset, generation }),
+        b"n" => {
+            Some(u16::try_from(generation).map_or(Entry::Invalid, |generation| Entry::Direct { offset, generation }))
+        }
         b"f" => Some(Entry::Free),
         _ => None,
     }
@@ -379,6 +386,8 @@ pub(crate) enum ObjectDamage {
     BareCr(usize),
     /// A compressed object whose object stream is damaged, missing, or has no such index.
     ObjectStream(u32),
+    /// The cross-reference entry for the object is not a valid in-use entry.
+    Entry,
 }
 
 /// Read the indirect object at `at`: `n g obj`, a value, an optional stream, `endobj`. `length` resolves an indirect
@@ -575,6 +584,11 @@ pub(crate) fn damage_finding(num: u32, damage: &ObjectDamage) -> Finding {
             "7.3.8.1",
         ),
         ObjectDamage::ObjectStream(s) => (format!("is in object stream {s}, which cannot be read"), None, "7.5.7"),
+        ObjectDamage::Entry => (
+            "has a cross-reference entry with a generation above 65535".to_owned(),
+            None,
+            "7.3.10",
+        ),
     };
     let mut chain = vec![Location::Object(num, 0)];
     chain.extend(at.map(Location::Offset));
@@ -795,7 +809,6 @@ mod tests {
         assert_eq!(broken_table(" 00000 n\r\n", " 00000 x\r\n"), bad(XrefProblem::Entry));
         assert_eq!(broken_table(" 00000 n\r\n", "-00000 n\r\n"), bad(XrefProblem::Entry));
         assert_eq!(broken_table(" 00000 n\r\n", " 0000x n\r\n"), bad(XrefProblem::Entry));
-        assert_eq!(broken_table(" 00000 n\r\n", " 99999 n\r\n"), bad(XrefProblem::Entry));
         assert_eq!(broken_table("0 2\n", "4294967295 2\n"), bad(XrefProblem::Entry));
         assert_eq!(broken_table("trailer\n<<", "trailer\n[ <<"), bad(XrefProblem::Trailer));
         assert_eq!(
@@ -1194,6 +1207,7 @@ mod tests {
             ObjectDamage::Length(1),
             ObjectDamage::BareCr(1),
             ObjectDamage::ObjectStream(9),
+            ObjectDamage::Entry,
         ];
         for d in &damages {
             let f = damage_finding(7, d);
@@ -1261,5 +1275,47 @@ mod tests {
         // startxref may sit anywhere in the last 1024 bytes; here it precedes a table that runs off the end.
         let buf = b"%PDF-1.7\nstartxref\n28\n%%EOF\nxref\n0 3\n0000000000 65535 f\r\n";
         assert_eq!(open_it(buf), Err(Refusal::BadXref(28, XrefProblem::Entry)));
+    }
+
+    #[test]
+    fn a_free_entry_may_have_generation_65536() {
+        let text = String::from_utf8(classic(&[(1, CATALOG)], TRAILER)).unwrap();
+        let opened = open_it(text.replacen("0000000000 65535 f", "0000000000 65536 f", 1).as_bytes()).unwrap();
+        assert_eq!(opened.entries.get(&0), Some(&Entry::Free));
+    }
+
+    #[test]
+    fn one_xrefstm_named_by_two_trailers_is_read_once() {
+        // Two tables, the newer with /Prev to the older, both naming the same /XRefStm, as Microsoft Word writes them.
+        let mut buf = b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n".to_vec();
+        let stm = buf.len();
+        let rows = [
+            vec![0; 7],
+            vec![0; 7],
+            [vec![2], 3_u32.to_be_bytes().to_vec(), vec![0, 0]].concat(),
+        ]
+        .concat();
+        buf.extend(
+            format!(
+                "4 0 obj\n<< /Type /XRef /W [1 4 2] /Size 3 /Length {} >>\nstream\n",
+                rows.len()
+            )
+            .as_bytes(),
+        );
+        buf.extend(&rows);
+        buf.extend(b"\nendstream\nendobj\n");
+        let older = buf.len();
+        buf.extend(format!("xref\n0 2\n0000000000 65535 f\r\n0000000009 00000 n\r\ntrailer\n<< /Size 5 /Root 1 0 R /XRefStm {stm} >>\n").as_bytes());
+        let newer = buf.len();
+        buf.extend(format!("xref\n0 1\n0000000000 65535 f\r\ntrailer\n<< /Size 5 /Root 1 0 R /XRefStm {stm} /Prev {older} >>\nstartxref\n{newer}\n%%EOF\n").as_bytes());
+        let opened = open_it(&buf).unwrap();
+        assert_eq!(opened.entries.get(&2), Some(&Entry::Compressed { stream: 3, index: 0 }));
+    }
+
+    #[test]
+    fn an_in_use_entry_with_a_generation_too_big_is_invalid_not_a_refusal() {
+        let text = String::from_utf8(classic(&[(1, CATALOG)], TRAILER)).unwrap();
+        let opened = open_it(text.replacen("0000000009 00000 n", "0000000009 65536 n", 1).as_bytes()).unwrap();
+        assert_eq!(opened.entries.get(&1), Some(&Entry::Invalid));
     }
 }

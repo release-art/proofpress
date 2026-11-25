@@ -238,6 +238,7 @@ impl Document {
                 return Some(self.compressed(num, stream, index, limits));
             }
             (false, Some(Entry::Compressed { .. })) => Dangling::Generation(0),
+            (false, Some(Entry::Invalid)) => return Some(Slot::Damaged(ObjectDamage::Entry)),
         };
         self.dangling.push((num, generation, why));
         None
@@ -717,5 +718,18 @@ mod tests {
             "<< /Size SIZE /Root 1 0 R >>",
         ));
         assert_eq!(ids(&doc), ["stream.filter", "stream.filter"]);
+    }
+
+    #[test]
+    fn an_invalid_entry_is_a_gap_when_referred_to() {
+        let text = String::from_utf8(classic(
+            &[(1, b"<< /A 2 0 R >>"), (2, b"1")],
+            "<< /Size SIZE /Root 1 0 R >>",
+        ))
+        .unwrap();
+        let at = text.find("2 0 obj").unwrap();
+        let broken = text.replacen(&format!("{at:010} 00000 n"), &format!("{at:010} 65536 n"), 1);
+        let doc = open(broken.as_bytes());
+        assert!(matches!(doc.slots.get(&2), Some(Slot::Damaged(ObjectDamage::Entry))));
     }
 }
