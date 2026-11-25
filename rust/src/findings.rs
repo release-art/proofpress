@@ -127,8 +127,8 @@ impl Check {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Location {
-    /// A byte offset in the file.
-    Offset(u64),
+    /// A byte offset in the buffer the rest of the chain names: the file, or an object stream's decoded data.
+    Offset(usize),
     /// An indirect object, by number and generation.
     Object(u32, u16),
     /// A page, counted from 1.

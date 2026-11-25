@@ -46,7 +46,7 @@ mod tests {
                 .extract()
                 .unwrap();
             assert!(
-                json.starts_with(r#"{"schema":1,"file":"x.pdf","verdict":"pass""#),
+                json.starts_with(r#"{"schema":1,"file":"x.pdf","verdict":"refused""#),
                 "{json}"
             );
             let error = verify.call1(("x.pdf", b"".as_slice(), "x3")).unwrap_err();

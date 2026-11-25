@@ -10,7 +10,9 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 2** (reading the file): task 2.1, the parser. Phase 1 is done; its report is under "Stage reports".
+- **Phase 2** (reading the file): task 2.1 in progress. Tiers 1 to 5 read a file (first slice committed); next: the
+  brief's parser to-do list (header offset handling done; inline images, decompression limits, the oracle and fuzz runs),
+  then 2.2's PDF/X rows. The Windows build request is queued after this slice.
 
 ## Done
 
@@ -29,6 +31,7 @@ record it as not conforming to that one rule).
 | 1.5 | `a8ebbac` | `checks::verify` (judges nothing yet), Gherkin steps, `x4-base.feature` on `x4-good` |
 | 1.6 | `08c3e64`; test-db `a7422dcc` | `bin/suites/pdfx.sh`, `expectations/pdfx.toml` (39 files) |
 | 1.7 | `c2aa73a` | maturin, `proof_pdf._internal._core`, release wheels, wheel checks, `checks::guarded` |
+| 2.1, slice 1 | this commit | Tiers 1-5 read files: lexer, object events, filters, xref chain, the walk at open; 15 structure checks |
 
 ## Register coverage
 
@@ -92,11 +95,19 @@ Oracle consultations:
   built from the sdist, installed in a clean venv, only OS libraries, CLI runs); the CI matrix (manylinux x86-64 and
   arm64, macOS arm64) is written but cannot run until the owner pushes, so "a wheel installs from CI on a clean
   machine" is unverified.
+- Task 2.1: tiers publish to listeners only once an observer needs it. For now tier 2 is a pull parser whose events tier
+  4's and 5's reader consume directly, and each tier turns its own notes into findings inline (`syntax::note_finding`,
+  `file::refusal_finding`, ...). The `Limits` defaults are provisional until task 2.3 measures them.
 - `catch_unwind` is in place as `checks::guarded` with its `internal` check (status skip: no file is meant to trigger
   it); `verify` wires it in with the first real check.
 - The extension is `proof_pdf._internal._core`, not `proof_pdf._core`: every private module lives in `_internal`.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
+
+## Owner requests
+
+- 2026-11-25: add a Windows x64 build to CI and the release wheels (`x86_64-pc-windows-msvc`), with a Windows form of
+  `bin/rust/check-wheel.sh`'s shared-library check. To do after the first parser slice (task 2.1).
 
 ## Owner actions
 

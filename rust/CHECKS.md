@@ -236,3 +236,18 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `pdfa` | veraPDF passes the PDF/A flavour |  | error | print | todo |
 | `structure` | The file can be read |  | error | print | todo |
 | `internal` | The engine itself failed on this file |  | error | x4, x4p, x5g, x5pg, x5n, print | skip: Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it |
+| `file.header` | The file starts with a %PDF- header in its first 1024 bytes | iso-32000-2:7.5.2 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `file.header-offset` | The header is at the very start of the file | iso-32000-2:7.5.2 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `file.startxref` | The file ends with startxref and the offset of its cross-reference | iso-32000-2:7.5.5 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `file.xref` | Every cross-reference section can be read | iso-32000-2:7.5.4, iso-32000-2:7.5.8 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `file.trailer` | The trailer names the document catalog | iso-32000-2:7.5.5 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `file.encrypted` | The file is not encrypted | iso-32000-2:7.6 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `file.eof` | The file ends with %%EOF and nothing after it | iso-32000-2:7.5.5 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `file.limit` | The file stays within proof-pdf's safety limits |  | error | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `syntax.hex-digits` | Hex strings have an even number of digits | iso-32000-2:7.3.4.3 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `syntax.octal-escape` | Octal escapes in strings stay within one byte | iso-32000-2:7.3.4.2 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `syntax.name-escape` | Escapes in names are two hex digits, never 00 | iso-32000-2:7.3.5 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `syntax.duplicate-key` | No dictionary gives a key twice | iso-32000-2:7.3.7 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `stream.eol` | Stream data is followed by an end of line before endstream | iso-32000-2:7.3.8.1 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `object.damaged` | Every object reachable from the trailer can be read | iso-32000-2:7.3, iso-32000-2:7.3.8.1, iso-32000-2:7.3.10, iso-32000-2:7.5.7 | error | x4, x4p, x5g, x5pg, x5n, print | todo |
+| `object.dangling-reference` | References point at objects that exist | iso-32000-2:7.3.10 | warning | x4, x4p, x5g, x5pg, x5n, print | todo |

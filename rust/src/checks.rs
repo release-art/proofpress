@@ -3,16 +3,26 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+use crate::document::Document;
 use crate::findings::{Check, Finding, INTERNAL, Level, Report, Structure};
+use crate::pipeline::Limits;
 
-/// Verify `bytes`, the file named `file`, at `level`.
-///
-/// ponytail: no tier reads the file yet, so nothing is judged and the structure is taken as sound; phase 2 of
-/// `docs/briefs/pdfx-plan.md` brings tiers 1 to 4, and each check joins the report as it is implemented.
+/// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, and report what tiers 1 to
+/// 5 found. The checks of tiers 6 to 8 join as they are written.
 #[must_use]
 pub fn verify(file: &str, bytes: &[u8], level: Level) -> Report {
-    let _ = (bytes, level);
-    Report::new(file, Structure::Sound, Vec::new(), Vec::new())
+    let _ = level;
+    match Document::open(bytes, &Limits::default()) {
+        Err(refusal) => Report::new(file, Structure::Refused, Vec::new(), vec![*refusal]),
+        Ok(doc) => {
+            let structure = if doc.damaged() {
+                Structure::Damaged
+            } else {
+                Structure::Sound
+            };
+            Report::new(file, structure, Vec::new(), doc.findings())
+        }
+    }
 }
 
 /// Run one check, turning a panic into an `internal` finding so the other checks still run and nothing panics into the
@@ -67,11 +77,38 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_judged_yet() {
+    fn a_file_that_cannot_be_read_is_refused() {
         let report = verify("x.pdf", b"%PDF-1.7", Level::X4);
         assert_eq!(
-            (report.verdict, report.checks.len(), report.findings.len()),
-            (Verdict::Pass, 0, 0)
+            (report.verdict, report.structure),
+            (Verdict::Refused, Structure::Refused)
+        );
+        assert_eq!(report.findings[0].check.id, "file.startxref");
+    }
+
+    #[test]
+    fn a_damaged_object_makes_the_file_damaged() {
+        let body = b"%PDF-1.7\n1 0 obj\n<< /A 2 0 R >>\nendobj\n2 0 obj\n[1\nendobj\n";
+        let mut file = body.to_vec();
+        file.extend(format!("xref\n0 3\n0000000000 65535 f\r\n0000000009 00000 n\r\n0000000039 00000 n\r\ntrailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", body.len()).as_bytes());
+        let report = verify("x.pdf", &file, Level::X4);
+        assert_eq!((report.verdict, report.structure), (Verdict::Fail, Structure::Damaged));
+        assert_eq!(report.findings[0].check.id, "object.damaged");
+    }
+
+    #[test]
+    fn the_genuine_fixture_is_sound() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/fixtures/pdfs/x4-good.pdf"
+        ))
+        .unwrap();
+        let report = verify("x4-good.pdf", &bytes, Level::X4);
+        assert_eq!(
+            (report.verdict, report.structure),
+            (Verdict::Pass, Structure::Sound),
+            "{:#?}",
+            report.findings
         );
     }
 }

@@ -67,6 +67,34 @@ pub fn publish<E>(event: &E, observers: &mut [&mut dyn Listener<E>], readers: &m
     }
 }
 
+/// Every safety limit, one field per kind of structure (architecture note, "Limits"). Reaching one is damage, not a
+/// verdict: the scope becomes a gap, or the file is refused when the limit is file-wide.
+///
+/// ponytail: the defaults are provisional, chosen to pass every file in the corpus; pdfx-plan task 2.3 measures them and
+/// adds the kinds not yet read (strings, names, images, graphs, content).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    /// Arrays and dictionaries nested inside one direct object.
+    pub nesting: usize,
+    /// Bytes one stream may decode to.
+    pub decoded_bytes: usize,
+    /// Cross-reference sections followed through `/Prev` and `/XRefStm`.
+    pub xref_sections: usize,
+    /// Indirect objects in the file.
+    pub objects: usize,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            nesting: 100,
+            decoded_bytes: 1 << 30,
+            xref_sections: 1000,
+            objects: 10_000_000,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
