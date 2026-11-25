@@ -18,7 +18,7 @@ title = "Pages are not pre-separated plates"
 clauses = ["iso-15930-7:6.1.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.complete.resources-inside"

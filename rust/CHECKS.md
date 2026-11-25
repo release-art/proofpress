@@ -5,7 +5,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | Id | Title | Clauses | Severity | Applies | Status |
 |---|---|---|---|---|---|
 | `x4.pdf-reference.conforms` | Valid PDF as the PDF 1.6 Reference defines it | iso-15930-7:6.1.1, iso-15930-7:B | error | x4, x4p | todo |
-| `x4.pre-separated.absent` | Pages are not pre-separated plates | iso-15930-7:6.1.2 | error | x4, x4p | todo |
+| `x4.pre-separated.absent` | Pages are not pre-separated plates | iso-15930-7:6.1.2 | error | x4, x4p | implemented |
 | `x4.complete.resources-inside` | Every resource a print element needs is in the file | iso-15930-7:6.3 | error | x4, x4p | todo |
 | `x4.complete.single-condition` | All print data is prepared for one printing condition | iso-15930-7:6.3, iso-15930-7:6.4.1 | error | x4, x4p | skip: Intent, not a property of the file: the colour rows are its checkable part |
 | `x4.output-intent.channels` | The printing condition has 1, 3 or 4 channels | iso-15930-7:6.4.1 | error | x4, x4p | implemented |

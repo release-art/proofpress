@@ -549,3 +549,9 @@ expect = { "x4.jpx.uniform-depth" = "channels of 8 and 16 bits (6.27)" }
 [x4-jpx-cmyk-as-device]
 levels = ["x4"]
 expect = { "x4.jpx.cmyk-as-device" = "profile-less CMYK JPEG 2000 with no /ColorSpace under an RGB intent (6.27)", "x4.colour.device-space-matches-intent" = "and the page's own DeviceCMYK under that intent (6.4.3.2)" }
+
+# PDF/X-4 6.1.2: pre-separated pages (X4-Q2).
+
+[x4-pre-separated]
+levels = ["x4"]
+expect = { "x4.pre-separated.absent" = "two pages painting only Cyan and only Magenta (6.1.2, X4-Q2)" }

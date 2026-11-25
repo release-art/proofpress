@@ -12,7 +12,7 @@ use crate::common::icc;
 use crate::document::{Document, Object, Value};
 use crate::findings::{
     Check, Finding, Level, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
-    X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
+    X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_PRE_SEPARATED_ABSENT, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
     X4_TRANSPARENCY_GROUP_CS_RESTRICTED,
 };
 use crate::graphics::{self, Event, Role, Use};
@@ -327,6 +327,61 @@ pub(super) fn not_intent_profile(doc: &Document, _: Level) -> Vec<Finding> {
     distinct(out)
 }
 
+/// The one colorant a colour space paints, when it paints only one: gray for a one-channel space, the name of a
+/// `Separation`, the ink of a one-ink `DeviceN`, an `Indexed` space's base's. `None` for spaces with more.
+fn single_ink(doc: &Document, space: &Object, depth: usize) -> Option<Vec<u8>> {
+    let resolved = doc.resolve(space).filter(|_| depth < DEPTH)?;
+    let items = resolved.array().unwrap_or_default();
+    match family(resolved) {
+        b"Separation" => items.get(1)?.name().map(<[u8]>::to_vec),
+        b"DeviceN" => match doc.resolve(items.get(1)?)?.array()? {
+            [one] => one.name().map(<[u8]>::to_vec),
+            _ => None,
+        },
+        b"Indexed" | b"I" => single_ink(doc, items.get(1)?, depth + 1),
+        _ => (graphics::components(doc, resolved) == Some(1)).then(|| b"Gray".to_vec()),
+    }
+}
+
+/// The single colorants a page's paints use; `None` stands for a paint with more than one.
+type Inks = BTreeSet<Option<Vec<u8>>>;
+
+/// 6.1.2 (X4-Q2): the file is not pre-separated: it fails only when every page that paints uses a single colorant and
+/// those colorants differ between pages.
+pub(super) fn pre_separated(doc: &Document, _: Level) -> Vec<Finding> {
+    // Paints grouped by the page they are on, the first of their frames.
+    let mut pages: Vec<(Option<Location>, Inks)> = Vec::new();
+    for event in graphics::walk(doc) {
+        let Event::Paint { uses, frames } = event else { continue };
+        let page = frames.into_iter().next();
+        let inks: Inks = uses.iter().map(|u| single_ink(doc, &u.space, 0)).collect();
+        match pages.iter_mut().find(|(p, _)| *p == page) {
+            Some((_, seen)) => seen.extend(inks),
+            None => pages.push((page, inks)),
+        }
+    }
+    let single: Vec<&Vec<u8>> = pages
+        .iter()
+        .filter_map(|(_, inks)| match inks.iter().collect::<Vec<_>>().as_slice() {
+            [Some(ink)] => Some(ink),
+            _ => None,
+        })
+        .collect();
+    let distinct: BTreeSet<&&Vec<u8>> = single.iter().collect();
+    if pages.len() < 2 || single.len() < pages.len() || distinct.len() < 2 {
+        return Vec::new();
+    }
+    let names: Vec<String> = distinct
+        .iter()
+        .map(|n| String::from_utf8_lossy(n).into_owned())
+        .collect();
+    let message = format!(
+        "every page paints a single colorant, and they differ: {}",
+        names.join(", ")
+    );
+    vec![Finding::new(X4_PRE_SEPARATED_ABSENT, message).citing("6.1.2")]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,5 +522,83 @@ mod tests {
             ["a transparency group's /CS uses DeviceRGB, which 6.4.3 does not allow here"]
         );
         assert_eq!(groups("/Lab"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn pages_that_each_paint_one_colorant() {
+        let separated = |contents: &[&str]| -> Vec<String> {
+            let spaces = "<< /ColorSpace << /C [/Separation /Cyan /DeviceCMYK 9 0 R] /N [/DeviceN [/Spot] /DeviceCMYK 9 0 R] \
+                /M [/DeviceN [/A /B] /DeviceCMYK 9 0 R] /I [/Indexed [/Separation /Cyan /DeviceCMYK 9 0 R] 1 <00ff>] \
+                /G [/CalGray << >>] /X [/DeviceN 5 /DeviceCMYK 9 0 R] /S [/Separation 5 /DeviceCMYK 9 0 R] \
+                /E [/Separation] /F [/DeviceN] /H [/DeviceN 99 0 R] /J [/Indexed] /K [/Indexed 98 0 R 0 <00>] /L 7 0 R >> >>";
+            let mut objects: Vec<(u32, Vec<u8>)> = vec![
+                (1, b"<< /Pages 2 0 R >>".to_vec()),
+                (9, b"<< /FunctionType 2 >>".to_vec()),
+                (7, b"[/Indexed 7 0 R 0 <00>]".to_vec()),
+            ];
+            let kids: Vec<String> = (0..contents.len()).map(|i| format!("{} 0 R", 10 + 2 * i)).collect();
+            objects.push((
+                2,
+                format!("<< /Type /Pages /Kids [{}] /Resources {spaces} >>", kids.join(" ")).into_bytes(),
+            ));
+            for (i, data) in contents.iter().enumerate() {
+                let n = u32::try_from(10 + 2 * i).unwrap();
+                let page = format!(
+                    "<< /Type /Page /Group << /S /Transparency >> /Contents {} 0 R >>",
+                    n + 1
+                );
+                objects.push((n, page.into_bytes()));
+                objects.push((
+                    n + 1,
+                    format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len()).into_bytes(),
+                ));
+            }
+            let refs: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
+            let doc = Document::open(&classic(&refs, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
+            pre_separated(&doc, Level::X4).into_iter().map(|f| f.message).collect()
+        };
+        assert_eq!(
+            separated(&["/C cs f", "/N cs f", "0 g f /G cs f"]),
+            ["every page paints a single colorant, and they differ: Cyan, Gray, Spot"]
+        );
+        assert_eq!(
+            separated(&["/I cs f", "/N cs f"]),
+            ["every page paints a single colorant, and they differ: Cyan, Spot"],
+            "an Indexed base"
+        );
+        assert_eq!(
+            separated(&["/C cs f", "/C cs f"]),
+            Vec::<String>::new(),
+            "the same colorant on every page"
+        );
+        assert_eq!(separated(&["/C cs f"]), Vec::<String>::new(), "one page");
+        assert_eq!(
+            separated(&["/C cs f", "/M cs f"]),
+            Vec::<String>::new(),
+            "a page with two inks"
+        );
+        assert_eq!(
+            separated(&["/C cs f", "0 0 0 1 k f"]),
+            Vec::<String>::new(),
+            "a page in CMYK"
+        );
+        assert_eq!(
+            separated(&["/C cs f", "/X cs f", "/S cs f", ""]),
+            Vec::<String>::new(),
+            "odd spaces, and a blank page"
+        );
+        assert_eq!(
+            separated(&["/C cs f", "/N cs f /G cs f"]),
+            Vec::<String>::new(),
+            "a page with a spot and gray"
+        );
+        let odd = ["/E cs f", "/F cs f", "/H cs f", "/J cs f", "/K cs f", "/L cs f"];
+        for page in odd {
+            assert_eq!(
+                separated(&["/C cs f", page]),
+                Vec::<String>::new(),
+                "{page} has no single colorant"
+            );
+        }
     }
 }

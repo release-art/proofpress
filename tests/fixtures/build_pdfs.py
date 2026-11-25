@@ -721,6 +721,16 @@ def _x4_jpx_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _x4_pre_separated() -> pikepdf.Pdf:
+    """x4-good as two pages, each painting a single colorant, Cyan then Magenta: a pre-separated file (6.1.2)."""
+    pdf = _x4_good()
+    pdf.pages.append(pdf.pages[0])
+    for page, ink in zip(pdf.pages, ["Cyan", "Magenta"], strict=True):
+        page.obj["/Contents"] = pdf.make_indirect(pdf.make_stream(b"q /S cs 1 sc 0 0 10 10 re f Q"))
+        page.obj["/Resources"] = pikepdf.Dictionary(ColorSpace=pikepdf.Dictionary(S=_separation(pdf, ink)))
+    return pdf
+
+
 def _x4_content_fixtures() -> dict[str, pikepdf.Pdf]:
     """The negatives of the content-stream checks: ISO 32000-2 7.8.2 and 8.9.7, PDF/X-4 6.19 and 6.23."""
     gstate = _x4_good()
@@ -1175,6 +1185,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_colour_fixtures(),
         **_x4_spot_fixtures(),
         **_x4_jpx_fixtures(),
+        "x4-pre-separated": _x4_pre_separated(),
     }
 
 

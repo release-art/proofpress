@@ -18,8 +18,9 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 4** (content, page model and colour): tasks 4.1 (tier 6), 4.2 (tier 7, the colour part) and 4.3's first rows
-  done. Next: the spot rows of 6.4.3.4, transparency (6.20), then JPEG 2000 (4.4) and pre-separated pages (4.5).
+- **Phase 4** (content, page model and colour): 4.1 to 4.5 done but for 6.27's baseline rows (they wait for ISO/IEC
+  15444-2). Next: task 4.6, porting today's print checks under the parity gate, where the brief's pace checkpoint for
+  `paint.py` applies.
 
 ## Done
 
@@ -57,7 +58,8 @@ record it as not conforming to that one rule).
 | 4.1 (part) | `d15e3a9`; test-db `1117700d` | Tier 6 reads content streams: operands across streams, BX/EX, inline images ended by /L, their size, or the first filter's end-of-data marker (JPEG walked, CCITT decoded with hayro-ccitt); 6.19, 6.23 and 3 house content checks with 9 fixtures |
 | 4.2, 4.3 (part) | `b5742dc` | Tier 7 walks pages with a graphics state: paint events with colour space, role, overprint and OPM, `Default` spaces applied, forms and coloured patterns walked with one ancestor set; 5 colour rows (6.4.3.2, 6.4.3.3, 6.4.3.4's alternates) with 6 fixtures; `md5` crate for profile identity |
 | 4.3 (spots), 6.20 | `a82f79a`, `ea2c86c` (scope) | 7 spot rows of 6.4.3.4 and both 6.20 rows with 9 fixtures; `x4.spot.colorants-match-devicen` waits for function evaluation |
-| 4.4 (part) | this commit | JPEG 2000 header reader (JPX boxes, codestream SIZ); 6 of 6.27's rows with 6 fixtures, agreeing with veraPDF's 6.2.8.3 files |
+| 4.4 (part) | `81362d4` | JPEG 2000 header reader (JPX boxes, codestream SIZ); 6 of 6.27's rows with 6 fixtures, agreeing with veraPDF's 6.2.8.3 files |
+| 4.5 | this commit | Pre-separated files (6.1.2, X4-Q2): every painting page one colorant, differing between pages; 1 fixture; none in Ghent, Altona or GWG Processing Steps |
 
 ## Register coverage
 
@@ -65,7 +67,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 106 | 31 | 4 |
+| PDF/X-4 and X-4p | 107 | 30 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 19 | 37 | 1 (`internal`) |
 

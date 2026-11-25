@@ -136,6 +136,7 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_ICC_OVERPRINT_MODE_ZERO, colour::overprint_mode),
     (f::X4_ICC_CMYK_NOT_INTENT_PROFILE, colour::not_intent_profile),
     (f::X4_TRANSPARENCY_GROUP_CS_RESTRICTED, colour::group_spaces),
+    (f::X4_PRE_SEPARATED_ABSENT, colour::pre_separated),
     (f::X4_SPOT_COLORANTS_ENTRY, spots::colorants_entry),
     (f::X4_SPOT_PROCESS_COLORSPACE, spots::process_space),
     (f::X4_SPOT_NO_DOTGAIN, spots::no_dot_gain),
