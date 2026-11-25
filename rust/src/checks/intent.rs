@@ -105,14 +105,19 @@ pub(super) fn identifier_text_string(doc: &Document, _: Level) -> Vec<Finding> {
     )
 }
 
-/// 6.4.2.1 recommends that a `/RegistryName` other than the ICC's be a URL about the registry.
+/// 6.4.2.1 recommends that a `/RegistryName` other than the ICC's be a URL about the registry; an empty one names no
+/// registry and is taken as absent.
 pub(super) fn registry_name_url(doc: &Document, _: Level) -> Vec<Finding> {
     let Some(name) = the_intent(doc).and_then(|i| i.get(b"RegistryName")) else {
         return Vec::new();
     };
     let url = match &doc.resolve(name).map(|o| &o.value) {
+        // An empty name names no registry, so it reads as absent (decision log, 2026-11-25).
         Some(Value::String(bytes, _)) => {
-            bytes.as_slice() == COLOR_ORG || bytes.starts_with(b"http://") || bytes.starts_with(b"https://")
+            bytes.is_empty()
+                || bytes.as_slice() == COLOR_ORG
+                || bytes.starts_with(b"http://")
+                || bytes.starts_with(b"https://")
         }
         _ => false,
     };
@@ -253,7 +258,7 @@ mod tests {
             ["x4.output-intent.identifier-text-string"],
             "a profile that is not a stream is unread"
         );
-        let named = intent("/OutputConditionIdentifier (x) /RegistryName (http://r.example)");
+        let named = intent("/OutputConditionIdentifier (x) /RegistryName ()");
         assert_eq!(ids(&[(1, named.as_bytes())]), ["x4.output-intent.dest-profile-present"]);
         let unreadable = b"<< /OutputIntents [7 0 R 8 0 R] >>";
         assert_eq!(ids(&[(1, unreadable), (8, b"5")]), ["x4.output-intent.present"]);

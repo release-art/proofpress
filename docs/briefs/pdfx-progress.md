@@ -40,7 +40,7 @@ record it as not conforming to that one rule).
 | (progress) | `4a7a721` | This file brought up to date |
 | 2.3 | `6deb894` | Mutation test on stable Rust; "same rule" files compared; phase 2 report |
 | 3.2 | `bf5716a`; test-db `50ca948e` | XMP, date and text-string helpers in `common`; 25 metadata checks (6.9-6.11) with 25 fixtures and 3 feature files |
-| 3.3 | this commit | ICC header helper; 11 output-intent checks (6.4.1, 6.4.2.1) with 12 fixtures |
+| 3.3 | `d3f2f13`; this commit | ICC header helper; 11 output-intent checks (6.4.1, 6.4.2.1) with 12 fixtures |
 
 ## Register coverage
 
@@ -106,6 +106,11 @@ Task 3.2, 2026-11-25:
   of predefined schema properties) stay `todo`.
 
 Oracle consultations:
+- Empty `/RegistryName ()` with `/OutputConditionIdentifier (Custom)` (12 Ghent positives, 6.4.2.1): no "shall" broken;
+  empty reads as absent; medium-high confidence; no escalation. The "should not use Custom" recommendation is
+  `x4.output-intent.identifier-registered`, still `todo`: count its hits on the Ghent set before implementing it.
+- The 3 Ghent DeviceN ReadMe files lack `/OutputCondition`, which 6.4.2.1 says should always be present: the warning is
+  right, classified (b), and recorded in test-db's expectations.
 - GWG151 and GWG152 under 6.24: do not conform (their `/D /Order` leaves out content OCGs); high confidence; classified
   (b) without escalation. veraPDF's PDF/A-2 rule 6.9-3 fails them too.
 - Altona under 6.4.3.3: does not conform (DefaultCMYK equal to the intent profile remaps a painted DeviceCMYK
