@@ -68,11 +68,125 @@ struct EventId {
 ```
 
 - Every buffer that is opened (the file, or the decoded data of object N) gets an id from a counter per document. Ids are
-  deterministic within a run; they depend on request order, so tests and saved reports match on location, not on id.
+  deterministic. Objects are all parsed in the same walk at open, so their events get the same ids on every run; content-stream
+  events come from page walks and depend on which checks ran, so tests and saved reports match on location, not on id.
 - A muted event keeps its id. A synthetic event takes the next number from the same counter.
 - Every event carries its location (buffer, offset, length, kind) and its **parent id**: the event it sits inside.
 - A table of container events (objects, streams, pages, forms) resolves parent ids. Token-level events are not kept. When a finding
   is raised, its full chain is copied into it, as veraPDF does with its context path.
+
+## The object model
+
+Tier 5 hands out objects built by a second-order reader from tier 2's events, after the proxy. Five designs are taken from other
+libraries:
+
+- **Integers and reals stay distinct, and a real keeps its token text** next to its f64, as qpdf does (pikepdf calls its reals
+  "exact and lossless"). Checks use the f64; the writer copies the text.
+- **Values are slices of their buffer,** as in hayro-syntax, so a nested value's location is its slice's position in the buffer,
+  with no event id of its own.
+- **Two layers: raw objects and typed views** (`Page`, `Font`, `Image`), as PDFBox has COS and PD. The typed views are derived, as
+  pdf-rs derives them, and generated from Arlington's definitions, so the shape checks and the views come from one source.
+- **Copying between documents memoises,** as MuPDF's graft map does, so shared children are copied once. Objects are renumbered when
+  written, as qpdf does.
+- **Dictionaries keep their order,** as lopdf's `IndexMap` does: a key keeps the place where it first appeared.
+
+**Duplicate keys.** ISO 32000-2 7.3.7 forbids them but does not say which copy wins. The last one wins, which is also what qpdf 12
+does (it warns "last occurrence overrides earlier ones"). The copies it beat are kept, not lost: every dictionary, nested ones
+included, has an `overridden` list of layers, each an ordered dictionary of its own. When a key repeats, its current value moves
+down into layer 0, and whatever was there moves down a layer. So
+
+```text
+K1 V1   K2 V2   K3 V3   K1 V4   K2 V5   K1 V6
+```
+
+gives `{K1: V6, K2: V5, K3: V3}`, with layer 0 `{K1: V4, K2: V2}` and layer 1 `{K1: V1}`. Each duplicate is also a finding.
+
+- **Keys compare after `#xx` escapes are decoded:** `/K#31` and `/K1` are the same key (EC3's note to 7.3.5). qpdf agrees. Each
+  occurrence keeps its raw spelling, for findings and the writer.
+- **Inline-image keys are normalised** before layering, so `/W` and `/Width` are the same key; the raw spelling is kept.
+- **The entries in one dictionary, overridden ones included, count against a limit,** so a key repeated a million times cannot
+  exhaust memory.
+- **Parity:** qpdf matches on which value wins and on escaped keys. It does not keep key order, so order is not compared.
+
+**Strings and names.** ISO 32000-2 separates syntax from meaning: literal `(…)` and hex `<…>` mean the same bytes (7.3.4), and
+whether those bytes are a text, ASCII, byte or date string depends on the key they sit under (7.9.2), not on how they are written.
+
+- **Every string keeps its form and its raw slice.** The decoded bytes are borrowed from the slice when nothing was escaped and owned
+  only when unescaping changed something, as in hayro-syntax. Decoding can lose information (a bare line end in a literal string
+  reads as `\n`, 7.3.4.2), so the writer copies the raw slice to reproduce the original exactly.
+- **Text is decoded by the typed layer, not the raw one.** A typed view knows from Arlington that `/Title` is `string-text` and
+  decodes PDFDocEncoding, UTF-16BE or UTF-8; the raw layer stays bytes.
+- **Names are interned per document,** never globally: PDFBox's global name map leaked memory (PDFBOX-5731). The number of distinct
+  names counts against a limit.
+- **Tier 2 reports byte-level defects** that no later tier can see: a non-hex character in a hex string, an octal escape above
+  255, unbalanced parentheses, an invalid `#` escape in a name (`#G1`, a trailing `#`, or `#00`, which 7.3.5 forbids), and strings
+  or names over our safety limits.
+- **Two defects that only PDF/A forbids are warnings:** an odd number of hex digits (ISO 32000 pads it with a 0; ISO 19005-2
+  forbids it) and a name that is not UTF-8 (ISO 19005-2, 6.1.8). PDF/A's verdict stays veraPDF's; the warning says early where it
+  will fail. PDF/A's length limits (32,767 bytes per string, 127 per name) are left to veraPDF.
+
+**Dangling references: null for meaning, a reason for reporting.** ISO 32000-2 7.3.10 says a reference to an undefined object is not
+an error and reads as null, and a null value means the key is absent (7.3.7). Lookups do exactly that. But resolution records why
+the result is null: the object is not in the xref or is beyond `/Size`, its entry is free, its generation does not match, the
+object's value is null, or the value is a literal `null`. qpdf 12 collapses all five into an absent key with no warning, which is
+how a `Do` on a missing image passes today (bug 3).
+
+- A tier-5 observer reports each dangling reference once, as a **warning**, since the standard allows it but it usually means an
+  export or edit went wrong. If leftover references in unused places prove noisy, limit it to references reachable from pages.
+- A check that needs the object raises its own error, naming the reason ("`/Im0` points at object 99, which does not exist"), with
+  `caused_by` pointing at the warning. Bug 3's check fires on "nothing usable" whatever the reason; the reason only makes the
+  message precise.
+
+**Provenance: one type for every object, with where it came from.** qpdf, lopdf, PDFBox and Roslyn all use one type for parsed and
+created objects and leave provenance optional; nobody uses separate types. Ours is an enum, kept per value, since a parsed
+dictionary can hold a key a proxy inserted:
+
+| Origin | Records |
+|---|---|
+| Parsed | Buffer, range and event id |
+| Synthetic | The proxy's synthetic event id |
+| Created | Who built it: the writer or the API |
+| Copied | The source document and the source's own provenance |
+
+- **Bytes are in a buffer or owned:** `InBuffer { buffer, start, len }` or `Owned(...)`, the same split as for unescaped strings.
+- **Values with no source text are formatted by the writer:** a created real as the shortest text that reads back as the same f64; a
+  created string in the form the writer picks (hex for binary-looking bytes, as qpdf does).
+- **Copied keeps its origin,** which pikepdf loses (its `copy_foreign` renumbers at once and keeps no link), so a finding in an
+  extracted file can point back to the page it was cut from. Objects are renumbered when written, as decided above.
+
+**Caches: filled at open, then frozen.** qpdf, PDFBox and MuPDF never share a document between threads; hayro-syntax does, with a
+lock-free `OnceLock` per slot. We need neither, because open already reads everything reachable:
+
+- **The walk at open fills the object table,** on one thread and in a fixed order. A stream whose `/Length` points at itself, or two
+  objects that need each other, are caught there by an ordinary "currently loading" set. A lazy `OnceLock` cache would deadlock or
+  panic on the same input, since re-entering a `OnceLock` from its own initialiser is an error.
+- **After open the table is immutable:** a plain `Vec` indexed by object number, `Sync` with no locks.
+- **Decoded stream data is not cached.** Each check decodes what it needs, so memory stays bounded. Derived data (typed views, page
+  summaries) may sit in a `OnceLock` each, as hayro does, since it needs nothing that is still loading.
+  The cost is decoding a stream again when several checks read it; cache per stream only if profiling shows that matters.
+
+**Ownership, and the boundary with Python.** A `#[pyclass]` cannot have lifetime parameters, and since PyO3 0.23 it must be `Sync`
+for free-threaded Python. So the core holds handles, not borrows, as pikepdf does over qpdf:
+
+- **The document owns a table of buffers:** the file, and the decoded data of each stream. A value stores a buffer id and a range,
+  never `&'a [u8]`, and asks the document for its bytes. That is how "a value is a slice of its buffer" is held.
+- **No lifetimes in the core,** so the document is `Send` and `Sync`, and `verify` can run with the GIL released (`Python::detach`).
+- **Python objects hold an `Arc` of the document** plus an object number, so they keep it alive; there is no "destroyed" state.
+- **Python may hand Rust the file's bytes** without a copy: the buffer table holds Python's immutable `bytes` object as the file
+  buffer. Anything mutable (`bytearray`, a writable `memoryview`) is copied first, because Python could change it mid-parse.
+- **Python can read raw objects,** copied out as plain Python values; Python never sees single operators. Each kind maps as follows,
+  close to pikepdf so its users recognise it:
+
+| PDF | Python | Why |
+|---|---|---|
+| Reference | `Ref(num, gen)`, not followed | Following would copy the whole graph, which can have cycles. Follow with `doc.get(num)` |
+| Dictionary | `dict`, in order; the overridden layers as an attribute | Python dicts keep order |
+| Stream | Its dictionary and raw bytes; decoded bytes on request | Decoding can be large and can fail |
+| Real | `Decimal` from the token text | Exact, as pikepdf does |
+| Name | A `Name` type, not `str` | A name and a string differ in PDF |
+| String | `bytes`, with its form (literal or hex) as an attribute | Text decoding belongs to the typed views |
+| Any value | Its location (buffer, offset) as an attribute | So a Python tool can point at the bytes |
+
 
 ## Damage
 
@@ -85,6 +199,12 @@ The tier that cannot continue decides; it is a fact about the tier, not an opini
 - The tier emits `Damaged { scope, reason, open }` on the main stream, listing every element still open in that scope, and it counts
   as closing them all. Every stream is balanced: each start has its end or is covered by a `Damaged`. The same damage goes to the
   side channel as a finding naming the object or offset.
+- **A damaged object is partial for reading and a gap for judging.** Tier 5 keeps what was read before the damage (always a prefix,
+  since reading stops there) with a marker saying where it stopped. Python, `inspect` and findings show that prefix ("read `/Type`,
+  `/Parent`, `/MediaBox`, then damage at offset 214"). To checks and typed views the whole object is a gap: in a partial dictionary
+  nothing is certain, since a missing key may lie after the damage and a present one may be overridden by a later duplicate. So
+  nothing provisional reaches a verdict. Tree-sitter's `ERROR` nodes are the precedent for marking damage explicitly. qpdf is the
+  counter-example: it substitutes nulls or strings and carries on, and with a value missing it shifts keys onto values.
 - Each tier turns a `Damaged` it receives into its own for the scope it builds: a broken content stream is a damaged page in tier 7.
   Asking tier 5 for a damaged object returns a damaged result, never a panic.
 
@@ -131,7 +251,7 @@ From a survey on 2026-11-25. Direction agreed; details open.
 - Does `raw(n)` cover every case where tier 2 would otherwise need tier 4 (an indirect `/Length`)?
 - Is "not evaluated" a severity or a separate status?
 - Do reports show the well-formed and valid verdicts separately?
-- Still to discuss: the object model and its sharing with the writer and Python; content streams; the page model; the checks'
+- Still to discuss: the object model's sharing with the writer and Python; content streams; the page model; the checks'
   interface, profiles and configuration; limits on depth, size and decompression; PyO3, the CLI, external tools and threads; the
   writer and the other commands.
 

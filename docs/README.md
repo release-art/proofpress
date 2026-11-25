@@ -18,6 +18,8 @@ Newest first. A decision changes only by a new line here.
 
 | Date | Decision | Where |
 |---|---|---|
+| 2026-11-25 | Reversed the line below: PDF/A stays veraPDF's verdict. Rules must come from the ISO texts, and ISO 19005-1, -3 and -4 are not held | Brief, non-goals |
+| 2026-11-25 | proof-pdf validates PDF/A (every part and level) and PDF/UA with its own rules, proved against veraPDF, which stays available as an optional tool | Brief, decisions |
 | 2026-11-25 | Findings cite a clause; each check declares the clauses it may cite, validated against a committed list of clause numbers | Architecture note |
 | 2026-11-25 | Only file-level damage refuses a file. Damaged objects and streams leave gaps, the file still fails, and reading inside a stream stops at the first damage | Architecture note |
 | 2026-11-25 | Eight tiers following ISO 32000-2, each publishing events to synchronous listeners: observers, one proxy, then readers | Architecture note |
@@ -49,7 +51,7 @@ for colour; one crate with a `python` feature.
 | Altona test suite | `tests/fixtures/suites/.cache/`, by `bin/suites/fetch.sh` | Not redistributable, so fetched and never committed |
 | Every other sample, standards, private notes | `proof-pdf-test-db`, a sibling checkout at `../proof-pdf-test-db` (`/Users/ilo/Devel/Release.art/proof-pdf-test-db`) | Never copied out. Every sample gets a row in its `samples/PROVENANCE.csv`. No test may depend on it |
 
-Standards (ISO 32000, ISO 15930 for PDF/X, ISO 19005 for PDF/A, the GWG 2022 specification) go in that repository's `standards/`,
+Standards (ISO 32000, ISO 15930 for PDF/X, ISO 19005 for PDF/A, ISO 14289 for PDF/UA, the GWG specifications) go in that repository's `standards/`,
 if their licence allows a shared copy. The PDF/X rules in `x4.py` and the GWG presets in the backlog are written from them,
 clause by clause.
 
@@ -83,6 +85,11 @@ Worth keeping, but not scheduled. Move one into the brief's backlog when it is w
 - Used area: the extent of everything that prints, against the trim.
 - Bleed along a die line: ink must cover a band outside a cutting contour, not just past the trim box. Packaging only.
 - Corner angles and curve radii on cutting contours. Packaging only.
+
+**PDF/A and PDF/UA**
+- Our own rules, if the remaining standards become affordable. ISO 19005-2 (PDF/A-2, the default flavour), 14289-1 and -2 (PDF/UA) and
+  32000-1 are held; 19005-1, -3 and -4 are not. test-db's `samples/veraPDF-corpus/` (2,906 files, CC BY 4.0, named by clause and
+  expected result) would test each rule, with veraPDF as the oracle. Font programs, XMP and the structure tree are the hidden cost.
 
 **Reporting**
 - Render a saved JSON report as HTML or PDF for a print shop, only if one asks for it.

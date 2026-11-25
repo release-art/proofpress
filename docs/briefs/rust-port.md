@@ -29,6 +29,7 @@ judgement, and needs its own brief.
 - **Encryption.** PDF/X and PDF/A forbid it. An encrypted file fails, password or not.
 - **Speed.** A normal `verify` is mostly veraPDF's JVM start. Do not justify work with benchmarks.
 - **A PDF/A validator.** `pdfpurr` got 8 of 116 verdicts wrong, 6 of them false passes. "Passes veraPDF" is the claim that counts.
+  Reconsidered 2026-11-25 and kept: rules must be written from the ISO texts, and ISO 19005-1, -3 and -4 are not held.
 - **A CMYK compositor.** Peak ink needs CMYK blending that `hayro` cannot give, about 4-8 weeks by judgement.
 
 ## House rules (non-negotiable)
