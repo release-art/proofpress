@@ -8,13 +8,94 @@ use crate::common::{icc, text};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
     Finding, Level, X4_OUTPUT_INTENT_CHANNELS, X4_OUTPUT_INTENT_DEST_PROFILE_PRESENT,
-    X4_OUTPUT_INTENT_IDENTIFIER_PRESENT, X4_OUTPUT_INTENT_IDENTIFIER_TEXT_STRING, X4_OUTPUT_INTENT_NO_DEST_PROFILE_REF,
-    X4_OUTPUT_INTENT_OUTPUT_CONDITION, X4_OUTPUT_INTENT_PRESENT, X4_OUTPUT_INTENT_PROFILE_CLASS_PRTR,
-    X4_OUTPUT_INTENT_PROFILE_VERSION, X4_OUTPUT_INTENT_REGISTRY_NAME_URL, X4_OUTPUT_INTENT_UNIQUE,
+    X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY, X4_OUTPUT_INTENT_IDENTIFIER_PRESENT,
+    X4_OUTPUT_INTENT_IDENTIFIER_REGISTERED, X4_OUTPUT_INTENT_IDENTIFIER_TEXT_STRING,
+    X4_OUTPUT_INTENT_NO_DEST_PROFILE_REF, X4_OUTPUT_INTENT_OUTPUT_CONDITION, X4_OUTPUT_INTENT_PRESENT,
+    X4_OUTPUT_INTENT_PROFILE_CLASS_PRTR, X4_OUTPUT_INTENT_PROFILE_VERSION, X4_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG,
+    X4_OUTPUT_INTENT_REGISTRY_NAME_URL, X4_OUTPUT_INTENT_UNIQUE,
 };
 
 /// The ICC characterization registry's `RegistryName` (6.4.2.1).
 const COLOR_ORG: &[u8] = b"http://www.color.org";
+
+/// The reference names of the ICC Characterization Data Registry: the CMYK characterizations
+/// (registry.color.org/cmyk-registry) and the three-component colour encodings (registry.color.org/rgb-registry), as
+/// listed on 2026-11-25. The list only grows; nothing on it is marked withdrawn.
+const ICC_REGISTRY: [&str; 73] = [
+    "FOGRA53",
+    "CGATS21-2-CRPC7",
+    "APTEC_CTV_8",
+    "APTEC_CTV_7",
+    "APTEC_CTV_6",
+    "FOGRA51",
+    "JCS2011",
+    "FOGRA50",
+    "FOGRA49",
+    "FOGRA43",
+    "CGATS TR 006",
+    "FOGRA39",
+    "JC200103",
+    "FOGRA27",
+    "EUROSB104",
+    "APTEC Coated CardBoard",
+    "APTEC CCNB",
+    "CGATS21-2-CRPC6",
+    "CGATS21-2-CRPC5",
+    "FOGRA45",
+    "FOGRA46",
+    "FOGRA41",
+    "CGATS TR 001",
+    "CGATS TR 003",
+    "CGATS TR 005",
+    "FOGRA28",
+    "JCW2003",
+    "EUROSB204",
+    "APTEC_CTV_3",
+    "FOGRA52",
+    "CGATS21-2-CRPC3",
+    "FOGRA47",
+    "FOGRA44",
+    "FOGRA29",
+    "JC200104",
+    "FOGRA54",
+    "CGATS21-2-CRPC4",
+    "FOGRA40",
+    "FOGRA30",
+    "FOGRA48",
+    "CGATS21-2-CRPC2",
+    "CGATS21-2-CRPC1",
+    "FOGRA42",
+    "IFRA26",
+    "JCN2002",
+    "CGATS TR 002",
+    "APTEC_CTV_5",
+    "APTEC_CTV_4",
+    "FOGRA33",
+    "FOGRA37",
+    "FOGRA31",
+    "FOGRA35",
+    "FOGRA32",
+    "FOGRA34",
+    "FOGRA36",
+    "FOGRA38",
+    "sRGB",
+    "Adobe RGB (1998)",
+    "bg-sRGB",
+    "sYCC",
+    "scRGB",
+    "scRGB-nl",
+    "ROMM RGB",
+    "RIMM RGB",
+    "ERIMM RGB",
+    "eciRGB",
+    "opRGB",
+    "BT.601",
+    "BT.709",
+    "BT.2020",
+    "BT.2100",
+    "DCI P3",
+    "Display P3",
+];
 
 /// Every output intent dictionary in the catalog's `/OutputIntents` whose `/S` is `GTS_PDFX`.
 fn pdfx_intents(doc: &Document) -> Vec<&Dict> {
@@ -205,13 +286,93 @@ pub(super) fn profile_version(doc: &Document, _: Level) -> Vec<Finding> {
     )
 }
 
+/// The PDF/X intent's entry `key` as text.
+fn text_entry(doc: &Document, key: &[u8]) -> Option<String> {
+    match &doc.resolve(the_intent(doc)?.get(key)?)?.value {
+        Value::String(bytes, _) => text::decode(bytes),
+        _ => None,
+    }
+}
+
+/// How a `/RegistryName` names the ICC registry: exactly, by a variant of its URL, or not at all.
+#[derive(Debug, PartialEq, Eq)]
+enum Registry {
+    Exact,
+    Variant,
+    Other,
+}
+
+fn registry(name: &str) -> Registry {
+    let lower = name.trim().to_ascii_lowercase();
+    let host = lower
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_end_matches('/');
+    match (
+        name.as_bytes() == COLOR_ORG,
+        host == "www.color.org" || host == "color.org",
+    ) {
+        (true, _) => Registry::Exact,
+        (false, true) => Registry::Variant,
+        (false, false) => Registry::Other,
+    }
+}
+
+/// 6.4.2.1 recommends a registered identifier and no vague one such as "Custom": a warning for "Custom" (any case)
+/// or an empty identifier.
+pub(super) fn identifier_registered(doc: &Document, _: Level) -> Vec<Finding> {
+    let vague = text_entry(doc, b"OutputConditionIdentifier").is_some_and(|id| {
+        let id = id.trim();
+        id.is_empty() || id.eq_ignore_ascii_case("custom")
+    });
+    when(
+        vague,
+        X4_OUTPUT_INTENT_IDENTIFIER_REGISTERED,
+        "/OutputConditionIdentifier is \"Custom\" or empty",
+        "6.4.2.1",
+    )
+}
+
+/// 6.4.2.1: an ICC-registered condition names the ICC registry exactly. Checkable only where the file plainly meant
+/// that registry: a misspelt color.org URL with an ICC reference name fails. Another registry's URL may name the
+/// same condition (Fogra's for FOGRA39), and without `/RegistryName` a match is coincidental, so both pass (oracle).
+pub(super) fn registry_name_color_org(doc: &Document, _: Level) -> Vec<Finding> {
+    let (Some(name), Some(id)) = (
+        text_entry(doc, b"RegistryName"),
+        text_entry(doc, b"OutputConditionIdentifier"),
+    ) else {
+        return Vec::new();
+    };
+    let misspelt = registry(&name) == Registry::Variant && ICC_REGISTRY.contains(&id.as_str());
+    let message = format!("/RegistryName is {name:?}, not exactly \"http://www.color.org\"");
+    when(misspelt, X4_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG, &message, "6.4.2.1")
+}
+
+/// 6.4.2.1: with the ICC registry named, the identifier is one of its reference names, exactly. A warning, not the
+/// clause's error, by the owner's decision (2026-11-25): Adobe writes ECI profile names under color.org, and 14 Ghent
+/// positives that pdfToolbox passes do. Other registries' lists are not held, so they are not judged.
+pub(super) fn identifier_in_registry(doc: &Document, _: Level) -> Vec<Finding> {
+    let (Some(name), Some(id)) = (
+        text_entry(doc, b"RegistryName"),
+        text_entry(doc, b"OutputConditionIdentifier"),
+    ) else {
+        return Vec::new();
+    };
+    let unlisted = registry(&name) != Registry::Other && !ICC_REGISTRY.contains(&id.as_str());
+    let message = format!("{id:?} is not a reference name in the ICC registry that /RegistryName names");
+    when(unlisted, X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY, &message, "6.4.2.1")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 11] = [
+    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 14] = [
+        identifier_registered,
+        registry_name_color_org,
+        identifier_in_registry,
         present,
         unique,
         identifier_present,
@@ -231,6 +392,64 @@ mod tests {
             .flat_map(|run| run(&doc, Level::X4))
             .map(|f| f.check.id)
             .collect()
+    }
+
+    #[test]
+    fn registries() {
+        let ids = |registry: &str, identifier: &str| -> Vec<&'static str> {
+            let catalog = format!(
+                "<< /OutputIntents [<< /S /GTS_PDFX /OutputCondition (c) /DestOutputProfile 2 0 R {registry} /OutputConditionIdentifier {identifier} >>] >>"
+            );
+            let doc = Document::open(
+                &classic(
+                    &[(1, catalog.as_bytes()), (2, b"<< >>")],
+                    "<< /Size SIZE /Root 1 0 R >>",
+                ),
+                &Limits::default(),
+            )
+            .unwrap();
+            [identifier_registered, registry_name_color_org, identifier_in_registry]
+                .iter()
+                .flat_map(|run| run(&doc, Level::X4))
+                .map(|f| f.check.id)
+                .collect()
+        };
+        assert_eq!(
+            ids("/RegistryName (http://www.color.org)", "(FOGRA39)"),
+            Vec::<&str>::new()
+        );
+        assert_eq!(
+            ids("", "(FOGRA39)"),
+            Vec::<&str>::new(),
+            "no registry named: a match is coincidental"
+        );
+        assert_eq!(
+            ids("/RegistryName (http://www.fogra.org)", "(FOGRA39)"),
+            Vec::<&str>::new()
+        );
+        assert_eq!(
+            ids("/RegistryName (https://www.color.org/)", "(FOGRA39)"),
+            ["x4.output-intent.registry-name-color-org"]
+        );
+        assert_eq!(
+            ids("/RegistryName (http://www.color.org)", "(ISO Coated v2)"),
+            ["x4.output-intent.identifier-in-registry"]
+        );
+        assert_eq!(
+            ids("/RegistryName (color.org)", "( custom )"),
+            [
+                "x4.output-intent.identifier-registered",
+                "x4.output-intent.identifier-in-registry"
+            ]
+        );
+        assert_eq!(ids("/RegistryName 5", "()"), ["x4.output-intent.identifier-registered"]);
+        assert_eq!(ids("/RegistryName (http://www.color.org)", "/N"), Vec::<&str>::new());
+        assert_eq!(
+            ids("/RegistryName 9 0 R", "(FOGRA39)"),
+            Vec::<&str>::new(),
+            "a name that refers to nothing"
+        );
+        assert_eq!(registry("http://www.color.org"), Registry::Exact);
     }
 
     #[test]

@@ -22,3 +22,6 @@ Feature: PDF/X-4 6.4.1 and 6.4.2.1, the output intent
       | x4-intent-profile-v5 | x4.output-intent.profile-version |
       | x4-intent-profile-monitor | x4.output-intent.profile-class-prtr |
       | x4-intent-profile-lab | x4.output-intent.channels |
+      | x4-intent-custom | x4.output-intent.identifier-registered |
+      | x4-intent-registry-misspelt | x4.output-intent.registry-name-color-org |
+      | x4-intent-not-in-registry | x4.output-intent.identifier-in-registry |

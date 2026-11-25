@@ -411,3 +411,17 @@ expect = { "x4.xmp.conforms" = "dc:subject is plain text, not an rdf:Bag (6.10.1
 [x4-info-in-pdf-schema]
 levels = ["x4"]
 expect = { "x4.info.unlisted-not-in-predefined-schema" = "Info /Company is written as pdf:Company (6.10.2)" }
+
+# PDF/X-4 6.4.2.1: the ICC characterization registry.
+
+[x4-intent-custom]
+levels = ["x4"]
+expect = { "x4.output-intent.identifier-registered" = "the identifier is Custom, a warning (6.4.2.1)" }
+
+[x4-intent-registry-misspelt]
+levels = ["x4"]
+expect = { "x4.output-intent.registry-name-color-org" = "FOGRA39 under https://www.color.org/, not the exact ICC URL (6.4.2.1)" }
+
+[x4-intent-not-in-registry]
+levels = ["x4"]
+expect = { "x4.output-intent.identifier-in-registry" = "Little-CMS test1 under the ICC registry, which does not list it; a warning by decision (6.4.2.1)" }

@@ -77,6 +77,15 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_OUTPUT_INTENT_CHANNELS, intent::channels),
     (f::X4_OUTPUT_INTENT_PROFILE_CLASS_PRTR, intent::profile_class),
     (f::X4_OUTPUT_INTENT_PROFILE_VERSION, intent::profile_version),
+    (f::X4_OUTPUT_INTENT_IDENTIFIER_REGISTERED, intent::identifier_registered),
+    (
+        f::X4_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG,
+        intent::registry_name_color_org,
+    ),
+    (
+        f::X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY,
+        intent::identifier_in_registry,
+    ),
     (f::X4_BOXES_TRIM_OR_ART, boxes::trim_or_art),
     (f::X4_BOXES_NOT_BOTH, boxes::not_both),
     (f::X4_BOXES_PREFER_TRIM, boxes::prefer_trim),

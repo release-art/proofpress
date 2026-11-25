@@ -650,6 +650,13 @@ def _x4_intent(
     return pdf
 
 
+def _misspelt_registry(pdf: pikepdf.Pdf) -> None:
+    """An ICC reference name under a misspelling of the ICC registry's URL."""
+    intent = pdf.Root.OutputIntents[0]
+    intent["/RegistryName"] = pikepdf.String("https://www.color.org/")
+    intent["/OutputConditionIdentifier"] = pikepdf.String("FOGRA39")
+
+
 def _x4_intent_fixtures() -> dict[str, pikepdf.Pdf]:
     """The negatives of 6.4.1 and 6.4.2.1 (tests/fixtures/pdfx/expected.toml says what each raises)."""
     two = _x4_good()
@@ -670,6 +677,9 @@ def _x4_intent_fixtures() -> dict[str, pikepdf.Pdf]:
             "DestOutputProfileRef", pikepdf.Dictionary(URLs=pikepdf.Array([pikepdf.String("http://example.com/p.icc")]))
         ),
         "x4-intent-no-condition": _x4_intent("OutputCondition"),
+        "x4-intent-custom": _x4_intent("OutputConditionIdentifier", pikepdf.String("Custom")),
+        "x4-intent-registry-misspelt": _x4_with(_misspelt_registry),
+        "x4-intent-not-in-registry": _x4_intent("RegistryName", pikepdf.String("http://www.color.org")),
         # ICC.1 7.2.4-7.2.6: version byte 8, class at 12, data colour space at 16.
         "x4-intent-profile-v5": _x4_intent("", header=(8, b"\x05")),
         "x4-intent-profile-monitor": _x4_intent("", header=(12, b"mntr")),

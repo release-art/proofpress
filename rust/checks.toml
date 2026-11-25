@@ -84,7 +84,7 @@ title = "The condition identifier names a registered condition"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.registry-name-color-org"
@@ -92,15 +92,15 @@ title = "An ICC-registered condition gives the ICC registry"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.identifier-in-registry"
 title = "The identifier exists in the named registry"
 clauses = ["iso-15930-7:6.4.2.1"]
-severity = "error"
+severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.registry-name-url"

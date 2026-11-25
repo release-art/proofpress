@@ -5,22 +5,12 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
-**Open, 2026-11-25 (oracle escalation, task 3.3/3.5, ISO 15930-7 6.4.2.1 p.18):** 14 of the 35 Ghent X-4 positives
-(GWG130, GWG150-152, GWG205/206, GWG220/221 and others; all Adobe output) give `/RegistryName (http://www.color.org)`
-with `/OutputConditionIdentifier (ISO Coated v2 300% (ECI))`. That is an ECI profile name, not a reference name in
-the ICC registry (registry.color.org lists 56 CMYK names such as FOGRA39, plus 17 three-component encodings).
-6.4.2.1 says that when `/RegistryName` is present, the identifier *shall* match a registry entry exactly. Read as
-written, these 14 files fail `x4.output-intent.identifier-in-registry`, though pdfToolbox 17.1 passes them and the
-plan counts them as conforming. Which do you want?
-- (a) Fail them as the text says: record the 14 as not conforming to this one rule (as with Altona and 6.4.3.3) and
-  record it in the plan's positives. The oracle's choice.
-- (b) Report it as a warning only: a logged deviation from a "shall", matching what pdfToolbox does in practice.
-- (c) Leave the row unchecked (`skip`): registry membership not judged.
-
-The other two registry rows follow from your answer: a misspelled ICC URL fails, another registry passes, and an
-identifier of "Custom" gets a warning (12 Ghent files). None of the three is written yet; the rest of phase 3 is done.
-
-Earlier questions, answered 2026-11-25: none open before this one. Answered 2026-11-25: the ICC version reading (by pdfToolbox's verdicts) and Altona under 6.4.3.3 (owner:
+None open. Answered 2026-11-25:
+- The ICC registry rule of 6.4.2.1 (oracle escalation): the owner chose (b), a warning. 14 Ghent X-4 positives write an
+  ECI profile name under `/RegistryName (http://www.color.org)`; they get `x4.output-intent.identifier-in-registry` as a
+  warning and stay positives. Recorded in test-db's expectations with the 12 "Custom" warnings.
+- The ICC version reading (by pdfToolbox's verdicts) and Altona under 6.4.3.3 (record it as not conforming to that
+  one rule). Answered 2026-11-25: the ICC version reading (by pdfToolbox's verdicts) and Altona under 6.4.3.3 (owner:
 record it as not conforming to that one rule).
 
 ## Status
@@ -60,7 +50,8 @@ record it as not conforming to that one rule).
 | 3.1 (part), 3.5 (6.12) | `2371597` | The page tree with inherited attributes; a rectangle helper; 6 box checks with 6 fixtures |
 | 3.5 (keys) | `c729133` | 19 checks on keys forbidden anywhere (6.7, 6.13, 6.14, 6.16, 6.18, 6.21, 6.22, 6.26) with 19 fixtures, on a walk of every dictionary with its place |
 | 3.5, 3.6 | `4f2c410` | 4 optional content checks (6.24), 2 annotation checks (6.17), 3 TrapNet checks (6.9), with 9 fixtures |
-| 3.2 (rest) | this commit | `x4.xmp.conforms` (value types of the predefined schemas) and `x4.info.unlisted-not-in-predefined-schema`; `x4.image.alternates-same-content` is a `skip` |
+| 3.2 (rest) | `3820c19` | `x4.xmp.conforms` (value types of the predefined schemas) and `x4.info.unlisted-not-in-predefined-schema`; `x4.image.alternates-same-content` is a `skip` |
+| 3.3 (registry) | this commit; test-db | The three ICC registry rows, with the registry's 73 reference names built in; 3 fixtures |
 
 ## Register coverage
 
@@ -68,7 +59,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 80 | 57 | 4 |
+| PDF/X-4 and X-4p | 83 | 54 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 16 | 37 | 1 (`internal`) |
 
@@ -204,8 +195,8 @@ Oracle consultations:
 - Task 3.3: the ICC helper reads the header only (class, data colour space, version). The Profile ID, the MD5 of
   ICC.1 7.2.18 and the `desc`/`clrt` tags wait for the rows that read them, `x4.icc.cmyk-not-intent-profile` and
   `x4.icc.profile-version`, which follow print elements (X4-Q3) and so belong to phase 4's colour evaluator.
-  `x4.output-intent.identifier-registered`, `.registry-name-color-org` and `.identifier-in-registry` need the ICC
-  characterization registry's list of reference names as data; not yet in test-db, so they stay `todo`.
+  The ICC registry rows came later in phase 3, with the registry's names built in.
+- `x4.output-intent.identifier-in-registry` is a warning, not the clause's error (owner, 2026-11-25).
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 

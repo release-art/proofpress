@@ -13,9 +13,9 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.output-intent.unique` | Only one output intent is GTS_PDFX | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
 | `x4.output-intent.identifier-present` | The PDF/X intent names its condition identifier | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
 | `x4.output-intent.identifier-text-string` | The condition identifier is a text string | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
-| `x4.output-intent.identifier-registered` | The condition identifier names a registered condition | iso-15930-7:6.4.2.1 | warning | x4, x4p | todo |
-| `x4.output-intent.registry-name-color-org` | An ICC-registered condition gives the ICC registry | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
-| `x4.output-intent.identifier-in-registry` | The identifier exists in the named registry | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
+| `x4.output-intent.identifier-registered` | The condition identifier names a registered condition | iso-15930-7:6.4.2.1 | warning | x4, x4p | implemented |
+| `x4.output-intent.registry-name-color-org` | An ICC-registered condition gives the ICC registry | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
+| `x4.output-intent.identifier-in-registry` | The identifier exists in the named registry | iso-15930-7:6.4.2.1 | warning | x4, x4p | implemented |
 | `x4.output-intent.registry-name-url` | A non-ICC registry name is a URL | iso-15930-7:6.4.2.1 | warning | x4, x4p | implemented |
 | `x4.output-intent.dest-profile-present` | The PDF/X intent embeds its profile | iso-15930-7:6.4.2.1 | error | x4 | implemented |
 | `x4.output-intent.no-dest-profile-ref` | The PDF/X intent has no external profile reference | iso-15930-7:6.4.2.1 | error | x4 | implemented |
