@@ -1,0 +1,107 @@
+//! The completeness gate (pdfx-plan task 1.3): every check in `rust/checks.toml` is accounted for, and one marked
+//! `implemented` has a fixture that fails it and one that passes it in `tests/fixtures/pdfx/expected.toml`.
+//! Run with `--nocapture` to see the register coverage.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+
+use proof_pdf::checks::{ALL, Check, Level, Status};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Fixture {
+    levels: Vec<String>,
+    expect: BTreeMap<String, String>,
+}
+
+fn repo() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap()
+}
+
+fn fixtures() -> BTreeMap<String, Fixture> {
+    let path = repo().join("tests/fixtures/pdfx/expected.toml");
+    toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+fn level(name: &str) -> Level {
+    match name {
+        "x4" => Level::X4,
+        "x4p" => Level::X4p,
+        "x5g" => Level::X5g,
+        "x5pg" => Level::X5pg,
+        "x5n" => Level::X5n,
+        other => panic!("unknown level {other:?} in expected.toml"),
+    }
+}
+
+/// Whether `fixture` is verified at a level `check` applies to.
+fn judges(fixture: &Fixture, check: &Check) -> bool {
+    fixture.levels.iter().any(|l| check.applies.contains(&level(l)))
+}
+
+#[test]
+fn every_fixture_exists_and_names_only_known_checks() {
+    let known: BTreeSet<&str> = ALL.iter().map(|c| c.id).collect();
+    for (name, fixture) in fixtures() {
+        let file = format!("{name}.pdf");
+        assert!(
+            repo().join("tests/fixtures/pdfs").join(&file).is_file()
+                || repo().join("tests/fixtures/pdfx").join(&file).is_file(),
+            "{file} is in expected.toml but not in tests/fixtures/pdfs or pdfx"
+        );
+        assert!(!fixture.levels.is_empty(), "{name}: no levels");
+        for (id, reason) in &fixture.expect {
+            assert!(known.contains(id.as_str()), "{name}: {id} is not in checks.toml");
+            assert!(!reason.is_empty(), "{name}: {id} needs a reason");
+        }
+    }
+}
+
+#[test]
+fn an_implemented_check_has_a_failing_and_a_passing_fixture() {
+    let fixtures = fixtures();
+    let mut missing = Vec::new();
+    for check in ALL.iter().filter(|c| c.status == Status::Implemented) {
+        let fails = fixtures.values().any(|f| f.expect.contains_key(check.id));
+        let passes = fixtures
+            .values()
+            .any(|f| judges(f, check) && !f.expect.contains_key(check.id));
+        if !fails || !passes {
+            missing.push(format!("{} (fail fixture: {fails}, pass fixture: {passes})", check.id));
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "implemented without fixtures:\n{}",
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn register_coverage() {
+    let mut counts: BTreeMap<&str, [usize; 3]> = BTreeMap::new();
+    for check in ALL {
+        let group = if check.applies.contains(&Level::Print) {
+            "print"
+        } else if check.id.starts_with("x5.") {
+            "PDF/X-5"
+        } else {
+            "PDF/X-4"
+        };
+        let slot = match check.status {
+            Status::Implemented => 0,
+            Status::Todo => 1,
+            Status::Skip(_) => 2,
+        };
+        counts.entry(group).or_default()[slot] += 1;
+    }
+    println!("register coverage (implemented, todo, skip):");
+    for (group, [implemented, todo, skip]) in &counts {
+        println!("  {group:8} {implemented:4} {todo:4} {skip:4}");
+    }
+    assert_eq!(
+        counts.values().map(|c| c.iter().sum::<usize>()).sum::<usize>(),
+        ALL.len()
+    );
+}

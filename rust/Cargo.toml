@@ -16,6 +16,8 @@ futures = "0.3.34"
 mockall = "0.15.0"
 pretty_assertions = "1.4.1"
 proptest = "1.12.0"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.2.3"
 
 # Gherkin scenarios in tests/features. cucumber brings its own harness, which cargo-nextest cannot list, so the target is
 # left out of `cargo test` and run explicitly by bin/rust/check.sh.

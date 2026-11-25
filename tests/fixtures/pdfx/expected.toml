@@ -1,0 +1,9 @@
+# What the PDF/X checks must report for each fixture: the set of check ids it must raise, each with a one-line reason.
+# A check not listed must pass. `levels` are the PDF/X levels the fixture is verified at. Fixtures live in
+# tests/fixtures/pdfs/ (built by build_pdfs.py) or here. Checked by rust/tests/completeness.rs: a check may be
+# `implemented` in rust/checks.toml only when some fixture expects it and another, at one of its levels, does not.
+
+# Genuine PDF/X-4, the base every negative is built from. pdfToolbox 17.1 "Verify compliance with PDFX-4" passes it.
+[x4-good]
+levels = ["x4"]
+expect = {}
