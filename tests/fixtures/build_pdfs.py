@@ -359,6 +359,7 @@ def _crop_marks() -> pikepdf.Pdf:
 
 
 X4_PROFILE = pathlib.Path(__file__).parent / "icc" / "little-cms-test1.icc"
+GOOD_X4_CONTENT = GOOD_CONTENT + b" 0 0 0 1 k BT /F1 12 Tf %f 300 Td (PDF/X-4) Tj ET" % (BLEED + 20)
 X4_DATE_PDF, X4_DATE_XMP = "D:20261125120000Z", "2026-11-25T12:00:00Z"
 X4_INFO = {"Title": "PDF/X-4 base fixture", "Creator": "build_pdfs.py", "Producer": "proof-pdf tests (pikepdf)"}
 X4_XMP = f"""<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
@@ -448,7 +449,7 @@ def _x4_good() -> pikepdf.Pdf:
         Encoding=pikepdf.Name.WinAnsiEncoding,
         FontDescriptor=pdf.make_indirect(descriptor),
     )
-    content = GOOD_CONTENT + b" 0 0 0 1 k BT /F1 12 Tf %f 300 Td (PDF/X-4) Tj ET" % (BLEED + 20)
+    content = GOOD_X4_CONTENT
     build(
         content,
         resources=pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=pdf.make_indirect(font))),
@@ -482,6 +483,64 @@ def _x4_good() -> pikepdf.Pdf:
     pdf.docinfo["/CreationDate"] = pdf.docinfo["/ModDate"] = pikepdf.String(X4_DATE_PDF)
     pdf.docinfo["/Trapped"] = pikepdf.Name("/False")
     pdf.docinfo["/GTS_PDFXVersion"] = pikepdf.String("PDF/X-4")
+    return pdf
+
+
+def _lzw(data: bytes) -> bytes:
+    """LZW-encode ``data`` as 7.4.4 decodes it: 9- to 12-bit codes with EarlyChange, a clear code first, EOD last."""
+    table = {bytes([i]): i for i in range(256)}
+    codes, width_at = [256], []
+    current = b""
+    for byte in data:
+        candidate = current + bytes([byte])
+        if candidate in table:
+            current = candidate
+            continue
+        codes.append(table[current])
+        table[candidate] = len(table) + 2  # 256 and 257 are clear and end of data
+        current = bytes([byte])
+    codes += [table[current], 257] if current else [257]
+    out, held, bits, size = bytearray(), 0, 0, 258
+    for i, code in enumerate(codes):
+        width = 9 if size + 1 < 512 else 10 if size + 1 < 1024 else 11 if size + 1 < 2048 else 12
+        held, bits = held << width | code, bits + width
+        while bits >= 8:
+            out.append(held >> (bits - 8) & 0xFF)
+            bits -= 8
+        if 0 < i < len(codes) - 1:
+            size += 1
+        width_at.append(width)
+    if bits:
+        out.append(held << (8 - bits) & 0xFF)
+    return bytes(out)
+
+
+def _x4_content(filters: list[str], data: bytes, parms: pikepdf.Dictionary | None = None) -> pikepdf.Pdf:
+    """x4-good with its page content stored under other filters (one defect per fixture)."""
+    pdf = _x4_good()
+    stream = pdf.make_stream(data)
+    stream["/Filter"] = (
+        pikepdf.Array([pikepdf.Name(f"/{f}") for f in filters]) if len(filters) > 1 else pikepdf.Name(f"/{filters[0]}")
+    )
+    if parms is not None:
+        stream["/DecodeParms"] = parms
+    pdf.pages[0].obj["/Contents"] = pdf.make_indirect(stream)
+    return pdf
+
+
+def _x4_crypt() -> pikepdf.Pdf:
+    """x4-good with its page content under the Identity Crypt filter (6.8 forbids Crypt), keyed /Xilter until saved."""
+    pdf = _x4_good()
+    stream = pdf.make_stream(GOOD_X4_CONTENT)
+    stream["/Xilter"] = pikepdf.Name.Crypt
+    pdf.pages[0].obj["/Contents"] = pdf.make_indirect(stream)
+    return pdf
+
+
+def _x4_perms() -> pikepdf.Pdf:
+    """x4-good with a DocMDP permission, which 6.15 forbids (only UR and UR3 may be there)."""
+    pdf = _x4_good()
+    pdf.Root["/Perms"] = pikepdf.Dictionary(DocMDP=pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Sig)))
     return pdf
 
 
@@ -558,6 +617,12 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         "no-output-intent": build(output_intent=False),
         # Genuine PDF/X-4: the positive base for the PDF/X checks (good.pdf is PDF/A-2b, and fails X-4).
         "x4-good": _x4_good(),
+        # Its negatives, one defect each (tests/fixtures/pdfx/expected.toml says what each must raise).
+        "x4-lzw": _x4_content(["LZWDecode"], _lzw(GOOD_X4_CONTENT)),
+        # Saved with a stand-in key, renamed to /Filter in the bytes: qpdf would decode a Crypt filter it was given.
+        "x4-crypt-filter": _x4_crypt(),
+        "x4-filter-abbreviated": _x4_content(["Fl"], zlib.compress(GOOD_X4_CONTENT)),
+        "x4-perms": _x4_perms(),
     }
 
 
@@ -579,11 +644,64 @@ def render() -> dict[str, bytes]:
             )
             out[name] = path.read_bytes()
         out["corrupt"] = out["good"][: len(out["good"]) // 2]  # truncated mid-file
+        out.update(_x4_variants(out["x4-good"], scratch))
+        assert out["x4-crypt-filter"].count(b"/Xilter /Crypt") == 1
+        out["x4-crypt-filter"] = out["x4-crypt-filter"].replace(b"/Xilter /Crypt", b"/Filter /Crypt")
     finally:
         for f in scratch.glob("*.pdf"):
             f.unlink()
         scratch.rmdir()
     return out
+
+
+def _x4_variants(good: bytes, scratch: pathlib.Path) -> dict[str, bytes]:
+    """Negatives of x4-good made on its saved bytes, each change keeping every offset."""
+    assert good.count(b"/ProofBox") == 2, "BaseFont and FontName"
+    with pikepdf.open(io.BytesIO(good)) as pdf:
+        path = scratch / "x4-encrypted.pdf"
+        # RC4 (R4 without AES) derives everything from the ID and the passwords, and a static ID makes the bytes the
+        # same every build (qpdf will not compute a deterministic ID for an encrypted file).
+        pdf.save(path, static_id=True, encryption=pikepdf.Encryption(owner="", user="", R=4, aes=False, metadata=False))
+        encrypted = path.read_bytes()
+    return {
+        # 6.6: a font name that decodes to bytes that are not UTF-8 (written escaped, as 6.6 also asks).
+        "x4-name-not-utf8": good.replace(b"/ProofBox", b"/Proof#FF"),
+        # 6.6: a font name holding UTF-8 bytes outside 33 to 126 written raw, not as #xx.
+        "x4-name-unescaped": good.replace(b"/ProofBox", "/Pr\u00e9fBox".encode()),
+        "x4-encrypted": encrypted,
+        "x4-too-many-objects": _too_many_objects(good),
+    }
+
+
+def _too_many_objects(good: bytes) -> bytes:
+    """x4-good with an incremental update listing 8,388,608 compressed objects, one more than 6.25 allows.
+
+    The entries are in object stream 999, which does not exist; nothing refers to them, so they are listed but never
+    read. A PNG Up predictor makes every row after the first the same, so the stream compresses to a few kilobytes.
+    """
+    with pikepdf.open(io.BytesIO(good)) as pdf:
+        size = int(pdf.trailer.Size)
+        trailer_id = [bytes(i) for i in pdf.trailer.ID]
+        root, info = pdf.Root.objgen[0], pdf.trailer.Info.objgen[0]
+    prev = int(good[good.rindex(b"startxref") + 9 :].split()[0])
+    count = 8_388_608 - (size - 1)
+    xref_num, offset = size + count, len(good)
+    rows = bytearray()
+    previous = bytes(7)
+    entries = [bytes([2]) + (999).to_bytes(3) + i.to_bytes(3) for i in range(count)]
+    entries.append(bytes([1]) + offset.to_bytes(3) + bytes(3))
+    for row in entries:
+        rows.append(2)  # PNG Up
+        rows += bytes((a - b) & 0xFF for a, b in zip(row, previous, strict=True))
+        previous = row
+    data = zlib.compress(bytes(rows), 9)
+    ids = "".join(f"<{i.hex()}>" for i in trailer_id)
+    head = (
+        f"{xref_num} 0 obj\n<< /Type /XRef /Size {xref_num + 1} /W [1 3 3] /Index [{size} {count + 1}] /Prev {prev}"
+        f" /Root {root} 0 R /Info {info} 0 R /ID [{ids}] /Filter /FlateDecode"
+        f" /DecodeParms << /Predictor 12 /Columns 7 >> /Length {len(data)} >>\nstream\n"
+    ).encode()
+    return good + head + data + f"\nendstream\nendobj\nstartxref\n{offset}\n%%EOF\n".encode()
 
 
 def main() -> int:

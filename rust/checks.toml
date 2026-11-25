@@ -333,7 +333,7 @@ title = "Font and separation names are UTF-8"
 clauses = ["iso-15930-7:6.6"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.names.hex-escaped"
@@ -341,7 +341,7 @@ title = "Bytes outside printable ASCII in those names are escaped"
 clauses = ["iso-15930-7:6.6"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.names.other-recommended"
@@ -389,7 +389,7 @@ title = "LZW compression is not used"
 clauses = ["iso-15930-7:6.8"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.filter.no-crypt"
@@ -397,7 +397,7 @@ title = "The Crypt filter is not used"
 clauses = ["iso-15930-7:6.8"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.filter.standard-only"
@@ -405,7 +405,7 @@ title = "Only standard filters are used"
 clauses = ["iso-15930-7:6.8"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.image.dct-valid"
@@ -801,7 +801,7 @@ title = "The file is not encrypted"
 clauses = ["iso-15930-7:6.15"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.perms.ur-only"
@@ -809,7 +809,7 @@ title = "Permissions hold only usage rights"
 clauses = ["iso-15930-7:6.15"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.image.no-default-for-printing"
@@ -969,7 +969,7 @@ title = "The indirect-object count stays within PDF 1.6 limits"
 clauses = ["iso-15930-7:6.25"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.limits.graphics"

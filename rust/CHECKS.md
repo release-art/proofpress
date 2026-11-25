@@ -44,16 +44,16 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.font.truetype-nonsymbolic-no-differences` | Non-symbolic TrueType has no Differences | iso-15930-7:6.5.4 | error | x4, x4p | todo |
 | `x4.font.truetype-symbolic-no-encoding` | Symbolic TrueType has no Encoding | iso-15930-7:6.5.4 | error | x4, x4p | todo |
 | `x4.font.truetype-symbolic-one-cmap` | Symbolic TrueType has exactly one cmap subtable | iso-15930-7:6.5.4 | error | x4, x4p | todo |
-| `x4.names.utf8` | Font and separation names are UTF-8 | iso-15930-7:6.6 | error | x4, x4p | todo |
-| `x4.names.hex-escaped` | Bytes outside printable ASCII in those names are escaped | iso-15930-7:6.6 | error | x4, x4p | todo |
+| `x4.names.utf8` | Font and separation names are UTF-8 | iso-15930-7:6.6 | error | x4, x4p | implemented |
+| `x4.names.hex-escaped` | Bytes outside printable ASCII in those names are escaped | iso-15930-7:6.6 | error | x4, x4p | implemented |
 | `x4.names.other-recommended` | Other names are UTF-8 and escaped too | iso-15930-7:6.6 | warning | x4, x4p | todo |
 | `x4.xobject.no-opi` | XObjects carry no OPI | iso-15930-7:6.7 | error | x4, x4p | todo |
 | `x4.xobject.no-ref` | Form XObjects are not reference XObjects | iso-15930-7:6.7 | error | x4, x4p | todo |
 | `x4.filespec.embedded` | File specifications embed their file | iso-15930-7:6.7 | error | x4 | todo |
 | `x4.stream.no-external-f` | No stream points at external data | iso-15930-7:6.7 | error | x4, x4p | todo |
-| `x4.filter.no-lzw` | LZW compression is not used | iso-15930-7:6.8 | error | x4, x4p | todo |
-| `x4.filter.no-crypt` | The Crypt filter is not used | iso-15930-7:6.8 | error | x4, x4p | todo |
-| `x4.filter.standard-only` | Only standard filters are used | iso-15930-7:6.8 | error | x4, x4p | todo |
+| `x4.filter.no-lzw` | LZW compression is not used | iso-15930-7:6.8 | error | x4, x4p | implemented |
+| `x4.filter.no-crypt` | The Crypt filter is not used | iso-15930-7:6.8 | error | x4, x4p | implemented |
+| `x4.filter.standard-only` | Only standard filters are used | iso-15930-7:6.8 | error | x4, x4p | implemented |
 | `x4.image.dct-valid` | JPEG data is valid | iso-15930-7:6.8 | error | x4, x4p | todo |
 | `x4.image.jpx-valid` | JPEG 2000 data is valid | iso-15930-7:6.8, iso-15930-7:6.27 | error | x4, x4p | todo |
 | `x4.image.jbig2-valid` | JBIG2 data is valid | iso-15930-7:6.8 | error | x4, x4p | todo |
@@ -102,8 +102,8 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.halftone.no-name` | Halftones have no name | iso-15930-7:6.13 | error | x4, x4p | todo |
 | `x4.xobject.no-postscript` | No PostScript XObjects | iso-15930-7:6.14 | error | x4, x4p | todo |
 | `x4.xobject.no-subtype2-ps` | No form XObject is PostScript underneath | iso-15930-7:6.14 | error | x4, x4p | todo |
-| `x4.encrypt.absent` | The file is not encrypted | iso-15930-7:6.15 | error | x4, x4p | todo |
-| `x4.perms.ur-only` | Permissions hold only usage rights | iso-15930-7:6.15 | error | x4, x4p | todo |
+| `x4.encrypt.absent` | The file is not encrypted | iso-15930-7:6.15 | error | x4, x4p | implemented |
+| `x4.perms.ur-only` | Permissions hold only usage rights | iso-15930-7:6.15 | error | x4, x4p | implemented |
 | `x4.image.no-default-for-printing` | No image alternate is the default for printing | iso-15930-7:6.16 | error | x4, x4p | todo |
 | `x4.image.alternates-same-content` | Image alternates show the same picture | iso-15930-7:6.16 | error | x4, x4p | todo |
 | `x4.annot.outside-bleed` | Annotations lie outside the bleed | iso-15930-7:6.17 | error | x4, x4p | todo |
@@ -123,7 +123,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.oc.order-complete` | An Order lists every optional-content group, or none | iso-15930-7:6.24 | error | x4, x4p | todo |
 | `x4.oc.no-as` | Optional-content configurations have no AS | iso-15930-7:6.24 | error | x4, x4p | todo |
 | `x4.limits.lexical` | Numbers, strings and names stay within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | todo |
-| `x4.limits.objects` | The indirect-object count stays within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | todo |
+| `x4.limits.objects` | The indirect-object count stays within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | implemented |
 | `x4.limits.graphics` | Graphics-state nesting, DeviceN and CIDs stay within limits | iso-15930-7:6.25 | error | x4, x4p | todo |
 | `x4.acroform.no-xfa` | Forms have no XFA | iso-15930-7:6.26 | error | x4, x4p | todo |
 | `x4.jpx.baseline` | JPEG 2000 uses the JPX format, baseline features only | iso-15930-7:6.27 | error | x4, x4p | todo |

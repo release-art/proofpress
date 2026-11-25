@@ -10,7 +10,12 @@ use crate::file::{self, Entry, ObjectDamage, Refusal, Xref};
 use crate::filters::Decoded;
 use crate::findings::{Finding, Location, OBJECT_DANGLING_REFERENCE};
 use crate::pipeline::Limits;
-use crate::syntax::{self, Mode, Note, Object, Parser, Read, Value};
+use crate::syntax::{self, Mode, Note, Parser, Read};
+pub(crate) use crate::syntax::{Dict, Object, Value};
+
+/// Hand-built PDFs for the tests of the tiers above.
+#[cfg(test)]
+pub(crate) use crate::file::test_pdf;
 
 /// The buffer a value's span is in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +104,51 @@ impl Document {
             }
         }
         Ok(doc)
+    }
+
+    /// The document catalog, when `/Root` names a dictionary that could be read.
+    pub(crate) fn catalog(&self) -> Option<&Dict> {
+        self.xref
+            .trailer
+            .get(b"Root")
+            .and_then(|root| self.resolve(root))
+            .and_then(Object::dict)
+    }
+
+    /// `object`, or what it refers to when it is a reference to an object the walk read.
+    pub(crate) fn resolve<'a>(&'a self, object: &'a Object) -> Option<&'a Object> {
+        match object.value {
+            Value::Reference(num, _) => match self.slots.get(&num) {
+                Some(Slot::Loaded { object, .. }) => Some(object),
+                _ => None,
+            },
+            _ => Some(object),
+        }
+    }
+
+    /// Every object the walk read: its number, value, stream data's range and buffer.
+    pub(crate) fn objects(&self) -> impl Iterator<Item = (u32, &Object, Option<(usize, usize)>, Buffer)> {
+        self.slots.iter().filter_map(|(num, slot)| match slot {
+            Slot::Loaded { object, stream, buffer } => Some((*num, object, *stream, *buffer)),
+            Slot::Damaged(_) => None,
+        })
+    }
+
+    /// The bytes `start..end` of `buffer`, as written: a name's raw spelling, a real's text.
+    pub(crate) fn raw(&self, buffer: Buffer, start: usize, end: usize) -> &[u8] {
+        let data = match buffer {
+            Buffer::File => self.file.as_slice(),
+            Buffer::ObjectStream(num) => {
+                let stream = self.object_streams.get(&num).and_then(|s| s.as_ref().ok());
+                stream.map_or(&[][..], |s| s.data.as_slice())
+            }
+        };
+        data.get(start..end).unwrap_or_default()
+    }
+
+    /// How many objects the cross-reference sections list as in use, reachable or not.
+    pub(crate) fn listed_objects(&self) -> usize {
+        self.xref.entries.values().filter(|e| !matches!(e, Entry::Free)).count()
     }
 
     /// Whether any object reachable from the trailer is a gap.
@@ -255,7 +305,7 @@ fn offset_size(xref: &Xref) -> Option<u32> {
         .and_then(|i| u32::try_from(i).ok())
 }
 
-fn dict_int(dict: &syntax::Dict, key: &[u8]) -> Option<usize> {
+fn dict_int(dict: &Dict, key: &[u8]) -> Option<usize> {
     dict.get(key)?.integer().and_then(|i| usize::try_from(i).ok())
 }
 

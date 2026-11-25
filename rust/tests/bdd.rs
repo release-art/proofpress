@@ -123,6 +123,16 @@ fn fails_on_page(world: &mut Pipeline, id: String, page: u32) {
     );
 }
 
+#[then(expr = "check {string} fails")]
+fn fails(world: &mut Pipeline, id: String) {
+    let report = report(world);
+    assert!(
+        report.findings.iter().any(|f| f.check.id == id),
+        "{id} did not fail: {:#?}",
+        report.findings
+    );
+}
+
 #[then(expr = "no check fails but {string}")]
 fn only(world: &mut Pipeline, id: String) {
     let others: Vec<_> = report(world).findings.iter().filter(|f| f.check.id != id).collect();

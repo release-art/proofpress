@@ -5,6 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use proof_pdf::checks::verify;
 use proof_pdf::findings::{ALL, Check, Level, Status};
 use serde::Deserialize;
 
@@ -97,4 +98,32 @@ fn register_coverage() {
         counts.values().map(|c| c.iter().sum::<usize>()).sum::<usize>(),
         ALL.len()
     );
+}
+
+/// Every fixture raises exactly the checks expected.toml lists for it, at every level it names.
+#[test]
+fn every_fixture_raises_exactly_its_expected_checks() {
+    let mut wrong = Vec::new();
+    for (name, fixture) in fixtures() {
+        let file = format!("{name}.pdf");
+        let path = [
+            repo().join("tests/fixtures/pdfs").join(&file),
+            repo().join("tests/fixtures/pdfx").join(&file),
+        ]
+        .into_iter()
+        .find(|p| p.is_file())
+        .unwrap();
+        let bytes = std::fs::read(path).unwrap();
+        for name_of_level in &fixture.levels {
+            let report = verify(&file, &bytes, level(name_of_level));
+            let found: BTreeSet<&str> = report.findings.iter().map(|f| f.check.id).collect();
+            let expected: BTreeSet<&str> = fixture.expect.keys().map(String::as_str).collect();
+            if found != expected {
+                wrong.push(format!(
+                    "{name} at {name_of_level}: expected {expected:?}, found {found:?}"
+                ));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

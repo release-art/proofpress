@@ -31,7 +31,10 @@ record it as not conforming to that one rule).
 | 1.5 | `a8ebbac` | `checks::verify` (judges nothing yet), Gherkin steps, `x4-base.feature` on `x4-good` |
 | 1.6 | `08c3e64`; test-db `a7422dcc` | `bin/suites/pdfx.sh`, `expectations/pdfx.toml` (39 files) |
 | 1.7 | `c2aa73a` | maturin, `proof_pdf._internal._core`, release wheels, wheel checks, `checks::guarded` |
-| 2.1, slice 1 | this commit | Tiers 1-5 read files: lexer, object events, filters, xref chain, the walk at open; 15 structure checks |
+| 2.1, slice 1 | `a9da02e` | Tiers 1-5 read files: lexer, object events, filters, xref chain, the walk at open; 15 structure checks |
+| (fixtures) | `6c77c09` | `pdfraw.tex` wrote `/Filter` twice; samples rebuilt |
+| (owner request) | `33abe20` | Windows x64 in CI and release |
+| 2.2, part 1 | this commit | 8 X-4 checks implemented (6.6, 6.8, 6.15, 6.25 objects) with 8 negative fixtures and 4 feature files |
 
 ## Register coverage
 
@@ -39,9 +42,9 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 0 | 138 | 3 |
+| PDF/X-4 and X-4p | 8 | 130 | 3 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House print checks | 0 | 37 | 1 (`internal`) |
+| House and structure checks | 0 | 52 | 1 (`internal`) |
 
 ## Gates
 
@@ -100,6 +103,10 @@ Oracle consultations:
   `file::refusal_finding`, ...). The `Limits` defaults are provisional until task 2.3 measures them.
 - `catch_unwind` is in place as `checks::guarded` with its `internal` check (status skip: no file is meant to trigger
   it); `verify` wires it in with the first real check.
+- Task 2.2: `x4.limits.lexical` (numbers, strings, names) waits for tier 6: content-stream strings need inline images
+  read correctly, so all of 6.25's lexical row moves to phase 4 rather than shipping half. `x4.limits.objects` counts the
+  distinct object numbers the sections list as in use (Table C.1: indirect objects in a file). `x4.pdf-reference.conforms`
+  is coded (every tier error becomes a 6.1.1 finding) but stays `todo` until the content and font tiers report too.
 - The extension is `proof_pdf._internal._core`, not `proof_pdf._core`: every private module lives in `_internal`.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.

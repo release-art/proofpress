@@ -7,3 +7,36 @@
 [x4-good]
 levels = ["x4"]
 expect = {}
+
+# ---- One-defect negatives of x4-good (tests/fixtures/build_pdfs.py).
+[x4-lzw]
+levels = ["x4"]
+expect = { "x4.filter.no-lzw" = "the page content is LZW-encoded (6.8)" }
+
+[x4-crypt-filter]
+levels = ["x4"]
+expect = { "x4.filter.no-crypt" = "the page content uses the Identity Crypt filter (6.8)" }
+
+[x4-filter-abbreviated]
+levels = ["x4"]
+expect = { "x4.filter.standard-only" = "the page content names its filter /Fl, an abbreviation only inline images may use (6.8)" }
+
+[x4-perms]
+levels = ["x4"]
+expect = { "x4.perms.ur-only" = "/Perms holds /DocMDP (6.15)" }
+
+[x4-name-not-utf8]
+levels = ["x4"]
+expect = { "x4.names.utf8" = "the font name /Proof#FF decodes to bytes that are not UTF-8 (6.6); twice, as BaseFont and FontName" }
+
+[x4-name-unescaped]
+levels = ["x4"]
+expect = { "x4.names.hex-escaped" = "the font name holds the UTF-8 bytes of an e-acute written raw, not as #C3#A9 (6.6)" }
+
+[x4-encrypted]
+levels = ["x4"]
+expect = { "x4.encrypt.absent" = "the file is encrypted with an empty password (6.15)", "file.encrypted" = "the reader refuses it, which is what makes it fail 6.15" }
+
+[x4-too-many-objects]
+levels = ["x4"]
+expect = { "x4.limits.objects" = "an update lists 8,388,608 objects in use, one more than Table C.1 of PDF 1.6 allows (6.25)" }
