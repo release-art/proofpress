@@ -49,6 +49,16 @@ def make_pdf(tmp_path):
     return _make
 
 
+@pytest.fixture
+def password_pdf(tmp_path) -> pathlib.Path:
+    """A one-page PDF that opens only with a password (pikepdf raises PasswordError, not PdfError)."""
+    path = tmp_path / "locked.pdf"
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.save(path, encryption=pikepdf.Encryption(user="secret", owner="secret"))
+    return path
+
+
 def xmp_bytes(*, pdfx: bool = True) -> bytes:
     """A well-formed XMP packet, optionally carrying the PDF/X version key.
 

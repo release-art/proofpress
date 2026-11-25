@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--pdfx-version`, `Profile.pdfx_version`, `PdfxVersion` and the config key `pdfx-version`: x1a and x3 had no checks, so
   selecting them could only fail. The x4 rule table is unchanged; `pdfx/COVERAGE.md` and its generator are gone too.
 
+### Fixed
+
+- A password-protected PDF no longer crashes `verify`, `inspect`, `extract` or `crop`: it is reported as a file that cannot
+  be opened, like a corrupt one. pikepdf's `PasswordError` is not a `PdfError`, so it escaped.
+- `--allow-k-only` no longer passes a CMYK JPEG that prints full C, M and Y. The check read Pillow's pixels, which undo the
+  inversion of Adobe CMYK JPEGs; a PDF reader leaves that to `/Decode`, so a JPEG without `/Decode [1 0 ...]` prints
+  inverted. The samples are now judged as Ghostscript prints them.
+
 ## [0.3.8] - 2026-11-06
 
 ### Added

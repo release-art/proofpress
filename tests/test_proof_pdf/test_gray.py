@@ -179,7 +179,7 @@ class TestImages:
             Image.new("CMYK", (8, 8), channels).save(buf, "JPEG", quality=95)
             return buf.getvalue()
 
-        def image(data):
+        def image(data, *, inverted=True):
             def make(p):
                 made = p.make_stream(
                     data,
@@ -191,13 +191,16 @@ class TestImages:
                     ColorSpace=pikepdf.Name.DeviceCMYK,
                     Filter=pikepdf.Name.DCTDecode,
                 )
-                made.Decode = [1, 0, 1, 0, 1, 0, 1, 0]  # Pillow writes Adobe (inverted) CMYK, as LaTeX includes it
+                if inverted:  # Pillow writes Adobe (inverted) CMYK; LaTeX includes it with this /Decode
+                    made.Decode = [1, 0, 1, 0, 1, 0, 1, 0]
                 return p.make_indirect(made)
 
             return make
 
         assert _check(_pdf_with_image(image(jpeg((0, 0, 0, 180)))), k_only=True) == []
         assert _flagged(_check(_pdf_with_image(image(jpeg((0, 150, 220, 0)))), k_only=True))
+        # Without /Decode a reader prints the stored (inverted) samples: near-full C, M and Y, whatever Pillow shows.
+        assert _flagged(_check(_pdf_with_image(image(jpeg((0, 0, 0, 180)), inverted=False)), k_only=True))
 
     def test_icc_and_indexed_cmyk_images_are_never_k_only(self):
         icc = lambda p: _cmyk_image(p, b"\x00" * 16, space=_icc_space(p, FAKE_CMYK, 4))  # noqa: E731

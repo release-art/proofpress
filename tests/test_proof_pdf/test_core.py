@@ -74,6 +74,12 @@ class TestVerifyFile:
         report = await core.verify_file(broken, Profile())
         assert any("corrupt or encrypted" in f.message for f in report.findings)
 
+    async def test_password_protected_pdf_is_a_finding_not_a_crash(self, password_pdf, mocker):
+        mocker.patch.object(verapdf, "available", return_value=True)
+        mocker.patch.object(verapdf, "run", return_value='{"report": {"jobs": []}}')
+        report = await core.verify_file(password_pdf, Profile())
+        assert any("corrupt or encrypted" in f.message for f in report.findings)
+
     @pytest.mark.parametrize(
         ("profile", "absent"),
         [

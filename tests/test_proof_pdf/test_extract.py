@@ -113,6 +113,10 @@ class TestCli:
         result = runner.invoke(cli.pdf_app, ["extract", str(PDFS / "corrupt.pdf"), "--out", str(tmp_path)])
         assert result.exit_code == 1
 
+    def test_a_password_protected_file_fails_the_run(self, runner, tmp_path, password_pdf):
+        result = runner.invoke(cli.pdf_app, ["extract", str(password_pdf), "--out", str(tmp_path / "out")])
+        assert result.exit_code == 1 and "cannot open" in result.output
+
 
 def test_artwork_smaller_than_the_minimum_page_size_is_still_written(tmp_path):
     pdf = pikepdf.new()

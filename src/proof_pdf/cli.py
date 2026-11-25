@@ -330,7 +330,7 @@ def inspect_cmd(
     for target in targets:
         try:
             facts = asyncio.run(inventory.inspect_file(target, proof_profile=proof_profile, with_contrast=contrast))
-        except pikepdf.PdfError as exc:
+        except (pikepdf.PdfError, pikepdf.PasswordError) as exc:
             typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             failed = True
             continue
@@ -412,7 +412,7 @@ def extract_cmd(
             typer.secho(f"FAIL -- Ghostscript could not render {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             failed = True
             continue
-        except pikepdf.PdfError as exc:
+        except (pikepdf.PdfError, pikepdf.PasswordError) as exc:
             typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             failed = True
             continue
@@ -449,7 +449,7 @@ def crop_cmd(
     except ValueError as exc:
         typer.secho(f"FAIL -- {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from exc
-    except pikepdf.PdfError as exc:
+    except (pikepdf.PdfError, pikepdf.PasswordError) as exc:
         typer.secho(f"FAIL -- cannot open {_rel(file)}: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from exc
     typer.echo(f"wrote {_rel(target)}")

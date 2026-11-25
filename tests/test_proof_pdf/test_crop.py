@@ -86,6 +86,11 @@ class TestCli:
         )
         assert result.exit_code == 2
 
+    def test_a_password_protected_file_fails_the_run(self, runner, tmp_path, password_pdf):
+        args = ["crop", str(password_pdf), "--page", "1", "--box", "0,0,10,10", "--out", str(tmp_path / "o.pdf")]
+        result = runner.invoke(cli.pdf_app, args)
+        assert result.exit_code == 1 and "cannot open" in result.output
+
     def test_a_missing_page_fails_the_run(self, runner, tmp_path):
         args = ["crop", str(IMAGE_PDF), "--page", "9", "--box", "0,0,10,10", "--out", str(tmp_path / "o.pdf")]
         result = runner.invoke(cli.pdf_app, args)

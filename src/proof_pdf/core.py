@@ -151,7 +151,7 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                     max_dpi=profile.max_dpi,
                     max_stretch_pct=profile.max_stretch_pct,
                 )
-    except pikepdf.PdfError as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
+    except (pikepdf.PdfError, pikepdf.PasswordError) as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
         return [Finding("structure", Severity.ERROR, f"cannot open the PDF (corrupt or encrypted): {exc}")], False
     return findings, True
 

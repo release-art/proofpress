@@ -437,13 +437,20 @@ def _cmy_problem(image: pikepdf.Object) -> str | None:
     """Why a DeviceCMYK image is not K-only: it has C, M or Y ink, or its pixels cannot be read."""
     unreadable = "could not be decoded, so K-only cannot be confirmed"
     try:
+        if int(image.get("/BitsPerComponent", 0)) != 8:
+            return unreadable
         if _IMAGE_FILTERS & {str(f) for f in _filters(image)}:
             pil = pikepdf.PdfImage(typing.cast(pikepdf.Stream, image)).as_pil_image()
             if pil.mode != "CMYK":
                 return unreadable
-            used = [int(band[1]) for band in typing.cast(tuple, pil.getextrema())[:3]]
+            samples = pil.tobytes()
+            # Pillow inverts the samples of an Adobe CMYK JPEG (APP14 marker); a PDF reader does not, and leaves
+            # inversion to /Decode. Undo Pillow's so the samples are the ones Ghostscript prints from.
+            if "adobe" in pil.info:
+                samples = bytes(255 - b for b in samples)
         else:
-            used = _raw_ink(image)
+            samples = bytes(image.read_bytes())
+        used = _cmy_ink(image, samples)
     except pikepdf.PdfError, NotImplementedError, OSError, ValueError, SyntaxError, Image.DecompressionBombError:
         return unreadable
     if used is None:
@@ -456,16 +463,17 @@ def _filters(image: pikepdf.Object) -> list:
     return [] if filters is None else list(filters) if isinstance(filters, pikepdf.Array) else [filters]
 
 
-def _raw_ink(image: pikepdf.Object) -> list[int] | None:
-    """The highest C, M and Y sample of an 8-bit image with no image filter (0 where that plate is empty), else None."""
-    if int(image.get("/BitsPerComponent", 0)) != 8:
-        return None
-    data = bytes(image.read_bytes())
+def _cmy_ink(image: pikepdf.Object, samples: bytes) -> list[int] | None:
+    """The highest C, M and Y ink in 8-bit CMYK samples after the image's /Decode (0 where that plate is empty).
+
+    ``None`` when /Decode is not a plain or inverted mapping. The test is for exactly zero ink: a sample one code
+    from empty is ink, whatever a JPEG decoder's rounding (decoders differ by a code on the same file).
+    """
     decode = [float(v) for v in image.get("/Decode", [0, 1] * 4)]
     if len(decode) != 8 or any(d not in (0.0, 1.0) for d in decode):
         return None
     # An inverted channel (/Decode [1 0]) is empty when every sample is 255, so measure its distance from that.
-    return [max(((255 - b) if decode[2 * c] else b) for b in data[c::4]) if data else 0 for c in range(3)]
+    return [max(((255 - b) if decode[2 * c] else b) for b in samples[c::4]) if samples else 0 for c in range(3)]
 
 
 # --------------------------------------------------------- spot definitions ----

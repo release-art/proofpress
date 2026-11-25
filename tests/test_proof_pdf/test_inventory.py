@@ -109,6 +109,10 @@ class TestInspectCommand:
         assert result.exit_code == 1
         assert [pathlib.Path(r["path"]).name for r in json.loads(result.stdout)] == ["good.pdf"]
 
+    def test_a_password_protected_file_fails_the_run(self, runner, password_pdf):
+        result = runner.invoke(cli.pdf_app, ["inspect", str(password_pdf)])
+        assert result.exit_code == 1 and "cannot open" in result.output
+
     def test_no_targets_is_an_error(self, runner):
         assert runner.invoke(cli.pdf_app, ["inspect"]).exit_code == 1
 
