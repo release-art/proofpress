@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag v1.2.3: tests, then PyPI (via TestPyPI first), then a GitHub Release.
-# The tag is the version (pdm-backend scm). The same tag also triggers the Docker publish in image.yml.
+# Push a tag v1.2.3: tests, then a wheel per platform and the sdist, then PyPI (via TestPyPI first), then a GitHub Release.
+# The tag is the version: bin/rust/set-version.sh writes it into rust/Cargo.toml, which maturin reads. The same tag also
+# triggers the Docker publish in image.yml.
 on:
   push:
     tags: ["v*.*.*"]
@@ -9,8 +10,57 @@ on:
 jobs:
   test:
     uses: ./.github/workflows/ci.yml
-  publish:
+  wheels:
     needs: test
+    strategy:
+      matrix:
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.15"
+      - run: bin/rust/set-version.sh "${GITHUB_REF_NAME#v}"
+      # maturin runs cargo from the root, where rust/rust-toolchain.toml is not seen: pass the pinned toolchain.
+      - run: echo "RUST_TOOLCHAIN=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust/rust-toolchain.toml)" >> "$GITHUB_ENV"
+      - uses: PyO3/maturin-action@v1
+        with:
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          target: ${{ matrix.target }}
+          args: --release --out dist --interpreter python3.15
+          manylinux: auto
+      # Only OS libraries, and the tag's version: the single wheel needs proving, not assuming.
+      - run: for w in dist/*.whl; do bin/rust/check-wheel.sh "$w" "${GITHUB_REF_NAME#v}"; done
+      - name: Install on a clean interpreter and run it
+        run: |
+          python -m venv /tmp/clean && /tmp/clean/bin/pip install dist/*.whl
+          test "$(/tmp/clean/bin/proof-pdf --version)" = "proof-pdf ${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+  sdist:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: bin/rust/set-version.sh "${GITHUB_REF_NAME#v}"
+      - run: echo "RUST_TOOLCHAIN=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust/rust-toolchain.toml)" >> "$GITHUB_ENV"
+      - uses: PyO3/maturin-action@v1
+        with:
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+  publish:
+    needs: [wheels, sdist]
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -18,14 +68,10 @@ jobs:
       contents: write # the GitHub Release
     steps:
       - uses: actions/checkout@v6
-      - uses: pdm-project/setup-pdm@v4
+      - uses: actions/download-artifact@v4
         with:
-          python-version: "3.15"
-      - name: Build packages
-        # Pin the version from the tag so a dirty tree can't add a local segment PyPI rejects.
-        run: |
-          export PDM_BUILD_SCM_VERSION="${GITHUB_REF_NAME#v}"
-          pdm build
+          path: dist
+          merge-multiple: true
       # The Sigstore action pip-installs its own tooling into whatever `python` is on PATH; its dependency pydantic-core
       # has no 3.15 wheels yet and fails to build from source. The wheel we ship is already built, so sign under 3.13.
       - uses: actions/setup-python@v6

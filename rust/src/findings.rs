@@ -47,6 +47,22 @@ pub enum Level {
     Print,
 }
 
+impl Level {
+    /// The level a command line or a profile names: `x4`, `x4p`, `x5g`, `x5pg`, `x5n` or `print`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "x4" => Some(Self::X4),
+            "x4p" => Some(Self::X4p),
+            "x5g" => Some(Self::X5g),
+            "x5pg" => Some(Self::X5pg),
+            "x5n" => Some(Self::X5n),
+            "print" => Some(Self::Print),
+            _ => None,
+        }
+    }
+}
+
 /// Whether a check exists in code yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
@@ -283,6 +299,17 @@ mod tests {
             }]
         );
         assert!(ALL.iter().any(|c| c.applies.contains(&Level::Print)));
+    }
+
+    #[test]
+    fn levels_by_name() {
+        let names = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"];
+        let levels = names.map(Level::from_name);
+        assert_eq!(
+            levels,
+            [Level::X4, Level::X4p, Level::X5g, Level::X5pg, Level::X5n, Level::Print].map(Some)
+        );
+        assert_eq!(Level::from_name("x3"), None);
     }
 
     #[test]

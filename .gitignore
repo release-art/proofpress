@@ -249,3 +249,7 @@ tmp/
 .vscode/
 .pdm-python
 
+
+# The Rust extension, built in place by maturin
+src/proof_pdf/_internal/_core.*.so
+src/proof_pdf/_internal/_core.*.pyd

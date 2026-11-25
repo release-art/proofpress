@@ -62,20 +62,17 @@ pythonVersion = "3.15"
 [tool.pdm]
 distribution = true
 
-# The version is the git tag (v1.2.3). No tag, or no .git (the Docker build), falls back to 0.0.0
-# unless PDM_BUILD_SCM_VERSION says otherwise.
-[tool.pdm.version]
-source = "scm"
-tag_regex = '^v(?P<version>\d+\.\d+\.\d+.*)$'
-fallback_version = "0.0.0"
-
-[tool.pdm.build]
-package-dir = "src"
-includes = ["src/proof_pdf"]
-
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["maturin>=1.9.4,<2"]
+build-backend = "maturin"
+
+# The Rust core is the extension module proof_pdf._internal._core, built from rust/ with its python feature. The version is
+# rust/Cargo.toml's: 0.0.0 in the tree, set from the tag (v1.2.3) by bin/rust/set-version.sh when releasing.
+[tool.maturin]
+manifest-path = "rust/Cargo.toml"
+features = ["python"]
+module-name = "proof_pdf._internal._core"
+python-source = "src"
 
 [tool.pytest.ini_options]
 addopts = "-v -l --color=yes --cov=proof_pdf --cov-report term-missing --no-cov-on-fail"

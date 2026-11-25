@@ -8,8 +8,18 @@ description = "The Rust core of proof-pdf: a strict PDF reader and the print che
 repository = "https://github.com/release-art/proofpress"
 publish = false
 
+[lib]
+# cdylib for the Python extension (maturin, with the python feature), rlib for the tests and the command line.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# The Python module proof_pdf._core, built by maturin.
+python = ["dep:pyo3", "dep:serde_json"]
+
 [dependencies]
+pyo3 = { version = "0.30.1", optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", optional = true }
 
 [dev-dependencies]
 cucumber = "0.23.0"
@@ -60,3 +70,4 @@ overflow-checks = true
 [build-dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.2.3"
+

@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.15"
+      # pdm builds the Rust extension with maturin, which runs cargo from the root: make the pinned toolchain the default.
+      - run: rustup toolchain install && rustup default "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+        working-directory: rust
       - run: python -m pip install pdm
       - run: pdm install --with dev
       - run: pdm run ruff check src tests
@@ -31,6 +34,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      # The python feature's tests link libpython 3.15.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.15"
+      - run: echo "PYO3_PYTHON=$(which python)" >> "$GITHUB_ENV"
       - run: rustup toolchain install # the version pinned in rust/rust-toolchain.toml
         working-directory: rust
       - uses: Swatinem/rust-cache@v2
@@ -56,6 +64,8 @@ jobs:
         with:
           python-version: "3.15"
       - run: sudo apt-get update && sudo apt-get install -y ghostscript
+      - run: rustup toolchain install && rustup default "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+        working-directory: rust
       - run: python -m pip install pdm
       - run: pdm install --with dev
       - run: bin/suites/fetch.sh

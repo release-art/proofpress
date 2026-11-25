@@ -42,15 +42,29 @@ RUN curl -fsSL --retry 5 --retry-delay 10 https://software.verapdf.org/rel/1.30/
  && unzip -q /tmp/v.zip -d /tmp/v && java -jar /tmp/v/*/verapdf-izpack-installer-*.jar /tmp/auto-install.xml \
  && rm -rf /tmp/v /tmp/v.zip
 
-# ---- proof-pdf's venv, from the lockfile ------------------------------------------
-FROM ${PYTHON_IMAGE} AS app
-# The release workflow passes the tag; there is no .git in the build context to read it from.
-ARG PKG_VERSION=0.0.0
-ENV PDM_BUILD_SCM_VERSION=${PKG_VERSION}
+# ---- Rust and pdm, to build proof-pdf's extension -------------------------------------
+# maturin builds proof_pdf._internal._core from rust/ with the toolchain pinned in rust/rust-toolchain.toml.
+FROM ${PYTHON_IMAGE} AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates build-essential \
+ && rm -rf /var/lib/apt/lists/*
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH
+RUN curl -fsSL --retry 5 https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+COPY rust/rust-toolchain.toml /tmp/rust-toolchain.toml
+# maturin runs cargo from /app, where rustup cannot see rust/rust-toolchain.toml, so the pinned toolchain is the default.
+RUN cd /tmp && rustup toolchain install && rustup default "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" \
+ && rm rust-toolchain.toml
 RUN pip install --no-cache-dir pdm
 WORKDIR /app
+# The release workflow passes the tag; there is no .git in the build context to read it from.
+ARG PKG_VERSION=0.0.0
 COPY pyproject.toml pdm.lock README.md LICENSE NOTICE /app/
+COPY rust /app/rust
+COPY bin/rust/set-version.sh /app/bin/rust/set-version.sh
 COPY src /app/src
+RUN bin/rust/set-version.sh "${PKG_VERSION}"
+
+# ---- proof-pdf's venv, from the lockfile ------------------------------------------
+FROM builder AS app
 RUN pdm install --frozen-lockfile --prod --no-editable
 
 # ---- lualatex ---------------------------------------------------------------------
@@ -109,13 +123,7 @@ CMD ["--help"]
 # ---- test (never published) ---------------------------------------------------------
 # The suite inside the real image: the dev dependencies on top of `full`, with real veraPDF and Ghostscript, so the
 # integration tests run instead of skipping. bin/docker/test.sh builds and runs it.
-FROM ${PYTHON_IMAGE} AS test-venv
-ARG PKG_VERSION=0.0.0
-ENV PDM_BUILD_SCM_VERSION=${PKG_VERSION}
-RUN pip install --no-cache-dir pdm
-WORKDIR /app
-COPY pyproject.toml pdm.lock README.md LICENSE NOTICE /app/
-COPY src /app/src
+FROM builder AS test-venv
 RUN pdm install --frozen-lockfile --dev
 
 FROM full AS test

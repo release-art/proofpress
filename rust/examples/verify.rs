@@ -20,16 +20,9 @@ fn main() {
         eprintln!("usage: verify <x4|x4p|x5g|x5pg|x5n> <file.pdf>");
         std::process::exit(64);
     };
-    let level = match level.as_str() {
-        "x4" => Level::X4,
-        "x4p" => Level::X4p,
-        "x5g" => Level::X5g,
-        "x5pg" => Level::X5pg,
-        "x5n" => Level::X5n,
-        other => {
-            eprintln!("unknown level {other}");
-            std::process::exit(64);
-        }
+    let Some(level) = Level::from_name(level) else {
+        eprintln!("unknown level {level}");
+        std::process::exit(64);
     };
     let bytes = std::fs::read(path).unwrap_or_else(|e| {
         eprintln!("{path}: {e}");

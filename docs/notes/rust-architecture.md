@@ -411,8 +411,10 @@ Agreed 2026-11-25, for the crate in `rust/`.
 - **Test fixtures.** Rust tests read the existing `tests/fixtures/pdfs/`, not a copy. Event streams and findings get snapshot
   tests (`insta`) once they exist. The corpus in `proof-pdf-test-db` stays out of CI.
 
-To settle in stage 1: whether PyO3's generated code is compatible with `forbid(unsafe_code)` (it may need `deny`, which can
-be overridden locally; not verified); and the maturin layout (the extension's module name, `crate-type = ["cdylib", "rlib"]`).
+Settled in pdfx-plan task 1.7: PyO3 0.30's generated code compiles under `forbid(unsafe_code)`. One crate with a `python`
+feature, `crate-type = ["cdylib", "rlib"]`; maturin builds the extension as `proof_pdf._internal._core` (private, like every
+other non-public module), and the version is `rust/Cargo.toml`'s, set from the tag when releasing. The binding is tested in
+Rust, which links libpython, so it counts towards the coverage gate like everything else.
 
 ## Taken from other tools
 

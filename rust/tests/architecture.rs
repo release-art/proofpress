@@ -33,6 +33,8 @@ const ALLOWED: &[(&str, &[&str])] = &[
         "checks",
         &["pipeline", "findings", "document", "common", "content", "graphics"],
     ),
+    // The Python module sits beside the tiers: it hands whole files to the checks and reports back.
+    ("python", &["findings", "checks"]),
     (
         "writer",
         &[

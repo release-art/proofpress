@@ -13,5 +13,7 @@ pub mod document;
 mod file;
 mod filters;
 pub mod graphics;
+#[cfg(feature = "python")]
+mod python;
 mod syntax;
 mod writer;

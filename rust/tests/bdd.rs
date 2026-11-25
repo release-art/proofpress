@@ -99,13 +99,7 @@ fn fixture(world: &mut Pipeline, name: String) {
 
 #[when(regex = r"^it is verified as PDF/X-(4|4p|5g|5pg|5n)$")]
 fn verified(world: &mut Pipeline, level: String) {
-    let level = match level.as_str() {
-        "4" => Level::X4,
-        "4p" => Level::X4p,
-        "5g" => Level::X5g,
-        "5pg" => Level::X5pg,
-        _ => Level::X5n,
-    };
+    let level = Level::from_name(&format!("x{level}")).unwrap();
     world.report = Some(verify(&world.fixture.0, &world.fixture.1, level));
 }
 

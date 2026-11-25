@@ -1876,3 +1876,12 @@ clauses = []
 severity = "error"
 applies = ["print"]
 status = "todo"
+
+[[check]]
+id = "internal"
+title = "The engine itself failed on this file"
+clauses = []
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+status = "skip"
+reason = "Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it"

@@ -25,14 +25,7 @@ fn fixtures() -> BTreeMap<String, Fixture> {
 }
 
 fn level(name: &str) -> Level {
-    match name {
-        "x4" => Level::X4,
-        "x4p" => Level::X4p,
-        "x5g" => Level::X5g,
-        "x5pg" => Level::X5pg,
-        "x5n" => Level::X5n,
-        other => panic!("unknown level {other:?} in expected.toml"),
-    }
+    Level::from_name(name).unwrap_or_else(|| panic!("unknown level {name:?} in expected.toml"))
 }
 
 /// Whether `fixture` is verified at a level `check` applies to.

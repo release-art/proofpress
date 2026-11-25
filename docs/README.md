@@ -20,6 +20,7 @@ Newest first. A decision changes only by a new line here.
 
 | Date | Decision | Where |
 |---|---|---|
+| 2026-11-25 | One crate with a `python` feature, as the brief proposed: maturin builds `proof_pdf._internal._core` from `rust/`, the package's version is the crate's, and releases ship wheels for macOS arm64 and Linux x86-64 and arm64. PyO3 works under `forbid(unsafe_code)` | Plan, task 1.7; architecture note |
 | 2026-11-25 | The Ghent Output Suite's PDF/X-4 positives are the 35 of its 39 X-4 claims that pdfToolbox 17.1 passes, the four signed test pages among them. GWG151 and GWG152 do not conform to 6.24 (their `/Order` leaves out content OCGs) and are negatives for `x4.oc.order-complete`; the pdfx-oracle agreed. The other two fail many rows | Plan, done criteria; test-db `expectations/pdfx.toml` |
 | 2026-11-25 | Both Altona technical2 X-4 files do not conform to ISO 15930-7 6.4.3.3: a `DefaultCMYK` equal to the output intent's profile remaps two painted DeviceCMYK images each (6.4.3.1). Classified "the file does not conform": they are expected to raise only `x4.icc.cmyk-not-intent-profile`, twice each, and stay positives for every other row. pdfToolbox 17.1 and the pdfx-oracle agree; approved by the owner | Plan, done criteria and task 3.6; progress file |
 | 2026-11-25 | PDF/X-4 6.4.2.1 and 6.4.3.3 accept an ICC profile of major version 2 or 4, any minor version; 5 and anything else fails. The clauses' list of ICC editions is read as the families they belong to. Evidence: pdfToolbox 17.1's "Verify compliance with PDFX-4" passes `x4-good` with its output profile at 2.0, 2.1, 2.4, 4.2, 4.3 and 4.4 and fails it at 5.0; the Ghent positives (2.4) and Altona (2.0) would fail any narrower reading. Agrees with the pdfx-oracle | Plan, task 0.4; progress file |
@@ -40,7 +41,7 @@ Newest first. A decision changes only by a new line here.
 | 2026-11-06 | Port the core to Rust. The CLI becomes Rust, and the Python package calls the same core through PyO3 | Brief |
 
 Proposed in the brief and not yet confirmed: our own small PDF writer instead of `lopdf`; `hayro` for previews; `lcms2`, which is C,
-for colour; one crate with a `python` feature.
+for colour.
 
 ## Open questions
 

@@ -9,10 +9,14 @@ bin/autoformat.sh                     # ruff format, ruff check --fix, pyright
 bin/test.sh                           # pytest with coverage
 ```
 
+- `pdm install` builds the Rust core (`rust/`) into the extension `proof_pdf._internal._core` with maturin, so it needs
+  `rustup` too; the toolchain is the one pinned in `rust/rust-toolchain.toml`. Rebuild after changing Rust with
+  `pdm install` again.
 - Code is formatted and linted with ruff, type-checked with pyright (0 errors), and runs on Python 3.15.
 - The Rust core lives in `rust/`, the port described in `docs/briefs/rust-port.md`. Install `rustup` (the toolchain version is
   pinned in `rust/rust-toolchain.toml`) and `cargo-nextest`, `cargo-llvm-cov` and `cargo-deny`, then run `bin/rust/check.sh`
-  (`--fix` formats first). It runs rustfmt, clippy with the pedantic set denied, `cargo doc`, cargo-deny (licences,
+  (`--fix` formats first). The `python` feature's tests link libpython 3.15, found through `PYO3_PYTHON` (pdm's
+  `.venv` by default). It runs rustfmt, clippy with the pedantic set denied, `cargo doc`, cargo-deny (licences,
   advisories, sources), the tests, and a **100% coverage gate** on lines, regions and functions, with no exclusions.
   - Unit and property tests (`proptest`) sit next to the code, in `#[cfg(test)]` modules.
   - Tests with mocks (`mockall`) go in `rust/tests/`, which coverage does not count, so generated mock code cannot dilute it.

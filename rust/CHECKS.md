@@ -235,3 +235,4 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `output-condition` | The output intent names the expected condition |  | error | print | todo |
 | `pdfa` | veraPDF passes the PDF/A flavour |  | error | print | todo |
 | `structure` | The file can be read |  | error | print | todo |
+| `internal` | The engine itself failed on this file |  | error | x4, x4p, x5g, x5pg, x5n, print | skip: Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it |

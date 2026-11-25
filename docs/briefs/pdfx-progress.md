@@ -87,6 +87,14 @@ Oracle consultations:
   the mixing-hints recommendation); the register's §2 bullets are not entries. X-5 levels appear in `applies` only on
   X-5 rows for now; which X-4 rows each X-5 level inherits is task 8.1.
 - The check catalogue lives in a new base module, `findings`, not in `checks`: every tier raises findings (task 1.4).
+- Task 1.7: the parity gate in CI waits for the first ported check (phase 4): with nothing ported there is nothing to
+  compare, and the spike's `check_parity.py` compares the spike, not this crate. Wheels are proved locally (macOS arm64:
+  built from the sdist, installed in a clean venv, only OS libraries, CLI runs); the CI matrix (manylinux x86-64 and
+  arm64, macOS arm64) is written but cannot run until the owner pushes, so "a wheel installs from CI on a clean
+  machine" is unverified.
+- `catch_unwind` is in place as `checks::guarded` with its `internal` check (status skip: no file is meant to trigger
+  it); `verify` wires it in with the first real check.
+- The extension is `proof_pdf._internal._core`, not `proof_pdf._core`: every private module lives in `_internal`.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 

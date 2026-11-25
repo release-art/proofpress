@@ -6,6 +6,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../rust"
 
+# The python feature links libpython 3.15 into the tests; PyO3 finds it through this interpreter (pdm's, by default).
+if [[ -z "${PYO3_PYTHON:-}" && -x ../.venv/bin/python ]]; then
+  export PYO3_PYTHON="$PWD/../.venv/bin/python"
+fi
+
 if [[ "${1:-}" == "--fix" ]]; then
   # rust/CHECKS.md is build.rs's listing of checks.toml, committed so it can be read without building.
   cargo build -q
