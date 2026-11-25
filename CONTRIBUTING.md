@@ -18,6 +18,11 @@ bin/test.sh                           # pytest with coverage
   - Tests with mocks (`mockall`) go in `rust/tests/`, which coverage does not count, so generated mock code cannot dilute it.
   - Behaviour is described in Gherkin under `rust/tests/features/`, run by cucumber (`rust/tests/bdd.rs`).
   - The library may not panic on input: `unwrap`, `expect`, `panic!` and slice indexing are denied outside tests.
+  - Every check is an entry in `rust/checks.toml` (id, title in our own words, the clauses it may cite, severity, the
+    levels it applies to, and `implemented`, `todo` or `skip` with a reason). `rust/build.rs` refuses a malformed entry
+    or a clause missing from `rust/clauses/`, and turns the file into one constant per check and `rust/CHECKS.md`,
+    which `bin/rust/check.sh --fix` refreshes. The clause lists are numbers only, made by `bin/rust/clauses.py` from
+    the standards in `proof-pdf-test-db`.
   - Tiers depend only downwards; `rust/tests/architecture.rs` holds the map of which module may use which, and a new module
     must be added to it. The other conventions (what is `pub`, errors, British spelling, no logging, fixtures) are under
     "Code conventions" in `docs/notes/rust-architecture.md`.

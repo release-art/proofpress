@@ -2,11 +2,14 @@
 # bin/rust/check.sh   every gate for the Rust crate: format, lints, docs, licences, tests, and 100% coverage.
 #
 # Needs the toolchain from rust/rust-toolchain.toml plus cargo-nextest, cargo-llvm-cov and cargo-deny on PATH.
-# `--fix` formats and applies clippy's fixes first.
+# `--fix` refreshes rust/CHECKS.md, formats and applies clippy's fixes first.
 set -euo pipefail
 cd "$(dirname "$0")/../../rust"
 
 if [[ "${1:-}" == "--fix" ]]; then
+  # rust/CHECKS.md is build.rs's listing of checks.toml, committed so it can be read without building.
+  cargo build -q
+  cp "$(ls -t target/debug/build/proof-pdf/*/out/CHECKS.md | head -1)" CHECKS.md
   cargo fmt
   cargo clippy --all-targets --all-features --fix --allow-dirty --allow-staged
 fi

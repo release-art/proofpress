@@ -312,8 +312,9 @@ fonts helper, for glyph presence and width consistency.
 
 ## Checks, profiles and reports
 
-- **The check list is data:** a checked-in `checks.toml`, read at build time, generates the check enum, the README's table and
-  `--list-checks` (text, and `--json`). Each entry has an id (kebab-case, stable, never reused), `aliases` for old ids, a title, the
+- **The check list is data:** a checked-in `checks.toml`, read at build time, generates the check table, the README's table and
+  `--list-checks` (text, and `--json`). Settled in pdfx-plan task 1.1: each check is a `&Check` constant (`X4_TRAPPED_PRESENT`)
+  in a list `ALL`, with no generated branches, so the coverage gate has nothing to chase and a misspelt check does not compile. Each entry has an id (kebab-case, stable, never reused), `aliases` for old ids, a title, the
   clauses it may cite, a default severity, and its parameters, each with a type and no default unless the entry gives one with a
   reason and a clause.
 - **`proof-pdf.toml`** starts with `schema = 1`; a higher number is refused. A profile may `extends` one other, merged key by key, the
@@ -406,8 +407,7 @@ Agreed 2026-11-25, for the crate in `rust/`.
   tests (`insta`) once they exist. The corpus in `proof-pdf-test-db` stays out of CI.
 
 To settle in stage 1: whether PyO3's generated code is compatible with `forbid(unsafe_code)` (it may need `deny`, which can
-be overridden locally; not verified); keeping the code generated from `checks.toml` free of branches, since every generated
-branch must be covered; and the maturin layout (the extension's module name, `crate-type = ["cdylib", "rlib"]`).
+be overridden locally; not verified); and the maturin layout (the extension's module name, `crate-type = ["cdylib", "rlib"]`).
 
 ## Taken from other tools
 

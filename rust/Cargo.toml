@@ -51,3 +51,7 @@ broken_intra_doc_links = "deny"
 [profile.release]
 # An overflow on hostile input panics (and becomes an internal finding) instead of wrapping into a wrong answer.
 overflow-checks = true
+
+[build-dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.2.3"
