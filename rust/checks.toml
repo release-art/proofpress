@@ -156,7 +156,7 @@ title = "Device colour matches the output intent's family"
 clauses = ["iso-15930-7:6.4.3.2", "iso-15930-7:6.4.2.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.icc.profile-version"
@@ -164,7 +164,7 @@ title = "ICCBased profiles are ICC version 2 or 4"
 clauses = ["iso-15930-7:6.4.3.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.icc.overprint-mode-zero"
@@ -172,7 +172,7 @@ title = "Overprinted four-channel ICC colour uses overprint mode 0"
 clauses = ["iso-15930-7:6.4.3.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.icc.cmyk-not-intent-profile"
@@ -180,7 +180,7 @@ title = "Four-channel ICC colour does not reuse the intent profile"
 clauses = ["iso-15930-7:6.4.3.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.colorants-entry"
@@ -261,7 +261,7 @@ title = "Spot alternate spaces follow the colour rules"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.font.embedded"

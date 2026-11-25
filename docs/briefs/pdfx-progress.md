@@ -15,9 +15,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 4** (content, page model and colour): task 4.1, tier 6, in progress. The content reader is done (inline
-  images measured, never guessed), with the 6.19 and 6.23 rows and three house content checks. Next: forms with one
-  ancestor set and the page's resources as their fallback, then tier 7 (task 4.2).
+- **Phase 4** (content, page model and colour): tasks 4.1 (tier 6), 4.2 (tier 7, the colour part) and 4.3's first rows
+  done. Next: the spot rows of 6.4.3.4, transparency (6.20), then JPEG 2000 (4.4) and pre-separated pages (4.5).
 
 ## Done
 
@@ -52,7 +51,8 @@ record it as not conforming to that one rule).
 | 3.5, 3.6 | `4f2c410` | 4 optional content checks (6.24), 2 annotation checks (6.17), 3 TrapNet checks (6.9), with 9 fixtures |
 | 3.2 (rest) | `3820c19` | `x4.xmp.conforms` (value types of the predefined schemas) and `x4.info.unlisted-not-in-predefined-schema`; `x4.image.alternates-same-content` is a `skip` |
 | 3.3 (registry) | `d63e3d9`; test-db `61b8b555` | The three ICC registry rows, with the registry's 73 reference names built in; 3 fixtures |
-| 4.1 (part) | this commit; test-db | Tier 6 reads content streams: operands across streams, BX/EX, inline images ended by /L, their size, or the first filter's end-of-data marker (JPEG walked, CCITT decoded with hayro-ccitt); 6.19, 6.23 and 3 house content checks with 9 fixtures |
+| 4.1 (part) | `d15e3a9`; test-db `1117700d` | Tier 6 reads content streams: operands across streams, BX/EX, inline images ended by /L, their size, or the first filter's end-of-data marker (JPEG walked, CCITT decoded with hayro-ccitt); 6.19, 6.23 and 3 house content checks with 9 fixtures |
+| 4.2, 4.3 (part) | this commit | Tier 7 walks pages with a graphics state: paint events with colour space, role, overprint and OPM, `Default` spaces applied, forms and coloured patterns walked with one ancestor set; 5 colour rows (6.4.3.2, 6.4.3.3, 6.4.3.4's alternates) with 6 fixtures; `md5` crate for profile identity |
 
 ## Register coverage
 
@@ -60,7 +60,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 86 | 51 | 4 |
+| PDF/X-4 and X-4p | 91 | 46 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 19 | 37 | 1 (`internal`) |
 
@@ -203,6 +203,11 @@ Oracle consultations:
   After `ID`, CR LF is accepted as the one white-space byte only when the data then ends exactly at `EI` and the
   one-byte reading does not. Over 4,484 corpus files the reader leaves 13 contents unread, each a broken test file
   (bomb, JPX tests, deliberate syntax errors, a wrong `/L`).
+- Task 4.2: tier 7 carries what the colour rows need; geometry (CTM, bounding boxes, clips), soft-mask content, Type 3
+  glyph procedures and annotation appearances come with the checks that read them. Each colour check walks the pages
+  again; the suite stays at about a second for the 39 positives, so a shared walk waits until it matters.
+- Task 4.3: Altona's two `x4.icc.cmyk-not-intent-profile` hits each now come from the Rust evaluator (`DefaultCMYK` on
+  the intent's profile), matching test-db's expectations; no Ghent positive raises a colour finding.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 

@@ -536,6 +536,61 @@ def _x4_page(extra: bytes) -> pikepdf.Pdf:
     return pdf
 
 
+def _x4_painted(
+    paint: bytes, spaces: dict[str, Callable[[pikepdf.Pdf], pikepdf.Object]], gstate: pikepdf.Dictionary | None = None
+) -> pikepdf.Pdf:
+    """x4-good with ``paint`` appended to its page content, the colour spaces ``spaces`` (each made from the PDF) in
+    its resources, and ``gstate`` as the ExtGState /GS: one 6.4.3 defect per fixture."""
+    pdf = _x4_page(paint)
+    resources = pdf.pages[0].obj.Resources
+    resources["/ColorSpace"] = pikepdf.Dictionary({f"/{k}": make(pdf) for k, make in spaces.items()})
+    if gstate is not None:
+        resources["/ExtGState"] = pikepdf.Dictionary(GS=pdf.make_indirect(gstate))
+    return pdf
+
+
+def _icc_space(pdf: pikepdf.Pdf, *, version: int = 2, changed: bool = True) -> pikepdf.Object:
+    """An ICCBased CMYK space on a copy of the intent's profile: with its version byte set, and, when ``changed``, one
+    byte of its tag data altered so its MD5 differs from the intent's."""
+    data = bytearray(X4_PROFILE.read_bytes())
+    data[8] = version
+    if changed:
+        data[-1] ^= 1
+    stream = pdf.make_stream(zlib.compress(bytes(data)), N=4)
+    stream["/Filter"] = pikepdf.Name.FlateDecode
+    return pikepdf.Array([pikepdf.Name.ICCBased, pdf.make_indirect(stream)])
+
+
+def _x4_colour_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.4.3 (expected.toml says what each raises)."""
+    fill = b"q 0 0 10 10 re f Q"
+
+    def tint(pdf: pikepdf.Pdf) -> pikepdf.Object:
+        return pdf.make_indirect(pikepdf.Dictionary(FunctionType=2, Domain=[0, 1], C0=[0, 0, 0], C1=[1, 0, 0], N=1))
+
+    def spot_rgb(pdf: pikepdf.Pdf) -> pikepdf.Object:
+        return pikepdf.Array([pikepdf.Name.Separation, pikepdf.Name("/Varnish"), pikepdf.Name.DeviceRGB, tint(pdf)])
+
+    def intent_profile(pdf: pikepdf.Pdf) -> pikepdf.Object:
+        return pikepdf.Array([pikepdf.Name.ICCBased, pdf.Root.OutputIntents[0].DestOutputProfile])
+
+    overprint = pikepdf.Dictionary(Type=pikepdf.Name.ExtGState, OP=True, OPM=1)
+    return {
+        # 6.4.3.2: DeviceRGB under a CMYK intent.
+        "x4-device-rgb": _x4_page(b"q 1 0 0 rg 0 0 10 10 re f Q"),
+        # 6.4.3.4 (X4-Q4): a spot colour whose alternate is DeviceRGB.
+        "x4-spot-rgb-alternate": _x4_painted(b"q /S cs 1 sc " + fill, {"S": spot_rgb}),
+        # 6.4.3.3: an ICC profile of version 5.
+        "x4-icc-v5": _x4_painted(b"q /P cs 0 0 0 1 sc " + fill, {"P": lambda p: _icc_space(p, version=5)}),
+        # 6.4.3.3: a four-colour ICCBased fill that overprints with OPM 1.
+        "x4-icc-opm": _x4_painted(b"q /GS gs /P cs 0 0 0 1 sc " + fill, {"P": _icc_space}, overprint),
+        # 6.4.3.3: a four-colour ICCBased space on the output intent's own profile stream.
+        "x4-icc-intent-profile": _x4_painted(b"q /P cs 0 0 0 1 sc " + fill, {"P": intent_profile}),
+        # 6.4.3.3: the same, on an identical copy of it (equal MD5).
+        "x4-icc-intent-copy": _x4_painted(b"q /P cs 0 0 0 1 sc " + fill, {"P": lambda p: _icc_space(p, changed=False)}),
+    }
+
+
 def _x4_content_fixtures() -> dict[str, pikepdf.Pdf]:
     """The negatives of the content-stream checks: ISO 32000-2 7.8.2 and 8.9.7, PDF/X-4 6.19 and 6.23."""
     gstate = _x4_good()
@@ -987,6 +1042,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_key_fixtures(),
         **_x4_page_object_fixtures(),
         **_x4_content_fixtures(),
+        **_x4_colour_fixtures(),
     }
 
 

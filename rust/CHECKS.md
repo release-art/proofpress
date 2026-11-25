@@ -22,10 +22,10 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.output-intent.profile-class-prtr` | The intent profile is an output-device profile | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
 | `x4.output-intent.profile-version` | The intent profile is ICC version 2 or 4 | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
 | `x4.output-intent.output-condition` | The PDF/X intent describes its condition for people | iso-15930-7:6.4.2.1 | warning | x4, x4p | implemented |
-| `x4.colour.device-space-matches-intent` | Device colour matches the output intent's family | iso-15930-7:6.4.3.2, iso-15930-7:6.4.2.3 | error | x4, x4p | todo |
-| `x4.icc.profile-version` | ICCBased profiles are ICC version 2 or 4 | iso-15930-7:6.4.3.3 | error | x4, x4p | todo |
-| `x4.icc.overprint-mode-zero` | Overprinted four-channel ICC colour uses overprint mode 0 | iso-15930-7:6.4.3.3 | error | x4, x4p | todo |
-| `x4.icc.cmyk-not-intent-profile` | Four-channel ICC colour does not reuse the intent profile | iso-15930-7:6.4.3.3 | error | x4, x4p | todo |
+| `x4.colour.device-space-matches-intent` | Device colour matches the output intent's family | iso-15930-7:6.4.3.2, iso-15930-7:6.4.2.3 | error | x4, x4p | implemented |
+| `x4.icc.profile-version` | ICCBased profiles are ICC version 2 or 4 | iso-15930-7:6.4.3.3 | error | x4, x4p | implemented |
+| `x4.icc.overprint-mode-zero` | Overprinted four-channel ICC colour uses overprint mode 0 | iso-15930-7:6.4.3.3 | error | x4, x4p | implemented |
+| `x4.icc.cmyk-not-intent-profile` | Four-channel ICC colour does not reuse the intent profile | iso-15930-7:6.4.3.3 | error | x4, x4p | implemented |
 | `x4.spot.colorants-entry` | Every DeviceN spot has a Colorants entry | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
 | `x4.spot.consistent-definition` | A spot name has one definition throughout | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
 | `x4.spot.colorants-match-devicen` | Colorants entries agree with their DeviceN space | iso-15930-7:6.4.3.4 | warning | x4, x4p | todo |
@@ -35,7 +35,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.spot.printing-order-consistent` | Printing orders agree across the file | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
 | `x4.spot.solidities-consistent` | Each ink has one solidity across the file | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
 | `x4.spot.mixing-hints-informed` | Mixing hints omit default values | iso-15930-7:6.4.3.4 | warning | x4, x4p | skip: Whether a value was chosen with care cannot be read from the file |
-| `x4.spot.alternate-space-restricted` | Spot alternate spaces follow the colour rules | iso-15930-7:6.4.3.4 | error | x4, x4p | todo |
+| `x4.spot.alternate-space-restricted` | Spot alternate spaces follow the colour rules | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
 | `x4.font.embedded` | Fonts used for text are embedded | iso-15930-7:6.5.1, iso-15930-7:6.24 | error | x4, x4p | todo |
 | `x4.font.glyphs-present` | Embedded fonts have every glyph they show | iso-15930-7:6.5.1 | error | x4, x4p | todo |
 | `x4.font.no-notdef` | Text never shows the .notdef glyph | iso-15930-7:6.5.2 | error | x4, x4p | todo |

@@ -459,3 +459,29 @@ expect = { "x4.intent.known-values" = "/Vivid ri (6.23)" }
 [x4-gstate-ri-unknown]
 levels = ["x4"]
 expect = { "x4.intent.known-values" = "an ExtGState with /RI /Vivid (6.23, 6.13)" }
+
+# PDF/X-4 6.4.3: element colour spaces. Each paints a small rectangle on x4-good's page.
+
+[x4-device-rgb]
+levels = ["x4"]
+expect = { "x4.colour.device-space-matches-intent" = "a DeviceRGB fill under a CMYK intent (6.4.3.2)" }
+
+[x4-spot-rgb-alternate]
+levels = ["x4"]
+expect = { "x4.spot.alternate-space-restricted" = "a spot colour with a DeviceRGB alternate under a CMYK intent (6.4.3.4, X4-Q4)" }
+
+[x4-icc-v5]
+levels = ["x4"]
+expect = { "x4.icc.profile-version" = "an ICCBased fill whose profile says version 5 (6.4.3.3)" }
+
+[x4-icc-opm]
+levels = ["x4"]
+expect = { "x4.icc.overprint-mode-zero" = "a four-colour ICCBased fill overprinting with OPM 1 under a CMYK intent (6.4.3.3)" }
+
+[x4-icc-intent-profile]
+levels = ["x4"]
+expect = { "x4.icc.cmyk-not-intent-profile" = "an ICCBased fill on the output intent's own profile stream (6.4.3.3)" }
+
+[x4-icc-intent-copy]
+levels = ["x4"]
+expect = { "x4.icc.cmyk-not-intent-profile" = "an ICCBased fill on a copy of the intent's profile, equal by MD5 (6.4.3.3)" }

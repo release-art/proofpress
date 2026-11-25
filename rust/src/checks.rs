@@ -5,6 +5,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 mod annots;
 mod boxes;
+mod colour;
 mod contents;
 mod intent;
 mod keys;
@@ -127,6 +128,11 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_CONTENT_KNOWN_OPERATORS, contents::known_operators),
     (f::X4_CONTENT_NO_BX_EX, contents::no_bx_ex),
     (f::X4_INTENT_KNOWN_VALUES, contents::known_intents),
+    (f::X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, colour::device_spaces),
+    (f::X4_SPOT_ALTERNATE_SPACE_RESTRICTED, colour::alternate_spaces),
+    (f::X4_ICC_PROFILE_VERSION, colour::profile_version),
+    (f::X4_ICC_OVERPRINT_MODE_ZERO, colour::overprint_mode),
+    (f::X4_ICC_CMYK_NOT_INTENT_PROFILE, colour::not_intent_profile),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5

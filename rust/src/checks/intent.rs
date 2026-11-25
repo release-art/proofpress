@@ -128,6 +128,14 @@ pub(super) fn profile(doc: &Document) -> Option<icc::Header> {
     }
 }
 
+/// The PDF/X intent's `/DestOutputProfile`: its object number and its data.
+pub(super) fn profile_stream(doc: &Document) -> Option<(u32, Vec<u8>)> {
+    match the_intent(doc)?.get(b"DestOutputProfile")?.value {
+        Value::Reference(num, _) => Some((num, doc.stream_data(num)?)),
+        _ => None,
+    }
+}
+
 /// A finding with `message` from `check`, citing 6.4.2.1, when `failed`.
 fn when(failed: bool, check: &'static crate::findings::Check, message: &str, clause: &str) -> Vec<Finding> {
     if failed {
@@ -450,6 +458,34 @@ mod tests {
             "a name that refers to nothing"
         );
         assert_eq!(registry("http://www.color.org"), Registry::Exact);
+        let direct = Document::open(
+            &classic(
+                &[(1, b"<< /OutputIntents [<< /S /GTS_PDFX /DestOutputProfile << >> >>] >>")],
+                "<< /Size SIZE /Root 1 0 R >>",
+            ),
+            &Limits::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            profile_stream(&direct),
+            None,
+            "a profile written directly is not a stream"
+        );
+        let none = Document::open(
+            &classic(&[(1, b"<< >>")], "<< /Size SIZE /Root 1 0 R >>"),
+            &Limits::default(),
+        )
+        .unwrap();
+        assert_eq!(profile_stream(&none), None, "no intent");
+        let bare = Document::open(
+            &classic(
+                &[(1, b"<< /OutputIntents [<< /S /GTS_PDFX >>] >>")],
+                "<< /Size SIZE /Root 1 0 R >>",
+            ),
+            &Limits::default(),
+        )
+        .unwrap();
+        assert_eq!(profile_stream(&bare), None, "no profile");
     }
 
     #[test]

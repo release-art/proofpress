@@ -7,11 +7,12 @@
 
 use super::walk::dicts;
 use crate::content::{self, At, Content, Item, OPERATORS, Problem};
-use crate::document::{Document, Object, Value};
+use crate::document::{Document, Object};
 use crate::findings::{
     CONTENT_COMPATIBILITY, CONTENT_DAMAGED, CONTENT_OPERATOR, Check, Finding, Level, Location,
     X4_CONTENT_KNOWN_OPERATORS, X4_CONTENT_NO_BX_EX, X4_INTENT_KNOWN_VALUES,
 };
+use crate::graphics;
 use crate::pipeline::Limits;
 
 /// The four rendering intents of the PDF 1.6 Reference, 4.5.4, which 6.23 allows.
@@ -37,15 +38,7 @@ fn contents(doc: &Document) -> Vec<Read> {
     let limits = Limits::default();
     let mut out = Vec::new();
     for (i, page) in doc.pages().iter().enumerate() {
-        // One stream, or an array of them, given directly or by reference.
-        let streams = match page.get(b"Contents") {
-            Some(contents) => match (&contents.value, doc.resolve(contents).map(|o| &o.value)) {
-                (_, Some(Value::Array(items))) => references(items),
-                (Value::Reference(num, _), _) => vec![*num],
-                _ => Vec::new(),
-            },
-            None => Vec::new(),
-        };
+        let streams = graphics::stream_numbers(doc, page.get(b"Contents"));
         let number = u32::try_from(i + 1).unwrap_or(u32::MAX);
         out.push(read(
             doc,
@@ -71,16 +64,6 @@ fn contents(doc: &Document) -> Vec<Read> {
     out
 }
 
-fn references(items: &[Object]) -> Vec<u32> {
-    items
-        .iter()
-        .filter_map(|i| match i.value {
-            Value::Reference(num, _) => Some(num),
-            _ => None,
-        })
-        .collect()
-}
-
 fn read(doc: &Document, owner: Location, streams: Vec<u32>, resources: Option<&Object>, limits: &Limits) -> Read {
     let data: Vec<(u32, Option<Vec<u8>>)> = streams.iter().map(|&n| (n, doc.stream_data(n))).collect();
     let undecoded = data.iter().filter(|(_, d)| d.is_none()).map(|(n, _)| *n).collect();
@@ -91,34 +74,12 @@ fn read(doc: &Document, owner: Location, streams: Vec<u32>, resources: Option<&O
         .and_then(|r| r.get(b"ColorSpace"))
         .and_then(|c| doc.resolve(c))
         .and_then(Object::dict);
-    let named = |name: &[u8]| components(doc, doc.resolve(spaces?.get(name)?)?);
+    let named = |name: &[u8]| graphics::components(doc, spaces?.get(name)?);
     Read {
         owner,
         streams,
         undecoded,
         content: content::read(&decoded, limits, &named),
-    }
-}
-
-/// The number of components of a colour space resource (ISO 32000-2, 8.6).
-fn components(doc: &Document, space: &Object) -> Option<usize> {
-    let (family, rest) = match &space.value {
-        Value::Name(name) => (name.as_slice(), &[][..]),
-        Value::Array(items) => (items.first()?.name()?, items.get(1..).unwrap_or_default()),
-        _ => return None,
-    };
-    let arg = |i: usize| rest.get(i).and_then(|o| doc.resolve(o));
-    match family {
-        b"DeviceGray" | b"CalGray" | b"Indexed" | b"Separation" => Some(1),
-        b"DeviceRGB" | b"CalRGB" | b"Lab" => Some(3),
-        b"DeviceCMYK" => Some(4),
-        b"ICCBased" => arg(0)?
-            .dict()?
-            .get(b"N")?
-            .integer()
-            .and_then(|n| usize::try_from(n).ok()),
-        b"DeviceN" => arg(0)?.array().map(<[Object]>::len),
-        _ => None,
     }
 }
 
@@ -421,7 +382,7 @@ mod tests {
                 "<< /Size SIZE /Root 1 0 R >>",
             );
             let d = Document::open(&pdf, &Limits::default()).unwrap();
-            components(&d, d.catalog().unwrap().get(b"X").unwrap())
+            graphics::components(&d, d.catalog().unwrap().get(b"X").unwrap())
         };
         assert_eq!(
             (
