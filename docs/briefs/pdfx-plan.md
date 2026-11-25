@@ -32,7 +32,8 @@ Done means, all together:
    cite, at least one fixture that passes and one that fails it, and a Gherkin scenario.
 2. **Every file that should pass, passes:**
    - the Ghent Output Suite files that conform (35 of the 39 that claim X-4, after the disputes in task 0.1 are settled);
-   - both Altona files;
+   - both Altona files, except for `x4.icc.cmyk-not-intent-profile` (6.4.3.3), which each fails twice by design of the
+     file (decision of 2026-11-25);
    - the four Ghent test pages, which carry a signed Acrobat Preflight "PDF/X-4 compliant" record, the only third-party
      PDF/X verdict in reach;
    - our own genuine X-4 and X-5 fixtures.
@@ -258,7 +259,7 @@ colour and font rows depend on it.
 - built negatives from §3, items 2, 8 and 10 to 17.
 
 *Done when* every tier-5, XMP and ICC-header row is `implemented`, and the Ghent and Altona positives raise no `x4.*`
-finding from them. Judgement: 3–4 weeks.
+finding from them, except Altona's two `x4.icc.cmyk-not-intent-profile` hits each. Judgement: 3–4 weeks.
 
 ## Phase 4: content, page model and colour (the brief's stage 3; tiers 6 and 7)
 

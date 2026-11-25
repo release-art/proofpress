@@ -5,25 +5,12 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
-**Open, 2026-11-25: may both Altona files leave the plan's set of PDF/X-4 positives for one rule?**
-
-- *What happened.* Fixing `colour.py` (task 0.5) to the real 6.4.3.3 rule made both Altona technical2 X-4 files fail it.
-  Each has a `DefaultCMYK` that is the output intent's own profile (same ICC.1 7.2.18 MD5), in two nested forms that paint
-  a DeviceCMYK image, so by 6.4.3.1 those images are ICCBased with the intent's profile. pdfToolbox 17.1 ("Verify
-  compliance with PDFX-4") reports exactly this, twice per file, and nothing else. The pdfx-oracle confirmed it from the
-  clause, 6.4.3.1 and ISO 32000-1 8.6.5.6, with high confidence, and asked that the owner approve the change to the plan,
-  whose "done" criteria (what feature-complete means, item 2, and phase 3) expect both Altona files to pass X-4.
-- *Options.* 1. Record them as classification (b), "the file does not conform": both are expected to raise only
-  `x4.icc.cmyk-not-intent-profile`, two instances each, and stay positives for every other row; edit the plan's done
-  criteria to say so. 2. Keep them as full positives and treat a DefaultCMYK as exempt from 6.4.3.3, against the text and
-  pdfToolbox.
-- *Recommendation:* option 1.
-- *What I do once answered:* log the decision, edit the plan's done criteria, then carry on with the brief's bug 4 (total
-  ink through `tiffsep`) and the end-of-phase-0 gates.
+None open. Answered 2026-11-25: the ICC version reading (by pdfToolbox's verdicts) and Altona under 6.4.3.3 (owner:
+record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 0, stopped** on the question above. Task 0.5 and the brief's bugs 1-3 are done; bug 4 is next.
+- **Phase 0**: task 0.5 and the brief's bugs 1-3 are done; bug 4 (total ink through `tiffsep`) is next.
 
 ## Done
 
@@ -51,6 +38,7 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 Decision log in [`../README.md`](../README.md), 2026-11-25:
 - PDF/X 6.25 is the PDF 1.6 Reference's Table C.1 only: no array or dictionary limit, no page size (task 0.2).
+- Altona fails 6.4.3.3 only (two hits per file) and stays a positive otherwise; owner approved; plan edited.
 - X4-Q6 stands: no corrigendum to ISO 15930-7:2010 found; 15930-8 Cor 1:2011 exists and is not held (task 0.2).
 - ICC profile version (6.4.2.1, 6.4.3.3): major version 2 or 4 passes, any minor; 5 fails. From pdfToolbox's verdicts on
   seven probes (`x4-good` with only the output profile's version field changed: 2.0, 2.1, 2.4, 4.2, 4.3, 4.4 pass; 5.0 fails,
@@ -65,7 +53,7 @@ Third-party preflight (pdfToolbox Server 17.1 CLI, trial, "Verify compliance wit
 
 Oracle consultations:
 - Altona under 6.4.3.3: does not conform (DefaultCMYK equal to the intent profile remaps a painted DeviceCMYK
-  image); high confidence; escalated because the plan lists Altona as a positive (stop question).
+  image); high confidence; escalated because the plan lists Altona as a positive; the owner approved recording it.
 - Task 0.4, `x4-good` against every X-4 row: conforms, high confidence; escalated the ICC version reading, which
   pdfToolbox then settled in line with the oracle's suggestion.
   Its aside (font `name` table lacked IDs 3-6, `FontBBox` did not match the glyphs) was fixed before commit.
