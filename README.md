@@ -28,14 +28,15 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
   and **white that overprints is an error** (it adds no ink, so it vanishes on press). A page that uses transparency must blend
   in the output intent's colour space (a mismatch is an error, an undeclared space a warning).
 - **Spot inks and ICC profiles**: one ink defined two ways in the same space is an error (`spot-definition`); an invalid ICC profile, or a
-  profile that disagrees with its colour space, is an error, and so is a mix of RGB profiles in an RGB job (`icc-profile`); a CMYK
-  profile other than the output intent's is a warning.
+  profile that disagrees with its colour space, is an error, and so is a mix of RGB profiles in an RGB job (`icc-profile`); in a CMYK
+  job a CMYK `ICCBased` space using the output intent's own profile is an error, as PDF/X-4 forbids it (ISO 15930-7, 6.4.3.3).
 - **RGB proofing** (opt-in, `--colour-mode rgb`): for a screen job, CMYK images, fills, strokes, shadings and patterns and a CMYK output intent are errors, spot colours a warning;
   total ink, overprint and rich-black checks are skipped. Save it as a profile: `[profiles.web.verify]` with `colour-mode = "rgb"` and `pdfx = false`, chosen with `proof-pdf --profile web verify`.
 - **Marks and hidden content** (`--no-marks`, opt-in): anything painted beyond the bleed region is an error (`outside-bleed`): crop and registration marks, slug text.
   The region is the BleedBox, else the TrimBox grown by `--bleed-mm` when `--trim-mm` is given, else the TrimBox (a note says which). Judged on the visible extent after
   clipping, so artwork in the bleed zone is correct; pages without a TrimBox are skipped and rotated pages reported as not checked. A text run's extent is its font box.
-  Always on, regardless of the flag: an object painted entirely beyond the MediaBox is a warning (`outside-media`, hidden content that ships in the file).
+  Always on, regardless of the flag: an object painted entirely beyond the MediaBox is a warning (`outside-media`, hidden content that ships in the file),
+  and a `Do` naming an image or form that is not there is an error (`xobject-missing`): nothing prints where it was placed.
 - **Gray proofing** (opt-in, `--colour-mode gray`): for a black-and-white interior, anything painted outside the gray family (DeviceGray, CalGray, ICC gray) is an
   error (`gray-only`): RGB, CMYK and Lab, by fill, stroke, image, inline image, stencil mask (judged by its fill), shading, pattern and form content; spot colours a warning;
   an RGB or CMYK output intent is an error; more than one gray ICC profile is an error (`icc-profile`). The ink checks are skipped, so total ink is not measured (K alone cannot exceed 100%).

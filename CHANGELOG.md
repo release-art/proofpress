@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A page that paints an image or form that is not there no longer passes: a `Do` whose name resolves to no XObject is
+  an error, `xobject-missing` (a missing resource, a non-stream, or a reference to an object the file does not have).
 - A password-protected PDF no longer crashes `verify`, `inspect`, `extract` or `crop`: it is reported as a file that cannot
   be opened, like a corrupt one. pikepdf's `PasswordError` is not a `PdfError`, so it escaped.
 - `--allow-k-only` no longer passes a CMYK JPEG that prints full C, M and Y. The check read Pillow's pixels, which undo the

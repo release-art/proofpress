@@ -124,6 +124,7 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                 findings += structure.check_geometry(pdf, profile.geometry)
             findings += _structure_rules(pdf, profile)
             findings += structure.check_outside_media(pdf)
+            findings += structure.check_missing_xobjects(pdf)
             if profile.require_bleed:
                 findings += structure.check_artwork_bleed(pdf)
             if profile.no_marks:

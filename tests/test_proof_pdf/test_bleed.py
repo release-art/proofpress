@@ -1,6 +1,7 @@
 """The artwork-bleed check, and the clip tracking it relies on."""
 
 import pathlib
+import re
 
 import pikepdf
 import pytest
@@ -263,3 +264,49 @@ class TestOutsideMedia:
         path = _pdf(tmp_path, b"BT /F1 6 Tf 400 380 Td (hidden) Tj ET", boxes=SHEET)
         findings, _ = core._check_pdf(path, Profile(pdfx=False))
         assert "outside-media" in {f.check for f in findings}
+
+
+class TestMissingXObjects:
+    """The brief's bug 3: a ``Do`` whose name resolves to nothing is a hole in the page, not a pass."""
+
+    @staticmethod
+    def _check(xobject):
+        pdf = pikepdf.new()
+        pdf.add_blank_page()
+        pdf.pages[0].Contents = pdf.make_stream(b"q 10 0 0 10 0 0 cm /Im0 Do Q")
+        if xobject is not None:
+            pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=xobject(pdf)))
+        return structure.check_missing_xobjects(pdf)
+
+    @pytest.mark.parametrize(
+        "xobject",
+        [
+            None,  # no /XObject dictionary at all
+            lambda pdf: pikepdf.Dictionary(),  # a dictionary, not a stream
+        ],
+        ids=["no-resource", "not-a-stream"],
+    )
+    def test_a_name_with_nothing_behind_it_fails(self, xobject):
+        [finding] = self._check(xobject)
+        assert (finding.check, finding.severity, finding.page) == ("xobject-missing", Severity.ERROR, 1)
+        assert "/Im0" in finding.message
+
+    def test_a_reference_to_an_object_that_does_not_exist_fails(self, tmp_path):
+        image = lambda pdf: pdf.make_stream(b"\x80", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image)  # noqa: E731
+        pdf = pikepdf.new()
+        pdf.add_blank_page()
+        pdf.pages[0].Contents = pdf.make_stream(b"/Im0 Do")
+        pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=pdf.make_indirect(image(pdf))))
+        path = tmp_path / "dangling.pdf"
+        pdf.save(path, qdf=True)
+        # Point /Im0 at an object number the file does not have, as veraPDFHiResWrongObjectID.pdf does.
+        data, count = re.subn(rb"/Im0 \d+ 0 R", b"/Im0 999 0 R", path.read_bytes())
+        assert count == 1
+        path.write_bytes(data)
+        with pikepdf.open(path) as broken:
+            [finding] = structure.check_missing_xobjects(broken)
+        assert finding.check == "xobject-missing"
+
+    def test_a_real_image_passes(self):
+        image = lambda pdf: pdf.make_stream(b"\x80", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image)  # noqa: E731
+        assert self._check(image) == []

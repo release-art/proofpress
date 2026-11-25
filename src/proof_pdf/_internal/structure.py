@@ -14,6 +14,7 @@ import pikepdf
 from PIL import ImageCms
 
 from ..models import Finding, PageGeometry, Severity, mm_to_pt, pt_to_mm
+from . import content
 from .paint import Paint, paint_events
 from .spaces import output_intents
 
@@ -254,6 +255,32 @@ def check_outside_media(pdf: pikepdf.Pdf) -> list[Finding]:
                     i,
                 )
             )
+    return findings
+
+
+def check_missing_xobjects(pdf: pikepdf.Pdf) -> list[Finding]:
+    """Fail a ``Do`` whose name resolves to no XObject: a hole in the page where the artwork should be.
+
+    ISO 32000-2, 7.8.3: a resource named in a content stream must be in the resource dictionary. A reference to an
+    object that does not exist reads as null (7.3.10), so viewers draw nothing there and say nothing.
+    """
+    findings: list[Finding] = []
+    for i, page in enumerate(pdf.pages, start=1):
+        missing = sorted(
+            {
+                str(op.operands[0])
+                for op in content.iter_operations(page)
+                if op.operator == "Do"
+                and op.operands
+                and not isinstance(content.lookup_xobject(op.resources, op.operands), pikepdf.Stream)
+            }
+        )
+        findings += [
+            Finding(
+                "xobject-missing", Severity.ERROR, f"{name} is painted but names no XObject: nothing prints there", i
+            )
+            for name in missing
+        ]
     return findings
 
 
