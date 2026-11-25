@@ -20,6 +20,7 @@ Newest first. A decision changes only by a new line here.
 
 | Date | Decision | Where |
 |---|---|---|
+| 2026-11-25 | PDF/X-4 6.4.2.1 and 6.4.3.3 accept an ICC profile of major version 2 or 4, any minor version; 5 and anything else fails. The clauses' list of ICC editions is read as the families they belong to. Evidence: pdfToolbox 17.1's "Verify compliance with PDFX-4" passes `x4-good` with its output profile at 2.0, 2.1, 2.4, 4.2, 4.3 and 4.4 and fails it at 5.0; the Ghent positives (2.4) and Altona (2.0) would fail any narrower reading. Agrees with the pdfx-oracle | Plan, task 0.4; progress file |
 | 2026-11-25 | PDF/X 6.25 means the PDF 1.6 Reference's Table C.1 only (now held): numbers, strings inside content streams, names, indirect objects, `q` nesting, DeviceN components and CIDs. It has no array or dictionary limit, and the page-size limit sits outside the table, so neither is a PDF/X check | Plan, tasks 0.2 and 2.2 |
 | 2026-11-25 | X4-Q6 stands as decided: no corrigendum or amendment to ISO 15930-7:2010 was found. ISO 15930-8:2010 has a Technical Corrigendum 1 (2011) that is not held; it is wanted before phase 8 | Plan, task 0.2 |
 | 2026-11-25 | The 34 PDF/X interpretation questions (X-4 Q1-Q21, X-5 Q1-Q13) take the defaults proposed in the plan, among them: `Trapped` judged in XMP; every action fails; spot alternates follow the colour rules; targets at X-1a or X-3 are "not evaluated" | Plan, task 0.1 |
