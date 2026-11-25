@@ -18,6 +18,7 @@ import io
 import pathlib
 import sys
 import zlib
+from collections.abc import Callable
 
 import pikepdf
 from PIL import ImageCms
@@ -695,6 +696,106 @@ def _x4_box_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _x4_with(change: Callable[[pikepdf.Pdf], None]) -> pikepdf.Pdf:
+    """x4-good with ``change`` applied to it."""
+    pdf = _x4_good()
+    change(pdf)
+    return pdf
+
+
+def _resource(pdf: pikepdf.Pdf, kind: str, value: pikepdf.Object) -> None:
+    """Add ``value`` to the page's resources of ``kind`` (an unused resource still counts: X4-Q3)."""
+    resources = pdf.pages[0].obj.Resources
+    if f"/{kind}" not in resources:
+        resources[f"/{kind}"] = pikepdf.Dictionary()
+    resources[f"/{kind}"]["/X0"] = value
+
+
+def _form(pdf: pikepdf.Pdf, **extra: pikepdf.Object) -> pikepdf.Object:
+    form = pdf.make_stream(b"", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Form, BBox=[0, 0, 1, 1])
+    for key, value in extra.items():
+        form[f"/{key}"] = value
+    return pdf.make_indirect(form)
+
+
+def _gstate(pdf: pikepdf.Pdf, **entries: pikepdf.Object) -> None:
+    _resource(pdf, "ExtGState", pdf.make_indirect(pikepdf.Dictionary({f"/{k}": v for k, v in entries.items()})))
+
+
+def _screen(**extra: int | pikepdf.Object) -> pikepdf.Dictionary:
+    """A type 1 halftone with ``extra`` entries."""
+    entries = {"/HalftoneType": 1, "/Frequency": 60, "/Angle": 45, "/SpotFunction": pikepdf.Name.Round}
+    return pikepdf.Dictionary({**entries, **{f"/{k}": v for k, v in extra.items()}})
+
+
+def _with_alternate(pdf: pikepdf.Pdf) -> None:
+    gray = {"Type": pikepdf.Name.XObject, "Subtype": pikepdf.Name.Image, "Width": 1, "Height": 1}
+    gray |= {"ColorSpace": pikepdf.Name.DeviceGray, "BitsPerComponent": 8}
+    alternate = pdf.make_indirect(pdf.make_stream(b"\x00", **gray))
+    image = pdf.make_stream(b"\x00", **gray)
+    image["/Alternates"] = pikepdf.Array([pikepdf.Dictionary(Image=alternate, DefaultForPrinting=True)])
+    _resource(pdf, "XObject", pdf.make_indirect(image))
+
+
+def _x4_key_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.7, 6.13, 6.14, 6.16, 6.18, 6.21, 6.22 and 6.26 (expected.toml says what each raises)."""
+    name = pikepdf.Name
+    return {
+        "x4-xobject-opi": _x4_with(lambda p: _resource(p, "XObject", _form(p, OPI=pikepdf.Dictionary()))),
+        "x4-form-ref": _x4_with(
+            lambda p: _resource(p, "XObject", _form(p, Ref=pikepdf.Dictionary(F=pikepdf.String("x.pdf"), Page=0)))
+        ),
+        "x4-stream-external": _x4_with(lambda p: _resource(p, "XObject", _form(p, F=pikepdf.String("data.bin")))),
+        "x4-filespec-not-embedded": _x4_with(
+            lambda p: p.Root.__setitem__(
+                "/AF", pikepdf.Array([pikepdf.Dictionary(Type=name.Filespec, F=pikepdf.String("a.txt"))])
+            )
+        ),
+        "x4-gstate-tr": _x4_with(lambda p: _gstate(p, TR=name.Identity)),
+        "x4-gstate-htp": _x4_with(lambda p: _gstate(p, HTP=pikepdf.Array([0, 0]))),
+        "x4-gstate-tr2": _x4_with(lambda p: _gstate(p, TR2=name.Identity)),
+        "x4-halftone-type": _x4_with(lambda p: _gstate(p, HT=_screen(HalftoneType=6))),
+        "x4-halftone-name": _x4_with(lambda p: _gstate(p, HT=_screen(HalftoneName=pikepdf.String("Screen 1")))),
+        "x4-halftone-transfer": _x4_with(lambda p: _gstate(p, HT=_screen(TransferFunction=name.Identity))),
+        "x4-postscript-xobject": _x4_with(
+            lambda p: _resource(p, "XObject", p.make_indirect(p.make_stream(b"", Type=name.XObject, Subtype=name.PS)))
+        ),
+        "x4-form-subtype2-ps": _x4_with(lambda p: _resource(p, "XObject", _form(p, Subtype2=name.PS))),
+        "x4-image-alternate-printed": _x4_with(_with_alternate),
+        "x4-open-action": _x4_with(
+            lambda p: p.Root.__setitem__(
+                "/OpenAction", pikepdf.Dictionary(S=name.URI, URI=pikepdf.String("https://example.com"))
+            )
+        ),
+        "x4-javascript": _x4_with(
+            lambda p: p.Root.__setitem__(
+                "/Names",
+                pikepdf.Dictionary(
+                    JavaScript=pikepdf.Dictionary(
+                        Names=pikepdf.Array(
+                            [pikepdf.String("a"), p.make_indirect(pikepdf.Dictionary(JS=pikepdf.String("1")))]
+                        )
+                    )
+                ),
+            )
+        ),
+        "x4-viewer-print-area": _x4_with(
+            lambda p: p.Root.__setitem__("/ViewerPreferences", pikepdf.Dictionary(PrintArea=name.CropBox))
+        ),
+        "x4-alternate-presentations": _x4_with(
+            lambda p: p.Root.__setitem__(
+                "/Names", pikepdf.Dictionary(AlternatePresentations=pikepdf.Dictionary(Names=pikepdf.Array()))
+            )
+        ),
+        "x4-pres-steps": _x4_with(lambda p: p.pages[0].obj.__setitem__("/PresSteps", pikepdf.Dictionary())),
+        "x4-xfa": _x4_with(
+            lambda p: p.Root.__setitem__(
+                "/AcroForm", pikepdf.Dictionary(Fields=pikepdf.Array(), XFA=pikepdf.String("<xdp/>"))
+            )
+        ),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -777,6 +878,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_metadata_fixtures(),
         **_x4_intent_fixtures(),
         **_x4_box_fixtures(),
+        **_x4_key_fixtures(),
     }
 
 

@@ -283,3 +283,81 @@ expect = { "x4.boxes.within-crop" = "a CropBox inside the BleedBox (6.12)" }
 [x4-crop-beyond-media]
 levels = ["x4"]
 expect = { "x4.boxes.within-media" = "a CropBox larger than the MediaBox (6.12)" }
+
+# PDF/X-4 6.7 to 6.26: keys forbidden anywhere in the file (X4-Q3). Each adds one thing to x4-good.
+
+[x4-xobject-opi]
+levels = ["x4"]
+expect = { "x4.xobject.no-opi" = "a form XObject with /OPI (6.7)" }
+
+[x4-form-ref]
+levels = ["x4"]
+expect = { "x4.xobject.no-ref" = "a form XObject with /Ref (6.7)" }
+
+[x4-stream-external]
+levels = ["x4"]
+expect = { "x4.stream.no-external-f" = "a stream with /F (6.7)" }
+
+[x4-filespec-not-embedded]
+levels = ["x4"]
+expect = { "x4.filespec.embedded" = "a file specification in /AF without /EF (6.7)" }
+
+[x4-gstate-tr]
+levels = ["x4"]
+expect = { "x4.extgstate.no-tr" = "an ExtGState with /TR (6.13)" }
+
+[x4-gstate-htp]
+levels = ["x4"]
+expect = { "x4.extgstate.no-htp" = "an ExtGState with /HTP (6.13)" }
+
+[x4-gstate-tr2]
+levels = ["x4"]
+expect = { "x4.extgstate.tr2-default" = "an ExtGState with /TR2 /Identity (6.13)" }
+
+[x4-halftone-type]
+levels = ["x4"]
+expect = { "x4.halftone.type-1-or-5" = "a type 6 halftone (6.13)" }
+
+[x4-halftone-name]
+levels = ["x4"]
+expect = { "x4.halftone.no-name" = "a halftone with /HalftoneName (6.13)" }
+
+[x4-halftone-transfer]
+levels = ["x4"]
+expect = { "x4.halftone.transfer-function" = "a type 1 halftone with /TransferFunction (6.13, X4-Q9)" }
+
+[x4-postscript-xobject]
+levels = ["x4"]
+expect = { "x4.xobject.no-postscript" = "a PostScript XObject (6.14)" }
+
+[x4-form-subtype2-ps]
+levels = ["x4"]
+expect = { "x4.xobject.no-subtype2-ps" = "a form XObject with /Subtype2 /PS (6.14)" }
+
+[x4-image-alternate-printed]
+levels = ["x4"]
+expect = { "x4.image.no-default-for-printing" = "an image alternate with /DefaultForPrinting true (6.16)" }
+
+[x4-open-action]
+levels = ["x4"]
+expect = { "x4.actions.absent" = "a URI action as /OpenAction (6.18, X4-Q11)" }
+
+[x4-javascript]
+levels = ["x4"]
+expect = { "x4.javascript.absent" = "a /JavaScript name tree (6.18)" }
+
+[x4-viewer-print-area]
+levels = ["x4"]
+expect = { "x4.viewer-prefs.areas" = "ViewerPreferences /PrintArea /CropBox (6.21)" }
+
+[x4-alternate-presentations]
+levels = ["x4"]
+expect = { "x4.names.no-alternate-presentations" = "/AlternatePresentations in the name dictionary (6.22)" }
+
+[x4-pres-steps]
+levels = ["x4"]
+expect = { "x4.page.no-pres-steps" = "a page with /PresSteps (6.22)" }
+
+[x4-xfa]
+levels = ["x4"]
+expect = { "x4.acroform.no-xfa" = "an interactive form with /XFA (6.26)" }

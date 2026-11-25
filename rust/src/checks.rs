@@ -5,7 +5,9 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 mod boxes;
 mod intent;
+mod keys;
 mod metadata;
+mod walk;
 mod x4;
 
 use crate::document::Document;
@@ -74,6 +76,25 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_BOXES_WITHIN_BLEED, boxes::within_bleed),
     (f::X4_BOXES_WITHIN_CROP, boxes::within_crop),
     (f::X4_BOXES_WITHIN_MEDIA, boxes::within_media),
+    (f::X4_XOBJECT_NO_OPI, keys::no_opi),
+    (f::X4_XOBJECT_NO_REF, keys::no_ref),
+    (f::X4_STREAM_NO_EXTERNAL_F, keys::no_external_f),
+    (f::X4_FILESPEC_EMBEDDED, keys::filespec_embedded),
+    (f::X4_EXTGSTATE_NO_TR, keys::no_tr),
+    (f::X4_EXTGSTATE_NO_HTP, keys::no_htp),
+    (f::X4_EXTGSTATE_TR2_DEFAULT, keys::tr2_default),
+    (f::X4_HALFTONE_TYPE_1_OR_5, keys::halftone_type),
+    (f::X4_HALFTONE_NO_NAME, keys::halftone_name),
+    (f::X4_HALFTONE_TRANSFER_FUNCTION, keys::halftone_transfer),
+    (f::X4_XOBJECT_NO_POSTSCRIPT, keys::no_postscript),
+    (f::X4_XOBJECT_NO_SUBTYPE2_PS, keys::no_subtype2_ps),
+    (f::X4_IMAGE_NO_DEFAULT_FOR_PRINTING, keys::no_default_for_printing),
+    (f::X4_ACTIONS_ABSENT, keys::no_actions),
+    (f::X4_JAVASCRIPT_ABSENT, keys::no_javascript),
+    (f::X4_VIEWER_PREFS_AREAS, keys::viewer_areas),
+    (f::X4_NAMES_NO_ALTERNATE_PRESENTATIONS, keys::no_alternate_presentations),
+    (f::X4_PAGE_NO_PRES_STEPS, keys::no_pres_steps),
+    (f::X4_ACROFORM_NO_XFA, keys::no_xfa),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5

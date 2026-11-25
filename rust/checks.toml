@@ -357,7 +357,7 @@ title = "XObjects carry no OPI"
 clauses = ["iso-15930-7:6.7"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xobject.no-ref"
@@ -365,7 +365,7 @@ title = "Form XObjects are not reference XObjects"
 clauses = ["iso-15930-7:6.7"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.filespec.embedded"
@@ -373,7 +373,7 @@ title = "File specifications embed their file"
 clauses = ["iso-15930-7:6.7"]
 severity = "error"
 applies = ["x4"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.stream.no-external-f"
@@ -381,7 +381,7 @@ title = "No stream points at external data"
 clauses = ["iso-15930-7:6.7"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.filter.no-lzw"
@@ -737,7 +737,7 @@ title = "Graphics states have no transfer function"
 clauses = ["iso-15930-7:6.13"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.extgstate.no-htp"
@@ -745,7 +745,7 @@ title = "Graphics states have no halftone phase"
 clauses = ["iso-15930-7:6.13"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.extgstate.tr2-default"
@@ -753,7 +753,7 @@ title = "TR2, if present, is Default"
 clauses = ["iso-15930-7:6.13"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.halftone.transfer-function"
@@ -761,7 +761,7 @@ title = "Halftones carry transfer functions only where required"
 clauses = ["iso-15930-7:6.13"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.halftone.type-1-or-5"
@@ -769,7 +769,7 @@ title = "Halftones are type 1 or 5"
 clauses = ["iso-15930-7:6.13"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.halftone.no-name"
@@ -777,7 +777,7 @@ title = "Halftones have no name"
 clauses = ["iso-15930-7:6.13"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xobject.no-postscript"
@@ -785,7 +785,7 @@ title = "No PostScript XObjects"
 clauses = ["iso-15930-7:6.14"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xobject.no-subtype2-ps"
@@ -793,7 +793,7 @@ title = "No form XObject is PostScript underneath"
 clauses = ["iso-15930-7:6.14"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.encrypt.absent"
@@ -817,7 +817,7 @@ title = "No image alternate is the default for printing"
 clauses = ["iso-15930-7:6.16"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.image.alternates-same-content"
@@ -849,7 +849,7 @@ title = "The file has no actions"
 clauses = ["iso-15930-7:6.18", "iso-15930-7:6.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.javascript.absent"
@@ -857,7 +857,7 @@ title = "The file has no JavaScript"
 clauses = ["iso-15930-7:6.18", "iso-15930-7:6.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.content.known-operators"
@@ -897,7 +897,7 @@ title = "Viewer areas and clips are MediaBox or BleedBox"
 clauses = ["iso-15930-7:6.21"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.names.no-alternate-presentations"
@@ -905,7 +905,7 @@ title = "No alternate presentations"
 clauses = ["iso-15930-7:6.22"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.page.no-pres-steps"
@@ -913,7 +913,7 @@ title = "No page has presentation steps"
 clauses = ["iso-15930-7:6.22"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.intent.known-values"
@@ -985,7 +985,7 @@ title = "Forms have no XFA"
 clauses = ["iso-15930-7:6.26"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.jpx.baseline"

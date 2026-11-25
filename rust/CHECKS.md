@@ -47,10 +47,10 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.names.utf8` | Font and separation names are UTF-8 | iso-15930-7:6.6 | error | x4, x4p | implemented |
 | `x4.names.hex-escaped` | Bytes outside printable ASCII in those names are escaped | iso-15930-7:6.6 | error | x4, x4p | implemented |
 | `x4.names.other-recommended` | Other names are UTF-8 and escaped too | iso-15930-7:6.6 | warning | x4, x4p | todo |
-| `x4.xobject.no-opi` | XObjects carry no OPI | iso-15930-7:6.7 | error | x4, x4p | todo |
-| `x4.xobject.no-ref` | Form XObjects are not reference XObjects | iso-15930-7:6.7 | error | x4, x4p | todo |
-| `x4.filespec.embedded` | File specifications embed their file | iso-15930-7:6.7 | error | x4 | todo |
-| `x4.stream.no-external-f` | No stream points at external data | iso-15930-7:6.7 | error | x4, x4p | todo |
+| `x4.xobject.no-opi` | XObjects carry no OPI | iso-15930-7:6.7 | error | x4, x4p | implemented |
+| `x4.xobject.no-ref` | Form XObjects are not reference XObjects | iso-15930-7:6.7 | error | x4, x4p | implemented |
+| `x4.filespec.embedded` | File specifications embed their file | iso-15930-7:6.7 | error | x4 | implemented |
+| `x4.stream.no-external-f` | No stream points at external data | iso-15930-7:6.7 | error | x4, x4p | implemented |
 | `x4.filter.no-lzw` | LZW compression is not used | iso-15930-7:6.8 | error | x4, x4p | implemented |
 | `x4.filter.no-crypt` | The Crypt filter is not used | iso-15930-7:6.8 | error | x4, x4p | implemented |
 | `x4.filter.standard-only` | Only standard filters are used | iso-15930-7:6.8 | error | x4, x4p | implemented |
@@ -94,29 +94,29 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.boxes.within-crop` | Page boxes lie within the CropBox | iso-15930-7:6.12 | error | x4, x4p | implemented |
 | `x4.boxes.within-media` | Page boxes lie within the MediaBox | iso-15930-7:6.12 | error | x4, x4p | implemented |
 | `x4.boxes.prefer-trim` | TrimBox is used rather than ArtBox | iso-15930-7:6.12 | warning | x4, x4p | implemented |
-| `x4.extgstate.no-tr` | Graphics states have no transfer function | iso-15930-7:6.13 | error | x4, x4p | todo |
-| `x4.extgstate.no-htp` | Graphics states have no halftone phase | iso-15930-7:6.13 | error | x4, x4p | todo |
-| `x4.extgstate.tr2-default` | TR2, if present, is Default | iso-15930-7:6.13 | error | x4, x4p | todo |
-| `x4.halftone.transfer-function` | Halftones carry transfer functions only where required | iso-15930-7:6.13 | error | x4, x4p | todo |
-| `x4.halftone.type-1-or-5` | Halftones are type 1 or 5 | iso-15930-7:6.13 | error | x4, x4p | todo |
-| `x4.halftone.no-name` | Halftones have no name | iso-15930-7:6.13 | error | x4, x4p | todo |
-| `x4.xobject.no-postscript` | No PostScript XObjects | iso-15930-7:6.14 | error | x4, x4p | todo |
-| `x4.xobject.no-subtype2-ps` | No form XObject is PostScript underneath | iso-15930-7:6.14 | error | x4, x4p | todo |
+| `x4.extgstate.no-tr` | Graphics states have no transfer function | iso-15930-7:6.13 | error | x4, x4p | implemented |
+| `x4.extgstate.no-htp` | Graphics states have no halftone phase | iso-15930-7:6.13 | error | x4, x4p | implemented |
+| `x4.extgstate.tr2-default` | TR2, if present, is Default | iso-15930-7:6.13 | error | x4, x4p | implemented |
+| `x4.halftone.transfer-function` | Halftones carry transfer functions only where required | iso-15930-7:6.13 | error | x4, x4p | implemented |
+| `x4.halftone.type-1-or-5` | Halftones are type 1 or 5 | iso-15930-7:6.13 | error | x4, x4p | implemented |
+| `x4.halftone.no-name` | Halftones have no name | iso-15930-7:6.13 | error | x4, x4p | implemented |
+| `x4.xobject.no-postscript` | No PostScript XObjects | iso-15930-7:6.14 | error | x4, x4p | implemented |
+| `x4.xobject.no-subtype2-ps` | No form XObject is PostScript underneath | iso-15930-7:6.14 | error | x4, x4p | implemented |
 | `x4.encrypt.absent` | The file is not encrypted | iso-15930-7:6.15 | error | x4, x4p | implemented |
 | `x4.perms.ur-only` | Permissions hold only usage rights | iso-15930-7:6.15 | error | x4, x4p | implemented |
-| `x4.image.no-default-for-printing` | No image alternate is the default for printing | iso-15930-7:6.16 | error | x4, x4p | todo |
+| `x4.image.no-default-for-printing` | No image alternate is the default for printing | iso-15930-7:6.16 | error | x4, x4p | implemented |
 | `x4.image.alternates-same-content` | Image alternates show the same picture | iso-15930-7:6.16 | error | x4, x4p | todo |
 | `x4.annot.outside-bleed` | Annotations lie outside the bleed | iso-15930-7:6.17 | error | x4, x4p | todo |
 | `x4.annot.printermark-outside-trim` | Printer's marks lie outside the trim | iso-15930-7:6.17 | error | x4, x4p | todo |
-| `x4.actions.absent` | The file has no actions | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | todo |
-| `x4.javascript.absent` | The file has no JavaScript | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | todo |
+| `x4.actions.absent` | The file has no actions | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | implemented |
+| `x4.javascript.absent` | The file has no JavaScript | iso-15930-7:6.18, iso-15930-7:6.2 | error | x4, x4p | implemented |
 | `x4.content.known-operators` | Content uses only PDF 1.6 operators | iso-15930-7:6.19, iso-15930-7:B | error | x4, x4p | todo |
 | `x4.content.no-bx-ex` | Content avoids BX and EX | iso-15930-7:6.19 | warning | x4, x4p | todo |
 | `x4.transparency.group-cs-restricted` | Transparency group colour spaces follow the colour rules | iso-15930-7:6.20 | error | x4, x4p | todo |
 | `x4.transparency.blend-modes` | Blend modes are standard | iso-15930-7:6.20 | error | x4, x4p | todo |
-| `x4.viewer-prefs.areas` | Viewer areas and clips are MediaBox or BleedBox | iso-15930-7:6.21 | error | x4, x4p | todo |
-| `x4.names.no-alternate-presentations` | No alternate presentations | iso-15930-7:6.22 | error | x4, x4p | todo |
-| `x4.page.no-pres-steps` | No page has presentation steps | iso-15930-7:6.22 | error | x4, x4p | todo |
+| `x4.viewer-prefs.areas` | Viewer areas and clips are MediaBox or BleedBox | iso-15930-7:6.21 | error | x4, x4p | implemented |
+| `x4.names.no-alternate-presentations` | No alternate presentations | iso-15930-7:6.22 | error | x4, x4p | implemented |
+| `x4.page.no-pres-steps` | No page has presentation steps | iso-15930-7:6.22 | error | x4, x4p | implemented |
 | `x4.intent.known-values` | Rendering intents are standard | iso-15930-7:6.23, iso-15930-7:6.13 | error | x4, x4p | todo |
 | `x4.oc.config-name-present` | Optional-content configurations are named | iso-15930-7:6.24 | error | x4, x4p | todo |
 | `x4.oc.config-name-unique` | Optional-content configuration names are unique | iso-15930-7:6.24 | error | x4, x4p | todo |
@@ -125,7 +125,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.limits.lexical` | Numbers, strings and names stay within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | todo |
 | `x4.limits.objects` | The indirect-object count stays within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | implemented |
 | `x4.limits.graphics` | Graphics-state nesting, DeviceN and CIDs stay within limits | iso-15930-7:6.25 | error | x4, x4p | todo |
-| `x4.acroform.no-xfa` | Forms have no XFA | iso-15930-7:6.26 | error | x4, x4p | todo |
+| `x4.acroform.no-xfa` | Forms have no XFA | iso-15930-7:6.26 | error | x4, x4p | implemented |
 | `x4.jpx.baseline` | JPEG 2000 uses the JPX format, baseline features only | iso-15930-7:6.27 | error | x4, x4p | todo |
 | `x4.jpx.channels` | JPEG 2000 has 1, 3 or 4 channels | iso-15930-7:6.27 | error | x4, x4p | todo |
 | `x4.jpx.one-colour-space` | JPEG 2000 declares at most one colour space | iso-15930-7:6.27 | error | x4, x4p | todo |

@@ -11,7 +11,8 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 3** (document structure and metadata): 3.2 (XMP, 6.9-6.11), 3.3 (ICC header, 6.4.1-6.4.2.1) and the page
-  tree of 3.1 with the 6.12 rows done. Next: the 3.5 rows on keys (6.13-6.26), then optional content and annotations.
+  tree of 3.1 with the 6.12 rows, and the 3.5 rows on forbidden keys, done. Next: optional content (6.24),
+  annotations and TrapNet (6.17, 6.9), then the phase 3 gates and report.
 
 ## Done
 
@@ -41,7 +42,8 @@ record it as not conforming to that one rule).
 | 2.3 | `6deb894` | Mutation test on stable Rust; "same rule" files compared; phase 2 report |
 | 3.2 | `bf5716a`; test-db `50ca948e` | XMP, date and text-string helpers in `common`; 25 metadata checks (6.9-6.11) with 25 fixtures and 3 feature files |
 | 3.3 | `d3f2f13`, `a3b7768`; test-db `650d1bf7` | ICC header helper; 11 output-intent checks (6.4.1, 6.4.2.1) with 12 fixtures |
-| 3.1 (part), 3.5 (6.12) | this commit | The page tree with inherited attributes; a rectangle helper; 6 box checks with 6 fixtures |
+| 3.1 (part), 3.5 (6.12) | `2371597` | The page tree with inherited attributes; a rectangle helper; 6 box checks with 6 fixtures |
+| 3.5 (keys) | this commit | 19 checks on keys forbidden anywhere (6.7, 6.13, 6.14, 6.16, 6.18, 6.21, 6.22, 6.26) with 19 fixtures, on a walk of every dictionary with its place |
 
 ## Register coverage
 
@@ -49,7 +51,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 50 | 88 | 3 |
+| PDF/X-4 and X-4p | 69 | 69 | 3 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 16 | 37 | 1 (`internal`) |
 
@@ -105,6 +107,17 @@ Task 3.2, 2026-11-25:
   stays pass; test-db's `expectations/pdfx.toml` records the warning per file. The clause is explicit, so no oracle call.
 - `x4.xmp.conforms` (value types of the XMP 2005 schemas) and `x4.info.unlisted-not-in-predefined-schema` (needs the list
   of predefined schema properties) stay `todo`.
+
+Task 3.5, the forbidden keys, against the veraPDF and BFO "same rule" files (44 files): every verdict agrees with the
+X-4 reading except these, each explained:
+- PDF/A-2b 6-2-5 t03-fail-b: a non-primary type 5 component *without* `/TransferFunction` fails PDF/A; X-4 (X4-Q9) only
+  limits where one may be, so it passes. Different rule.
+- 6-2-5 t05 (`/RI`): 6.23, rendering intents, waits for phase 4 with the `ri` operator.
+- 6-5-1 t02-pass-a: Named actions in outlines pass PDF/A and fail X-4, as the register expects.
+- BFO 6-10 t01: its name dictionary is object 16 while `/Size` is 16, so the reference is invalid (7.5.5) and reads as
+  null, with an `object.dangling-reference` finding; the file is malformed, classified (b).
+Two fixes came from it: the obsolete `SetState` and `NOP` actions are actions, and an indirect `/AA` dictionary's actions
+are found (the walk gives an indirect object's entries the keys the object is referred to under).
 
 Oracle consultations:
 - Empty `/RegistryName ()` with `/OutputConditionIdentifier (Custom)` (12 Ghent positives, 6.4.2.1): no "shall" broken;
