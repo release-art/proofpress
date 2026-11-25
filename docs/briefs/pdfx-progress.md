@@ -10,9 +10,9 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 2** (reading the file): task 2.1 in progress. Tiers 1 to 5 read a file (first slice committed); next: the
-  brief's parser to-do list (header offset handling done; inline images, decompression limits, the oracle and fuzz runs),
-  then 2.2's PDF/X rows.
+- **Phase 2** (reading the file): tasks 2.1 to 2.3 largely done. Tiers 1 to 5 read the whole corpus without a crash;
+  8 X-4 checks and 16 structure checks are implemented with fixtures; the qpdf oracle comparison is worked through (see
+  "Corpus and oracle"). Next: a decompression-bomb test, the fuzz question, then the phase 2 gates and stage report.
 
 ## Done
 
@@ -34,7 +34,11 @@ record it as not conforming to that one rule).
 | 2.1, slice 1 | `a9da02e` | Tiers 1-5 read files: lexer, object events, filters, xref chain, the walk at open; 15 structure checks |
 | (fixtures) | `6c77c09` | `pdfraw.tex` wrote `/Filter` twice; samples rebuilt |
 | (owner request) | `33abe20` | Windows x64 in CI and release |
-| 2.2, part 1 | this commit | 8 X-4 checks implemented (6.6, 6.8, 6.15, 6.25 objects) with 8 negative fixtures and 4 feature files |
+| 2.2, part 1 | `3f7ee45` | 8 X-4 checks implemented (6.6, 6.8, 6.15, 6.25 objects) with 8 negative fixtures and 4 feature files |
+| 2.1 | `03ccd61` | An unknown filter is a `stream.filter` finding wherever it appears; `pdfx.py --all` |
+| 2.3, part 1 | `803cb78` | 15 structure fixtures; 16 house and structure checks implemented |
+| 2.3 | `158d4f7`, `95ebfa3` | Three false refusals and a compressed `/Length` fixed, all found by the qpdf comparison |
+| (progress) | this commit | This file brought up to date |
 
 ## Register coverage
 
@@ -44,16 +48,31 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 8 | 130 | 3 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 0 | 52 | 1 (`internal`) |
+| House and structure checks | 16 | 37 | 1 (`internal`) |
 
 ## Gates
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green, 2026-11-25 |
+| `bin/rust/check.sh` | green at `95ebfa3`, 2026-11-25 (100% lines, regions, functions) |
 | Python (ruff, pyright, pytest) | green, 2026-11-25: 1156 passed |
 | `bin/docker/test.sh` | green at the end of phase 1 (`c2aa73a`, the Rust extension built in the image), 2026-11-25: 1156 passed |
 | `bin/suites/pdfx.sh` | 2026-11-25: 39 files, 39 accepted, 0 problems (nothing judged yet) |
+
+## Corpus and oracle
+
+Task 2.3, 2026-11-25: `rust/examples/verify.rs` over every PDF in test-db's `samples/` (44,608 files): no crash, no
+timeout. Against `qpdf --check` as the oracle for "is this file readable", 326 disagreements at first; three commits
+removed 300 of them. What is left, each a deliberate refusal under PDF 1.7 or genuinely unreadable:
+- 19 files whose cross-reference entries are 19 bytes, not 20 (7.5.4); web downloads, no print output among them.
+- 3 with two spaces in a subsection header (Isartor and veraPDF test files that fail PDF/A on purpose).
+- 2 whose `startxref` is 0 and 1 with none; 1 whose `startxref` sits more than 1024 bytes before the end, with
+  unrelated bytes after `%%EOF`.
+- 3 whose object stream cannot be decoded, and 1 whose referenced object has an invalid entry: gaps, reported as damage.
+- 4 encrypted files, refused as X-4 requires.
+
+Every Ghent, Altona and GWG Processing Steps file and every fixture opens sound, so the re-plan point (the parser
+refusing real print output) has not triggered.
 
 ## Decisions taken
 
