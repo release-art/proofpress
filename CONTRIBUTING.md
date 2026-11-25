@@ -17,6 +17,9 @@ bin/test.sh                           # pytest with coverage
   - Unit and property tests (`proptest`) sit next to the code, in `#[cfg(test)]` modules.
   - Tests with mocks (`mockall`) go in `rust/tests/`, which coverage does not count, so generated mock code cannot dilute it.
   - Behaviour is described in Gherkin under `rust/tests/features/`, run by cucumber (`rust/tests/bdd.rs`).
+    PDF/X scenarios go in `rust/tests/features/pdfx/`, one file per clause (`x4-6.09-trapping.feature`), with the steps
+    `Given the fixture "x4-good"`, `When it is verified as PDF/X-4`, `Then it passes`, `Then check "<id>" fails on page 1`
+    and `Then no check fails but "<id>"`. What each fixture must raise is in `tests/fixtures/pdfx/expected.toml`.
   - The library may not panic on input: `unwrap`, `expect`, `panic!` and slice indexing are denied outside tests.
   - Every check is an entry in `rust/checks.toml` (id, title in our own words, the clauses it may cite, severity, the
     levels it applies to, and `implemented`, `todo` or `skip` with a reason). `rust/build.rs` refuses a malformed entry

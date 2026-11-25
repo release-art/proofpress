@@ -4,6 +4,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use cucumber::{World, given, then, when};
+use proof_pdf::checks::verify;
+use proof_pdf::findings::{Level, Report, Verdict};
 use proof_pdf::pipeline::{Listener, publish};
 
 /// Who heard what, in the order they heard it, shared by every listener in a scenario.
@@ -20,11 +22,14 @@ impl Listener<u32> for Named {
     }
 }
 
+/// One scenario's state: the pipeline steps use the listeners and log, the PDF/X steps the fixture and its report.
 #[derive(Debug, Default, World)]
 struct Pipeline {
     observer: String,
     reader: String,
     log: Log,
+    fixture: (String, Vec<u8>),
+    report: Option<Report>,
 }
 
 impl Pipeline {
@@ -78,6 +83,56 @@ fn heard(world: &mut Pipeline, name: String, count: usize) {
         world.log.borrow().iter().filter(|(heard, _)| *heard == name).count(),
         count
     );
+}
+
+/// A fixture by name: built ones are in `tests/fixtures/pdfs`, PDF/X-only ones in `tests/fixtures/pdfx`.
+#[given(expr = "the fixture {string}")]
+fn fixture(world: &mut Pipeline, name: String) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures");
+    let file = format!("{name}.pdf");
+    let path = [root.join("pdfs").join(&file), root.join("pdfx").join(&file)]
+        .into_iter()
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| panic!("no fixture {file}"));
+    world.fixture = (file, std::fs::read(path).unwrap());
+}
+
+#[when(regex = r"^it is verified as PDF/X-(4|4p|5g|5pg|5n)$")]
+fn verified(world: &mut Pipeline, level: String) {
+    let level = match level.as_str() {
+        "4" => Level::X4,
+        "4p" => Level::X4p,
+        "5g" => Level::X5g,
+        "5pg" => Level::X5pg,
+        _ => Level::X5n,
+    };
+    world.report = Some(verify(&world.fixture.0, &world.fixture.1, level));
+}
+
+fn report(world: &Pipeline) -> &Report {
+    world.report.as_ref().expect("a When step verifies the fixture first")
+}
+
+#[then("it passes")]
+fn passes(world: &mut Pipeline) {
+    let report = report(world);
+    assert_eq!(report.verdict, Verdict::Pass, "{:#?}", report.findings);
+}
+
+#[then(expr = "check {string} fails on page {int}")]
+fn fails_on_page(world: &mut Pipeline, id: String, page: u32) {
+    let report = report(world);
+    assert!(
+        report.findings.iter().any(|f| f.check.id == id && f.page == Some(page)),
+        "{id} did not fail on page {page}: {:#?}",
+        report.findings
+    );
+}
+
+#[then(expr = "no check fails but {string}")]
+fn only(world: &mut Pipeline, id: String) {
+    let others: Vec<_> = report(world).findings.iter().filter(|f| f.check.id != id).collect();
+    assert!(others.is_empty(), "other checks failed: {others:#?}");
 }
 
 fn main() {
