@@ -669,6 +669,32 @@ def _x4_intent_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _x4_boxes(**boxes: list[float] | None) -> pikepdf.Pdf:
+    """x4-good with its page's boxes set, or removed for ``None``: one 6.12 defect per fixture."""
+    pdf = _x4_good()
+    page = pdf.pages[0].obj
+    for key, value in boxes.items():
+        if value is None:
+            del page[f"/{key}"]
+        else:
+            page[f"/{key}"] = pikepdf.Array(value)
+    return pdf
+
+
+def _x4_box_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.12 (tests/fixtures/pdfx/expected.toml says what each raises). x4-good's page is
+    MediaBox = BleedBox = [0 0 314.65 436.54], with a TrimBox 3 mm inside."""
+    trim = [8.5, 8.5, 306.1, 428.0]
+    return {
+        "x4-no-trim-or-art": _x4_boxes(TrimBox=None),
+        "x4-trim-and-art": _x4_boxes(ArtBox=trim),
+        "x4-art-not-trim": _x4_boxes(TrimBox=None, ArtBox=trim),
+        "x4-trim-beyond-bleed": _x4_boxes(BleedBox=[10, 10, 300, 420]),
+        "x4-bleed-beyond-crop": _x4_boxes(CropBox=[4, 4, 310, 432]),
+        "x4-crop-beyond-media": _x4_boxes(CropBox=[0, 0, 320, 440]),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -750,6 +776,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         "x4-perms": _x4_perms(),
         **_x4_metadata_fixtures(),
         **_x4_intent_fixtures(),
+        **_x4_box_fixtures(),
     }
 
 

@@ -689,7 +689,7 @@ title = "Each page has a TrimBox or an ArtBox"
 clauses = ["iso-15930-7:6.12"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.boxes.not-both"
@@ -697,7 +697,7 @@ title = "No page has both TrimBox and ArtBox"
 clauses = ["iso-15930-7:6.12"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.boxes.within-bleed"
@@ -705,7 +705,7 @@ title = "The trim or art box lies within the BleedBox"
 clauses = ["iso-15930-7:6.12"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.boxes.within-crop"
@@ -713,7 +713,7 @@ title = "Page boxes lie within the CropBox"
 clauses = ["iso-15930-7:6.12"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.boxes.within-media"
@@ -721,7 +721,7 @@ title = "Page boxes lie within the MediaBox"
 clauses = ["iso-15930-7:6.12"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.boxes.prefer-trim"
@@ -729,7 +729,7 @@ title = "TrimBox is used rather than ArtBox"
 clauses = ["iso-15930-7:6.12"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.extgstate.no-tr"

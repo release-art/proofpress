@@ -53,6 +53,32 @@ pub(crate) enum Dangling {
     Generation(u16),
 }
 
+/// The page attributes a page may take from its ancestors (7.7.3.4).
+const INHERITABLE: [&[u8]; 4] = [b"Resources", b"MediaBox", b"CropBox", b"Rotate"];
+
+/// Inheritable attributes by key, each resolved.
+type Inherited<'a> = Vec<(&'static [u8], &'a Object)>;
+
+/// A page: its object number (0 for a page written directly in `/Kids`), its dictionary, and the inheritable
+/// attributes, its own or its nearest ancestor's.
+#[derive(Debug)]
+pub(crate) struct Page<'a> {
+    pub(crate) num: u32,
+    pub(crate) dict: &'a Dict,
+    inherited: Inherited<'a>,
+}
+
+impl<'a> Page<'a> {
+    /// The page's value for `key`: for an inheritable key, its own or its nearest ancestor's, resolved; for any other,
+    /// its own as written.
+    pub(crate) fn get(&self, key: &[u8]) -> Option<&'a Object> {
+        match self.inherited.iter().find(|(k, _)| *k == key) {
+            Some((_, value)) => Some(value),
+            None => self.dict.get(key),
+        }
+    }
+}
+
 /// An object stream's decoded data, and its `/N` and `/First`.
 struct ObjectStream {
     data: Vec<u8>,
@@ -142,6 +168,47 @@ impl Document {
             Ok(Decoded::Plain(data)) => Some(data),
             _ => None,
         }
+    }
+
+    /// Every page in order, from the catalog's `/Pages` (7.7.3), with its inheritable attributes resolved (7.7.3.4).
+    /// A node already visited is not entered again, so a `/Kids` loop ends the walk there.
+    pub(crate) fn pages(&self) -> Vec<Page<'_>> {
+        let mut out = Vec::new();
+        let mut seen = BTreeSet::new();
+        let root = self.catalog().and_then(|c| c.get(b"Pages"));
+        let mut stack: Vec<(&Object, Inherited<'_>)> = root.map(|r| (r, Vec::new())).into_iter().collect();
+        while let Some((node, inherited)) = stack.pop() {
+            if let Value::Reference(num, _) = node.value
+                && !seen.insert(num)
+            {
+                continue;
+            }
+            let Some(dict) = self.resolve(node).and_then(Object::dict) else {
+                continue;
+            };
+            let mut attributes = inherited;
+            for key in INHERITABLE {
+                if let Some(value) = dict.get(key).and_then(|v| self.resolve(v)) {
+                    attributes.retain(|(k, _)| *k != key);
+                    attributes.push((key, value));
+                }
+            }
+            let kids = dict.get(b"Kids").and_then(|k| self.resolve(k)).and_then(Object::array);
+            if let (Some(b"Pages") | None, Some(kids)) = (dict.get(b"Type").and_then(Object::name), kids) {
+                stack.extend(kids.iter().rev().map(|kid| (kid, attributes.clone())));
+            } else {
+                let num = match node.value {
+                    Value::Reference(num, _) => num,
+                    _ => 0,
+                };
+                out.push(Page {
+                    num,
+                    dict,
+                    inherited: attributes,
+                });
+            }
+        }
+        out
     }
 
     /// `object`, or what it refers to when it is a reference to an object the walk read.

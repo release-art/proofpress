@@ -3,5 +3,6 @@
 
 pub(crate) mod date;
 pub(crate) mod icc;
+pub(crate) mod rect;
 pub(crate) mod text;
 pub(crate) mod xmp;

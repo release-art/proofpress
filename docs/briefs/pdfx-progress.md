@@ -10,8 +10,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 3** (document structure and metadata): tasks 3.2 (XMP, 6.9-6.11) and 3.3 (ICC header, 6.4.1-6.4.2.1) done.
-  Next: 3.1, tier 5's page tree; then the 3.5 rows.
+- **Phase 3** (document structure and metadata): 3.2 (XMP, 6.9-6.11), 3.3 (ICC header, 6.4.1-6.4.2.1) and the page
+  tree of 3.1 with the 6.12 rows done. Next: the 3.5 rows on keys (6.13-6.26), then optional content and annotations.
 
 ## Done
 
@@ -40,7 +40,8 @@ record it as not conforming to that one rule).
 | (progress) | `4a7a721` | This file brought up to date |
 | 2.3 | `6deb894` | Mutation test on stable Rust; "same rule" files compared; phase 2 report |
 | 3.2 | `bf5716a`; test-db `50ca948e` | XMP, date and text-string helpers in `common`; 25 metadata checks (6.9-6.11) with 25 fixtures and 3 feature files |
-| 3.3 | `d3f2f13`; this commit | ICC header helper; 11 output-intent checks (6.4.1, 6.4.2.1) with 12 fixtures |
+| 3.3 | `d3f2f13`, `a3b7768`; test-db `650d1bf7` | ICC header helper; 11 output-intent checks (6.4.1, 6.4.2.1) with 12 fixtures |
+| 3.1 (part), 3.5 (6.12) | this commit | The page tree with inherited attributes; a rectangle helper; 6 box checks with 6 fixtures |
 
 ## Register coverage
 
@@ -48,7 +49,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 44 | 94 | 3 |
+| PDF/X-4 and X-4p | 50 | 88 | 3 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 16 | 37 | 1 (`internal`) |
 
@@ -152,6 +153,10 @@ Oracle consultations:
 - Decompression limits: every filter decodes within `Limits::decoded_bytes` (1 GiB), tested per filter. The brief's test
   file, pdf.js's `bomb_giant.pdf`, is a JBIG2 bomb; tier 3 leaves image filters encoded, so it reads in milliseconds and
   2.5 MB. It becomes a real test when an image decoder arrives (phase 4 onwards), and stays in the corpus run until then.
+- Task 3.1 is done in part: the page tree with inheritance. Its Python mapping waits for a Python caller that needs
+  objects (the parity gate, phase 4), and the typed views and shape checks generated from the Arlington PDF Model
+  (Apache-2.0, `cdc485e` the candidate pin) wait until a row needs them: the X-4 rows read a handful of keys each, and
+  generating views for every PDF object type now would be code without a caller.
 - Task 3.3: the mutation test timed out under coverage now and then. The cause was `x4-too-many-objects`: its
   cross-reference stream lists 8,388,608 entries, which took 12 seconds to decode in a debug build before the object
   limit was checked. A cross-reference stream whose `/Index` declares more entries than `Limits::objects` is now refused

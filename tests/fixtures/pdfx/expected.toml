@@ -257,3 +257,29 @@ expect = { "x4.output-intent.profile-class-prtr" = "the profile's class is mntr 
 [x4-intent-profile-lab]
 levels = ["x4"]
 expect = { "x4.output-intent.channels" = "the profile's data colour space is Lab (6.4.1)" }
+
+# PDF/X-4 6.12: page boxes. Each changes x4-good's page boxes in one way.
+
+[x4-no-trim-or-art]
+levels = ["x4"]
+expect = { "x4.boxes.trim-or-art" = "the page has neither a TrimBox nor an ArtBox (6.12)" }
+
+[x4-trim-and-art]
+levels = ["x4"]
+expect = { "x4.boxes.not-both" = "the page has both (6.12)" }
+
+[x4-art-not-trim]
+levels = ["x4"]
+expect = { "x4.boxes.prefer-trim" = "an ArtBox instead of a TrimBox, a warning (6.12)" }
+
+[x4-trim-beyond-bleed]
+levels = ["x4"]
+expect = { "x4.boxes.within-bleed" = "the BleedBox is smaller than the TrimBox (6.12)" }
+
+[x4-bleed-beyond-crop]
+levels = ["x4"]
+expect = { "x4.boxes.within-crop" = "a CropBox inside the BleedBox (6.12)" }
+
+[x4-crop-beyond-media]
+levels = ["x4"]
+expect = { "x4.boxes.within-media" = "a CropBox larger than the MediaBox (6.12)" }

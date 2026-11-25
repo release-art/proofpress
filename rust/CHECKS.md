@@ -88,12 +88,12 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.identity.version-value` | The PDF/X version value is exact | iso-15930-7:6.11, iso-15930-7:A.3 | error | x4, x4p | implemented |
 | `x4.identity.pdfxid-only-version` | The pdfxid namespace holds only the version | iso-15930-7:6.11 | error | x4, x4p | implemented |
 | `x4.identity.no-info-conformance` | Info has no GTS_PDFXConformance | iso-15930-7:6.11 | error | x4, x4p | implemented |
-| `x4.boxes.trim-or-art` | Each page has a TrimBox or an ArtBox | iso-15930-7:6.12 | error | x4, x4p | todo |
-| `x4.boxes.not-both` | No page has both TrimBox and ArtBox | iso-15930-7:6.12 | error | x4, x4p | todo |
-| `x4.boxes.within-bleed` | The trim or art box lies within the BleedBox | iso-15930-7:6.12 | error | x4, x4p | todo |
-| `x4.boxes.within-crop` | Page boxes lie within the CropBox | iso-15930-7:6.12 | error | x4, x4p | todo |
-| `x4.boxes.within-media` | Page boxes lie within the MediaBox | iso-15930-7:6.12 | error | x4, x4p | todo |
-| `x4.boxes.prefer-trim` | TrimBox is used rather than ArtBox | iso-15930-7:6.12 | warning | x4, x4p | todo |
+| `x4.boxes.trim-or-art` | Each page has a TrimBox or an ArtBox | iso-15930-7:6.12 | error | x4, x4p | implemented |
+| `x4.boxes.not-both` | No page has both TrimBox and ArtBox | iso-15930-7:6.12 | error | x4, x4p | implemented |
+| `x4.boxes.within-bleed` | The trim or art box lies within the BleedBox | iso-15930-7:6.12 | error | x4, x4p | implemented |
+| `x4.boxes.within-crop` | Page boxes lie within the CropBox | iso-15930-7:6.12 | error | x4, x4p | implemented |
+| `x4.boxes.within-media` | Page boxes lie within the MediaBox | iso-15930-7:6.12 | error | x4, x4p | implemented |
+| `x4.boxes.prefer-trim` | TrimBox is used rather than ArtBox | iso-15930-7:6.12 | warning | x4, x4p | implemented |
 | `x4.extgstate.no-tr` | Graphics states have no transfer function | iso-15930-7:6.13 | error | x4, x4p | todo |
 | `x4.extgstate.no-htp` | Graphics states have no halftone phase | iso-15930-7:6.13 | error | x4, x4p | todo |
 | `x4.extgstate.tr2-default` | TR2, if present, is Default | iso-15930-7:6.13 | error | x4, x4p | todo |
