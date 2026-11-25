@@ -269,41 +269,22 @@ impl Document {
             let decoded = self.decode_object_stream(stream, limits);
             self.object_streams.insert(stream, decoded);
         }
-        let Some(Ok(ObjectStream { data, count, first })) = self.object_streams.get(&stream) else {
+        let Some(Ok(decoded)) = self.object_streams.get(&stream) else {
             return damaged;
         };
-        let mut header = Parser::new(data.get(..*first).unwrap_or_default(), 0, Mode::Objects, 1);
-        let mut pairs = Vec::new();
-        while let Ok(Some(syntax::Located {
-            event: syntax::Event::Integer(i),
-            ..
-        })) = header.next()
-        {
-            pairs.push(i);
-        }
-        let listed = pairs.get(2 * index).copied();
-        let offset = pairs.get(2 * index + 1).and_then(|o| usize::try_from(*o).ok());
-        let (Some(offset), true) = (offset, index < *count && listed == Some(i64::from(num))) else {
-            return damaged;
-        };
-        let mut parser = Parser::new(data, first.saturating_add(offset), Mode::Objects, limits.nesting);
         let mut notes = Vec::new();
-        let read = syntax::read(&mut parser, &mut notes);
+        let read = member(decoded, num, index, limits, &mut notes);
         self.notes
             .extend(notes.into_iter().map(|n| (Buffer::ObjectStream(stream), n)));
-        match read {
-            Ok(Read::Value(object)) => Slot::Loaded {
-                object,
-                stream: None,
-                buffer: Buffer::ObjectStream(stream),
-            },
-            _ => damaged,
-        }
+        read.map_or(damaged, |object| Slot::Loaded {
+            object,
+            stream: None,
+            buffer: Buffer::ObjectStream(stream),
+        })
     }
 
     /// Object stream `stream`, decoded, reading the stream object first if the walk has not.
     fn decode_object_stream(&mut self, stream: u32, limits: &Limits) -> Result<ObjectStream, ObjectDamage> {
-        let damaged = ObjectDamage::ObjectStream(stream);
         if let (None, Some(Entry::Direct { offset, generation: 0 })) =
             (self.slots.get(&stream), self.xref.entries.get(&stream).copied())
         {
@@ -316,21 +297,53 @@ impl Document {
             ..
         }) = self.slots.get(&stream)
         else {
-            return Err(damaged);
+            return Err(ObjectDamage::ObjectStream(stream));
         };
-        let dict = object
-            .dict()
-            .filter(|d| d.get(b"Type").and_then(Object::name) == Some(b"ObjStm"))
-            .ok_or(damaged)?;
-        let (count, first) = (
-            dict_int(dict, b"N").ok_or(damaged)?,
-            dict_int(dict, b"First").ok_or(damaged)?,
-        );
         let (buf, xref) = (&self.file, &self.xref);
-        match file::decode(buf, dict, *range, limits, &|o| resolve_direct(buf, xref, o, limits)) {
-            Ok(Decoded::Plain(data)) => Ok(ObjectStream { data, count, first }),
-            _ => Err(damaged),
-        }
+        object_stream(buf, object, *range, limits, &|o| resolve_stored(buf, xref, o, limits))
+            .ok_or(ObjectDamage::ObjectStream(stream))
+    }
+}
+
+/// An object stream's data and layout, from its stream object: `/Type /ObjStm`, `/N` and `/First`, decoded.
+fn object_stream(
+    buf: &[u8],
+    object: &Object,
+    range: (usize, usize),
+    limits: &Limits,
+    resolve: &dyn Fn(&Object) -> Option<Object>,
+) -> Option<ObjectStream> {
+    let dict = object
+        .dict()
+        .filter(|d| d.get(b"Type").and_then(Object::name) == Some(b"ObjStm"))?;
+    let (count, first) = (dict_int(dict, b"N")?, dict_int(dict, b"First")?);
+    match file::decode(buf, dict, range, limits, resolve) {
+        Ok(Decoded::Plain(data)) => Some(ObjectStream { data, count, first }),
+        _ => None,
+    }
+}
+
+/// Object `num`, the `index`-th member of a decoded object stream, when its header lists it there.
+fn member(stream: &ObjectStream, num: u32, index: usize, limits: &Limits, notes: &mut Vec<Note>) -> Option<Object> {
+    let ObjectStream { data, count, first } = stream;
+    let mut header = Parser::new(data.get(..*first).unwrap_or_default(), 0, Mode::Objects, 1);
+    let mut pairs = Vec::new();
+    while let Ok(Some(syntax::Located {
+        event: syntax::Event::Integer(i),
+        ..
+    })) = header.next()
+    {
+        pairs.push(i);
+    }
+    let listed = pairs.get(2 * index).copied();
+    let offset = pairs.get(2 * index + 1).and_then(|o| usize::try_from(*o).ok())?;
+    if index >= *count || listed != Some(i64::from(num)) {
+        return None;
+    }
+    let mut parser = Parser::new(data, first.saturating_add(offset), Mode::Objects, limits.nesting);
+    match syntax::read(&mut parser, notes) {
+        Ok(Read::Value(object)) => Some(object),
+        _ => None,
     }
 }
 
@@ -356,29 +369,44 @@ fn references(object: &Object, stack: &mut Vec<(u32, u16)>) {
     }
 }
 
-/// A referenced object read straight from the file, for an indirect `/Length` or a filter named by reference. Only a
-/// directly stored object without a stream qualifies, so these reads cannot recurse.
-fn resolve_direct(buf: &[u8], xref: &Xref, reference: &Object, limits: &Limits) -> Option<Object> {
+/// A referenced object read straight from the file, for an indirect `/Length` or a filter named by reference: an
+/// object stored directly without a stream, or a member of an object stream whose own `/Length` and filters are direct.
+/// These reads never follow a further reference, so they cannot recurse.
+fn resolve_stored(buf: &[u8], xref: &Xref, reference: &Object, limits: &Limits) -> Option<Object> {
     let Value::Reference(num, generation) = reference.value else {
         return None;
     };
-    let Some(Entry::Direct { offset, generation: g }) = xref.entries.get(&num).copied() else {
-        return None;
+    let at = |offset: usize| {
+        file::framed(
+            buf,
+            xref.header.saturating_add(offset),
+            limits,
+            &mut Vec::new(),
+            &|_| None,
+        )
+        .ok()
     };
-    let framed = file::framed(
-        buf,
-        xref.header.saturating_add(offset),
-        limits,
-        &mut Vec::new(),
-        &|_| None,
-    )
-    .ok()?;
-    (framed.number == num && framed.generation == generation && g == generation && framed.stream.is_none())
-        .then_some(framed.object)
+    match xref.entries.get(&num).copied()? {
+        Entry::Direct { offset, generation: g } => {
+            let framed = at(offset)?;
+            let ok =
+                framed.number == num && framed.generation == generation && g == generation && framed.stream.is_none();
+            ok.then_some(framed.object)
+        }
+        Entry::Compressed { stream, index } if generation == 0 => {
+            let Some(Entry::Direct { offset, .. }) = xref.entries.get(&stream).copied() else {
+                return None;
+            };
+            let container = at(offset)?;
+            let decoded = object_stream(buf, &container.object, container.stream?, limits, &|_| None)?;
+            member(&decoded, num, index, limits, &mut Vec::new())
+        }
+        _ => None,
+    }
 }
 
 fn integer_at(buf: &[u8], xref: &Xref, reference: &Object, limits: &Limits) -> Option<i64> {
-    resolve_direct(buf, xref, reference, limits)?.integer()
+    resolve_stored(buf, xref, reference, limits)?.integer()
 }
 
 fn location(buffer: Buffer) -> Vec<Location> {
@@ -731,5 +759,76 @@ mod tests {
         let broken = text.replacen(&format!("{at:010} 00000 n"), &format!("{at:010} 65536 n"), 1);
         let doc = open(broken.as_bytes());
         assert!(matches!(doc.slots.get(&2), Some(Slot::Damaged(ObjectDamage::Entry))));
+    }
+
+    #[test]
+    fn a_length_may_be_stored_in_an_object_stream() {
+        let stm = object_stream(&[(3, "3")]);
+        let body: &[u8] = b"<< /Length 3 0 R >>\nstream\nabc\nendstream";
+        let buf = with_xref_stream(
+            &[(1, b"<< /S 2 0 R >>"), (2, body), (5, &stm)],
+            &[(3, 5, 0)],
+            6,
+            "/Root 1 0 R",
+        );
+        let doc = open(&buf);
+        assert!(
+            matches!(doc.slots.get(&2), Some(Slot::Loaded { stream: Some(_), .. })),
+            "{:?}",
+            doc.slots.get(&2)
+        );
+        // A compressed /Length that names a generation other than 0, or whose container is itself compressed, is not
+        // followed.
+        let wrong = with_xref_stream(
+            &[
+                (1, b"<< /S 2 0 R >>"),
+                (2, b"<< /Length 3 1 R >>\nstream\nabc\nendstream"),
+                (5, &stm),
+            ],
+            &[(3, 5, 0)],
+            6,
+            "/Root 1 0 R",
+        );
+        assert!(matches!(
+            open(&wrong).slots.get(&2),
+            Some(Slot::Damaged(ObjectDamage::Length(_)))
+        ));
+        let nested = with_xref_stream(
+            &[(1, b"<< /S 2 0 R >>"), (2, body)],
+            &[(3, 5, 0), (5, 7, 0)],
+            6,
+            "/Root 1 0 R",
+        );
+        assert!(matches!(
+            open(&nested).slots.get(&2),
+            Some(Slot::Damaged(ObjectDamage::Length(_)))
+        ));
+        let gone = with_xref_stream(
+            &[(1, b"<< /S 2 0 R >>"), (2, body), (5, b"(not a stream)")],
+            &[(3, 5, 0)],
+            6,
+            "/Root 1 0 R",
+        );
+        assert!(matches!(
+            open(&gone).slots.get(&2),
+            Some(Slot::Damaged(ObjectDamage::Length(_)))
+        ));
+    }
+
+    #[test]
+    fn a_length_whose_object_stream_is_unreadable_or_not_one() {
+        let body: &[u8] = b"<< /Length 3 0 R >>\nstream\nabc\nendstream";
+        for container in [&b"[1"[..], b"<< /Type /Other /Length 1 >>\nstream\n3\nendstream"] {
+            let buf = with_xref_stream(
+                &[(1, b"<< /S 2 0 R >>"), (2, body), (5, container)],
+                &[(3, 5, 0)],
+                6,
+                "/Root 1 0 R",
+            );
+            assert!(matches!(
+                open(&buf).slots.get(&2),
+                Some(Slot::Damaged(ObjectDamage::Length(_)))
+            ));
+        }
     }
 }
