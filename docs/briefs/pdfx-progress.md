@@ -12,7 +12,7 @@ record it as not conforming to that one rule).
 
 - **Phase 2** (reading the file): task 2.1 in progress. Tiers 1 to 5 read a file (first slice committed); next: the
   brief's parser to-do list (header offset handling done; inline images, decompression limits, the oracle and fuzz runs),
-  then 2.2's PDF/X rows. The Windows build request is queued after this slice.
+  then 2.2's PDF/X rows.
 
 ## Done
 
@@ -106,8 +106,9 @@ Oracle consultations:
 
 ## Owner requests
 
-- 2026-11-25: add a Windows x64 build to CI and the release wheels (`x86_64-pc-windows-msvc`), with a Windows form of
-  `bin/rust/check-wheel.sh`'s shared-library check. To do after the first parser slice (task 2.1).
+- 2026-11-25: add a Windows x64 build to CI and the release wheels. Done: a `windows` CI job (Rust tests, a wheel that
+  installs and runs) and a `x86_64-pc-windows-msvc` release wheel, checked for non-system DLLs with `pefile`. Unverified
+  until pushed: no Windows machine here.
 
 ## Owner actions
 

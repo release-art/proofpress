@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The package now contains a compiled Rust core (`proof_pdf._internal._core`), the start of the port described in
   `docs/briefs/rust-port.md`. It is built with maturin, so releases ship a wheel per platform (macOS arm64, Linux x86-64
-  and arm64, manylinux) and installing from source needs Rust. Nothing user-visible uses it yet.
+  and arm64, manylinux, Windows x64) and installing from source needs Rust. Nothing user-visible uses it yet.
 - Total ink (`tac`) counts each spot colour as one ink at its tint, measured with Ghostscript's `tiffsep` (one plate per
   ink) instead of `tiff32nc`, which converted spots to their CMYK alternate and dropped a spot overprinting process ink.
   Jobs with spot colours can read lower than before (a spot whose alternate was a CMYK mix), or higher (a spot

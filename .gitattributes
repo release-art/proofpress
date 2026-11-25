@@ -1,0 +1,5 @@
+# Files the tests compare byte for byte keep LF on every platform, including Windows checkouts.
+rust/CHECKS.md text eol=lf
+rust/src/snapshots/*.snap text eol=lf
+*.pdf binary
+*.icc binary

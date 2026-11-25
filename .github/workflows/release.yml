@@ -18,6 +18,7 @@ jobs:
           - { os: macos-latest, target: aarch64-apple-darwin }
           - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -25,20 +26,28 @@ jobs:
         with:
           python-version: "3.15"
       - run: bin/rust/set-version.sh "${GITHUB_REF_NAME#v}"
+        shell: bash
       # maturin runs cargo from the root, where rust/rust-toolchain.toml is not seen: pass the pinned toolchain.
       - run: echo "RUST_TOOLCHAIN=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust/rust-toolchain.toml)" >> "$GITHUB_ENV"
+        shell: bash
       - uses: PyO3/maturin-action@v1
         with:
           rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter python3.15
           manylinux: auto
+      - if: runner.os == 'Windows'
+        run: python -m pip install pefile
       # Only OS libraries, and the tag's version: the single wheel needs proving, not assuming.
       - run: for w in dist/*.whl; do bin/rust/check-wheel.sh "$w" "${GITHUB_REF_NAME#v}"; done
+        shell: bash
       - name: Install on a clean interpreter and run it
+        shell: bash
         run: |
-          python -m venv /tmp/clean && /tmp/clean/bin/pip install dist/*.whl
-          test "$(/tmp/clean/bin/proof-pdf --version)" = "proof-pdf ${GITHUB_REF_NAME#v}"
+          python -m venv clean
+          bin=clean/bin; [ -d clean/Scripts ] && bin=clean/Scripts
+          "$bin/pip" install dist/*.whl
+          test "$("$bin/proof-pdf" --version)" = "proof-pdf ${GITHUB_REF_NAME#v}"
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.target }}

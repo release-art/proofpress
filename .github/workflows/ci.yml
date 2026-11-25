@@ -51,6 +51,28 @@ jobs:
         env:
           NEXTEST_PROFILE: ci
 
+  windows:
+    # The Rust core's tests, and a wheel that installs and runs, on Windows x64.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.15"
+      - run: echo "PYO3_PYTHON=$(which python)" >> "$GITHUB_ENV"
+      - run: rustup toolchain install && rustup default "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+        working-directory: rust
+      - run: cargo test --all-features
+        working-directory: rust
+      - run: python -m pip install maturin pefile && maturin build --release --out dist
+      - run: bin/rust/check-wheel.sh dist/*.whl
+      - run: |
+          python -m venv clean && clean/Scripts/pip install dist/*.whl
+          clean/Scripts/proof-pdf --version
+
   suites:
     # Opt-in: runs the Ghent/Altona calibration over files fetched at run time (they cannot be committed).
     if: github.event_name == 'workflow_dispatch'

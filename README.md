@@ -49,8 +49,8 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 `inspect` reports what is in a PDF without judging it, and `texlog` lints a LaTeX build log. `preview` rasterises each page and draws the trim, bleed and safe guides from the PDF's own boxes, so a geometry finding can be seen.
 
 ```zsh
-pip install proof-pdf          # Python 3.15; needs verapdf and gs (Ghostscript) on PATH. Wheels for macOS arm64 and Linux
-                               # x86-64 and arm64; elsewhere pip builds the Rust core, which needs rustup
+pip install proof-pdf          # Python 3.15; needs verapdf and gs (Ghostscript) on PATH. Wheels for macOS arm64, Linux
+                               # x86-64 and arm64, Windows x64; elsewhere pip builds the Rust core, which needs rustup
 
 proof-pdf verify job/ --trim-mm 105x148 --bleed-mm 3 --exclude '*_preview.pdf'
 proof-pdf verify job/ --exempt 'manual.pdf=internal docs, never printed'   # listed with the reason, never fails
