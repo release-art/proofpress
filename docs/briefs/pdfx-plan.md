@@ -199,7 +199,9 @@ process rules as `skip`, and a scenario runs end to end on `x4-good` (judging no
 - **6.6** name encoding: the raw spelling is already kept, so check `#xx` escapes and UTF-8.
 - **6.8** filters: the allowed set, LZW, `Crypt`.
 - **6.15** encryption and permissions: only `UR` and `UR3`.
-- **6.25** architectural limits for strings, names, arrays, dictionaries, as PDF/X-4 checks, not safety limits. Needs 0.2.
+- **6.25** architectural limits, as PDF/X-4 checks, not safety limits. The PDF 1.6 Reference's Table C.1 (in test-db since
+  task 0.2) limits integers, reals, strings inside content streams, names and indirect objects, which tiers 2 and 4 see; it has
+  no array or dictionary limit. Its `q` nesting, DeviceN and CID rows wait for tiers 5 to 7.
 - **6.1.1** "valid PDF": each tier's own validators report here, as `x4.pdf-reference.conforms` findings with `caused_by`
   pointing at the underlying finding.
 
@@ -209,7 +211,7 @@ process rules as `skip`, and a scenario runs end to end on `x4-good` (judging no
   comparing them with the PDF 1.6 values);
 - the brief's oracle and fuzz runs over every corpus in test-db.
 
-*Done when* the brief's stage 2 is done, and the rows for 6.6, 6.8, 6.15 and 6.25 (strings, names, arrays, dictionaries) are
+*Done when* the brief's stage 2 is done, and the rows for 6.6, 6.8, 6.15 and 6.25 (numbers, content-stream strings, names, indirect objects) are
 `implemented`. Judgement: 2–3 weeks.
 
 ## Phase 3: document structure and metadata (tier 5 and helpers)

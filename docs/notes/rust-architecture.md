@@ -137,8 +137,8 @@ whether those bytes are a text, ASCII, byte or date string depends on the key th
 - **Two defects that only PDF/A forbids are warnings:** an odd number of hex digits (ISO 32000 pads it with a 0; ISO 19005-2
   forbids it) and a name that is not UTF-8 (ISO 19005-2, 6.1.8). PDF/A's verdict stays veraPDF's; the warning says early where it
   will fail.
-- **Length limits from standards are checks, not safety limits.** PDF/X-4 (ISO 15930-7, 6.25) requires PDF Reference 1.7's Table
-  C.1 limits, among them 32,767 bytes per string and 127 per name, so they are PDF/X-4 checks of ours. Under PDF/A alone they stay
+- **Length limits from standards are checks, not safety limits.** PDF/X-4 (ISO 15930-7, 6.25) requires the PDF 1.6 Reference's
+  Table C.1 limits, among them 32,767 bytes per string inside a content stream and 127 per name, so they are PDF/X-4 checks of ours. Under PDF/A alone they stay
   veraPDF's.
 
 **Dangling references: null for meaning, a reason for reporting.** ISO 32000-2 7.3.10 says a reference to an undefined object is not

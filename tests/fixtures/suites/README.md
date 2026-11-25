@@ -23,9 +23,10 @@ and ask that links point to the start page, "as their URL might change without p
 Online Version, but they are the only ones on offer for the same project and publisher, so they are treated as applying.
 Redistribution is therefore forbidden without ECI's written permission (altonatestsuite@eci.org), and the files are fetched.
 
-**Ghent PDF Output Suite 5.0** (https://gwg.org/gos5/): not covered. gwg.org answered HTTP 503 with `Retry-After: 3600` on
-2026-10-21, so neither its terms nor its files were read or fetched. Add it here (terms first, then `bin/suites/fetch.sh`
-and `expected.toml`) when the site is reachable.
+**Ghent PDF Output Suite 5.0** (https://gwg.org/gos5/): not covered here. gwg.org was down on 2026-10-21 but has answered
+since 2026-11-08. Its terms allow use for testing only and require GWG's written permission for commercial use, and
+proof-pdf may be sold, so permission to run it in public CI is to be asked for (admin@gwg.org). Until GWG agrees, it is a
+local corpus run over the private test-db copy only, never fetched by `bin/suites/fetch.sh`.
 
 | File | sha256 (first retrieval) |
 |---|---|

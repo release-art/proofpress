@@ -20,6 +20,8 @@ Newest first. A decision changes only by a new line here.
 
 | Date | Decision | Where |
 |---|---|---|
+| 2026-11-25 | PDF/X 6.25 means the PDF 1.6 Reference's Table C.1 only (now held): numbers, strings inside content streams, names, indirect objects, `q` nesting, DeviceN components and CIDs. It has no array or dictionary limit, and the page-size limit sits outside the table, so neither is a PDF/X check | Plan, tasks 0.2 and 2.2 |
+| 2026-11-25 | X4-Q6 stands as decided: no corrigendum or amendment to ISO 15930-7:2010 was found. ISO 15930-8:2010 has a Technical Corrigendum 1 (2011) that is not held; it is wanted before phase 8 | Plan, task 0.2 |
 | 2026-11-25 | The 34 PDF/X interpretation questions (X-4 Q1-Q21, X-5 Q1-Q13) take the defaults proposed in the plan, among them: `Trapped` judged in XMP; every action fails; spot alternates follow the colour rules; targets at X-1a or X-3 are "not evaluated" | Plan, task 0.1 |
 | 2026-11-25 | Feature-complete means every file requirement of PDF/X-4, X-4p (ISO 15930-7) and X-5g, X-5pg, X-5n (ISO 15930-8), plus today's print checks | Plan |
 | 2026-11-25 | Content streams, the page model, checks and reports, limits, the PyO3 and CLI boundaries and the writer settled from a survey of qpdf, pdf.js, PDFBox, MuPDF, hayro, veraPDF, SARIF, ruff and ESLint. Checks report a status separate from severity; a form without `/Resources` uses the page's | Architecture note |
