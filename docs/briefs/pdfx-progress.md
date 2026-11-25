@@ -10,9 +10,7 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 2** (reading the file): tasks 2.1 to 2.3 largely done. Tiers 1 to 5 read the whole corpus without a crash;
-  8 X-4 checks and 16 structure checks are implemented with fixtures; the qpdf oracle comparison is worked through (see
-  "Corpus and oracle"). Next: a decompression-bomb test, the fuzz question, then the phase 2 gates and stage report.
+- **Phase 2** (reading the file) finished; stage report below. Next: phase 3, document structure and metadata.
 
 ## Done
 
@@ -38,7 +36,8 @@ record it as not conforming to that one rule).
 | 2.1 | `03ccd61` | An unknown filter is a `stream.filter` finding wherever it appears; `pdfx.py --all` |
 | 2.3, part 1 | `803cb78` | 15 structure fixtures; 16 house and structure checks implemented |
 | 2.3 | `158d4f7`, `95ebfa3` | Three false refusals and a compressed `/Length` fixed, all found by the qpdf comparison |
-| (progress) | this commit | This file brought up to date |
+| (progress) | `4a7a721` | This file brought up to date |
+| 2.3 | this commit | Mutation test on stable Rust; "same rule" files compared; phase 2 report |
 
 ## Register coverage
 
@@ -56,7 +55,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|
 | `bin/rust/check.sh` | green at `95ebfa3`, 2026-11-25 (100% lines, regions, functions) |
 | Python (ruff, pyright, pytest) | green, 2026-11-25: 1156 passed |
-| `bin/docker/test.sh` | green at the end of phase 1 (`c2aa73a`, the Rust extension built in the image), 2026-11-25: 1156 passed |
+| `bin/docker/test.sh` | green at the end of phase 2, 2026-11-25: 1156 passed |
 | `bin/suites/pdfx.sh` | 2026-11-25: 39 files, 39 accepted, 0 problems (nothing judged yet) |
 
 ## Corpus and oracle
@@ -127,6 +126,14 @@ Oracle consultations:
   distinct object numbers the sections list as in use (Table C.1: indirect objects in a file). `x4.pdf-reference.conforms`
   is coded (every tier error becomes a 6.1.1 finding) but stays `todo` until the content and font tiers report too.
 - The extension is `proof_pdf._internal._core`, not `proof_pdf._core`: every private module lives in `_internal`.
+- Fuzzing: no `cargo fuzz` target. It needs a nightly toolchain and `cargo-fuzz`, neither installed nor in the toolchain
+  file. Instead `rust/tests/mutation.rs` mutates every built fixture with proptest on stable Rust (byte flips, cuts,
+  repeats, truncation, spliced PDF tokens) and requires a report with no `internal` finding within 10 seconds; failures
+  shrink and replay as an ordinary `cargo test`, as the brief's replay row asks. 512 cases in the gates;
+  `PROPTEST_CASES=5000000` for a long run. A coverage-guided `cargo fuzz` target can follow if the owner installs nightly.
+- Decompression limits: every filter decodes within `Limits::decoded_bytes` (1 GiB), tested per filter. The brief's test
+  file, pdf.js's `bomb_giant.pdf`, is a JBIG2 bomb; tier 3 leaves image filters encoded, so it reads in milliseconds and
+  2.5 MB. It becomes a real test when an image decoder arrives (phase 4 onwards), and stays in the corpus run until then.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 
@@ -144,6 +151,8 @@ Oracle consultations:
 - **Later, X5-Q9:** ISO 15930-1, -3, -4 and -6 are listed in test-db's `docs/standards-wanted.md`; not to buy now.
 
 ## Environment notes
+
+- The Arlington PDF Model (phase 3.1) is Apache-2.0; master at `cdc485e` (2026-11-19) is the candidate pin.
 
 - `cargo` is not on the default `PATH`: Homebrew's rustup keeps its proxies in `/opt/homebrew/opt/rustup/bin`.
 - `qpdf` 12.4.2 installed by the owner on 2026-11-25.
@@ -187,3 +196,23 @@ Oracle consultations:
 - **Departures.** The CI wheel matrix is unverified until pushed; the parity gate in CI waits for the first port; the
   extension lives in `_internal`. See "Deviations from the plan".
 
+
+### Phase 2 (reading the file), finished 2026-11-25
+
+- **What changed.** Tiers 1 to 5 read a file in Rust: the lexer and object reader (raw spellings kept), the filters
+  with byte budgets, the cross-reference chain with object and cross-reference streams, damage, gaps and refusals as
+  findings, and the walk at open. 8 PDF/X-4 checks (6.6, 6.8, 6.15, the 6.25 object count) and 16 structure checks are
+  implemented, each with a fixture that fails it and one that passes it.
+- **Toolchains.** `bin/rust/check.sh` green at 100% coverage; Python green (1156); Docker green (1156);
+  `bin/suites/pdfx.sh` 39 files, 39 accepted, no problems.
+- **Corpus, oracle and fuzzing.** 44,608 corpus files with no crash or timeout; the qpdf disagreements are explained
+  above, under "Corpus and oracle", and no print output is refused. The stable mutation test ran 5,000,000 cases (20 minutes) clean.
+- **"Same rule" test material.** On the veraPDF, Isartor and BFO files that `x4-test-material.md` §2 marks as the same
+  rule for 6.6, 6.8 and 6.15, every verdict agrees with the X-4 reading: LZW in a stream fails, a non-standard filter
+  fails, every encrypted file is refused, a font name that is not UTF-8 fails while another name passes, and a DocMDP
+  signature fails X-4 though PDF/A-2 passes it. The misses are all content-stream matters that wait for tier 6: LZW in
+  an inline image (3 files) and the lexical limits of 6.25 (the 6-1-13 files).
+- **Unexpected.** qpdf found 300 false refusals in the first reader, all fixed: free entries with generation 65536,
+  shared `/XRefStm` sections, and `/Length` stored in an object stream.
+- **Departures.** 6.25's lexical row moves to phase 4; `x4.pdf-reference.conforms` stays `todo`; no `cargo fuzz`
+  target (stable mutation test instead); `bomb_giant.pdf` waits for an image decoder. See "Deviations from the plan".
