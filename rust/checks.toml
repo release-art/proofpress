@@ -43,7 +43,7 @@ title = "The printing condition has 1, 3 or 4 channels"
 clauses = ["iso-15930-7:6.4.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.present"
@@ -52,7 +52,7 @@ title = "A GTS_PDFX output intent exists"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.unique"
@@ -60,7 +60,7 @@ title = "Only one output intent is GTS_PDFX"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.identifier-present"
@@ -68,7 +68,7 @@ title = "The PDF/X intent names its condition identifier"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.identifier-text-string"
@@ -76,7 +76,7 @@ title = "The condition identifier is a text string"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.identifier-registered"
@@ -108,7 +108,7 @@ title = "A non-ICC registry name is a URL"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.dest-profile-present"
@@ -116,7 +116,7 @@ title = "The PDF/X intent embeds its profile"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.no-dest-profile-ref"
@@ -124,7 +124,7 @@ title = "The PDF/X intent has no external profile reference"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.profile-class-prtr"
@@ -132,7 +132,7 @@ title = "The intent profile is an output-device profile"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.profile-version"
@@ -140,7 +140,7 @@ title = "The intent profile is ICC version 2 or 4"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.output-intent.output-condition"
@@ -148,7 +148,7 @@ title = "The PDF/X intent describes its condition for people"
 clauses = ["iso-15930-7:6.4.2.1"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.colour.device-space-matches-intent"

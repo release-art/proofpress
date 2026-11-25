@@ -8,20 +8,20 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.pre-separated.absent` | Pages are not pre-separated plates | iso-15930-7:6.1.2 | error | x4, x4p | todo |
 | `x4.complete.resources-inside` | Every resource a print element needs is in the file | iso-15930-7:6.3 | error | x4, x4p | todo |
 | `x4.complete.single-condition` | All print data is prepared for one printing condition | iso-15930-7:6.3, iso-15930-7:6.4.1 | error | x4, x4p | skip: Intent, not a property of the file: the colour rows are its checkable part |
-| `x4.output-intent.channels` | The printing condition has 1, 3 or 4 channels | iso-15930-7:6.4.1 | error | x4, x4p | todo |
-| `x4.output-intent.present` | A GTS_PDFX output intent exists | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
-| `x4.output-intent.unique` | Only one output intent is GTS_PDFX | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
-| `x4.output-intent.identifier-present` | The PDF/X intent names its condition identifier | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
-| `x4.output-intent.identifier-text-string` | The condition identifier is a text string | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
+| `x4.output-intent.channels` | The printing condition has 1, 3 or 4 channels | iso-15930-7:6.4.1 | error | x4, x4p | implemented |
+| `x4.output-intent.present` | A GTS_PDFX output intent exists | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
+| `x4.output-intent.unique` | Only one output intent is GTS_PDFX | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
+| `x4.output-intent.identifier-present` | The PDF/X intent names its condition identifier | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
+| `x4.output-intent.identifier-text-string` | The condition identifier is a text string | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
 | `x4.output-intent.identifier-registered` | The condition identifier names a registered condition | iso-15930-7:6.4.2.1 | warning | x4, x4p | todo |
 | `x4.output-intent.registry-name-color-org` | An ICC-registered condition gives the ICC registry | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
 | `x4.output-intent.identifier-in-registry` | The identifier exists in the named registry | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
-| `x4.output-intent.registry-name-url` | A non-ICC registry name is a URL | iso-15930-7:6.4.2.1 | warning | x4, x4p | todo |
-| `x4.output-intent.dest-profile-present` | The PDF/X intent embeds its profile | iso-15930-7:6.4.2.1 | error | x4 | todo |
-| `x4.output-intent.no-dest-profile-ref` | The PDF/X intent has no external profile reference | iso-15930-7:6.4.2.1 | error | x4 | todo |
-| `x4.output-intent.profile-class-prtr` | The intent profile is an output-device profile | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
-| `x4.output-intent.profile-version` | The intent profile is ICC version 2 or 4 | iso-15930-7:6.4.2.1 | error | x4, x4p | todo |
-| `x4.output-intent.output-condition` | The PDF/X intent describes its condition for people | iso-15930-7:6.4.2.1 | warning | x4, x4p | todo |
+| `x4.output-intent.registry-name-url` | A non-ICC registry name is a URL | iso-15930-7:6.4.2.1 | warning | x4, x4p | implemented |
+| `x4.output-intent.dest-profile-present` | The PDF/X intent embeds its profile | iso-15930-7:6.4.2.1 | error | x4 | implemented |
+| `x4.output-intent.no-dest-profile-ref` | The PDF/X intent has no external profile reference | iso-15930-7:6.4.2.1 | error | x4 | implemented |
+| `x4.output-intent.profile-class-prtr` | The intent profile is an output-device profile | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
+| `x4.output-intent.profile-version` | The intent profile is ICC version 2 or 4 | iso-15930-7:6.4.2.1 | error | x4, x4p | implemented |
+| `x4.output-intent.output-condition` | The PDF/X intent describes its condition for people | iso-15930-7:6.4.2.1 | warning | x4, x4p | implemented |
 | `x4.colour.device-space-matches-intent` | Device colour matches the output intent's family | iso-15930-7:6.4.3.2, iso-15930-7:6.4.2.3 | error | x4, x4p | todo |
 | `x4.icc.profile-version` | ICCBased profiles are ICC version 2 or 4 | iso-15930-7:6.4.3.3 | error | x4, x4p | todo |
 | `x4.icc.overprint-mode-zero` | Overprinted four-channel ICC colour uses overprint mode 0 | iso-15930-7:6.4.3.3 | error | x4, x4p | todo |

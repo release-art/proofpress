@@ -207,3 +207,53 @@ expect = { "x4.xmp.modify-date" = "xmp:ModifyDate has hour 25 (6.10.4, X4-Q7)", 
 [x4-no-xmp]
 levels = ["x4"]
 expect = { "x4.xmp.present" = "the catalog's /Metadata key is renamed (6.10.1)", "x4.trapped.present" = "so nothing the XMP must hold is there (6.9)", "x4.info.xmp-analogue-present" = "nor any analogue of the Info entries (6.10.2)", "x4.xmp.document-id" = "6.10.4", "x4.xmp.version-id" = "6.10.4", "x4.xmp.rendition-class" = "6.10.4", "x4.xmp.create-date" = "6.10.4", "x4.xmp.modify-date" = "6.10.4", "x4.xmp.metadata-date" = "6.10.4", "x4.xmp.title" = "6.10.4", "x4.xmp.agent-names" = "6.10.4, a warning", "x4.identity.version-present" = "6.11" }
+
+# PDF/X-4 6.4.1 and 6.4.2.1: the output intent. Each changes x4-good's intent or its profile's header in one way.
+
+[x4-no-output-intent]
+levels = ["x4"]
+expect = { "x4.output-intent.present" = "the catalog has no /OutputIntents (6.4.2.1)" }
+
+[x4-intent-not-pdfx]
+levels = ["x4"]
+expect = { "x4.output-intent.present" = "the only output intent is /GTS_PDFA1 (6.4.2.1)" }
+
+[x4-two-pdfx-intents]
+levels = ["x4"]
+expect = { "x4.output-intent.unique" = "two /GTS_PDFX output intents (6.4.2.1)" }
+
+[x4-intent-no-identifier]
+levels = ["x4"]
+expect = { "x4.output-intent.identifier-present" = "no /OutputConditionIdentifier (6.4.2.1)" }
+
+[x4-intent-identifier-not-text]
+levels = ["x4"]
+expect = { "x4.output-intent.identifier-text-string" = "/OutputConditionIdentifier is a name, not a text string (6.4.2.1)" }
+
+[x4-intent-registry-not-url]
+levels = ["x4"]
+expect = { "x4.output-intent.registry-name-url" = "/RegistryName is not a URL, a warning (6.4.2.1)" }
+
+[x4-intent-no-profile]
+levels = ["x4"]
+expect = { "x4.output-intent.dest-profile-present" = "no /DestOutputProfile (6.4.2.1)" }
+
+[x4-intent-profile-ref]
+levels = ["x4"]
+expect = { "x4.output-intent.no-dest-profile-ref" = "a /DestOutputProfileRef, which only X-4p may use (6.4.2.1)" }
+
+[x4-intent-no-condition]
+levels = ["x4"]
+expect = { "x4.output-intent.output-condition" = "no /OutputCondition, a warning (6.4.2.1)" }
+
+[x4-intent-profile-v5]
+levels = ["x4"]
+expect = { "x4.output-intent.profile-version" = "the profile's version byte says 5 (6.4.2.1)" }
+
+[x4-intent-profile-monitor]
+levels = ["x4"]
+expect = { "x4.output-intent.profile-class-prtr" = "the profile's class is mntr (6.4.2.1)" }
+
+[x4-intent-profile-lab]
+levels = ["x4"]
+expect = { "x4.output-intent.channels" = "the profile's data colour space is Lab (6.4.1)" }

@@ -621,6 +621,54 @@ def _x4_metadata_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _x4_intent(
+    change: str, value: pikepdf.Object | None = None, *, header: tuple[int, bytes] | None = None
+) -> pikepdf.Pdf:
+    """x4-good with its output intent's key ``change`` set to ``value`` (removed for ``None``), or its profile's header
+    bytes at ``header[0]`` replaced by ``header[1]``: one 6.4.1 or 6.4.2.1 defect per fixture."""
+    pdf = _x4_good()
+    intent = pdf.Root.OutputIntents[0]
+    if header is not None:
+        at, new = header
+        icc = bytearray(X4_PROFILE.read_bytes())
+        icc[at : at + len(new)] = new
+        profile = pdf.make_stream(zlib.compress(bytes(icc)))
+        profile["/N"], profile["/Filter"] = 4, pikepdf.Name.FlateDecode
+        intent["/DestOutputProfile"] = pdf.make_indirect(profile)
+    elif value is None:
+        del intent[f"/{change}"]
+    else:
+        intent[f"/{change}"] = value
+    return pdf
+
+
+def _x4_intent_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.4.1 and 6.4.2.1 (tests/fixtures/pdfx/expected.toml says what each raises)."""
+    two = _x4_good()
+    two.Root["/OutputIntents"].append(two.Root.OutputIntents[0])
+    none = _x4_good()
+    del none.Root["/OutputIntents"]
+    other = _x4_good()
+    other.Root.OutputIntents[0]["/S"] = pikepdf.Name.GTS_PDFA1
+    return {
+        "x4-no-output-intent": none,
+        "x4-intent-not-pdfx": other,
+        "x4-two-pdfx-intents": two,
+        "x4-intent-no-identifier": _x4_intent("OutputConditionIdentifier"),
+        "x4-intent-identifier-not-text": _x4_intent("OutputConditionIdentifier", pikepdf.Name("/FOGRA39")),
+        "x4-intent-registry-not-url": _x4_intent("RegistryName", pikepdf.String("our in-house registry")),
+        "x4-intent-no-profile": _x4_intent("DestOutputProfile"),
+        "x4-intent-profile-ref": _x4_intent(
+            "DestOutputProfileRef", pikepdf.Dictionary(URLs=pikepdf.Array([pikepdf.String("http://example.com/p.icc")]))
+        ),
+        "x4-intent-no-condition": _x4_intent("OutputCondition"),
+        # ICC.1 7.2.4-7.2.6: version byte 8, class at 12, data colour space at 16.
+        "x4-intent-profile-v5": _x4_intent("", header=(8, b"\x05")),
+        "x4-intent-profile-monitor": _x4_intent("", header=(12, b"mntr")),
+        "x4-intent-profile-lab": _x4_intent("", header=(16, b"Lab ")),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -701,6 +749,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         "x4-filter-abbreviated": _x4_content(["Fl"], zlib.compress(GOOD_X4_CONTENT)),
         "x4-perms": _x4_perms(),
         **_x4_metadata_fixtures(),
+        **_x4_intent_fixtures(),
     }
 
 

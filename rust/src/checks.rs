@@ -3,6 +3,7 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+mod intent;
 mod metadata;
 mod x4;
 
@@ -52,6 +53,20 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_IDENTITY_VERSION_VALUE, metadata::version_value),
     (f::X4_IDENTITY_PDFXID_ONLY_VERSION, metadata::pdfxid_only_version),
     (f::X4_IDENTITY_NO_INFO_CONFORMANCE, metadata::no_info_conformance),
+    (f::X4_OUTPUT_INTENT_PRESENT, intent::present),
+    (f::X4_OUTPUT_INTENT_UNIQUE, intent::unique),
+    (f::X4_OUTPUT_INTENT_IDENTIFIER_PRESENT, intent::identifier_present),
+    (
+        f::X4_OUTPUT_INTENT_IDENTIFIER_TEXT_STRING,
+        intent::identifier_text_string,
+    ),
+    (f::X4_OUTPUT_INTENT_REGISTRY_NAME_URL, intent::registry_name_url),
+    (f::X4_OUTPUT_INTENT_DEST_PROFILE_PRESENT, intent::dest_profile_present),
+    (f::X4_OUTPUT_INTENT_NO_DEST_PROFILE_REF, intent::no_dest_profile_ref),
+    (f::X4_OUTPUT_INTENT_OUTPUT_CONDITION, intent::output_condition),
+    (f::X4_OUTPUT_INTENT_CHANNELS, intent::channels),
+    (f::X4_OUTPUT_INTENT_PROFILE_CLASS_PRTR, intent::profile_class),
+    (f::X4_OUTPUT_INTENT_PROFILE_VERSION, intent::profile_version),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5
@@ -59,9 +74,15 @@ const RUNS: &[(&Check, Run)] = &[
 /// refused file nothing is.
 #[must_use]
 pub fn verify(file: &str, bytes: &[u8], level: Level) -> Report {
+    verify_with(file, bytes, level, &Limits::default())
+}
+
+/// [`verify`] within other limits than the defaults.
+#[must_use]
+pub fn verify_with(file: &str, bytes: &[u8], level: Level, limits: &Limits) -> Report {
     let applies = |check: &Check| check.applies.contains(&level) && check.status == Status::Implemented;
     let enabled = RUNS.iter().filter(|(check, _)| applies(check));
-    match Document::open(bytes, &Limits::default()) {
+    match Document::open(bytes, limits) {
         Err(refusal) => {
             let unread = enabled.map(|(id, _)| CheckResult {
                 id,

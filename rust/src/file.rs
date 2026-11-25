@@ -89,6 +89,9 @@ pub(crate) enum XrefProblem {
     Trailer,
     /// The object at the offset is not a valid cross-reference stream.
     Stream,
+    /// A cross-reference stream whose `/Index` lists more entries than [`Limits::objects`]: refused before its data
+    /// is decoded, which for millions of entries takes a while.
+    TooMany,
 }
 
 const WINDOW: usize = 1024;
@@ -128,7 +131,10 @@ pub(crate) fn open(buf: &[u8], limits: &Limits) -> Result<Xref, Refusal> {
                 return Err(Refusal::TooManySections);
             }
             let at = header.saturating_add(offset);
-            section(buf, at, limits, &mut notes).map_err(|problem| Refusal::BadXref(at, problem))
+            section(buf, at, limits, &mut notes).map_err(|problem| match problem {
+                XrefProblem::TooMany => Refusal::TooManyObjects,
+                problem => Refusal::BadXref(at, problem),
+            })
         };
         let section = read(offset, &mut seen)?;
         // A hybrid file's /XRefStm is read before its own table, whose entries for compressed objects are free
@@ -304,9 +310,6 @@ fn stream(buf: &[u8], at: usize, limits: &Limits, notes: &mut Vec<FileNote>) -> 
     if dict.get(b"Type").and_then(Object::name) != Some(b"XRef") {
         return Err(bad);
     }
-    let Ok(Decoded::Plain(data)) = decode(buf, &dict, range, limits, &|_| None) else {
-        return Err(bad);
-    };
     let widths: Vec<usize> = ints(dict.get(b"W")).ok_or(bad)?;
     let [w0, w1, w2] = widths.as_slice() else {
         return Err(bad);
@@ -317,6 +320,17 @@ fn stream(buf: &[u8], at: usize, limits: &Limits, notes: &mut Vec<FileNote>) -> 
         some => ints(some)
             .filter(|i: &Vec<usize>| i.len().is_multiple_of(2))
             .ok_or(bad)?,
+    };
+    let declared = index
+        .iter()
+        .skip(1)
+        .step_by(2)
+        .fold(0usize, |n, c| n.saturating_add(*c));
+    if declared > limits.objects {
+        return Err(XrefProblem::TooMany);
+    }
+    let Ok(Decoded::Plain(data)) = decode(buf, &dict, range, limits, &|_| None) else {
+        return Err(bad);
     };
     let row = w0 + w1 + w2;
     if row == 0 || [*w0, *w1, *w2].iter().any(|w| *w > 8) {
@@ -527,6 +541,7 @@ pub(crate) fn refusal_finding(refusal: &Refusal) -> Finding {
                 XrefProblem::Entry => "an entry that is not 20 bytes in the form of 7.5.4",
                 XrefProblem::Trailer => "no trailer dictionary after the table",
                 XrefProblem::Stream => "not a valid cross-reference stream",
+                XrefProblem::TooMany => "more entries than the object limit",
             };
             let clause = if *problem == XrefProblem::Stream {
                 "7.5.8"
@@ -1147,6 +1162,17 @@ mod tests {
     }
 
     #[test]
+    fn a_stream_listing_too_many_objects_is_refused_before_it_is_decoded() {
+        let buf = with_xref_stream(&[(1, b"<< >>")], &[], 2, "/Root 1 0 R");
+        let few = Limits {
+            objects: 2,
+            ..Limits::default()
+        };
+        assert_eq!(open(&buf, &few), Err(Refusal::TooManyObjects));
+        assert!(open(&buf, &Limits::default()).is_ok());
+    }
+
+    #[test]
     fn every_refusal_note_and_damage_has_a_finding() {
         let refusals = [
             Refusal::NoHeader,
@@ -1156,6 +1182,7 @@ mod tests {
             Refusal::BadXref(5, XrefProblem::Entry),
             Refusal::BadXref(5, XrefProblem::Trailer),
             Refusal::BadXref(5, XrefProblem::Stream),
+            Refusal::BadXref(5, XrefProblem::TooMany),
             Refusal::XrefLoop(5),
             Refusal::TooManySections,
             Refusal::TooManyObjects,
@@ -1168,6 +1195,7 @@ mod tests {
             [
                 "file.header",
                 "file.startxref",
+                "file.xref",
                 "file.xref",
                 "file.xref",
                 "file.xref",

@@ -2,5 +2,6 @@
 //! XMP and text-string readers the metadata checks share.
 
 pub(crate) mod date;
+pub(crate) mod icc;
 pub(crate) mod text;
 pub(crate) mod xmp;

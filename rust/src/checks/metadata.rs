@@ -146,8 +146,9 @@ pub(super) fn present(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.10.1 (X4-Q8: every metadata stream, not only the document's): no metadata stream has a `/Filter`.
 pub(super) fn unfiltered(doc: &Document, _: Level) -> Vec<Finding> {
+    let streams = metadata_streams(doc);
     doc.objects()
-        .filter(|(num, ..)| metadata_streams(doc).contains(num))
+        .filter(|(num, ..)| streams.contains(num))
         .filter(|(_, object, ..)| object.dict().and_then(|d| d.get(b"Filter")).is_some())
         .map(|(num, ..)| {
             Finding::new(X4_XMP_UNFILTERED, format!("metadata stream {num} has a /Filter"))

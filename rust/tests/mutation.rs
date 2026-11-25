@@ -7,8 +7,9 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use proof_pdf::checks::verify;
+use proof_pdf::checks::verify_with;
 use proof_pdf::findings::{INTERNAL, Level};
+use proof_pdf::pipeline::Limits;
 use proptest::prelude::*;
 
 /// Every built fixture, read once.
@@ -142,7 +143,10 @@ proptest! {
             apply(&mut bytes, e);
         }
         let start = Instant::now();
-        let report = verify(&name, &bytes, LEVELS[level]);
+        // A million objects, not ten: the fixture that lists 8,388,608 takes seconds to open in a debug build, which is
+        // what the gates run, and the limit's own refusal is worth fuzzing too.
+        let limits = Limits { objects: 1_000_000, ..Limits::default() };
+        let report = verify_with(&name, &bytes, LEVELS[level], &limits);
         prop_assert!(start.elapsed() < Duration::from_secs(10), "{name}: took {:?}", start.elapsed());
         let internal = report.findings.iter().find(|f| f.check.id == INTERNAL.id);
         prop_assert!(internal.is_none(), "{name}: {internal:?}");

@@ -10,8 +10,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 3** (document structure and metadata): task 3.2, the XMP helper and the 6.9-6.11 metadata rows, done. Next: 3.3,
-  the ICC header helper; then tier 5's page tree and the 3.5 rows.
+- **Phase 3** (document structure and metadata): tasks 3.2 (XMP, 6.9-6.11) and 3.3 (ICC header, 6.4.1-6.4.2.1) done.
+  Next: 3.1, tier 5's page tree; then the 3.5 rows.
 
 ## Done
 
@@ -39,7 +39,8 @@ record it as not conforming to that one rule).
 | 2.3 | `158d4f7`, `95ebfa3` | Three false refusals and a compressed `/Length` fixed, all found by the qpdf comparison |
 | (progress) | `4a7a721` | This file brought up to date |
 | 2.3 | `6deb894` | Mutation test on stable Rust; "same rule" files compared; phase 2 report |
-| 3.2 | this commit; test-db (expectations) | XMP, date and text-string helpers in `common`; 25 metadata checks (6.9-6.11) with 25 fixtures and 3 feature files |
+| 3.2 | `bf5716a`; test-db `50ca948e` | XMP, date and text-string helpers in `common`; 25 metadata checks (6.9-6.11) with 25 fixtures and 3 feature files |
+| 3.3 | this commit | ICC header helper; 11 output-intent checks (6.4.1, 6.4.2.1) with 12 fixtures |
 
 ## Register coverage
 
@@ -47,7 +48,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 33 | 105 | 3 |
+| PDF/X-4 and X-4p | 44 | 94 | 3 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 16 | 37 | 1 (`internal`) |
 
@@ -146,6 +147,16 @@ Oracle consultations:
 - Decompression limits: every filter decodes within `Limits::decoded_bytes` (1 GiB), tested per filter. The brief's test
   file, pdf.js's `bomb_giant.pdf`, is a JBIG2 bomb; tier 3 leaves image filters encoded, so it reads in milliseconds and
   2.5 MB. It becomes a real test when an image decoder arrives (phase 4 onwards), and stays in the corpus run until then.
+- Task 3.3: the mutation test timed out under coverage now and then. The cause was `x4-too-many-objects`: its
+  cross-reference stream lists 8,388,608 entries, which took 12 seconds to decode in a debug build before the object
+  limit was checked. A cross-reference stream whose `/Index` declares more entries than `Limits::objects` is now refused
+  before its data is decoded, and the mutation test runs with a limit of a million (`checks::verify_with`), so that
+  refusal is fuzzed too. 2,000,000 release cases ran clean.
+- Task 3.3: the ICC helper reads the header only (class, data colour space, version). The Profile ID, the MD5 of
+  ICC.1 7.2.18 and the `desc`/`clrt` tags wait for the rows that read them, `x4.icc.cmyk-not-intent-profile` and
+  `x4.icc.profile-version`, which follow print elements (X4-Q3) and so belong to phase 4's colour evaluator.
+  `x4.output-intent.identifier-registered`, `.registry-name-color-org` and `.identifier-in-registry` need the ICC
+  characterization registry's list of reference names as data; not yet in test-db, so they stay `todo`.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 
