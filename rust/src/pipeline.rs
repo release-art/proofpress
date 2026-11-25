@@ -2,6 +2,8 @@
 
 use std::hash::{Hash, Hasher};
 
+use serde::{Serialize, Serializer};
+
 /// The identity of one event.
 ///
 /// Identity is the document and the sequence number. `tier` and `synthetic` only describe the event, so two ids that
@@ -29,6 +31,22 @@ impl Eq for EventId {}
 impl Hash for EventId {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (self.doc, self.seq).hash(state);
+    }
+}
+
+impl Serialize for EventId {
+    /// As its identity, `{"doc": .., "seq": ..}`: a saved report names the event, not how it was logged.
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct Identity {
+            doc: u32,
+            seq: u64,
+        }
+        Identity {
+            doc: self.doc,
+            seq: self.seq,
+        }
+        .serialize(serializer)
     }
 }
 

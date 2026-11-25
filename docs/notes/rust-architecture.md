@@ -240,6 +240,11 @@ does not understand, and gets files wrong because of it.
 | `caused_by` | Optional `EventId` of the cause, so a report can group one defect's consequences |
 | `page` | Derived from the chain |
 
+Settled in pdfx-plan task 1.4: the check catalogue, `Finding`, the per-check outcome and `Report` live in a base module,
+`findings`, on top of `pipeline` and below every tier, since every tier raises findings. The JSON is schema 1; its shape is
+pinned by an `insta` snapshot (`rust/src/snapshots/`). A finding citing a clause its check does not declare stops a debug
+build, so tests catch it.
+
 **Status is separate from severity,** as SARIF separates `kind` from `level`. Every check enabled for a file gets one status:
 `pass`, `fail` or `not_evaluated`, with a reason for the last (a gap, a missing tool, a limit, "not measured"). `not_evaluated` fails
 the file. The JSON carries a summary per check, so a test can assert that a check was not evaluated; without it, a check that never

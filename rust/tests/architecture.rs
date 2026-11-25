@@ -6,22 +6,38 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Each module and the modules it may use. `pipeline` is the base every tier publishes through.
+/// Each module and the modules it may use. `pipeline` is the base every tier publishes through, and `findings` (the
+/// check catalogue, findings and reports) sits on it, since every tier raises findings.
 const ALLOWED: &[(&str, &[&str])] = &[
     ("pipeline", &[]),
-    ("syntax", &["pipeline"]),
-    ("filters", &["pipeline"]),
-    ("file", &["pipeline", "syntax", "filters"]),
+    ("findings", &["pipeline"]),
+    ("syntax", &["pipeline", "findings"]),
+    ("filters", &["pipeline", "findings"]),
+    ("file", &["pipeline", "findings", "syntax", "filters"]),
     // Document structure and the helpers use each other: a page needs rectangles, and rectangles are read from objects.
-    ("document", &["pipeline", "syntax", "filters", "file", "common"]),
-    ("common", &["pipeline", "document"]),
-    ("content", &["pipeline", "syntax", "filters", "document", "common"]),
-    ("graphics", &["pipeline", "filters", "document", "common", "content"]),
+    (
+        "document",
+        &["pipeline", "findings", "syntax", "filters", "file", "common"],
+    ),
+    ("common", &["pipeline", "findings", "document"]),
+    (
+        "content",
+        &["pipeline", "findings", "syntax", "filters", "document", "common"],
+    ),
+    (
+        "graphics",
+        &["pipeline", "findings", "filters", "document", "common", "content"],
+    ),
     // A tier's own validators live in its module; `checks` holds the print checks on tiers 5 to 7 only.
-    ("checks", &["pipeline", "document", "common", "content", "graphics"]),
+    (
+        "checks",
+        &["pipeline", "findings", "document", "common", "content", "graphics"],
+    ),
     (
         "writer",
-        &["pipeline", "syntax", "filters", "document", "common", "content"],
+        &[
+            "pipeline", "findings", "syntax", "filters", "document", "common", "content",
+        ],
     ),
 ];
 
@@ -64,6 +80,11 @@ fn every_module_is_in_the_map() {
     let declared: BTreeSet<String> = fs::read_dir(src())
         .unwrap()
         .map(|e| e.unwrap().path())
+        // A module is a `.rs` file or a directory of them; insta's `snapshots/` is neither.
+        .filter(|p| {
+            p.extension().is_some_and(|e| e == "rs")
+                || (p.is_dir() && !files_of(&p.file_name().unwrap().to_string_lossy()).is_empty())
+        })
         .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
         .filter(|name| name != "lib")
         .collect();

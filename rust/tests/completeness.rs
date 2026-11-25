@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use proof_pdf::checks::{ALL, Check, Level, Status};
+use proof_pdf::findings::{ALL, Check, Level, Status};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

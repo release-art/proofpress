@@ -9,10 +9,12 @@ repository = "https://github.com/release-art/proofpress"
 publish = false
 
 [dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
 
 [dev-dependencies]
 cucumber = "0.23.0"
 futures = "0.3.34"
+insta = { version = "1.49.0", features = ["json"] }
 mockall = "0.15.0"
 pretty_assertions = "1.4.1"
 proptest = "1.12.0"

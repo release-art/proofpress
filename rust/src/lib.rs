@@ -3,6 +3,7 @@
 //! The modules follow the eight tiers of `docs/notes/rust-architecture.md`, which in turn follow ISO 32000-2: each tier
 //! publishes events to listeners, and the checks are listeners on the last ones.
 
+pub mod findings;
 pub mod pipeline;
 
 pub mod checks;

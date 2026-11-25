@@ -1,0 +1,63 @@
+---
+source: src/findings.rs
+expression: report
+---
+{
+  "schema": 1,
+  "file": "altona.pdf",
+  "verdict": "fail",
+  "structure": "damaged",
+  "checks": [
+    {
+      "id": "x4.icc.cmyk-not-intent-profile",
+      "status": "fail"
+    },
+    {
+      "id": "x4.trapped.present",
+      "status": "pass"
+    },
+    {
+      "id": "x4.xmp.title",
+      "status": "not_evaluated",
+      "reason": "the metadata stream is a gap"
+    }
+  ],
+  "findings": [
+    {
+      "check": "x4.icc.cmyk-not-intent-profile",
+      "severity": "error",
+      "message": "the image uses the output intent's profile",
+      "clause": "iso-15930-7:6.4.3.3",
+      "event": {
+        "doc": 0,
+        "seq": 41
+      },
+      "chain": [
+        {
+          "page": 1
+        },
+        {
+          "object": [
+            109,
+            0
+          ]
+        }
+      ],
+      "caused_by": {
+        "doc": 0,
+        "seq": 41
+      },
+      "page": 1
+    },
+    {
+      "check": "x4.boxes.prefer-trim",
+      "severity": "warning",
+      "message": "page 2 uses an ArtBox",
+      "clause": null,
+      "event": null,
+      "chain": [],
+      "caused_by": null,
+      "page": null
+    }
+  ]
+}
