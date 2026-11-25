@@ -5,13 +5,25 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
-None open. The ICC profile-version question (raised 2026-11-25 by the oracle's escalation) was settled the same day by
-pdfToolbox's verdicts; see Decisions taken.
+**Open, 2026-11-25: may both Altona files leave the plan's set of PDF/X-4 positives for one rule?**
+
+- *What happened.* Fixing `colour.py` (task 0.5) to the real 6.4.3.3 rule made both Altona technical2 X-4 files fail it.
+  Each has a `DefaultCMYK` that is the output intent's own profile (same ICC.1 7.2.18 MD5), in two nested forms that paint
+  a DeviceCMYK image, so by 6.4.3.1 those images are ICCBased with the intent's profile. pdfToolbox 17.1 ("Verify
+  compliance with PDFX-4") reports exactly this, twice per file, and nothing else. The pdfx-oracle confirmed it from the
+  clause, 6.4.3.1 and ISO 32000-1 8.6.5.6, with high confidence, and asked that the owner approve the change to the plan,
+  whose "done" criteria (what feature-complete means, item 2, and phase 3) expect both Altona files to pass X-4.
+- *Options.* 1. Record them as classification (b), "the file does not conform": both are expected to raise only
+  `x4.icc.cmyk-not-intent-profile`, two instances each, and stay positives for every other row; edit the plan's done
+  criteria to say so. 2. Keep them as full positives and treat a DefaultCMYK as exempt from 6.4.3.3, against the text and
+  pdfToolbox.
+- *Recommendation:* option 1.
+- *What I do once answered:* log the decision, edit the plan's done criteria, then carry on with the brief's bug 4 (total
+  ink through `tiffsep`) and the end-of-phase-0 gates.
 
 ## Status
 
-- **Phase 0**, task 0.5 next: `check_trapped` in XMP, the inverted CMYK-profile rule, deleting `pdf-version`; then the
-  brief's bugs 3 and 4.
+- **Phase 0, stopped** on the question above. Task 0.5 and the brief's bugs 1-3 are done; bug 4 is next.
 
 ## Done
 
@@ -20,7 +32,8 @@ pdfToolbox's verdicts; see Decisions taken.
 | 0.1 | (owner) | 34 interpretation defaults accepted |
 | 0.2, 0.3 | `c01b3fa`; test-db `3a1b8d0a` | PDF 1.6 Reference and errata; suites README; the letter to GWG is the owner's |
 | 0.4 | `222b6c2` | `x4-good` built; the oracle and pdfToolbox 17.1 ("Verify compliance with PDFX-4": 0 errors, 0 warnings) both pass it |
-| 0.5, part | `7a53c78` | The brief's bugs 1 (password crash) and 2 (K-only JPEG `/Decode`) fixed, with tests |
+| 0.5 | `7a53c78`, `8f68de5`, `112d0ba`, `39af9a3` | Bugs 1, 2; `trapped` in XMP; `pdf-version` deleted; 6.4.3.3 identical-profile rule |
+| Brief bug 3 | `dded7d0` | `xobject-missing`: a `Do` on a missing XObject fails |
 
 ## Register coverage
 
@@ -31,7 +44,7 @@ pdfToolbox's verdicts; see Decisions taken.
 | Gate | Last result |
 |---|---|
 | `bin/rust/check.sh` | green, 2026-11-25 |
-| Python (ruff, pyright, pytest) | green, 2026-11-25: 1144 passed |
+| Python (ruff, pyright, pytest) | green, 2026-11-25: 1151 passed |
 | `bin/docker/test.sh` | not run yet (end of phase 0) |
 
 ## Decisions taken
@@ -51,6 +64,8 @@ Third-party preflight (pdfToolbox Server 17.1 CLI, trial, "Verify compliance wit
   (6.10.2) that nobody had listed.
 
 Oracle consultations:
+- Altona under 6.4.3.3: does not conform (DefaultCMYK equal to the intent profile remaps a painted DeviceCMYK
+  image); high confidence; escalated because the plan lists Altona as a positive (stop question).
 - Task 0.4, `x4-good` against every X-4 row: conforms, high confidence; escalated the ICC version reading, which
   pdfToolbox then settled in line with the oracle's suggestion.
   Its aside (font `name` table lacked IDs 3-6, `FontBBox` did not match the glyphs) was fixed before commit.
@@ -60,8 +75,9 @@ Oracle consultations:
 - Task 2.2's 6.25 line named array and dictionary limits; Table C.1 of PDF 1.6 has none, so the plan text was corrected.
 - Task 0.4 needed a real embedded font; `fonttools` became a development dependency to build one, rather than vendoring a
   third-party font.
-- Phase 0 also carries the brief's four stage-0 bugs (plan 0.5 says "on top of"); bugs 1 and 2 were still open and are
-  fixed; 3 and 4 remain.
+- Phase 0 also carries the brief's four stage-0 bugs (plan 0.5 says "on top of"); bugs 1-3 are fixed, 4 remains.
+- The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
+  `colour.py`, for the Rust colour evaluator to do properly.
 
 ## Owner actions
 
