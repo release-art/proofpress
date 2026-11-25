@@ -13,7 +13,7 @@ core. pikepdf, Pillow and typer stop being runtime dependencies.
 | Decision | Choice | Why |
 |---|---|---|
 | Reading PDFs | Our own strict parser, no repair and no encryption. Only file-level damage refuses a file; a damaged object or stream leaves a gap, and the file still fails | A verifier reports a broken file, it does not fix it. A 808-line spike passed the tests below. Gaps let the rest of the file be checked, without guessing at what is unreadable |
-| Writing PDFs | Our own small writer, on the same object model | `crop` and `vector.py` copy objects between files. `lopdf` stores reals as f32 and panicked on 3 hostile files. Fall back to it only if the writer spike fails |
+| Writing PDFs | Our own small writer, on the same object model | `crop` and `vector.py` copy objects between files. `lopdf` 0.47 stores reals as f32 (its development branch has moved to f64) and panicked on 3 hostile files; `pdf-writer` is f32-only. Fall back to lopdf only if the writer spike fails. Design: architecture note, "The writer" |
 | Previews | `hayro`, unpatched | Renders 116/116 pages close to Ghostscript. Leniency is fine there. It brings its own `hayro-syntax`, which never reaches a check |
 | Images | `zune-jpeg`, `hayro-jpeg2000`, `hayro-jbig2`, `hayro-ccitt` | About 20,000 lines nobody should rewrite |
 | ICC | `lcms2`, statically linked | Exact against Pillow, 1296/1296 on two real CMYK profiles. It is C, so "fully Rust" has this one exception unless `moxcms` works out |
@@ -136,7 +136,8 @@ Still to do:
 - Compare an image's `/Width` and `/Height` with its data. `veraPDFHiResChangedHeight.pdf` passes everything today.
 - Find out why 5 files passed here when qpdf had to reconstruct their xref. Do this first; it may be a real gap.
 - Report duplicate dictionary keys. They are silently last-wins now, and some of our own fixtures have them, so fix the builder too.
-- Replace the inline-image `EI` heuristic, using `/L` where present. One file is refused because of it.
+- Replace the inline-image `EI` heuristic: `/L` where present, otherwise measure the length by decoding to end-of-data, as the
+  architecture note's "Content streams" section sets out. One file is refused because of it.
 - Add the TIFF predictor below 8 bits.
 - Set decompression limits. `bomb_giant.pdf` is the test.
 - Add a fuzz target under `cargo fuzz`, and run it for hours, not the 4,000 files the spike managed.
@@ -164,6 +165,8 @@ Differences that are expected, so do not chase them:
 - Objects pikepdf synthesises when it pushes inherited attributes onto pages.
 - Indirect `/Length` values, which qpdf inlines.
 - Files pikepdf repairs and we refuse or read with gaps. That is the behaviour change, listed in the changelog.
+- A form XObject without `/Resources` inside another form: we use the page's resources, as ISO 32000-2 7.8.3 says; today's
+  Python uses the enclosing form's.
 - `--allow-k-only` on an image without `/Decode`, once bug 2 below is fixed.
 
 ## Traps
@@ -218,6 +221,9 @@ None of this was tested beyond a local macOS arm64 wheel, so stage 1 proves it f
   them today must turn them on. This is the biggest change for existing users: put it first in the changelog.
 - `crop_page` no longer raises `pikepdf.PdfError`. `cli.py` catches it at three sites. Give the replacement a public exception.
 - Previews come from `hayro`, so pixels shift slightly on colour-managed files.
+- A form XObject without `/Resources` now falls back to the page's resources, as ISO 32000-2 7.8.3 says, with a warning. Today it
+  falls back to the enclosing form's, as PDFBox and pdf.js do; nested forms can therefore resolve names differently.
+- Each check reports a status (`pass`, `fail`, `not_evaluated`), and the JSON gains a per-check summary and a `structure` field.
 
 ## Bugs to fix first (stage 0)
 
@@ -254,7 +260,7 @@ catalogue entries nobody has tested.
 | Idea | Stage | Why |
 |---|---|---|
 | Give each reason for a refusal or a gap a stable check id (`data-after-eof`, `broken-reference`, `unknown-operator`, `content-stream-error`, `damaged`) | 2 | Profiles can then choose error or warning per reason, which stage 2 has to decide anyway |
-| Exit codes: 0 pass, 1 findings, 2 input refused, 3 timeout, 64 usage error. Only file-level damage refuses; a file read with gaps exits 1 | 4 | Today a file that cannot be read and a file with findings both exit 1, so CI cannot tell them apart |
+| Exit codes: 0 pass, 1 findings, 2 input refused, 3 timeout, 64 usage error, 70 internal error. Only file-level damage refuses; a file read with gaps exits 1. With several files the worst code wins. clap's own usage exit (2) is remapped | 4 | Today a file that cannot be read and a file with findings both exit 1, so CI cannot tell them apart |
 | A "not evaluated" status in the JSON output, distinct from pass and fail | 4 | Makes "an unconfirmable check fails" visible and testable, including a check whose scope holds a gap. Contrast already says "not measured" in prose |
 | The check list as data: id, title, value type, the clauses it may cite (see the architecture note), and a reason for any default | 4 | Generates the README's check table and a `--list-checks` command, so the docs cannot drift |
 
@@ -284,7 +290,7 @@ warnings for the word "reconstruct".
 | Warnings, not refusals: a missing binary comment after the header; `/ID` near `/Linearized` differing from the last `/ID`, which means the file was edited after export; data after `%%EOF`, tolerating whitespace and NUL padding | 2 | `000293.pdf` is the data-after-EOF case we refuse today |
 | Sub-reasons for content errors: unknown operator (allowed inside `BX`/`EX`), wrong operand count or type, operator out of place, unbalanced `q`/`Q`, `BT`/`ET` and marked content, operands left over, missing resource | 2-3 | Gives the planned `content-stream-error` id a ready taxonomy |
 | A generator for pathological seeds, such as forms, patterns and dictionaries nested thousands deep. Replay them and every crash input as an ordinary `cargo test`. Let the fuzz target's first byte pick the check set | 2 | Depth limits must be tested on purpose. Replay runs on stable Rust |
-| Turn a panic into an `internal` finding at the PyO3 boundary (`catch_unwind`) | 1 | A panic must never cross into Python |
+| Turn a panic into an `internal` finding, catching it around each check (`catch_unwind`) so the other checks still run | 1 | A panic must never cross into Python. PyO3's `PanicException` escapes `except Exception` |
 | Generate the check enum from the check list, so a check with no code fails to compile. A missing or invalid check refuses at load, never runs as "not evaluated" | 4 | Kura does it at runtime, so a missing check degrades silently |
 | `schema = 1` in `proof-pdf.toml`, and errors that name the profile and key | 4 | Cheap now, costly once the Rust CLI fixes the format |
 | Cap what we read from Ghostscript and veraPDF, kill the whole process group on timeout, and keep partial progress in the timeout report | 4 | Kura kills only the direct child and sets no memory limit |

@@ -26,7 +26,20 @@ extensions dictionary (7.12).
 
 **Tier 2 emits events,** such as `DictStart`, a key, a value, `DictEnd`. A reference (`12 0 R`) is a leaf; following it is tier 5's
 job. Tier 2 never seeks: it is given bytes and a position, and the caller decides where to read. After `stream`, or an inline image's
-`ID`, the caller says how many bytes are binary (`raw(n)`), because only it knows the length.
+`ID`, the caller says how many bytes are binary (`raw(n)`), because only it knows the length. After `raw`, tier 2 expects an
+optional end of line and then `endstream`; a length that runs past the buffer is damage, not a panic.
+
+**Tier 2 has two modes,** as qpdf's parser has one `content_stream` flag:
+
+- **Objects** recognises `n g R` by looking ahead two tokens.
+- **Content** makes a bare keyword at the top level an operator. A keyword inside a content array or dictionary is damage, so a
+  reference in content (forbidden by 7.8.2) is caught.
+- **Object streams need no third mode.** Tier 2 emits `obj`, `endobj`, `stream` and `endstream` as keyword events and tier 4 frames
+  them; a `stream` inside an object stream (forbidden by 7.5.7) is tier 4's finding.
+
+**Tiers are modules, not public interfaces.** Tier 1 is private inside tier 2. Tier 2 is crate-internal, with a `#[doc(hidden)]`
+entry for fuzzing, as hayro-syntax does. The public surface is tier 5's objects, the listener traits of tiers 6 and 7, and the
+checks.
 
 **Tiers 4 and 5 answer requests** ("object 12"): tier 4 finds the offset and drives tier 2 there. Everything reachable from the
 trailer is read at open by a walk that is itself one of the requesters. Tiers 6 to 8 are driven by a page walk.
@@ -123,7 +136,10 @@ whether those bytes are a text, ASCII, byte or date string depends on the key th
   or names over our safety limits.
 - **Two defects that only PDF/A forbids are warnings:** an odd number of hex digits (ISO 32000 pads it with a 0; ISO 19005-2
   forbids it) and a name that is not UTF-8 (ISO 19005-2, 6.1.8). PDF/A's verdict stays veraPDF's; the warning says early where it
-  will fail. PDF/A's length limits (32,767 bytes per string, 127 per name) are left to veraPDF.
+  will fail.
+- **Length limits from standards are checks, not safety limits.** PDF/X-4 (ISO 15930-7, 6.25) requires PDF Reference 1.7's Table
+  C.1 limits, among them 32,767 bytes per string and 127 per name, so they are PDF/X-4 checks of ours. Under PDF/A alone they stay
+  veraPDF's.
 
 **Dangling references: null for meaning, a reason for reporting.** ISO 32000-2 7.3.10 says a reference to an undefined object is not
 an error and reads as null, and a null value means the key is absent (7.3.7). Lookups do exactly that. But resolution records why
@@ -224,10 +240,146 @@ does not understand, and gets files wrong because of it.
 | `caused_by` | Optional `EventId` of the cause, so a report can group one defect's consequences |
 | `page` | Derived from the chain |
 
+**Status is separate from severity,** as SARIF separates `kind` from `level`. Every check enabled for a file gets one status:
+`pass`, `fail` or `not_evaluated`, with a reason for the last (a gap, a missing tool, a limit, "not measured"). `not_evaluated` fails
+the file. The JSON carries a summary per check, so a test can assert that a check was not evaluated; without it, a check that never
+ran leaves no trace. "Skipped" is not used: JUnit and TAP both show it as passed.
+
+**One verdict per file:** `pass`, `fail` or `refused`, exiting 0, 1 or 2. Beside it, `structure` is `sound` (tiers 1 to 4 found
+nothing), `damaged` (read with gaps) or `refused`. That answers a print shop's question, whether the file is broken or only the
+artwork, without a second pass/fail axis. JHOVE's well-formed and valid verdicts were considered and not taken: they confused more
+than they helped. Arlington's shape checks appear as findings.
+
 - Each check declares the clauses it may cite. A finding citing one outside its check's set is a bug, caught by a test. The README
   and `--list-checks` list each check's clauses from the declarations.
 - A list of clause numbers per standard held, extracted from the test-db Markdown copies, is committed here: numbers only, no titles
   or text. Declared clauses are validated against it.
+
+## Content streams
+
+- **Inline images.** Keys and the filter and colour-space values are normalised from their abbreviations only inside `BI`; an
+  abbreviation used in an image XObject is a finding. A reference, or the JBIG2, JPX or Crypt filter, inside `BI` is damage. A missing
+  `/L` in a PDF 2.0 file is a warning (8.9.7 says "shall"); `/L` over 4096 is not a finding, since the limit is a "should".
+- **Where an inline image ends.** With `/L`, `raw(L)`, skipping white space first when the last filter is ASCIIHex or ASCII85, then an
+  optional white space and `EI`. Without `/L`, the length is measured: width × height × bits per component × components, rounded
+  up per row, when unfiltered; otherwise by decoding to the filter's end-of-data marker, so tier 3 reports the bytes it consumed.
+  `/L` that disagrees with the measured length is damage. The `EI` guessing every other library uses is not: an ambiguous end is a
+  gap.
+- **Cycles.** One set of ancestor object numbers covers forms, patterns, Type 3 glyphs, annotation appearances and soft masks. A
+  cycle is an error and a gap. Nesting depth is a safety limit; exceeding it reports "not evaluated", never silently.
+- **A form without `/Resources` uses the page's resources,** as 7.8.3 says, with a warning. MuPDF does this; today's Python, the
+  spike, PDFBox and pdf.js use the enclosing form's resources, so nested forms without `/Resources` are a behaviour change.
+- **`BX`/`EX`** keep a nesting counter. An unknown operator outside them is an error; inside, it is ignored and recorded. A pair left
+  open at the end of the page is a finding.
+- **Several content streams on a page** are read each as its own buffer, with the operand stack and the `q`/`Q`, `BT`/`ET` and `BI`
+  state carried across. A token split across two streams is damage (7.7.3.3); no library checks this. An empty `/Contents` array is
+  a finding.
+
+## The page model
+
+Tier 7 emits one borrowed, `#[non_exhaustive]` event type, matching tier 2's style: `Paint`, `ClipPush`, `ClipPop`, `GroupBegin`,
+`GroupEnd`, `MaskBegin`, `MaskEnd`, `MarkedBegin`, `MarkedEnd` and `Damaged`. Each listener has one `on_event` and ignores what it
+does not need. A device trait with one method per kind of paint (hayro, MuPDF, PDFBox) would make fanning out to several listeners
+and putting a proxy in between a matter of forwarding every method by hand.
+
+**A paint carries:**
+
+- Provenance: the operator's event id and a frame stack (page, form, pattern, Type 3 glyph, soft mask, annotation).
+- Geometry: the CTM and a page-space bbox from true curve extrema, widened by half the line width for strokes.
+- The clip's id and bbox.
+- Fill and stroke colour separately: resolved space (family, spot names, profiled), components, pattern.
+- `OP`, `op` and `OPM` separately. Today's Python merges `OP` and `op`.
+- Opacity (`ca`, `CA`), blend mode, soft mask, transparency group.
+- For strokes, the line width as the minimum page-space width (the smallest singular value of the CTM, not the square root of its
+  determinant) and the dash.
+- Optional-content membership and visibility. Hidden content is marked, not dropped as hayro drops it; today's Python does not
+  model optional content at all.
+- Marked-content id and artifact.
+
+**Text comes per run,** as in MuPDF and hayro, with a borrowed slice of positioned glyphs (code, Unicode, origin, advance, `.notdef`).
+Size and colour are constant within a run, so small-text and contrast checks work per run; per-glyph checks walk the slice.
+
+**Clipping, as hayro models it:** a stack of {path, fill rule, bbox, exact-rectangle flag}. Intersections of rectangles stay exact;
+anything else falls back to its bbox, and exact geometry is computed only when a check asks. A form's `/BBox` and text render
+modes 4 to 7 are clips too. A finding says when a clip was approximate.
+
+**Transparency is reported, never composited:** group and mask events, and each paint knows whether it is inside a soft mask, whose
+content is not ink. The blend-space check runs per group, not per page.
+
+**Text metrics start from widths only** (`/Widths`, `/W`, the standard 14 fonts), with boxes from `FontBBox` or ascent and descent.
+A Type 3 glyph's procedure is walked as a nested scope only when a listener asks for it. Font programs are parsed later, in a
+fonts helper, for glyph presence and width consistency.
+
+## Checks, profiles and reports
+
+- **The check list is data:** a checked-in `checks.toml`, read at build time, generates the check enum, the README's table and
+  `--list-checks` (text, and `--json`). Each entry has an id (kebab-case, stable, never reused), `aliases` for old ids, a title, the
+  clauses it may cite, a default severity, and its parameters, each with a type and no default unless the entry gives one with a
+  reason and a clause.
+- **`proof-pdf.toml`** starts with `schema = 1`; a higher number is refused. A profile may `extends` one other, merged key by key, the
+  later value winning, as ESLint merges (changing only a severity keeps the inherited parameters). Checks are named one by one, not
+  by prefix.
+- **Errors at load name the profile and the key:** an unknown id, a check that is on but missing a parameter with no default, a value
+  of the wrong type. `--show-profile` prints the merged result, as ruff's `--show-settings` does. Today's flags become shorthand for
+  setting a check's parameter.
+- **Our own versioned JSON stays the main output,** shaped so SARIF can be derived from it without loss: status to `kind`, severity
+  to `level`, the chain to logical locations, `caused_by` to related locations. `--format sarif` comes after the port. GitHub's code
+  scanning needs line numbers and ignores `kind`, so there the exit code and our JSON stay the real verdict.
+
+## Limits
+
+One `Limits` struct, one field per kind of structure, in one place:
+
+| Group | Kinds |
+|---|---|
+| Syntax | Direct-object nesting; bytes per string and per name; entries per dictionary, overridden ones included; elements per array; distinct names |
+| File | Indirect objects; length of the xref chain |
+| Filters | Filters per stream; decoded bytes per stream; decoded-to-encoded ratio; decoded bytes per document |
+| Images | Width, height, and width × height × components × bits, checked from the dictionary before decoding |
+| Graphs | Page-tree depth and page count; nesting of forms, colour spaces, functions and patterns; depth of outlines and name and number trees |
+| Content | Operators per stream; `q` depth; operand stack |
+| Time | Per file, and per external tool |
+
+- **Reaching a limit is damage, not a verdict:** `Damaged { reason: Limit(kind) }` for that scope and an error finding
+  `limit.<kind>`, so the checks inside report "not evaluated". Only file-level limits (objects, xref chain) refuse the file.
+- **Cycles are not limits;** a visited set catches them, whatever the limits are.
+- **Decoding stops at its budget** (`Read::take(budget + 1)`). hayro-syntax decodes Flate with no bound.
+- **Configurable** with `--limit kind=value` and from Python; `--list-limits` prints them.
+- **Defaults are ours, measured on the corpus.** None is chosen yet. Figures from qpdf, PDFBox, MuPDF, lopdf and hayro are
+  references, not defaults.
+
+## Boundaries
+
+- **Panics.** Each check runs inside `catch_unwind`, so a panic becomes an internal finding and the other checks go on; the frozen
+  object table means a panic cannot leave shared state half-written. PyO3 turns an escaped panic into `PanicException`, which
+  `except Exception` does not catch. The release profile keeps `panic = "unwind"`.
+- **Async.** `core.verify_file` stays `async def` and awaits `asyncio.to_thread`, and Rust releases the GIL inside
+  (`Python::detach`). A cancel token, set when the task is cancelled, is polled between pages and while waiting on external tools.
+- **Wheels.** Per-version `cp315` wheels now, since `requires-python` is 3.15 only. `abi3t` (PEP 803) later, if the range widens or
+  free-threaded 3.15 matters; plain abi3 does not load on free-threaded CPython.
+- **CLI.** Parse with clap's `try_parse`, so a usage error exits 64 rather than clap's own 2, which would read as "refused". `--help`
+  and `--version` exit 0. With several files the worst code wins: refused, then timeout, then findings, then pass. A panic outside
+  any check exits 70 (`EX_SOFTWARE`). The wheel's `proof-pdf` command calls the same clap code.
+- **External tools** run through `process-wrap`: a session or process group on Unix, a job object on Windows, killed when dropped.
+  Output is read on threads up to a cap, with a deadline; what was read is kept for the timeout report. veraPDF gets `-Xmx`.
+  `proc.py` goes.
+- **Threads.** Files run in parallel (`--jobs`). Within a file, veraPDF and Ghostscript run while the in-process checks do. Pages stay
+  sequential, so findings come out in the same order every time.
+
+## The writer
+
+Our own, on the object model, as the brief decided:
+
+- **A full rewrite** with a classic xref table and no object streams.
+- **Parsed values copy their raw slices,** so a real keeps its text and a string its bytes. Created reals use Rust's shortest `f64`
+  text, which never has an exponent (PDF has none). Streams are copied raw with their filters, never re-encoded: that keeps `crop`
+  pixel-identical.
+- **Copying between documents** goes through a graft map, walked with an explicit stack. A copied page resolves its inherited
+  `/Resources`, `/MediaBox` and `/Rotate`, drops `/Parent`, `/Annots` and `/StructParents`, and writes a dangling reference as `null`.
+- **Unused resources are pruned** with a tier-6 listener that records the names used; if a content stream is damaged, every resource
+  is kept.
+- **Every output is read back** by our own parser and passed through `qpdf --check` in the parity gate.
+- `pdf-writer` (typst) stores numbers as `f32` only, so it cannot be the copy path; it is fine for building test fixtures.
 
 ## Taken from other tools
 
@@ -236,7 +388,6 @@ From a survey on 2026-11-25. Direction agreed; details open.
 - **Shape checks from the Arlington PDF Model** (PDF Association): one TSV per object type with keys, types, required keys, values
   and versions, derived from ISO 32000-2. A first-order observer on tier 5, driven by the data. Pin a version; check its licence first.
 - **`inspect` as recording listeners** on the same pipeline, as veraPDF does feature extraction, rather than a separate code path.
-- **Two verdicts: well-formed** (tiers 1 to 4) **and valid** (tier 5 against Arlington), as JHOVE distinguishes them.
 - **More oracles for the parity gate:** the Arlington checker, and perhaps Galois's DaeDaLus PDF parser, next to qpdf.
 - Precedent for the proxy: qpdf's `TokenFilter` and MuPDF's filter processor, both muting or rewriting content in a chain. callas
   pdfToolbox and Enfocus PitStop keep checks and fixups separate, as observers and the proxy are here.
@@ -245,15 +396,10 @@ From a survey on 2026-11-25. Direction agreed; details open.
 
 ## Open
 
-- Does tier 2 take an explicit mode (file body, object stream, content)? `12 0 R` is a reference in a file body and two operands and
-  an operator in content.
-- Is every tier a public interface, or only a module? Tier 1 has one consumer, so it may be private to tier 2.
-- Does `raw(n)` cover every case where tier 2 would otherwise need tier 4 (an indirect `/Length`)?
-- Is "not evaluated" a severity or a separate status?
-- Do reports show the well-formed and valid verdicts separately?
-- Still to discuss: the object model's sharing with the writer and Python; content streams; the page model; the checks'
-  interface, profiles and configuration; limits on depth, size and decompression; PyO3, the CLI, external tools and threads; the
-  writer and the other commands.
+Every question raised in the discussion is settled. What remains needs measuring, not deciding:
+
+- Default values for each limit, from the corpus.
+- The Arlington model's licence, before it is pinned.
 
 ## Ideas for later
 

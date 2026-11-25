@@ -18,6 +18,7 @@ Newest first. A decision changes only by a new line here.
 
 | Date | Decision | Where |
 |---|---|---|
+| 2026-11-25 | Content streams, the page model, checks and reports, limits, the PyO3 and CLI boundaries and the writer settled from a survey of qpdf, pdf.js, PDFBox, MuPDF, hayro, veraPDF, SARIF, ruff and ESLint. Checks report a status separate from severity; a form without `/Resources` uses the page's | Architecture note |
 | 2026-11-25 | Reversed the line below: PDF/A stays veraPDF's verdict. Rules must come from the ISO texts, and ISO 19005-1, -3 and -4 are not held | Brief, non-goals |
 | 2026-11-25 | proof-pdf validates PDF/A (every part and level) and PDF/UA with its own rules, proved against veraPDF, which stays available as an optional tool | Brief, decisions |
 | 2026-11-25 | Findings cite a clause; each check declares the clauses it may cite, validated against a committed list of clause numbers | Architecture note |
