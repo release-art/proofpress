@@ -87,3 +87,7 @@ Oracle consultations:
 
 - `cargo` is not on the default `PATH`: Homebrew's rustup keeps its proxies in `/opt/homebrew/opt/rustup/bin`.
 - `qpdf` 12.4.2 installed by the owner on 2026-11-25.
+- pdfToolbox Server 17.1 CLI installed by the owner on 2026-11-25 at `/Applications/callas pdfToolbox Server 17/cli/pdfToolbox`,
+  with the profile `var/Profiles/PDFX compliance/Verify compliance with PDFX-4.kfpx`. Not yet activated (error 1008): the
+  owner requests a trial with `pdfToolbox -k <name> <company> trial`, gets callas's activation PDF back, and runs
+  `pdfToolbox --activate <activation.pdf>`.
