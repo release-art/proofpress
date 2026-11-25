@@ -57,37 +57,37 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.image.dct-valid` | JPEG data is valid | iso-15930-7:6.8 | error | x4, x4p | todo |
 | `x4.image.jpx-valid` | JPEG 2000 data is valid | iso-15930-7:6.8, iso-15930-7:6.27 | error | x4, x4p | todo |
 | `x4.image.jbig2-valid` | JBIG2 data is valid | iso-15930-7:6.8 | error | x4, x4p | todo |
-| `x4.trapped.present` | XMP states whether the file is trapped | iso-15930-7:6.9 | error | x4, x4p | todo |
-| `x4.trapped.true-or-false` | The trapped state is True or False | iso-15930-7:6.9 | error | x4, x4p | todo |
+| `x4.trapped.present` | XMP states whether the file is trapped | iso-15930-7:6.9 | error | x4, x4p | implemented |
+| `x4.trapped.true-or-false` | The trapped state is True or False | iso-15930-7:6.9 | error | x4, x4p | implemented |
 | `x4.trapped.trapnet-implies-true` | TrapNet annotations need the trapped state True | iso-15930-7:6.9 | error | x4, x4p | todo |
 | `x4.trapped.truthful` | The trapped state is true of the whole file | iso-15930-7:6.9 | error | x4, x4p | skip: Whether a file is really trapped cannot be read from it |
 | `x4.trapnet.font-fauxing-empty` | TrapNet font fauxing is absent or empty | iso-15930-7:6.9 | error | x4, x4p | todo |
 | `x4.trapnet.pcm-matches-intent` | TrapNet process colour model matches the intent | iso-15930-7:6.9 | error | x4, x4p | todo |
-| `x4.xmp.present` | The catalog has document metadata | iso-15930-7:6.10.1 | error | x4, x4p | todo |
+| `x4.xmp.present` | The catalog has document metadata | iso-15930-7:6.10.1 | error | x4, x4p | implemented |
 | `x4.xmp.conforms` | Document metadata is valid XMP | iso-15930-7:6.10.1 | error | x4, x4p | todo |
-| `x4.xmp.namespace-prefixes` | XMP uses the required prefixes for its namespaces | iso-15930-7:6.10.1, iso-15930-7:6.11 | error | x4, x4p | todo |
-| `x4.xmp.unfiltered` | Metadata streams are not filtered | iso-15930-7:6.10.1 | error | x4, x4p | todo |
-| `x4.info.xmp-analogue-present` | Info entries with an XMP equivalent are in XMP | iso-15930-7:6.10.2 | error | x4, x4p | todo |
-| `x4.info.xmp-analogue-equal` | Info entries equal their XMP equivalents | iso-15930-7:6.10.2 | error | x4, x4p | todo |
+| `x4.xmp.namespace-prefixes` | XMP uses the required prefixes for its namespaces | iso-15930-7:6.10.1, iso-15930-7:6.11 | error | x4, x4p | implemented |
+| `x4.xmp.unfiltered` | Metadata streams are not filtered | iso-15930-7:6.10.1 | error | x4, x4p | implemented |
+| `x4.info.xmp-analogue-present` | Info entries with an XMP equivalent are in XMP | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
+| `x4.info.xmp-analogue-equal` | Info entries equal their XMP equivalents | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
 | `x4.info.unlisted-not-in-predefined-schema` | Other Info entries stay out of predefined schemas | iso-15930-7:6.10.2 | error | x4, x4p | todo |
-| `x4.info.pdfx-version-pdfdoc` | Info GTS_PDFXVersion is PDFDocEncoded | iso-15930-7:6.10.2 | error | x4, x4p | todo |
-| `x4.info.author-single-creator` | With Info Author, dc:creator has one item | iso-15930-7:6.10.2 | error | x4, x4p | todo |
-| `x4.xmp.no-bytes-encoding-attrs` | XMP packet headers have no bytes or encoding attribute | iso-15930-7:6.10.3 | error | x4, x4p | todo |
-| `x4.xmp.document-id` | XMP has a document ID | iso-15930-7:6.10.4 | error | x4, x4p | todo |
-| `x4.xmp.version-id` | XMP has a version ID | iso-15930-7:6.10.4 | error | x4, x4p | todo |
-| `x4.xmp.rendition-class` | XMP has a rendition class | iso-15930-7:6.10.4 | error | x4, x4p | todo |
-| `x4.xmp.document-id-uuid` | The document ID is a UUID URI | iso-15930-7:6.10.4 | warning | x4, x4p | todo |
-| `x4.xmp.create-date` | XMP has a creation date | iso-15930-7:6.10.4 | error | x4, x4p | todo |
-| `x4.xmp.modify-date` | XMP has a modification date | iso-15930-7:6.10.4 | error | x4, x4p | todo |
-| `x4.xmp.metadata-date` | XMP has a metadata date | iso-15930-7:6.10.4 | error | x4, x4p | todo |
-| `x4.xmp.title` | XMP has a title | iso-15930-7:6.10.4 | error | x4, x4p | todo |
-| `x4.xmp.agent-names` | XMP names the creator tool and producer | iso-15930-7:6.10.4 | warning | x4, x4p | todo |
-| `x4.trailer.id` | The trailer has a file ID | iso-15930-7:6.10.4 | error | x4, x4p | todo |
-| `x4.xmp.well-formed` | Every XMP packet is well-formed RDF/XML | iso-15930-7:6.10.6 | error | x4, x4p | todo |
-| `x4.identity.version-present` | XMP declares the PDF/X version | iso-15930-7:6.11, iso-15930-7:A.3 | error | x4, x4p | todo |
-| `x4.identity.version-value` | The PDF/X version value is exact | iso-15930-7:6.11, iso-15930-7:A.3 | error | x4, x4p | todo |
-| `x4.identity.pdfxid-only-version` | The pdfxid namespace holds only the version | iso-15930-7:6.11 | error | x4, x4p | todo |
-| `x4.identity.no-info-conformance` | Info has no GTS_PDFXConformance | iso-15930-7:6.11 | error | x4, x4p | todo |
+| `x4.info.pdfx-version-pdfdoc` | Info GTS_PDFXVersion is PDFDocEncoded | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
+| `x4.info.author-single-creator` | With Info Author, dc:creator has one item | iso-15930-7:6.10.2 | error | x4, x4p | implemented |
+| `x4.xmp.no-bytes-encoding-attrs` | XMP packet headers have no bytes or encoding attribute | iso-15930-7:6.10.3 | error | x4, x4p | implemented |
+| `x4.xmp.document-id` | XMP has a document ID | iso-15930-7:6.10.4 | error | x4, x4p | implemented |
+| `x4.xmp.version-id` | XMP has a version ID | iso-15930-7:6.10.4 | error | x4, x4p | implemented |
+| `x4.xmp.rendition-class` | XMP has a rendition class | iso-15930-7:6.10.4 | error | x4, x4p | implemented |
+| `x4.xmp.document-id-uuid` | The document ID is a UUID URI | iso-15930-7:6.10.4 | warning | x4, x4p | implemented |
+| `x4.xmp.create-date` | XMP has a creation date | iso-15930-7:6.10.4 | error | x4, x4p | implemented |
+| `x4.xmp.modify-date` | XMP has a modification date | iso-15930-7:6.10.4 | error | x4, x4p | implemented |
+| `x4.xmp.metadata-date` | XMP has a metadata date | iso-15930-7:6.10.4 | error | x4, x4p | implemented |
+| `x4.xmp.title` | XMP has a title | iso-15930-7:6.10.4 | error | x4, x4p | implemented |
+| `x4.xmp.agent-names` | XMP names the creator tool and producer | iso-15930-7:6.10.4 | warning | x4, x4p | implemented |
+| `x4.trailer.id` | The trailer has a file ID | iso-15930-7:6.10.4 | error | x4, x4p | implemented |
+| `x4.xmp.well-formed` | Every XMP packet is well-formed RDF/XML | iso-15930-7:6.10.6 | error | x4, x4p | implemented |
+| `x4.identity.version-present` | XMP declares the PDF/X version | iso-15930-7:6.11, iso-15930-7:A.3 | error | x4, x4p | implemented |
+| `x4.identity.version-value` | The PDF/X version value is exact | iso-15930-7:6.11, iso-15930-7:A.3 | error | x4, x4p | implemented |
+| `x4.identity.pdfxid-only-version` | The pdfxid namespace holds only the version | iso-15930-7:6.11 | error | x4, x4p | implemented |
+| `x4.identity.no-info-conformance` | Info has no GTS_PDFXConformance | iso-15930-7:6.11 | error | x4, x4p | implemented |
 | `x4.boxes.trim-or-art` | Each page has a TrimBox or an ArtBox | iso-15930-7:6.12 | error | x4, x4p | todo |
 | `x4.boxes.not-both` | No page has both TrimBox and ArtBox | iso-15930-7:6.12 | error | x4, x4p | todo |
 | `x4.boxes.within-bleed` | The trim or art box lies within the BleedBox | iso-15930-7:6.12 | error | x4, x4p | todo |

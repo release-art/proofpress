@@ -10,7 +10,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 2** (reading the file) finished; stage report below. Next: phase 3, document structure and metadata.
+- **Phase 3** (document structure and metadata): task 3.2, the XMP helper and the 6.9-6.11 metadata rows, done. Next: 3.3,
+  the ICC header helper; then tier 5's page tree and the 3.5 rows.
 
 ## Done
 
@@ -37,7 +38,8 @@ record it as not conforming to that one rule).
 | 2.3, part 1 | `803cb78` | 15 structure fixtures; 16 house and structure checks implemented |
 | 2.3 | `158d4f7`, `95ebfa3` | Three false refusals and a compressed `/Length` fixed, all found by the qpdf comparison |
 | (progress) | `4a7a721` | This file brought up to date |
-| 2.3 | this commit | Mutation test on stable Rust; "same rule" files compared; phase 2 report |
+| 2.3 | `6deb894` | Mutation test on stable Rust; "same rule" files compared; phase 2 report |
+| 3.2 | this commit; test-db (expectations) | XMP, date and text-string helpers in `common`; 25 metadata checks (6.9-6.11) with 25 fixtures and 3 feature files |
 
 ## Register coverage
 
@@ -45,7 +47,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 8 | 130 | 3 |
+| PDF/X-4 and X-4p | 33 | 105 | 3 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 16 | 37 | 1 (`internal`) |
 
@@ -91,6 +93,16 @@ Third-party preflight (pdfToolbox Server 17.1 CLI, trial, "Verify compliance wit
   as `x4-test-material.md` §1 predicts.
 - `pdfx-x4-rgb-image.pdf`: DeviceRGB under a CMYK intent, as task 0.4 corrected; also an Info/XMP Keywords mismatch
   (6.10.2) that nobody had listed.
+
+Task 3.2, 2026-11-25:
+- Dates (6.10.2) compare as instants in UTC when both carry a zone, as written when neither does, and never equal when
+  only one does; fractions of a second in XMP are dropped, since PDF dates cannot carry them.
+- Info text strings are read as PDF 1.6 defines them: PDFDocEncoding or UTF-16BE with a byte order mark, no UTF-8.
+- Ghent and Altona: 38 of the 39 positives carry `xmp.did:` or `adobe:docid:` document IDs, which 6.10.4 recommends against
+  (it says *should* be a uuid-schemed URI). Classified (b): the `x4.xmp.document-id-uuid` warning is right and the verdict
+  stays pass; test-db's `expectations/pdfx.toml` records the warning per file. The clause is explicit, so no oracle call.
+- `x4.xmp.conforms` (value types of the XMP 2005 schemas) and `x4.info.unlisted-not-in-predefined-schema` (needs the list
+  of predefined schema properties) stay `todo`.
 
 Oracle consultations:
 - GWG151 and GWG152 under 6.24: do not conform (their `/D /Order` leaves out content OCGs); high confidence; classified

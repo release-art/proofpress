@@ -544,6 +544,83 @@ def _x4_perms() -> pikepdf.Pdf:
     return pdf
 
 
+def _x4_meta(
+    *edits: tuple[str, str],
+    info: dict[str, pikepdf.Object | None] | None = None,
+    page_xmp: bytes | None = None,
+    compress_page_xmp: bool = False,
+) -> pikepdf.Pdf:
+    """x4-good with its XMP edited (each ``old`` found exactly once), Info entries set or removed (``None``), a metadata
+    stream added to the page: one 6.9-6.11 defect per fixture."""
+    pdf = _x4_good()
+    xmp = X4_XMP.decode()
+    for old, new in edits:
+        assert xmp.count(old) == 1, old
+        xmp = xmp.replace(old, new)
+    pdf.Root["/Metadata"].write(xmp.encode())
+    for key, value in (info or {}).items():
+        if value is None:
+            del pdf.docinfo[f"/{key}"]
+        else:
+            pdf.docinfo[f"/{key}"] = value
+    if page_xmp is not None:
+        stream = pdf.make_stream(zlib.compress(page_xmp) if compress_page_xmp else page_xmp)
+        if compress_page_xmp:
+            stream["/Filter"] = pikepdf.Name.FlateDecode
+        stream["/Type"], stream["/Subtype"] = pikepdf.Name.Metadata, pikepdf.Name.XML
+        pdf.pages[0].obj["/Metadata"] = pdf.make_indirect(stream)
+    return pdf
+
+
+def _x4_metadata_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.9 to 6.11 (tests/fixtures/pdfx/expected.toml says what each raises)."""
+    page = X4_XMP.replace(b"<pdf:Trapped>False</pdf:Trapped>", b"")
+    mm = "<xmpMM:DocumentID>uuid:5f0b8a8e-6f0e-4a57-9d55-2c1f3f1d0a40</xmpMM:DocumentID>"
+    title = f'<dc:title><rdf:Alt><rdf:li xml:lang="x-default">{X4_INFO["Title"]}</rdf:li></rdf:Alt></dc:title>'
+    version = "<pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion>"
+    return {
+        # X4-Q8: a page's metadata stream is held to 6.10 too.
+        "x4-page-xmp-filtered": _x4_meta(page_xmp=page, compress_page_xmp=True),
+        "x4-page-xmp-malformed": _x4_meta(page_xmp=page.replace(b"</rdf:Description>", b"")),
+        "x4-page-xmp-header-bytes": _x4_meta(page_xmp=page.replace(b'id="W5M0', b'bytes="4096" id="W5M0')),
+        "x4-xmp-prefix": _x4_meta(
+            ('xmlns:pdfxid="', 'xmlns:gts="'), (version, "<gts:GTS_PDFXVersion>PDF/X-4</gts:GTS_PDFXVersion>")
+        ),
+        "x4-xmp-no-document-id": _x4_meta((mm, "")),
+        "x4-xmp-document-id-not-uuid": _x4_meta((mm, mm.replace("uuid:", "xmp.did:"))),
+        "x4-xmp-no-version-id": _x4_meta(("<xmpMM:VersionID>1</xmpMM:VersionID>", "")),
+        "x4-xmp-no-rendition-class": _x4_meta(("<xmpMM:RenditionClass>default</xmpMM:RenditionClass>", "")),
+        "x4-xmp-no-metadata-date": _x4_meta((f"<xmp:MetadataDate>{X4_DATE_XMP}</xmp:MetadataDate>", "")),
+        "x4-xmp-bad-create-date": _x4_meta((f"<xmp:CreateDate>{X4_DATE_XMP}", "<xmp:CreateDate>2026-13-25T12:00:00Z")),
+        "x4-xmp-bad-modify-date": _x4_meta((f"<xmp:ModifyDate>{X4_DATE_XMP}", "<xmp:ModifyDate>2026-11-25T25:00:00Z")),
+        "x4-xmp-no-title": _x4_meta((title, ""), info={"Title": None}),
+        "x4-xmp-no-creator-tool": _x4_meta(
+            (f"<xmp:CreatorTool>{X4_INFO['Creator']}</xmp:CreatorTool>", ""), info={"Creator": None}
+        ),
+        "x4-xmp-no-version": _x4_meta((version, ""), info={"GTS_PDFXVersion": None}),
+        "x4-xmp-wrong-version": _x4_meta(
+            (version, version.replace("X-4", "X-3")), info={"GTS_PDFXVersion": pikepdf.String("PDF/X-3")}
+        ),
+        "x4-xmp-pdfxid-extra": _x4_meta(
+            (version, version + "<pdfxid:GTS_PDFXConformance>PDF/X-4</pdfxid:GTS_PDFXConformance>")
+        ),
+        "x4-info-conformance": _x4_meta(info={"GTS_PDFXConformance": pikepdf.String("PDF/X-4")}),
+        "x4-info-version-utf16": _x4_meta(
+            info={"GTS_PDFXVersion": pikepdf.String("\ufeffPDF/X-4".encode("utf-16-be"))}
+        ),
+        "x4-xmp-no-trapped": _x4_meta(("<pdf:Trapped>False</pdf:Trapped>", ""), info={"Trapped": None}),
+        "x4-trapped-unknown": _x4_meta(
+            ("<pdf:Trapped>False<", "<pdf:Trapped>Unknown<"), info={"Trapped": pikepdf.Name.Unknown}
+        ),
+        "x4-info-title-differs": _x4_meta(info={"Title": pikepdf.String("Another title")}),
+        "x4-info-no-analogue": _x4_meta(info={"Subject": pikepdf.String("Not in XMP")}),
+        "x4-author-bag": _x4_meta(
+            ("<dc:format>", "<dc:creator><rdf:Bag><rdf:li>A. Writer</rdf:li></rdf:Bag></dc:creator><dc:format>"),
+            info={"Author": pikepdf.String("A. Writer")},
+        ),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -623,6 +700,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         "x4-crypt-filter": _x4_crypt(),
         "x4-filter-abbreviated": _x4_content(["Fl"], zlib.compress(GOOD_X4_CONTENT)),
         "x4-perms": _x4_perms(),
+        **_x4_metadata_fixtures(),
     }
 
 
@@ -686,6 +764,10 @@ def _x4_variants(good: bytes, scratch: pathlib.Path) -> dict[str, bytes]:
         "x4-unknown-filter": _edit(good, b"/FlateDecode", b"/FlateDecodX", times=2),
         "x4-damaged-object": _edit(good, b"2 0 obj\n<<", b"2 0 obj\n[<"),
         "x4-dangling-reference": _edit(good, b"/Info 2 0 R", b"/Info 2 5 R"),
+        # 6.10.1 and 6.10.4: no catalog metadata, and no trailer /ID.
+        "x4-no-xmp": _edit(good, b"<< /Metadata 3 0 R", b"<< /Metadatx 3 0 R"),
+        "x4-no-trailer-id": _edit(good, b"/ID [", b"/IX ["),
+        "x4-xmp-filtered": _compressed_xmp(good),
     }
 
 
@@ -705,6 +787,22 @@ def _many_updates(good: bytes, count: int) -> bytes:
         out += b"xref\n0 0\ntrailer\n" + trailer[:-2] + b" /Prev %d >>\nstartxref\n%d\n%%%%EOF\n" % (prev, here)
         prev = here
     return bytes(out)
+
+
+def _compressed_xmp(good: bytes) -> bytes:
+    """x4-good with its XMP (object 3) Flate-compressed in an incremental update: qpdf will not save it compressed."""
+    with pikepdf.open(io.BytesIO(good)) as pdf:
+        assert pdf.Root.Metadata.objgen == (3, 0)
+        xmp = pdf.Root.Metadata.read_bytes()
+    data = zlib.compress(xmp)
+    obj = b"3 0 obj\n<< /Type /Metadata /Subtype /XML /Filter /FlateDecode /Length %d >>\nstream\n" % len(data)
+    obj += data + b"\nendstream\nendobj\n"
+    trailer = good[good.rindex(b"trailer") + 7 : good.rindex(b"startxref")].strip()
+    prev = int(good[good.rindex(b"startxref") + 9 :].split()[0])
+    here = len(good) + len(obj)
+    update = b"xref\n3 1\n%010d 00000 n \ntrailer\n" % len(good)
+    update += trailer[:-2] + b" /Prev %d >>\nstartxref\n%d\n%%%%EOF\n" % (prev, here)
+    return good + obj + update
 
 
 def _too_many_objects(good: bytes) -> bytes:

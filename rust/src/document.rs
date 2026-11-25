@@ -68,6 +68,7 @@ pub struct Document {
     object_streams: BTreeMap<u32, Result<ObjectStream, ObjectDamage>>,
     notes: Vec<(Buffer, Note)>,
     dangling: Vec<(u32, u16, Dangling)>,
+    limits: Limits,
 }
 
 impl Document {
@@ -85,6 +86,7 @@ impl Document {
             object_streams: BTreeMap::new(),
             notes: Vec::new(),
             dangling: Vec::new(),
+            limits: *limits,
         };
         let mut stack: Vec<(u32, u16)> = Vec::new();
         for (_, value) in doc.xref.trailer.entries.iter().rev() {
@@ -116,6 +118,32 @@ impl Document {
             .and_then(Object::dict)
     }
 
+    /// The newest trailer, or the newest cross-reference stream's dictionary.
+    pub(crate) fn trailer(&self) -> &Dict {
+        &self.xref.trailer
+    }
+
+    /// Stream `num`'s data with every filter applied, when it is a stream the walk read and its filters decode it; not
+    /// for image data, which stays encoded here. The tiers below report a stream that cannot be decoded.
+    pub(crate) fn stream_data(&self, num: u32) -> Option<Vec<u8>> {
+        let Some(Slot::Loaded {
+            object: Object {
+                value: Value::Dict(dict),
+                ..
+            },
+            stream: Some(range),
+            buffer,
+        }) = self.slots.get(&num)
+        else {
+            return None;
+        };
+        let resolve = |o: &Object| self.resolve(o).cloned();
+        match file::decode(self.bytes(*buffer), dict, *range, &self.limits, &resolve) {
+            Ok(Decoded::Plain(data)) => Some(data),
+            _ => None,
+        }
+    }
+
     /// `object`, or what it refers to when it is a reference to an object the walk read.
     pub(crate) fn resolve<'a>(&'a self, object: &'a Object) -> Option<&'a Object> {
         match object.value {
@@ -137,14 +165,18 @@ impl Document {
 
     /// The bytes `start..end` of `buffer`, as written: a name's raw spelling, a real's text.
     pub(crate) fn raw(&self, buffer: Buffer, start: usize, end: usize) -> &[u8] {
-        let data = match buffer {
+        self.bytes(buffer).get(start..end).unwrap_or_default()
+    }
+
+    /// The whole of `buffer`.
+    fn bytes(&self, buffer: Buffer) -> &[u8] {
+        match buffer {
             Buffer::File => self.file.as_slice(),
             Buffer::ObjectStream(num) => {
                 let stream = self.object_streams.get(&num).and_then(|s| s.as_ref().ok());
                 stream.map_or(&[][..], |s| s.data.as_slice())
             }
-        };
-        data.get(start..end).unwrap_or_default()
+        }
     }
 
     /// How many objects the cross-reference sections list as in use, reachable or not.
@@ -427,6 +459,28 @@ mod tests {
 
     fn ids(doc: &Document) -> Vec<&'static str> {
         doc.findings().iter().map(|f| f.check.id).collect()
+    }
+
+    #[test]
+    fn stream_data_is_decoded_on_request() {
+        let doc = open(&classic(
+            &[
+                (1, b"<< /A 2 0 R /B 3 0 R /C 4 0 R /D 6 0 R >>"),
+                (2, b"<< /Length 5 0 R /Filter 7 0 R >>\nstream\n6869>\nendstream"),
+                (3, b"<< /Length 4 /Filter /DCTDecode >>\nstream\nJPEG\nendstream"),
+                (4, b"<< /Length 2 /Filter /ASCIIHexDecode >>\nstream\nzz\nendstream"),
+                (5, b"5"),
+                (6, b"<< /Length 2 >>"),
+                (7, b"/ASCIIHexDecode"),
+            ],
+            "<< /Size SIZE /Root 1 0 R >>",
+        ));
+        assert_eq!(doc.stream_data(2).as_deref(), Some(b"hi".as_slice()));
+        assert_eq!(doc.stream_data(3), None, "an image filter stays encoded");
+        assert_eq!(doc.stream_data(4), None, "data the filter cannot decode");
+        assert_eq!(doc.stream_data(6), None, "not a stream");
+        assert_eq!(doc.stream_data(9), None, "not read");
+        assert_eq!(doc.trailer().get(b"Size").and_then(Object::integer), Some(8));
     }
 
     #[test]

@@ -3,29 +3,55 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+mod metadata;
 mod x4;
 
 use crate::document::Document;
 use crate::findings::{
-    Check, CheckResult, FILE_ENCRYPTED, Finding, INTERNAL, Level, Outcome, Report, Severity, Status, Structure,
-    X4_ENCRYPT_ABSENT, X4_FILTER_NO_CRYPT, X4_FILTER_NO_LZW, X4_FILTER_STANDARD_ONLY, X4_LIMITS_OBJECTS,
+    self as f, Check, CheckResult, FILE_ENCRYPTED, Finding, INTERNAL, Level, Outcome, Report, Severity, Status,
+    Structure, X4_ENCRYPT_ABSENT, X4_FILTER_NO_CRYPT, X4_FILTER_NO_LZW, X4_FILTER_STANDARD_ONLY, X4_LIMITS_OBJECTS,
     X4_NAMES_HEX_ESCAPED, X4_NAMES_UTF8, X4_PDF_REFERENCE_CONFORMS, X4_PERMS_UR_ONLY,
 };
 use crate::pipeline::Limits;
 
-/// A check's code: what it finds in an open document.
-type Run = fn(&Document) -> Vec<Finding>;
+/// A check's code: what it finds in an open document verified at a level.
+type Run = fn(&Document, Level) -> Vec<Finding>;
 
 /// Every implemented check that reads an open document, with its code. A test holds this list and the
 /// `implemented` entries of `rust/checks.toml` equal, apart from the checks judged from tiers 1 to 5's own findings.
 const RUNS: &[(&Check, Run)] = &[
-    (X4_FILTER_NO_LZW, x4::no_lzw),
-    (X4_FILTER_NO_CRYPT, x4::no_crypt),
-    (X4_FILTER_STANDARD_ONLY, x4::standard_only),
-    (X4_PERMS_UR_ONLY, x4::ur_only),
-    (X4_LIMITS_OBJECTS, x4::object_count),
-    (X4_NAMES_UTF8, x4::names_utf8),
-    (X4_NAMES_HEX_ESCAPED, x4::names_escaped),
+    (X4_FILTER_NO_LZW, |d, _| x4::no_lzw(d)),
+    (X4_FILTER_NO_CRYPT, |d, _| x4::no_crypt(d)),
+    (X4_FILTER_STANDARD_ONLY, |d, _| x4::standard_only(d)),
+    (X4_PERMS_UR_ONLY, |d, _| x4::ur_only(d)),
+    (X4_LIMITS_OBJECTS, |d, _| x4::object_count(d)),
+    (X4_NAMES_UTF8, |d, _| x4::names_utf8(d)),
+    (X4_NAMES_HEX_ESCAPED, |d, _| x4::names_escaped(d)),
+    (f::X4_TRAPPED_PRESENT, metadata::trapped_present),
+    (f::X4_TRAPPED_TRUE_OR_FALSE, metadata::trapped_true_or_false),
+    (f::X4_XMP_PRESENT, metadata::present),
+    (f::X4_XMP_NAMESPACE_PREFIXES, metadata::prefixes),
+    (f::X4_XMP_UNFILTERED, metadata::unfiltered),
+    (f::X4_INFO_XMP_ANALOGUE_PRESENT, metadata::analogue_present),
+    (f::X4_INFO_XMP_ANALOGUE_EQUAL, metadata::analogue_equal),
+    (f::X4_INFO_PDFX_VERSION_PDFDOC, metadata::info_version_pdfdoc),
+    (f::X4_INFO_AUTHOR_SINGLE_CREATOR, metadata::author_single_creator),
+    (f::X4_XMP_NO_BYTES_ENCODING_ATTRS, metadata::header_attributes),
+    (f::X4_XMP_DOCUMENT_ID, metadata::document_id),
+    (f::X4_XMP_VERSION_ID, metadata::version_id),
+    (f::X4_XMP_RENDITION_CLASS, metadata::rendition_class),
+    (f::X4_XMP_DOCUMENT_ID_UUID, metadata::document_id_uuid),
+    (f::X4_XMP_CREATE_DATE, metadata::create_date),
+    (f::X4_XMP_MODIFY_DATE, metadata::modify_date),
+    (f::X4_XMP_METADATA_DATE, metadata::metadata_date),
+    (f::X4_XMP_TITLE, metadata::title),
+    (f::X4_XMP_AGENT_NAMES, metadata::agent_names),
+    (f::X4_TRAILER_ID, metadata::trailer_id),
+    (f::X4_XMP_WELL_FORMED, metadata::well_formed),
+    (f::X4_IDENTITY_VERSION_PRESENT, metadata::version_present),
+    (f::X4_IDENTITY_VERSION_VALUE, metadata::version_value),
+    (f::X4_IDENTITY_PDFXID_ONLY_VERSION, metadata::pdfxid_only_version),
+    (f::X4_IDENTITY_NO_INFO_CONFORMANCE, metadata::no_info_conformance),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5
@@ -55,7 +81,7 @@ pub fn verify(file: &str, bytes: &[u8], level: Level) -> Report {
                 let outcome = if structure == Structure::Damaged {
                     Outcome::NotEvaluated("objects it would read could not be read".into())
                 } else {
-                    let found = guarded(id, &|| run(&doc));
+                    let found = guarded(id, &|| run(&doc, level));
                     let outcome = if found.is_empty() { Outcome::Pass } else { Outcome::Fail };
                     findings.extend(found);
                     outcome

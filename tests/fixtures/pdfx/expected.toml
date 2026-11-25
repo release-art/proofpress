@@ -101,3 +101,109 @@ expect = { "object.damaged" = "the Info dictionary starts [<, which cannot be re
 [x4-dangling-reference]
 levels = ["x4"]
 expect = { "object.dangling-reference" = "the trailer's /Info points at generation 5 of an object that has generation 0 (7.3.10)" }
+
+# PDF/X-4 6.9 to 6.11: trapping, metadata, identification. Each changes x4-good's XMP or Info in one way.
+
+[x4-xmp-filtered]
+levels = ["x4"]
+expect = { "x4.xmp.unfiltered" = "the document's metadata stream is Flate-compressed (6.10.1)" }
+
+[x4-page-xmp-filtered]
+levels = ["x4"]
+expect = { "x4.xmp.unfiltered" = "the page's metadata stream is Flate-compressed (6.10.1, X4-Q8)" }
+
+[x4-page-xmp-malformed]
+levels = ["x4"]
+expect = { "x4.xmp.well-formed" = "the page's XMP lacks a closing rdf:Description tag (6.10.6)" }
+
+[x4-page-xmp-header-bytes]
+levels = ["x4"]
+expect = { "x4.xmp.no-bytes-encoding-attrs" = "the page's packet header has a bytes attribute (6.10.3)" }
+
+[x4-xmp-prefix]
+levels = ["x4"]
+expect = { "x4.xmp.namespace-prefixes" = "the pdfxid namespace is written with the prefix gts (6.10.1, Table 2)" }
+
+[x4-xmp-no-document-id]
+levels = ["x4"]
+expect = { "x4.xmp.document-id" = "no xmpMM:DocumentID (6.10.4)" }
+
+[x4-xmp-document-id-not-uuid]
+levels = ["x4"]
+expect = { "x4.xmp.document-id-uuid" = "the document ID is an xmp.did: URI, a warning (6.10.4)" }
+
+[x4-xmp-no-version-id]
+levels = ["x4"]
+expect = { "x4.xmp.version-id" = "no xmpMM:VersionID (6.10.4)" }
+
+[x4-xmp-no-rendition-class]
+levels = ["x4"]
+expect = { "x4.xmp.rendition-class" = "no xmpMM:RenditionClass (6.10.4)" }
+
+[x4-xmp-no-metadata-date]
+levels = ["x4"]
+expect = { "x4.xmp.metadata-date" = "no xmp:MetadataDate (6.10.4)" }
+
+[x4-xmp-no-title]
+levels = ["x4"]
+expect = { "x4.xmp.title" = "no dc:title, and no Info /Title (6.10.4)" }
+
+[x4-xmp-no-creator-tool]
+levels = ["x4"]
+expect = { "x4.xmp.agent-names" = "no xmp:CreatorTool and no Info /Creator, a warning (6.10.4)" }
+
+[x4-xmp-no-version]
+levels = ["x4"]
+expect = { "x4.identity.version-present" = "no pdfxid:GTS_PDFXVersion, and none in Info (6.11)" }
+
+[x4-xmp-wrong-version]
+levels = ["x4"]
+expect = { "x4.identity.version-value" = "pdfxid:GTS_PDFXVersion is PDF/X-3, as is Info's (6.11)" }
+
+[x4-xmp-pdfxid-extra]
+levels = ["x4"]
+expect = { "x4.identity.pdfxid-only-version" = "pdfxid:GTS_PDFXConformance beside the version (6.11)" }
+
+[x4-info-conformance]
+levels = ["x4"]
+expect = { "x4.identity.no-info-conformance" = "Info has /GTS_PDFXConformance (6.11)" }
+
+[x4-info-version-utf16]
+levels = ["x4"]
+expect = { "x4.info.pdfx-version-pdfdoc" = "Info /GTS_PDFXVersion is UTF-16; its text still equals XMP's (6.10.2)" }
+
+[x4-xmp-no-trapped]
+levels = ["x4"]
+expect = { "x4.trapped.present" = "no pdf:Trapped, and no Info /Trapped (6.9, X4-Q1)" }
+
+[x4-trapped-unknown]
+levels = ["x4"]
+expect = { "x4.trapped.true-or-false" = "pdf:Trapped and Info /Trapped are Unknown (6.9)" }
+
+[x4-info-title-differs]
+levels = ["x4"]
+expect = { "x4.info.xmp-analogue-equal" = "Info /Title differs from dc:title (6.10.2)" }
+
+[x4-info-no-analogue]
+levels = ["x4"]
+expect = { "x4.info.xmp-analogue-present" = "Info /Subject has no dc:description (6.10.2)" }
+
+[x4-author-bag]
+levels = ["x4"]
+expect = { "x4.info.author-single-creator" = "with Info /Author, dc:creator is an rdf:Bag, not an rdf:Seq (6.10.2, X4-Q6)" }
+
+[x4-no-trailer-id]
+levels = ["x4"]
+expect = { "x4.trailer.id" = "the trailer's /ID key is renamed (6.10.4)" }
+
+[x4-xmp-bad-create-date]
+levels = ["x4"]
+expect = { "x4.xmp.create-date" = "xmp:CreateDate has month 13 (6.10.4, X4-Q7)", "x4.info.xmp-analogue-equal" = "so it cannot equal Info /CreationDate (6.10.2)" }
+
+[x4-xmp-bad-modify-date]
+levels = ["x4"]
+expect = { "x4.xmp.modify-date" = "xmp:ModifyDate has hour 25 (6.10.4, X4-Q7)", "x4.info.xmp-analogue-equal" = "so it cannot equal Info /ModDate (6.10.2)" }
+
+[x4-no-xmp]
+levels = ["x4"]
+expect = { "x4.xmp.present" = "the catalog's /Metadata key is renamed (6.10.1)", "x4.trapped.present" = "so nothing the XMP must hold is there (6.9)", "x4.info.xmp-analogue-present" = "nor any analogue of the Info entries (6.10.2)", "x4.xmp.document-id" = "6.10.4", "x4.xmp.version-id" = "6.10.4", "x4.xmp.rendition-class" = "6.10.4", "x4.xmp.create-date" = "6.10.4", "x4.xmp.modify-date" = "6.10.4", "x4.xmp.metadata-date" = "6.10.4", "x4.xmp.title" = "6.10.4", "x4.xmp.agent-names" = "6.10.4, a warning", "x4.identity.version-present" = "6.11" }

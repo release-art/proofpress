@@ -438,7 +438,7 @@ title = "XMP states whether the file is trapped"
 clauses = ["iso-15930-7:6.9"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.trapped.true-or-false"
@@ -446,7 +446,7 @@ title = "The trapped state is True or False"
 clauses = ["iso-15930-7:6.9"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.trapped.trapnet-implies-true"
@@ -487,7 +487,7 @@ title = "The catalog has document metadata"
 clauses = ["iso-15930-7:6.10.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.conforms"
@@ -503,7 +503,7 @@ title = "XMP uses the required prefixes for its namespaces"
 clauses = ["iso-15930-7:6.10.1", "iso-15930-7:6.11"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.unfiltered"
@@ -511,7 +511,7 @@ title = "Metadata streams are not filtered"
 clauses = ["iso-15930-7:6.10.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.info.xmp-analogue-present"
@@ -519,7 +519,7 @@ title = "Info entries with an XMP equivalent are in XMP"
 clauses = ["iso-15930-7:6.10.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.info.xmp-analogue-equal"
@@ -527,7 +527,7 @@ title = "Info entries equal their XMP equivalents"
 clauses = ["iso-15930-7:6.10.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.info.unlisted-not-in-predefined-schema"
@@ -543,7 +543,7 @@ title = "Info GTS_PDFXVersion is PDFDocEncoded"
 clauses = ["iso-15930-7:6.10.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.info.author-single-creator"
@@ -551,7 +551,7 @@ title = "With Info Author, dc:creator has one item"
 clauses = ["iso-15930-7:6.10.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.no-bytes-encoding-attrs"
@@ -559,7 +559,7 @@ title = "XMP packet headers have no bytes or encoding attribute"
 clauses = ["iso-15930-7:6.10.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.document-id"
@@ -567,7 +567,7 @@ title = "XMP has a document ID"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.version-id"
@@ -575,7 +575,7 @@ title = "XMP has a version ID"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.rendition-class"
@@ -583,7 +583,7 @@ title = "XMP has a rendition class"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.document-id-uuid"
@@ -591,7 +591,7 @@ title = "The document ID is a UUID URI"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.create-date"
@@ -599,7 +599,7 @@ title = "XMP has a creation date"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.modify-date"
@@ -607,7 +607,7 @@ title = "XMP has a modification date"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.metadata-date"
@@ -615,7 +615,7 @@ title = "XMP has a metadata date"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.title"
@@ -623,7 +623,7 @@ title = "XMP has a title"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.agent-names"
@@ -631,7 +631,7 @@ title = "XMP names the creator tool and producer"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.trailer.id"
@@ -639,7 +639,7 @@ title = "The trailer has a file ID"
 clauses = ["iso-15930-7:6.10.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xmp.well-formed"
@@ -647,7 +647,7 @@ title = "Every XMP packet is well-formed RDF/XML"
 clauses = ["iso-15930-7:6.10.6"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.identity.version-present"
@@ -656,7 +656,7 @@ title = "XMP declares the PDF/X version"
 clauses = ["iso-15930-7:6.11", "iso-15930-7:A.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.identity.version-value"
@@ -664,7 +664,7 @@ title = "The PDF/X version value is exact"
 clauses = ["iso-15930-7:6.11", "iso-15930-7:A.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.identity.pdfxid-only-version"
@@ -672,7 +672,7 @@ title = "The pdfxid namespace holds only the version"
 clauses = ["iso-15930-7:6.11"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.identity.no-info-conformance"
@@ -680,7 +680,7 @@ title = "Info has no GTS_PDFXConformance"
 clauses = ["iso-15930-7:6.11"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.boxes.trim-or-art"
