@@ -46,6 +46,7 @@ PORTED = frozenset(
         "safe-area",
         "spot-definition",
         "gray-only",
+        "contrast",
     }
 )
 _SEVERITY = {"error": Severity.ERROR, "warning": Severity.WARN}
@@ -89,6 +90,7 @@ def check(path: pathlib.Path, profile: Profile) -> list[Finding]:
         (profile.require_bleed, ("artwork-bleed",)),
         (profile.no_marks, ("outside-bleed",)),
         (profile.allow_spots is not None, ("spot-ink",)),
+        (profile.min_delta_l is not None, ("contrast",)),
     )
     wanted = {check for on, checks in switches if on for check in checks}
     return [f for f in run(path, params(profile)) if f.check in wanted]
@@ -113,4 +115,6 @@ def params(profile: Profile) -> dict[str, object]:
         "min_text_pt": profile.min_text_pt,
         "min_stroke_pt": profile.min_stroke_pt,
         "safe_mm": profile.safe_mm,
+        "min_delta_l": profile.min_delta_l,
+        "proof_profile": str(profile.proof_profile) if profile.proof_profile is not None else None,
     }

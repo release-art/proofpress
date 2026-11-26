@@ -1724,7 +1724,7 @@ title = "Text contrasts with its background"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "safe-area"

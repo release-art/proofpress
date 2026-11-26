@@ -23,7 +23,7 @@ use crate::graphics::{self, Event, Ink, Kind};
 const EDGE_TOLERANCE_PT: f64 = 0.05;
 
 /// Each page's paints, outside pattern cells, in order.
-fn paints(doc: &Document) -> BTreeMap<u32, Vec<(Kind, Option<Rect>, Ink)>> {
+pub(super) fn paints(doc: &Document) -> BTreeMap<u32, Vec<(Kind, Option<Rect>, Ink)>> {
     let mut out: BTreeMap<u32, Vec<(Kind, Option<Rect>, Ink)>> = BTreeMap::new();
     for event in graphics::walk(doc) {
         if let Event::Paint {

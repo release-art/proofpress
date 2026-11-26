@@ -1,6 +1,6 @@
 Feature: Text and line work
   Characters show real glyphs, fonts are embedded (Type 3 fonts are advisory), text and strokes meet the profile's
-  floors, and text stays inside the safe area.
+  floors, text stays inside the safe area, and text differs enough in lightness from its background.
 
   Scenario: Embedded text that meets every limit
     Given the fixture "embedded-text"
@@ -32,3 +32,13 @@ Feature: Text and line work
     Given the fixture "edge-text"
     When it is verified for print with '{"safe_mm": 3.0}'
     Then check "safe-area" fails on page 1
+
+  Scenario: Text too close to its background in lightness
+    Given the fixture "low-contrast"
+    When it is verified for print with '{"min_delta_l": 30}'
+    Then check "contrast" fails on page 1
+
+  Scenario: Text far from its background in lightness
+    Given the fixture "high-contrast"
+    When it is verified for print with '{"min_delta_l": 30}'
+    Then no check fails but "font-embedded"

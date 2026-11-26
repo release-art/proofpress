@@ -24,15 +24,15 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 4** (content, page model and colour): 4.1 to 4.5 done; 4.6 under way. The walk now places what it paints
-  (CTM, clip, path, text and image extents) and reads colours as the print checks do; 31 print checks run in Rust:
+  (CTM, clip, path, text and image extents) and reads colours as the print checks do; 32 print checks run in Rust:
   what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
-  (`overprint`, `white-overprint`, `rich-black`, `k-only-text`) and the page geometry (`geometry`, `bleed`, `centring`,
-  `page-count`, `page-size`, `page-rotate`, `output-condition`) and the colour mode (`blend-space`, `spot-ink`,
-  `colour-space`, `rgb-only`, `icc-profile`), image resolution (`image-dpi`, `image-dpi-max`, `image-stretch`) and
-  text (`missing-glyph`, `font-embedded`, `font-type3`, `text-size`, `hairline`, `safe-area`), `spot-definition` and `gray-only`. Profile parameters reach
-  the core as JSON (`Settings`, `Params`). Left in 4.6: `contrast` (needs colour management); `tac`, `pdfa` and `structure` are tool
-  orchestration and file-level outcomes for the CLI stage. The brief's pace checkpoint for
-  `paint.py` falls on 2026-12-02, one week into phase 4.
+  (`overprint`, `white-overprint`, `rich-black`, `k-only-text`), the page geometry (`geometry`, `bleed`, `centring`,
+  `page-count`, `page-size`, `page-rotate`, `output-condition`), the colour mode (`blend-space`, `spot-ink`,
+  `colour-space`, `rgb-only`, `gray-only`, `icc-profile`, `spot-definition`), image resolution (`image-dpi`,
+  `image-dpi-max`, `image-stretch`) and text (`missing-glyph`, `font-embedded`, `font-type3`, `text-size`, `hairline`,
+  `safe-area`, `contrast`). Profile parameters reach the core as JSON (`Settings`, `Params`). Every print check that
+  reads the PDF is ported; `tac`, `pdfa` and `structure` are tool orchestration and file-level outcomes for the CLI
+  stage. The brief's pace checkpoint for `paint.py` falls on 2026-12-02, one week into phase 4.
 
 ## Done
 
@@ -80,7 +80,8 @@ record it as not conforming to that one rule).
 | 4.6 (part) | `e3cd459` | Image resolution: placement and sample size in the walk; `image-dpi`, `image-dpi-max`, `image-stretch` ported, parity-proved, `resolution.py` deleted |
 | 4.6 (part) | `4295048` | Text: font names, subtypes, embedding and `.notdef` codes; glyph counts and stroke widths in the walk; the six text checks ported, parity-proved, `text.py` deleted; a null `/FontFile` entry counts as absent |
 | 4.6 (part) | `9bfdb2f` | PDF functions (types 0, 2, 3 and 4) evaluated in the core; `spot-definition` ported, parity-proved and its Python deleted |
-| 4.6 (part) | the commit after `9bfdb2f` | CMYK image samples decoded in the core (`zune-jpeg` for JPEG, `hayro-jpeg2000` for JPEG 2000, both MIT or Apache-2.0 and accepted by `cargo deny`); `gray-only` ported, parity-proved and its Python deleted |
+| 4.6 (part) | `0beb109` | CMYK image samples decoded in the core (`zune-jpeg` for JPEG, `hayro-jpeg2000` for JPEG 2000, both MIT or Apache-2.0 and accepted by `cargo deny`); `gray-only` ported, parity-proved and its Python deleted |
+| 4.6 (part) | the commit after `0beb109` | Colour to L*a*b* in the core through `lcms2` (static, LittleCMS 2.20); `contrast` ported, parity-proved and its Python check deleted (the measuring stays for the inventory and extract reports) |
 
 ## Register coverage
 
@@ -90,7 +91,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 109 | 28 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 50 | 6 | 1 (`internal`) |
+| House and structure checks | 51 | 5 | 1 (`internal`) |
 
 ## Gates
 
@@ -306,6 +307,15 @@ Oracle consultations:
   (release build) and longer for `x4`, where the Python gray check alone took 3 to 14. One of them passed the parity
   script's 120-second limit under load and was counted apart. Each print check walks the pages again (12 calls to
   `graphics::walk` in `checks`); worth measuring at the `paint.py` pace checkpoint (2026-12-02).
+- Task 4.6, the ninth port (`contrast`, with a 100 L* minimum so every measured pair is reported): 9,241 files identical
+  with 48,640 findings among them, 6 different, all explained. Three are the reading differences already explained. One
+  output intent's ASCIIHex profile has no `>` end-of-data marker (ISO 32000-2 7.4.2), so the core has no CMYK profile
+  there; the file does not conform. One file's fonts have names that are not UTF-8, which the Python reads as unknown
+  fonts with one-byte codes, so its text boxes, and the grounds under their centres, differ. In one, pikepdf ends three
+  ASCII85 inline images at an `EI` inside other data and misses them, where the core ends them at the filter's
+  end-of-data marker, so text centred on them is unmeasured in the core. Converted colours match Pillow's exactly. The
+  Python's CIEDE2000 is not ported: the check does not report it, and the inventory, which does, stays in Python for the
+  CLI stage.
 - Task 4.6: `boxes` and `bleedbox` come from the Python PDF/X layer (`pdfx/x4.py`), which the plan does not port; the
   `x4.boxes.*` rows replace them.
 - Task 4.6: the profile's on/off switches for print checks stay in Python (`ported.check`); the core runs every

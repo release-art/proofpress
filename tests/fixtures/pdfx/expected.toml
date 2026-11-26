@@ -669,6 +669,16 @@ levels = ["print"]
 expect = { "rgb-only" = "CMYK artwork in an RGB job" }
 params = { colour_mode = "rgb" }
 
+[low-contrast]
+levels = ["print"]
+expect = { "contrast" = "gray text on a slightly lighter gray, below a 30 L* minimum", "font-embedded" = "and its font is not embedded" }
+params = { min_delta_l = 30.0 }
+
+[high-contrast]
+levels = ["print"]
+expect = { "font-embedded" = "its font is not embedded; black text on the paper passes a 30 L* minimum" }
+params = { min_delta_l = 30.0 }
+
 [gray-vector]
 levels = ["print"]
 expect = {}

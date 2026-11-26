@@ -20,6 +20,7 @@ Newest first. A decision changes only by a new line here.
 
 | Date | Decision | Where |
 |---|---|---|
+| 2026-11-26 | Colour conversion in the core uses `lcms2` (LittleCMS 2.20, built from the crate's bundled source and linked statically, so the extension still links only system libraries). It reproduces Pillow's 8-bit sRGB and CMYK to Lab conversions exactly (1,512 of 1,512 colours, our test CMYK profile included); `moxcms` failed earlier. Image samples: `zune-jpeg` for JPEG and `hayro-jpeg2000` for JPEG 2000, both pure Rust, which give Pillow's samples | Brief, ICC; progress file, task 4.6 |
 | 2026-11-26 | PDF/X-4 6.27's "JPX file format, baseline features only" is read as written (ITU-T T.801 M.9.2): plain JP2 files without the `jpx ` and `jpxb` brands and a Reader Requirements box fail `x4.jpx.baseline`, as do bare codestreams. Adobe's output, and so every Altona and Ghent file, passes; veraPDF's PDF/A-2 test files do not | Owner, after an oracle escalation |
 | 2026-11-25 | PDF/X-4 6.4.3.4: the rule that same-named Separation arrays share their tint transform and alternate follows X4-Q3, so it judges the separations print elements use (with the `/Colorants` of used DeviceN spaces), not every array in the file. It covers every name, process inks such as Black included. Altona's odd `/Black`, in a vendor thumbnail no page paints, is out of scope. The `PrintingOrder` and `Solidities` rows stay file-wide, as stated | Owner, after an oracle escalation |
 | 2026-11-25 | Verifying a file never uses the network. Reference data, such as the ICC characterization registry's reference names, is built into the code with its source and date, and refreshed by hand; a missing local tool (veraPDF, Ghostscript) is reported as a finding for its layer and the other checks still run | Owner |
@@ -47,8 +48,7 @@ Newest first. A decision changes only by a new line here.
 | 2026-11-06 | Read PDFs with a strict parser of our own: no repair, no encryption. A file that needs either fails with the reason | Brief, the parser |
 | 2026-11-06 | Port the core to Rust. The CLI becomes Rust, and the Python package calls the same core through PyO3 | Brief |
 
-Proposed in the brief and not yet confirmed: our own small PDF writer instead of `lopdf`; `hayro` for previews; `lcms2`, which is C,
-for colour.
+Proposed in the brief and not yet confirmed: our own small PDF writer instead of `lopdf`; `hayro` for previews.
 
 ## Open questions
 

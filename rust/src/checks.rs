@@ -7,6 +7,7 @@ mod annots;
 mod boxes;
 mod colour;
 mod contents;
+mod contrast;
 mod gray;
 mod ink;
 mod intent;
@@ -89,6 +90,10 @@ pub struct Params {
     pub min_stroke_pt: Option<f64>,
     /// `safe-area`: how far inside the trim text must stay, in millimetres.
     pub safe_mm: Option<f64>,
+    /// `contrast`: the smallest L* difference text may have from its background; none turns the check off.
+    pub min_delta_l: Option<f64>,
+    /// `contrast`: the ICC profile to measure through, a file path, instead of the output intents' profiles.
+    pub proof_profile: Option<String>,
 }
 
 /// The colour model a job is held to.
@@ -123,6 +128,8 @@ impl Default for Params {
             min_text_pt: None,
             min_stroke_pt: None,
             safe_mm: None,
+            min_delta_l: None,
+            proof_profile: None,
         }
     }
 }
@@ -307,6 +314,7 @@ const RUNS: &[(&Check, Run)] = &[
     (f::ICC_PROFILE, modes::icc_profile),
     (f::SPOT_DEFINITION, modes::spot_definition),
     (f::GRAY_ONLY, gray::gray_only),
+    (f::CONTRAST, contrast::contrast),
     (f::IMAGE_DPI, resolution::image_dpi),
     (f::IMAGE_DPI_MAX, resolution::image_dpi_max),
     (f::IMAGE_STRETCH, resolution::image_stretch),

@@ -215,7 +215,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `image-stretch` | Images are not stretched unevenly |  | warning | print | implemented |
 | `text-size` | Text meets the size floor |  | error | print | implemented |
 | `hairline` | Strokes meet the width floor |  | error | print | implemented |
-| `contrast` | Text contrasts with its background |  | error | print | todo |
+| `contrast` | Text contrasts with its background |  | error | print | implemented |
 | `safe-area` | Text stays inside the safe area |  | error | print | implemented |
 | `missing-glyph` | Text shows no missing glyphs |  | error | print | implemented |
 | `font-embedded` | Fonts are embedded |  | error | print | implemented |

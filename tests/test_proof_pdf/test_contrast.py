@@ -12,6 +12,7 @@ from proof_pdf._internal.paint import Fill
 from proof_pdf.models import Severity
 
 from ._samples import build
+from .conftest import ported_findings
 
 
 def _page(tmp_path: pathlib.Path, stream: bytes, *, xobjects=None) -> pikepdf.Pdf:
@@ -150,7 +151,7 @@ class TestBackgrounds:
 class TestFindings:
     def _findings(self, tmp_path, stream, minimum=30.0, **kw):
         with _page(tmp_path, stream, **kw) as pdf:
-            return contrast.check_contrast(pdf, minimum)
+            return ported_findings(pdf, {"contrast"}, min_delta_l=minimum)
 
     def test_low_contrast_text_is_an_error_with_both_colours_named(self, tmp_path):
         [finding] = self._findings(tmp_path, b"0.9 g 50 50 150 150 re f " + _text(b"0.8 g"))
@@ -177,5 +178,5 @@ class TestFindings:
     @needs_cmyk_profile
     def test_cmyk_text_is_measured_through_a_given_profile(self, tmp_path):
         with _page(tmp_path, b"0 0 0 0.1 k 50 50 150 150 re f " + _text(b"0 0 0 0.2 k")) as pdf:
-            [finding] = contrast.check_contrast(pdf, 30.0, CMYK_PROFILE)
+            [finding] = ported_findings(pdf, {"contrast"}, min_delta_l=30.0, proof_profile=str(CMYK_PROFILE))
         assert "C0 M0 Y0 K20" in finding.message and "C0 M0 Y0 K10" in finding.message

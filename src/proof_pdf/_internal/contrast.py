@@ -9,6 +9,9 @@ The background of a text run is the last filled shape painted under the centre o
 none. A shape that is an image or a shading has an unknown colour, so text over one is reported as unmeasured and
 never as a pass or a fail. Clipping, transparency and blend modes are not modelled, so this is an estimate of the
 design's intent, and says so.
+
+The ``contrast`` check itself runs in the Rust core (``rust/src/checks/contrast.rs``, through :mod:`.ported`); this
+module measures for the inventory and extract reports.
 """
 
 import dataclasses
@@ -18,7 +21,6 @@ import pathlib
 import pikepdf
 from PIL import Image, ImageCms
 
-from ..models import Finding, Severity
 from . import deltae
 from .paint import Fill, Rect, paint_events
 from .spaces import CMYK, GRAY, RGB, output_intents
@@ -163,41 +165,3 @@ def describe(fill: Fill | None) -> str:
         tint = f" {round(fill.value[0] * 100)}%" if len(fill.spot) == 1 and fill.value else ""
         return f"spot {'+'.join(fill.spot)}{tint}"
     return "a spot or pattern colour"
-
-
-def check_contrast(pdf: pikepdf.Pdf, min_delta_l: float, proof_profile: pathlib.Path | None = None) -> list[Finding]:
-    """Flag text whose L* difference from its background is below *min_delta_l*.
-
-    Text over an image or shading, or in a colour no profile describes, cannot be measured: that is a warning,
-    not a pass. CMYK ink with no CMYK profile to measure it through is an error, because the check was asked for.
-    """
-    try:
-        pairs = measure(pdf, ColourModel.for_pdf(pdf, proof_profile))
-    except NoProfileError as exc:
-        return [Finding("contrast", Severity.ERROR, f"cannot measure contrast: {exc}")]
-    findings: list[Finding] = []
-    unmeasured: set[int] = set()
-    for pair in pairs:
-        if pair.delta_l is None:
-            unmeasured.add(pair.page)
-        elif pair.delta_l < min_delta_l:
-            ground = "the paper" if pair.on_paper else describe(pair.ground)
-            findings.append(
-                Finding(
-                    "contrast",
-                    Severity.ERROR,
-                    f"text in {describe(pair.text)} on {ground} differs by only {pair.delta_l:.1f} L* "
-                    f"(minimum {min_delta_l:g}; {pair.runs} run(s), smallest {pair.smallest_pt:.1f}pt)",
-                    pair.page,
-                )
-            )
-    findings += [
-        Finding(
-            "contrast",
-            Severity.WARN,
-            "text over an image, a shading or a spot colour: contrast not measured",
-            page,
-        )
-        for page in sorted(unmeasured)
-    ]
-    return findings

@@ -17,7 +17,7 @@ import pathlib
 
 import pikepdf
 
-from ._internal import colour, contrast, pdfx, ported, verapdf
+from ._internal import colour, pdfx, ported, verapdf
 from .models import ColourMode, FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)
@@ -121,17 +121,9 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
             if profile.pdfx:
                 findings += pdfx.check(pdf)
             findings += ported.check(path, profile)
-            findings += _text_checks(pdf, profile)
     except (pikepdf.PdfError, pikepdf.PasswordError) as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
         return [Finding("structure", Severity.ERROR, f"cannot open the PDF (corrupt or encrypted): {exc}")], False
     return findings, True
-
-
-def _text_checks(pdf: pikepdf.Pdf, profile: Profile) -> list[Finding]:
-    findings: list[Finding] = []
-    if profile.min_delta_l is not None:
-        findings += contrast.check_contrast(pdf, profile.min_delta_l, profile.proof_profile)
-    return findings
 
 
 async def _run_verapdf(path: pathlib.Path, profile: Profile, binary: str, timeout: float | None) -> list[Finding]:
