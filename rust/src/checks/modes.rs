@@ -17,6 +17,7 @@ use crate::common::pyfmt::{repr, repr_float};
 use crate::document::{Document, Object, Value};
 use crate::findings::{
     BLEND_SPACE, COLOUR_SPACE, Finding, ICC_PROFILE, Location, RGB_ONLY, SPOT_DEFINITION, SPOT_INK, Severity,
+    X5_N_TRANSPARENCY_GROUP_CS,
 };
 use crate::graphics::{self, Event, Kind, Role};
 
@@ -613,6 +614,33 @@ fn consistency(
     ))
 }
 
+/// ISO 15930-8 7.3 (X5-Q12): under PDF/X-5n a page on which any print element uses transparency has a `/Group` with
+/// `/CS`, since the intent's n-colorant space cannot be the blending space.
+pub(super) fn x5n_group_cs(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let found = pages(doc);
+    let mut out = Vec::new();
+    for (i, dict) in doc.pages().iter().enumerate() {
+        let number = u32::try_from(i + 1).unwrap_or(u32::MAX);
+        let Some(page) = found.get(&number).filter(|p| !p.transparency.is_empty()) else {
+            continue;
+        };
+        let group = dict
+            .dict
+            .get(b"Group")
+            .and_then(|g| doc.resolve(g))
+            .and_then(Object::dict);
+        let what = match group {
+            None => "no /Group",
+            Some(g) if g.get(b"CS").is_none() => "a /Group without /CS",
+            Some(_) => continue,
+        };
+        let reasons: Vec<&str> = page.transparency.iter().copied().collect();
+        let message = format!("the page uses transparency ({}) but has {what}", reasons.join(", "));
+        out.push(on_page(X5_N_TRANSPARENCY_GROUP_CS, number, message).citing("7.3"));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1047,6 +1075,32 @@ mod tests {
                 "spot ink Odd is defined 2 different ways in Foo: [0.0, 0.3, 1.0, 0.0]; [0.5]",
                 "spot ink Q is defined 2 different ways in ICCBased(0): [0.0, 0.3, 1.0, 0.0]; [0.5]",
                 "spot ink Two is defined 2 different ways in ICCBased(2): [0.0, 0.3, 1.0, 0.0]; [0.5]",
+            ]
+        );
+    }
+
+    #[test]
+    fn pdf_x_5n_transparent_pages_name_a_blending_space() {
+        let resources = "/Resources << /ExtGState << /A << /ca 0.5 >> >> >>";
+        let doc = paged(
+            &[
+                (resources, "/A gs"),
+                (&format!("{resources} /Group << /S /Transparency >>"), "/A gs"),
+                (&format!("{resources} /Group << /CS /DeviceCMYK >>"), "/A gs"),
+                (resources, ""),
+            ],
+            "",
+            &[],
+        );
+        let found: Vec<String> = x5n_group_cs(&doc, &Level::X5n.into())
+            .into_iter()
+            .map(|f| f.message)
+            .collect();
+        assert_eq!(
+            found,
+            [
+                "the page uses transparency (opacity) but has no /Group",
+                "the page uses transparency (opacity) but has a /Group without /CS"
             ]
         );
     }

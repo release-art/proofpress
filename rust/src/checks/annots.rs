@@ -11,7 +11,7 @@ use crate::common::rect::{Rect, rect};
 use crate::document::{Dict, Document, Object, Page};
 use crate::findings::{
     Check, Finding, Location, X4_ANNOT_OUTSIDE_BLEED, X4_ANNOT_PRINTERMARK_OUTSIDE_TRIM, X4_TRAPNET_FONT_FAUXING_EMPTY,
-    X4_TRAPNET_PCM_MATCHES_INTENT, X4_TRAPPED_TRAPNET_IMPLIES_TRUE,
+    X4_TRAPNET_PCM_MATCHES_INTENT, X4_TRAPPED_TRAPNET_IMPLIES_TRUE, X5_N_TRAPNET_PCM, X5_N_TRAPNET_SEPARATIONS,
 };
 
 /// Every annotation dictionary with its page's index and the page.
@@ -149,9 +149,67 @@ pub(super) fn pcm_matches_intent(doc: &Document, settings: &Settings) -> Vec<Fin
         return Vec::new();
     };
     let want = pcm_for(space);
+    pcm_is(doc, X4_TRAPNET_PCM_MATCHES_INTENT, want, "6.9")
+}
+
+/// ISO 15930-8 7.1: under PDF/X-5n a `TrapNet` appearance's `/PCM` is `DeviceN`.
+pub(super) fn x5n_pcm(doc: &Document, _: &Settings) -> Vec<Finding> {
+    pcm_is(doc, X5_N_TRAPNET_PCM, b"DeviceN", "7.1")
+}
+
+/// A finding from `check` for every `TrapNet` appearance whose `/PCM` is not `want`.
+fn pcm_is(doc: &Document, check: &'static Check, want: &[u8], clause: &str) -> Vec<Finding> {
     let pages = doc.pages();
     let mut out = Vec::new();
-    for (i, annot) in trapnets(doc, &pages) {
+    for (i, stream) in appearances(doc, &pages) {
+        let pcm = stream.get(b"PCM").and_then(|p| doc.resolve(p)).and_then(Object::name);
+        if pcm.is_some_and(|p| p != want) {
+            let message = format!(
+                "a TrapNet appearance with /PCM /{}, not /{}",
+                String::from_utf8_lossy(pcm.unwrap_or_default()),
+                String::from_utf8_lossy(want)
+            );
+            out.push(on_page(check, i, &message, clause));
+        }
+    }
+    out
+}
+
+/// ISO 15930-8 7.1: under PDF/X-5n a `TrapNet` appearance's `/SeparationColorNames` lists every colorant of the
+/// printing condition's `/ColorantTable`.
+pub(super) fn x5n_separations(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let Some(table) = super::x4p::colorant_table(doc) else {
+        return Vec::new();
+    };
+    let pages = doc.pages();
+    let mut out = Vec::new();
+    for (i, stream) in appearances(doc, &pages) {
+        let listed: Vec<&[u8]> = stream
+            .get(b"SeparationColorNames")
+            .and_then(|s| doc.resolve(s))
+            .and_then(Object::array)
+            .map_or_default(|names| names.iter().filter_map(|n| doc.resolve(n)?.name()).collect());
+        let missing: Vec<String> = table
+            .iter()
+            .filter(|n| !listed.contains(n))
+            .map(|n| String::from_utf8_lossy(n).into_owned())
+            .collect();
+        if !missing.is_empty() {
+            let message = format!(
+                "a TrapNet appearance's /SeparationColorNames lacks {}",
+                missing.join(", ")
+            );
+            out.push(on_page(X5_N_TRAPNET_SEPARATIONS, i, &message, "7.1"));
+        }
+    }
+    out
+}
+
+/// Every `TrapNet` annotation's normal appearance streams, with the page's index: the stream, or each stream of a
+/// dictionary of them by state.
+fn appearances<'a>(doc: &'a Document, pages: &'a [Page<'a>]) -> Vec<(usize, &'a Dict)> {
+    let mut out = Vec::new();
+    for (i, annot) in trapnets(doc, pages) {
         let normal = annot
             .get(b"AP")
             .and_then(|ap| doc.resolve(ap))
@@ -161,26 +219,15 @@ pub(super) fn pcm_matches_intent(doc: &Document, settings: &Settings) -> Vec<Fin
         let Some(normal) = normal.and_then(Object::dict) else {
             continue;
         };
-        // A normal appearance is a stream, or a dictionary of streams by state.
-        let streams: Vec<&Dict> = if normal.get(b"PCM").is_some() {
-            vec![normal]
+        if normal.get(b"PCM").is_some() || normal.get(b"SeparationColorNames").is_some() {
+            out.push((i, normal));
         } else {
-            normal
-                .entries
-                .iter()
-                .filter_map(|(_, s)| doc.resolve(s)?.dict())
-                .collect()
-        };
-        for stream in streams {
-            let pcm = stream.get(b"PCM").and_then(|p| doc.resolve(p)).and_then(Object::name);
-            if pcm.is_some_and(|p| p != want) {
-                let message = format!(
-                    "a TrapNet appearance with /PCM /{}, not /{}",
-                    String::from_utf8_lossy(pcm.unwrap_or_default()),
-                    String::from_utf8_lossy(want)
-                );
-                out.push(on_page(X4_TRAPNET_PCM_MATCHES_INTENT, i, &message, "6.9"));
-            }
+            out.extend(
+                normal
+                    .entries
+                    .iter()
+                    .filter_map(|(_, s)| Some((i, doc.resolve(s)?.dict()?))),
+            );
         }
     }
     out
@@ -292,5 +339,38 @@ mod tests {
             (3, b"<< /Type /Page /BleedBox [1] /TrimBox [0 0 9 9] /Annots [<< /Subtype /Link >> << /Subtype /Link /Rect [1 2] >>] >>"),
         ];
         assert_eq!(ids(&odd), [], "boxes and rectangles that are not four numbers");
+    }
+
+    #[test]
+    fn pdf_x_5n_trapnet_appearances() {
+        let catalog = b"<< /Pages 2 0 R /OutputIntents [<< /S /GTS_PDFX /DestOutputProfileRef << /ColorantTable [/Cyan /Orange] >> >>] >>";
+        let objects: [(u32, &[u8]); 5] = [
+            (1, catalog),
+            (2, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+            (
+                3,
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] /Annots [4 0 R] >>",
+            ),
+            (
+                4,
+                b"<< /Type /Annot /Subtype /TrapNet /Rect [0 0 1 1] /AP << /N << /On 5 0 R /Off 7 >> >> >>",
+            ),
+            (
+                5,
+                b"<< /PCM /DeviceCMYK /SeparationColorNames [/Cyan 9 0 R] /Length 0 >>\nstream\n\nendstream",
+            ),
+        ];
+        let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
+        let found = |run: fn(&Document, &Settings) -> Vec<Finding>| -> Vec<String> {
+            run(&doc, &Level::X5n.into()).into_iter().map(|f| f.message).collect()
+        };
+        assert_eq!(
+            found(x5n_pcm),
+            ["page 1: a TrapNet appearance with /PCM /DeviceCMYK, not /DeviceN"]
+        );
+        assert_eq!(
+            found(x5n_separations),
+            ["page 1: a TrapNet appearance's /SeparationColorNames lacks Orange"]
+        );
     }
 }

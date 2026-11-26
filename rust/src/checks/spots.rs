@@ -15,7 +15,7 @@ use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
     Finding, Location, X4_SPOT_COLORANTS_ENTRY, X4_SPOT_COLORANTS_MATCH_DEVICEN, X4_SPOT_CONFUSING_NAMES,
     X4_SPOT_CONSISTENT_DEFINITION, X4_SPOT_NO_DOTGAIN, X4_SPOT_PRINTING_ORDER_CONSISTENT, X4_SPOT_PROCESS_COLORSPACE,
-    X4_SPOT_SOLIDITIES_CONSISTENT, X4_TRANSPARENCY_BLEND_MODES,
+    X4_SPOT_SOLIDITIES_CONSISTENT, X4_TRANSPARENCY_BLEND_MODES, X5_N_DEVICEN_NO_PROCESS, X5_N_DEVICEN_SUBTYPE,
 };
 use crate::graphics::{self, Event};
 
@@ -596,6 +596,44 @@ fn dedup(findings: Vec<Finding>) -> Vec<Finding> {
         .into_iter()
         .filter(|f| seen.insert((f.message.clone(), format!("{:?}", f.chain))))
         .collect()
+}
+
+/// ISO 15930-8 7.3: a `DeviceN` space's attributes give `/Subtype /DeviceN`, if any: no `NChannel` under PDF/X-5n.
+pub(super) fn x5n_devicen_subtype(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for (items, frames) in used_device_n(doc) {
+        let (_, attributes) = names_and_attributes(doc, &items);
+        let subtype = entry(doc, attributes, b"Subtype").and_then(Object::name);
+        if let Some(other) = subtype.filter(|s| *s != b"DeviceN") {
+            let message = format!(
+                "a DeviceN space's attributes have /Subtype /{}, not /DeviceN",
+                text(other)
+            );
+            out.push(
+                Finding::new(X5_N_DEVICEN_SUBTYPE, message)
+                    .citing("7.3")
+                    .at(frames.clone()),
+            );
+        }
+    }
+    dedup(out)
+}
+
+/// ISO 15930-8 7.3: no `DeviceN` space's attributes have `/Process` under PDF/X-5n.
+pub(super) fn x5n_devicen_no_process(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for (items, frames) in used_device_n(doc) {
+        let (_, attributes) = names_and_attributes(doc, &items);
+        if entry(doc, attributes, b"Process").is_some() {
+            let message = "a DeviceN space's attributes have /Process";
+            out.push(
+                Finding::new(X5_N_DEVICEN_NO_PROCESS, message)
+                    .citing("7.3")
+                    .at(frames.clone()),
+            );
+        }
+    }
+    dedup(out)
 }
 
 #[cfg(test)]

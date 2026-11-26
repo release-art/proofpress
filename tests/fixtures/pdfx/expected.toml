@@ -1115,3 +1115,90 @@ expect = {}
 [x5-target-other-profile]
 levels = ["x4"]
 expect = {}
+
+# PDF/X-5n (ISO 15930-8 clause 7): x4p relabelled, its intent referring to an n-colorant ICC v4 profile of our own
+# (tests/fixtures/icc/xclr-5.icc or xclr-6.icc, written by build_pdfs.py), or embedding it in the URL file
+# specification (7.2).
+[x5n-good]
+levels = ["x5n"]
+expect = {}
+
+[x5n-good-6]
+levels = ["x5n"]
+expect = {}
+
+[x5n-good-embedded]
+levels = ["x5n"]
+expect = {}
+
+[x5n-good-alone]
+levels = ["x5n"]
+alone = true
+expect = {}
+unjudged = { "x4p.fileset.checksum-matches" = "verified alone", "x4p.fileset.fields-match" = "verified alone", "x5.n-profile-iso15076" = "verified alone, and /ICCVersion says 4.3", "x5.n-colorant-table-matches-profile" = "verified alone" }
+
+[x5n-profile-cs-cmyk]
+levels = ["x5n"]
+expect = { "x5.n-profilecs-xclr" = "/ProfileCS (CMYK), not xCLR (7.2)", "x4p.fileset.fields-match" = "nor the profile's 5CLR" }
+
+[x5n-no-colorant-table]
+levels = ["x5n"]
+expect = { "x5.n-colorant-table-present" = "no /ColorantTable (7.2)", "x5.n-devicegray-needs-black" = "so no Black for the page's DeviceGray (7.3)", "x5.n-devicecmyk-needs-cmyk" = "nor CMYK for its DeviceCMYK (7.3)" }
+
+[x5n-colorant-table-count]
+levels = ["x5n"]
+expect = { "x5.n-colorant-table-count" = "4 names for 5CLR, a warning (X5-Q4)", "x5.n-colorant-table-matches-profile" = "and not the profile's colorants (7.2)" }
+
+[x5n-colorant-table-order]
+levels = ["x5n"]
+expect = { "x5.n-colorant-table-matches-profile" = "the profile's colorants in reverse order (7.2)" }
+
+[x5n-4clr-cmyk]
+levels = ["x5n"]
+expect = { "x5.n-3clr-4clr-not-rgb-cmyk" = "4CLR naming exactly the CMYK inks, a warning (7.2, X5-Q4)", "x4p.fileset.fields-match" = "the profile is 5CLR", "x5.n-colorant-table-matches-profile" = "and its colorants differ" }
+
+[x5n-url-mac]
+levels = ["x5n"]
+expect = { "x5.n-urls-ef-allowed" = "a URL file specification with /Mac (7.2 allows only /EF)" }
+
+[x5n-icc-version-2]
+levels = ["x5n"]
+expect = { "x4p.fileset.fields-match" = "/ICCVersion says 2.1, the profile 4.3 (A.2)" }
+
+[x5n-icc-version-2-alone]
+levels = ["x5n"]
+alone = true
+expect = { "x5.n-profile-iso15076" = "/ICCVersion 2.1, told without the profile (7.1)" }
+unjudged = { "x4p.fileset.checksum-matches" = "verified alone", "x4p.fileset.fields-match" = "verified alone", "x5.n-colorant-table-matches-profile" = "verified alone" }
+
+[x5n-profile-v2]
+levels = ["x5n"]
+expect = { "x5.n-profile-iso15076" = "an embedded ICC 2.1 n-colorant profile, not ISO 15076-1 (7.1)" }
+
+[x5n-no-black]
+levels = ["x5n"]
+expect = { "x5.n-devicegray-needs-black" = "DeviceGray, but no Black colorant (7.3)", "x5.n-devicecmyk-needs-cmyk" = "DeviceCMYK, but no Black (7.3)", "x5.n-colorant-table-matches-profile" = "the colorants are not the profile's" }
+
+[x5n-rgb]
+levels = ["x5n"]
+expect = { "x5.n-no-devicergb" = "a DeviceRGB fill (7.3)" }
+
+[x5n-devicen-nchannel]
+levels = ["x5n"]
+expect = { "x5.n-devicen-subtype" = "/Subtype /NChannel (7.3)" }
+
+[x5n-devicen-process]
+levels = ["x5n"]
+expect = { "x5.n-devicen-no-process" = "/Process in a DeviceN's attributes (7.3)" }
+
+[x5n-transparency-no-group]
+levels = ["x5n"]
+expect = { "x5.n-transparency-group-cs" = "opacity on a page without /Group (7.3, X5-Q12)" }
+
+[x5n-trapnet-pcm-cmyk]
+levels = ["x5n"]
+expect = { "x5.n-trapnet-pcm" = "a TrapNet appearance with /PCM /DeviceCMYK (7.1)" }
+
+[x5n-trapnet-separations]
+levels = ["x5n"]
+expect = { "x5.n-trapnet-separations" = "/SeparationColorNames lists Cyan alone (7.1)" }

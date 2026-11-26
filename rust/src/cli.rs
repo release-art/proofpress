@@ -394,12 +394,10 @@ mod tests {
 
     #[test]
     fn a_check_left_unjudged_is_named_with_why() {
-        let (code, out, _) = cli(&["verify", &fixture("x4-good"), "--pdfx", "x5n"]);
+        let (code, out, _) = cli(&["verify", &fixture("x5g-good"), "--pdfx", "x5g", "--file-alone"]);
         assert_eq!(code, 1);
-        assert!(
-            out.contains("x not evaluated, not written yet: x5.n-profile-iso15076, "),
-            "{out}"
-        );
+        let why = "x not evaluated, the file is verified alone, without its targets: x5.g-target-conformance-level, ";
+        assert!(out.contains(why), "{out}");
     }
 
     #[test]

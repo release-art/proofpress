@@ -221,6 +221,11 @@ const JUDGES: &[(&Check, Judge)] = &[
     (f::X4P_FILESET_CHECKSUM_MATCHES, x4p::checksum_matches),
     (f::X4P_FILESET_FIELDS_MATCH, x4p::fields_match),
     (f::X4P_FILESET_PROFILE_VALID, x4p::profile_valid),
+    (f::X5_N_PROFILE_ISO15076, x4p::x5n_profile_iso15076),
+    (
+        f::X5_N_COLORANT_TABLE_MATCHES_PROFILE,
+        x4p::x5n_colorant_table_matches_profile,
+    ),
 ];
 
 const RUNS: &[(&Check, Run)] = &[
@@ -331,6 +336,19 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X5_G_PROXY_METADATA, x5g::proxy_metadata),
     (f::X5_G_PROXY_RENDITION_OF, x5g::proxy_rendition_of),
     (f::X5_G_DOCUMENT_ID_UUID, x5g::document_id_uuid),
+    (f::X5_N_TRAPNET_PCM, annots::x5n_pcm),
+    (f::X5_N_TRAPNET_SEPARATIONS, annots::x5n_separations),
+    (f::X5_N_URLS_EF_ALLOWED, x4p::x5n_urls_ef_allowed),
+    (f::X5_N_PROFILECS_XCLR, x4p::x5n_profile_cs_xclr),
+    (f::X5_N_3CLR_4CLR_NOT_RGB_CMYK, x4p::x5n_3clr_4clr),
+    (f::X5_N_COLORANT_TABLE_PRESENT, x4p::x5n_colorant_table_present),
+    (f::X5_N_COLORANT_TABLE_COUNT, x4p::x5n_colorant_table_count),
+    (f::X5_N_DEVICEGRAY_NEEDS_BLACK, colour::x5n_gray),
+    (f::X5_N_DEVICECMYK_NEEDS_CMYK, colour::x5n_cmyk),
+    (f::X5_N_NO_DEVICERGB, colour::x5n_rgb),
+    (f::X5_N_DEVICEN_SUBTYPE, spots::x5n_devicen_subtype),
+    (f::X5_N_DEVICEN_NO_PROCESS, spots::x5n_devicen_no_process),
+    (f::X5_N_TRANSPARENCY_GROUP_CS, modes::x5n_group_cs),
     (f::X4P_OUTPUT_INTENT_DEST_PROFILE_REF, x4p::dest_profile_ref),
     (f::X4P_OUTPUT_INTENT_NO_DEST_PROFILE, x4p::no_dest_profile),
     (f::X4P_REF_PROFILE_NAME, x4p::profile_name),
@@ -437,6 +455,19 @@ pub fn verify_settings(file: &str, bytes: &[u8], settings: &Settings) -> Report 
     verify_in(file, bytes, settings, &Limits::default())
 }
 
+/// The checks of `catalogue` at `level` still to be written, each not evaluated, so a level that is not fully checked
+/// cannot pass.
+fn unwritten(catalogue: &'static [&'static Check], level: Level) -> Vec<CheckResult> {
+    let todo = catalogue
+        .iter()
+        .filter(|c| c.applies.contains(&level) && c.status == Status::Todo);
+    todo.map(|id| CheckResult {
+        id,
+        outcome: Outcome::NotEvaluated("not written yet".into()),
+    })
+    .collect()
+}
+
 /// A check's code, of any kind.
 #[derive(Clone, Copy)]
 enum Code {
@@ -464,13 +495,7 @@ fn verify_chain(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits, 
     let judges = JUDGES.iter().map(|&(check, judge)| (check, Code::Judge(judge)));
     let set_judges = SET_JUDGES.iter().map(|&(check, judge)| (check, Code::Set(judge)));
     let enabled = runs.chain(judges).chain(set_judges).filter(|(check, _)| applies(check));
-    let unwritten = f::ALL
-        .iter()
-        .filter(|check| check.applies.contains(&level) && check.status == Status::Todo)
-        .map(|id| CheckResult {
-            id,
-            outcome: Outcome::NotEvaluated("not written yet".into()),
-        });
+    let unwritten = unwritten(f::ALL, level).into_iter();
     match Document::open(bytes, limits) {
         Err(refusal) => {
             let unread = enabled.map(|(id, _)| CheckResult {
@@ -702,6 +727,28 @@ mod tests {
         let report = verify("x4-lzw.pdf", &bytes, Level::X4);
         let lzw = report.checks.iter().find(|c| c.id == X4_FILTER_NO_LZW).unwrap();
         assert_eq!((report.verdict, &lzw.outcome), (Verdict::Fail, &Outcome::Fail));
+    }
+
+    #[test]
+    fn a_check_still_to_be_written_is_not_evaluated() {
+        static TODO: Check = Check {
+            id: "x5.example",
+            aliases: &[],
+            title: "An example",
+            clauses: &[],
+            severity: Severity::Error,
+            applies: &[Level::X5n],
+            status: Status::Todo,
+            tool: None,
+        };
+        static CATALOGUE: [&Check; 2] = [&TODO, X4_FILTER_NO_LZW];
+        let unjudged = unwritten(&CATALOGUE, Level::X5n);
+        assert_eq!(unjudged.len(), 1);
+        assert_eq!(
+            (unjudged[0].id.id, &unjudged[0].outcome),
+            ("x5.example", &Outcome::NotEvaluated("not written yet".into()))
+        );
+        assert_eq!(unwritten(&CATALOGUE, Level::X4), []);
     }
 
     #[test]

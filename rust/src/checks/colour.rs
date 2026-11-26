@@ -8,13 +8,13 @@
 use super::Settings;
 use std::collections::BTreeSet;
 
-use super::{intent, x4p};
+use super::{intent, jpx, x4p};
 use crate::common::icc;
 use crate::document::{Document, Object, Value};
 use crate::findings::{
     Check, Finding, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
     X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_PRE_SEPARATED_ABSENT, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
-    X4_TRANSPARENCY_GROUP_CS_RESTRICTED,
+    X4_TRANSPARENCY_GROUP_CS_RESTRICTED, X5_N_DEVICECMYK_NEEDS_CMYK, X5_N_DEVICEGRAY_NEEDS_BLACK, X5_N_NO_DEVICERGB,
 };
 use crate::graphics::{self, Event, Role, Use};
 
@@ -428,6 +428,73 @@ pub(super) fn pre_separated(doc: &Document, _: &Settings) -> Vec<Finding> {
     vec![Finding::new(X4_PRE_SEPARATED_ABSENT, message).citing("6.1.2")]
 }
 
+/// ISO 15930-8 7.3 under PDF/X-5n: a device space is used only when `/ColorantTable` names the colorants it stands
+/// for (`needed`; none means never). Print elements, the alternates they reach (X5-Q10) and transparency groups count.
+fn x5n_device(doc: &Document, check: &'static Check, device: &[u8], needed: &[&[u8]], why: &str) -> Vec<Finding> {
+    let table = x4p::colorant_table(doc).unwrap_or_default();
+    if !needed.is_empty() && needed.iter().all(|n| table.contains(n)) {
+        return Vec::new();
+    }
+    let mut spaces: Vec<(Object, Vec<Location>, &str)> = uses(doc)
+        .into_iter()
+        .map(|(used, frames)| (used.space, frames, "a print element"))
+        .collect();
+    for event in graphics::walk(doc) {
+        if let Event::Group {
+            space: Some(space),
+            frames,
+        } = event
+        {
+            spaces.push((space, frames, "a transparency group"));
+        }
+    }
+    let mut out = Vec::new();
+    for (space, frames, what) in &spaces {
+        let mut found = Vec::new();
+        leaves(doc, space, Via::Direct, 0, &mut found);
+        for leaf in found.iter().filter(|l| family(l.space) == device) {
+            let what = if leaf.via == Via::Alternate {
+                "a spot colour's alternate"
+            } else {
+                what
+            };
+            let message = format!("{what} uses {}, {why}", String::from_utf8_lossy(device));
+            out.push(Finding::new(check, message).citing("7.3").at(frames.clone()));
+        }
+    }
+    distinct(out)
+}
+
+/// ISO 15930-8 7.3: `DeviceGray` stands for a colorant named `Black`, and without one is not used.
+pub(super) fn x5n_gray(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let why = "but /ColorantTable has no Black colorant";
+    x5n_device(doc, X5_N_DEVICEGRAY_NEEDS_BLACK, b"DeviceGray", &[b"Black"], why)
+}
+
+/// ISO 15930-8 7.3: `DeviceCMYK` stands for colorants named `Cyan`, `Magenta`, `Yellow` and `Black`, and without them is
+/// not used. CMYK JPEG 2000 data read as `DeviceCMYK` (ISO 15930-7 6.27) counts too.
+pub(super) fn x5n_cmyk(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let why = "but /ColorantTable does not have Cyan, Magenta, Yellow and Black";
+    let process: [&[u8]; 4] = [b"Cyan", b"Magenta", b"Yellow", b"Black"];
+    let mut out = x5n_device(doc, X5_N_DEVICECMYK_NEEDS_CMYK, b"DeviceCMYK", &process, why);
+    let table = x4p::colorant_table(doc).unwrap_or_default();
+    if !process.iter().all(|n| table.contains(n)) {
+        out.extend(jpx::device_cmyk(doc, X5_N_DEVICECMYK_NEEDS_CMYK, "7.3", why));
+    }
+    out
+}
+
+/// ISO 15930-8 7.3: `DeviceRGB` is never used.
+pub(super) fn x5n_rgb(doc: &Document, _: &Settings) -> Vec<Finding> {
+    x5n_device(
+        doc,
+        X5_N_NO_DEVICERGB,
+        b"DeviceRGB",
+        &[],
+        "which PDF/X-5n does not allow",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -680,5 +747,74 @@ mod tests {
                 "{page} has no single colorant"
             );
         }
+    }
+
+    /// A one-page file whose PDF/X intent is `intent`, with page `resources`, content `data` and `more` objects.
+    fn x5n_doc(intent: &str, resources: &str, data: &str, more: &[(u32, Vec<u8>)]) -> Document {
+        let catalog = format!("<< /Pages 2 0 R /OutputIntents [<< /S /GTS_PDFX {intent} >>] >>");
+        let page = format!(
+            "<< /Type /Page /Contents 4 0 R /Group << /S /Transparency /CS /DeviceRGB >> /Resources {resources} >>"
+        );
+        let content = format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len());
+        let mut objects: Vec<(u32, &[u8])> = vec![
+            (1, catalog.as_bytes()),
+            (2, b"<< /Type /Pages /Kids [3 0 R] >>"),
+            (3, page.as_bytes()),
+            (4, content.as_bytes()),
+        ];
+        objects.extend(more.iter().map(|(n, b)| (*n, b.as_slice())));
+        Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap()
+    }
+
+    #[test]
+    fn pdf_x_5n_device_spaces_stand_for_colorants() {
+        let intent = "/DestOutputProfileRef << /ColorantTable [/Black /Orange] >>";
+        let resources = "<< /ColorSpace << /S [/Separation /Orange /DeviceRGB << /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 1 1] /N 1 >>] >> >>";
+        let doc = x5n_doc(
+            intent,
+            resources,
+            "/S cs 1 sc 0 0 1 1 re f 0 g 0 0 1 1 re f 0 0 0 1 k 0 0 1 1 re f",
+            &[],
+        );
+        let found = |run: fn(&Document, &Settings) -> Vec<Finding>| -> Vec<String> {
+            run(&doc, &Level::X5n.into()).into_iter().map(|f| f.message).collect()
+        };
+        assert_eq!(found(x5n_gray), Vec::<String>::new());
+        assert_eq!(
+            found(x5n_cmyk),
+            ["a print element uses DeviceCMYK, but /ColorantTable does not have Cyan, Magenta, Yellow and Black"]
+        );
+        assert_eq!(
+            found(x5n_rgb),
+            [
+                "a spot colour's alternate uses DeviceRGB, which PDF/X-5n does not allow",
+                "a transparency group uses DeviceRGB, which PDF/X-5n does not allow"
+            ]
+        );
+    }
+
+    #[test]
+    fn under_pdf_x_4p_the_external_profile_is_the_intent_s() {
+        let folder = std::env::temp_dir().join(format!("proof-pdf-colour-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let stream = profile(b"CMYK", 2);
+        let data = &stream[stream.iter().position(|b| *b == b'\n').unwrap() + 8..stream.len() - 10];
+        std::fs::write(folder.join("p.icc"), data).unwrap();
+        let sum = md5::compute(data)
+            .0
+            .iter()
+            .map(|b| format!("{b:02X}"))
+            .collect::<Vec<_>>()
+            .concat();
+        let intent = format!("/DestOutputProfileRef << /URLs [(p.icc)] /CheckSum <{sum}> /ProfileCS (CMYK) >>");
+        let resources = "<< /ColorSpace << /DefaultCMYK [/ICCBased 9 0 R] >> >>";
+        let doc = x5n_doc(&intent, resources, "0 0 0 1 k 0 0 1 1 re f", &[(9, stream.clone())]);
+        let settings = Settings {
+            files: crate::checks::Files::Set(folder.clone()),
+            ..Level::X4p.into()
+        };
+        let found = not_intent_profile_at_level(&doc, &settings).unwrap();
+        assert_eq!(found[0].message, "a DefaultCMYK uses the output intent's profile");
+        std::fs::remove_dir_all(&folder).unwrap();
     }
 }

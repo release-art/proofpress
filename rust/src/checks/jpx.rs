@@ -185,11 +185,18 @@ pub(super) fn cmyk_as_device(doc: &Document, settings: &Settings) -> Vec<Finding
     if intent.is_none_or(|i| i == *b"CMYK") {
         return Vec::new();
     }
-    each(doc, X4_JPX_CMYK_AS_DEVICE, &|h, spaced| {
+    device_cmyk(doc, X4_JPX_CMYK_AS_DEVICE, "6.27", "under a non-CMYK intent")
+}
+
+/// A finding from `check` for each JPEG 2000 image whose CMYK data has no profile and no `/ColorSpace`, so reads as
+/// `DeviceCMYK`; `why` says why that is not allowed.
+pub(super) fn device_cmyk(doc: &Document, check: &'static Check, clause: &str, why: &str) -> Vec<Finding> {
+    each_read(doc, check, clause, &|h, spaced| {
+        let h = h?;
         let cmyk = h.colours.iter().any(|c| c.enumerated == Some(CMYK));
         let profiled = h.colours.iter().any(|c| matches!(c.method, 2 | 3));
         (cmyk && !profiled && !spaced)
-            .then(|| "CMYK data with no profile and no /ColorSpace, so DeviceCMYK, under a non-CMYK intent".to_owned())
+            .then(|| format!("CMYK data with no profile and no /ColorSpace, so DeviceCMYK, {why}"))
     })
 }
 

@@ -1302,7 +1302,7 @@ title = "The n-colorant profile is ICC version 4"
 clauses = ["iso-15930-8:7.1"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-trapnet-pcm"
@@ -1310,7 +1310,7 @@ title = "TrapNet process colour model is DeviceN"
 clauses = ["iso-15930-8:7.1"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-trapnet-separations"
@@ -1318,7 +1318,7 @@ title = "TrapNet lists every output-intent colorant"
 clauses = ["iso-15930-8:7.1"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-urls-ef-allowed"
@@ -1326,7 +1326,7 @@ title = "A profile URL may embed the profile"
 clauses = ["iso-15930-8:7.2"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-profilecs-xclr"
@@ -1334,15 +1334,16 @@ title = "The profile colour space is an n-colour signature"
 clauses = ["iso-15930-8:7.2"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-3clr-4clr-not-rgb-cmyk"
 title = "Three or four colorants do not stand for RGB or CMYK"
 clauses = ["iso-15930-8:7.2"]
-severity = "error"
+# A warning (X5-Q4, decision of 2026-11-25): the colorant names, or a count derived from 3.13, are the only sign.
+severity = "warning"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-subtractive"
@@ -1350,7 +1351,8 @@ title = "The printing condition is subtractive"
 clauses = ["iso-15930-8:7.2"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "skip"
+reason = "Whether a printing condition is subtractive is not recorded in an ICC profile or the file"
 
 [[check]]
 id = "x5.n-colorant-table-present"
@@ -1358,15 +1360,16 @@ title = "The profile reference has a colorant table"
 clauses = ["iso-15930-8:7.2"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-colorant-table-count"
 title = "The colorant table matches the channel count"
 clauses = ["iso-15930-8:7.2"]
-severity = "error"
+# A warning (X5-Q4, decision of 2026-11-25): the colorant names, or a count derived from 3.13, are the only sign.
+severity = "warning"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-colorant-table-matches-profile"
@@ -1374,7 +1377,7 @@ title = "The colorant table matches the profile"
 clauses = ["iso-15930-8:7.2"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-devicegray-needs-black"
@@ -1382,7 +1385,7 @@ title = "DeviceGray needs a Black colorant"
 clauses = ["iso-15930-8:7.3"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-devicecmyk-needs-cmyk"
@@ -1390,7 +1393,7 @@ title = "DeviceCMYK needs all four process colorants"
 clauses = ["iso-15930-8:7.3"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-no-devicergb"
@@ -1398,7 +1401,7 @@ title = "DeviceRGB is not used"
 clauses = ["iso-15930-8:7.3"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-devicen-subtype"
@@ -1406,7 +1409,7 @@ title = "DeviceN attributes are not NChannel"
 clauses = ["iso-15930-8:7.3"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-devicen-no-process"
@@ -1414,7 +1417,7 @@ title = "DeviceN attributes have no Process"
 clauses = ["iso-15930-8:7.3"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.n-transparency-group-cs"
@@ -1422,7 +1425,7 @@ title = "Pages with transparency declare a group colour space"
 clauses = ["iso-15930-8:7.3"]
 severity = "error"
 applies = ["x5n"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.reader.writer-level"

@@ -13,7 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference XObject proxies and their XMP, and, for the file set, every target: read beside the container (or embedded),
   compared with its reference's `/ID` and XMP identifiers, checked for its page, printing condition and optional
   content, and verified at the level it claims, with loops and nesting caught. `--target-versions accept|reject`
-  (config `target-versions`) decides whether a target of another version passes. X-5n is not checked yet.
+  (config `target-versions`) decides whether a target of another version passes.
+- PDF/X-5n (`--pdfx x5n`, ISO 15930-8 clause 7) is checked: the n-colorant output intent (an xCLR `/ProfileCS`, a
+  `/ColorantTable` equal to the external ISO 15076-1 profile's colorant table, which may be embedded in the URL file
+  specification), device spaces only for the colorants they stand for and never `DeviceRGB`, `DeviceN` attributes, a
+  blending space on pages with transparency, and TrapNet appearances. Every PDF/X-4, X-4p and X-5 requirement is now
+  checked or recorded as not checkable.
 - A finding can now point into another file of a file set (`"file"` in its JSON chain).
 - PDF/X-4p (`--pdfx x4p`, ISO 15930-7 Annex A) is checked in full: the PDF/X intent's `/DestOutputProfileRef` and
   its entries, and, for the file set, the external profile it names. The profile is looked for at the reference's

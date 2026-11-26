@@ -34,8 +34,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 8** (PDF/X-5): 8.1 to 8.3 (identification, inheritance, X-5g and X-5pg with their file sets) done; X-5n
-  (8.4) is next. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
+- **Phase 9** (the writer and the other commands) is next. Phase 8 (PDF/X-5) finished 2026-11-26; see its stage
+  report. Every PDF/X-4, X-4p and X-5 row is implemented or skip. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
   owner said to carry on past the PDF/X-4 milestone (phase 6, finished 2026-11-26).
 
 ## Done
@@ -106,6 +106,7 @@ record it as not conforming to that one rule).
 | 7.4 | same commit | 19 `x4p-*` fixtures (the Little-CMS profile beside them by a relative URL), both modes; `expected.toml` gains `alone` and `unjudged`; feature `x4p-annex-a` |
 | 8.1 | the phase 8 (X-5g) commit | The inheritance map as `applies` (140 rows reach the X-5 levels), `x5.identification-value`; the `/URLs` exemption of 6.7 made unconditional; three rows settled as warning or skip |
 | 8.2, 8.3 | same commit | `checks/x5g.rs` (proxies, `/Ref`, `/ID`, metadata, `RenditionOf`, the X-5 6.7 rule), `checks/targets.rs` (the file set, read once and verified recursively; nine rows), `common/labels.rs`; `Location::File`, `Limits::target_depth`, `--target-versions`; 39 fixtures `x5*`, feature `x5g-clause-8`. X-5g and X-5pg: every row implemented or skip |
+| 8.4, 8.5 | the phase 8 (X-5n) commit | X-5n's 15 rows (`x4p.rs` reference and profile rows, `colour.rs`/`jpx.rs` device bans, `spots.rs` DeviceN attributes, `modes.rs` group `/CS`, `annots.rs` TrapNet), `icc::colorant_names`; `x5.n-subtractive` skipped; two generated n-colorant v4 profiles (`tests/fixtures/icc/xclr-5.icc`, `xclr-6.icc`) and 21 fixtures `x5n-*`, feature `x5n-clause-7` |
 
 ## Register coverage
 
@@ -114,7 +115,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
 | PDF/X-4 and X-4p | 137 | 0 | 4 |
-| PDF/X-5 | 17 | 16 | 20 |
+| PDF/X-5 | 32 | 0 | 21 |
 | House and structure checks | 54 | 0 | 4 (`internal`, `bleedbox`, `boxes`, `structure`) |
 
 ## Gates
@@ -123,7 +124,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|
 | `bin/rust/check.sh` | green, 2026-11-26 (100% lines, regions, functions) |
 | Python (ruff, pyright, pytest) | green, 2026-11-26: 1073 passed (the Python checks' own tests went with them) |
-| `bin/docker/test.sh` | green at the end of phase 7, 2026-11-26: 1073 passed |
+| `bin/docker/test.sh` | green at the end of phase 8, 2026-11-26: 1073 passed |
 | `bin/suites/pdfx.sh` | 2026-11-26: 39 files, 39 accepted, 0 problems |
 
 ## Corpus and oracle
@@ -407,6 +408,14 @@ Oracle consultations:
   `/ColorantTable`, an embedded profile) except one: it accepts a bare string in `/URLs`, which A.2 rules out (URL
   file specifications are dictionaries with `/FS /URL`, PDF 1.6 Reference 3.10.4). Kept as A.2 reads.
 
+- Task 8.5: the generated X-5 files are built by `tests/fixtures/build_pdfs.py` into `tests/fixtures/pdfs/` (and the two
+  n-colorant profiles into `tests/fixtures/icc/`), like every other fixture, rather than copied to test-db's
+  `samples/generated/x5/`: they are reproducible, ours, and test-db's `proofpress-fixtures/` snapshot carries them at
+  its next refresh. The n-colorant profiles are written in Python, not with `lcms2`, which has no Python binding that
+  writes xCLR profiles; LittleCMS (through Pillow) must open each.
+- Task 8.2: `x5.self-contained-is-x4` and `x5.g-proxy-bbox-target-page` are skips (decision log); the plan expected them
+  checked.
+
 ## Environment notes
 
 - The Arlington PDF Model (phase 3.1) is Apache-2.0; master at `cdc485e` (2026-11-19) is the candidate pin.
@@ -563,3 +572,18 @@ Oracle consultations:
   every reference row but the bare-string URL (see "Deviations from the plan").
 - **Unexpected.** pdfToolbox does not resolve relative profile URLs, so it cannot judge a file set here.
 - **Departures.** The three absent-path veraPDF files are Reference XObjects and go to phase 8.
+
+### Phase 8 (PDF/X-5), finished 2026-11-26
+
+- **What changed.** X-5g, X-5pg and X-5n are checked: the inheritance map as `applies`, the identification, reference
+  XObject proxies and their XMP, file sets whose targets are read beside the container (or embedded) and verified at
+  the level they claim, recursively, and the n-colorant output intent with its device-space rules. PDF/X-5 stands at 32
+  implemented, 0 todo, 21 skip; PDF/X-4 and X-4p at 137, 0, 4.
+- **Decisions.** The plan's X5-Q defaults throughout; the owner's corrigendum (ISO 15930-8 Cor 1:2011, added to test-db)
+  confirmed X5-Q6. New readings are in the decision log: target resolution and depth 16, `--target-versions`, the
+  X-5n profile version 4.2, the 7.3 bans' reach.
+- **Test material.** 60 built fixtures (`x5g-*`, `x5pg-*`, `x5n-*`, `x5-target-*`) and two n-colorant profiles of our
+  own. test-db holds no PDF/X-5 file, as the register found.
+- **Unexpected.** No row is `todo` any more, so the "not written yet" safeguard is tested on a made-up catalogue. The
+  library is compiled twice for coverage (unit tests and integration tests); new code needs unit tests for every path.
+- **Departures.** See "Deviations from the plan": generated files stay in proofpress's fixtures; two rows are skips.

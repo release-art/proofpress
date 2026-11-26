@@ -15,6 +15,8 @@ use crate::findings::{
     Check, Finding, Level, X4P_FILESET_CHECKSUM_MATCHES, X4P_FILESET_FIELDS_MATCH, X4P_FILESET_PROFILE_VALID,
     X4P_OUTPUT_INTENT_DEST_PROFILE_REF, X4P_OUTPUT_INTENT_NO_DEST_PROFILE, X4P_REF_CHECKSUM, X4P_REF_ICC_VERSION,
     X4P_REF_NO_COLORANT_TABLE, X4P_REF_PROFILE_CS, X4P_REF_PROFILE_NAME, X4P_REF_URLS, X4P_REF_URLS_NO_EF_PLATFORM,
+    X5_N_3CLR_4CLR_NOT_RGB_CMYK, X5_N_COLORANT_TABLE_COUNT, X5_N_COLORANT_TABLE_MATCHES_PROFILE,
+    X5_N_COLORANT_TABLE_PRESENT, X5_N_PROFILE_ISO15076, X5_N_PROFILECS_XCLR, X5_N_URLS_EF_ALLOWED,
 };
 
 /// The keys a `/URLs` file specification may not have (A.2).
@@ -51,14 +53,27 @@ fn string<'a>(doc: &'a Document, reference: &'a Dict, key: &[u8]) -> Option<&'a 
 }
 
 /// The URL each `/URLs` element names: a file specification's `/F` (or `/UF`), or a string.
-fn urls<'a>(doc: &'a Document, reference: &'a Dict) -> Vec<&'a [u8]> {
+/// Each `/URLs` element's URL, and the object number of the file its `/EF` embeds, if any (ISO 15930-8 7.2 allows that
+/// for PDF/X-5n; at the other levels `x4p.ref.urls-no-ef-platform` fails it).
+fn urls<'a>(doc: &'a Document, reference: &'a Dict) -> Vec<(&'a [u8], Option<u32>)> {
     let items = match entry(doc, reference, b"URLs") {
         Some(Value::Array(items)) => items.as_slice(),
         _ => &[],
     };
     let url = |item: &'a Object| match &doc.resolve(item)?.value {
-        Value::String(bytes, _) => Some(bytes.as_slice()),
-        Value::Dict(dict) => [b"F".as_slice(), b"UF"].iter().find_map(|k| string(doc, dict, k)),
+        Value::String(bytes, _) => Some((bytes.as_slice(), None)),
+        Value::Dict(dict) => {
+            let url = [b"F".as_slice(), b"UF"].iter().find_map(|k| string(doc, dict, k))?;
+            let embedded = dict
+                .get(b"EF")
+                .and_then(|ef| doc.resolve(ef))
+                .and_then(Object::dict)
+                .and_then(|ef| match ef.get(b"F")?.value {
+                    Value::Reference(num, _) => Some(num),
+                    _ => None,
+                });
+            Some((url, embedded))
+        }
         _ => None,
     };
     items.iter().filter_map(url).collect()
@@ -77,17 +92,25 @@ pub(super) fn external(doc: &Document, settings: &Settings) -> External {
     };
     let mut why = Vec::new();
     let mut network = false;
-    for url in urls(doc, reference) {
+    for (url, embedded) in urls(doc, reference) {
         let url = String::from_utf8_lossy(url);
-        match place(&url, folder) {
-            Place::Network => network = true,
-            Place::Local(path) => match std::fs::read(&path) {
+        let read = match (embedded, place(&url, folder)) {
+            (Some(num), _) => Some((folder.join(format!("{url} (embedded)")), doc.stream_data(num).ok_or(()))),
+            (None, Place::Network) => None,
+            (None, Place::Local(path)) => {
+                let data = std::fs::read(&path).map_err(|_| ());
+                Some((path, data))
+            }
+        };
+        match read {
+            None => network = true,
+            Some((path, data)) => match data {
                 Ok(data) if md5::compute(&data).0 == checksum => return External::Found { path, data },
                 Ok(data) => why.push(format!(
                     "{url} has MD5 {}, not the /CheckSum",
                     hex(&md5::compute(&data).0)
                 )),
-                Err(_) => why.push(format!("no file at {url}")),
+                Err(()) => why.push(format!("no file at {url}")),
             },
         }
     }
@@ -211,6 +234,17 @@ pub(super) fn urls_present(doc: &Document, _: &Settings) -> Vec<Finding> {
 
 /// A.2: no `/URLs` file specification has `/EF`, `/DOS`, `/Mac` or `/Unix`.
 pub(super) fn urls_no_ef_platform(doc: &Document, _: &Settings) -> Vec<Finding> {
+    forbidden_keys(doc, X4P_REF_URLS_NO_EF_PLATFORM, &FORBIDDEN, "A.2")
+}
+
+/// ISO 15930-8 7.2: under PDF/X-5n a `/URLs` file specification may embed the profile with `/EF`; `/DOS`, `/Mac` and
+/// `/Unix` stay forbidden.
+pub(super) fn x5n_urls_ef_allowed(doc: &Document, _: &Settings) -> Vec<Finding> {
+    forbidden_keys(doc, X5_N_URLS_EF_ALLOWED, &[b"DOS", b"Mac", b"Unix"], "7.2")
+}
+
+/// A finding from `check` for each of `keys` a `/URLs` file specification has.
+fn forbidden_keys(doc: &Document, check: &'static Check, keys: &[&[u8]], clause: &str) -> Vec<Finding> {
     let Some(reference) = reference(doc) else {
         return Vec::new();
     };
@@ -220,13 +254,10 @@ pub(super) fn urls_no_ef_platform(doc: &Document, _: &Settings) -> Vec<Finding> 
     };
     let specs = items.iter().filter_map(|i| doc.resolve(i)?.dict());
     specs
-        .flat_map(|spec| FORBIDDEN.iter().filter(|k| spec.get(k).is_some()))
+        .flat_map(|spec| keys.iter().filter(|k| spec.get(k).is_some()))
         .map(|key| {
             let key = String::from_utf8_lossy(key);
-            found(
-                X4P_REF_URLS_NO_EF_PLATFORM,
-                format!("a /URLs file specification has /{key}"),
-            )
+            Finding::new(check, format!("a /URLs file specification has /{key}")).citing(clause)
         })
         .collect()
 }
@@ -349,6 +380,156 @@ pub(super) fn is_intent_without_profile(doc: &Document, data: &[u8]) -> Option<b
         return Some(true);
     }
     (string(doc, reference, b"ProfileCS") != Some(b"CMYK")).then_some(false)
+}
+
+/// The reference's `/ColorantTable`, when it is an array of names (ISO 15930-8 7.2).
+pub(super) fn colorant_table(doc: &Document) -> Option<Vec<&[u8]>> {
+    match entry(doc, reference(doc)?, b"ColorantTable")? {
+        Value::Array(items) => items.iter().map(|i| doc.resolve(i)?.name()).collect(),
+        _ => None,
+    }
+}
+
+/// The number of colorants an xCLR signature (`2CLR` to `FCLR`) names.
+fn xclr_channels(signature: &[u8]) -> Option<usize> {
+    match signature {
+        [digit, b'C', b'L', b'R'] => char::from(*digit)
+            .to_digit(16)
+            .filter(|n| *n >= 2)
+            .and_then(|n| usize::try_from(n).ok()),
+        _ => None,
+    }
+}
+
+/// ISO 15930-8 7.2: `/ProfileCS` is an xCLR colour space signature.
+pub(super) fn x5n_profile_cs_xclr(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let wrong = |r: &Dict| match string(doc, r, b"ProfileCS") {
+        None => Some("/DestOutputProfileRef has no /ProfileCS string".to_owned()),
+        Some(cs) if xclr_channels(cs).is_some() => None,
+        Some(cs) => Some(format!(
+            "/ProfileCS is {:?}, not an xCLR signature",
+            String::from_utf8_lossy(cs)
+        )),
+    };
+    reference(doc)
+        .and_then(wrong)
+        .map(|m| Finding::new(X5_N_PROFILECS_XCLR, m).citing("7.2"))
+        .into_iter()
+        .collect()
+}
+
+/// ISO 15930-8 7.2: the reference has `/ColorantTable`, an array of names.
+pub(super) fn x5n_colorant_table_present(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let wrong = |r: &Dict| match r.get(b"ColorantTable") {
+        None => Some("/DestOutputProfileRef has no /ColorantTable".to_owned()),
+        Some(_) if colorant_table(doc).is_none() => Some("/ColorantTable is not an array of names".to_owned()),
+        Some(_) => None,
+    };
+    reference(doc)
+        .and_then(wrong)
+        .map(|m| Finding::new(X5_N_COLORANT_TABLE_PRESENT, m).citing("7.2"))
+        .into_iter()
+        .collect()
+}
+
+/// ISO 15930-8 7.2 with 3.13 (X5-Q4): `/ColorantTable` names as many colorants as `/ProfileCS` has channels. A warning:
+/// the rule is derived, not stated.
+pub(super) fn x5n_colorant_table_count(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let channels = reference(doc)
+        .and_then(|r| string(doc, r, b"ProfileCS"))
+        .and_then(xclr_channels);
+    let (Some(channels), Some(table)) = (channels, colorant_table(doc)) else {
+        return Vec::new();
+    };
+    let message = format!(
+        "/ColorantTable names {} colorants, but /ProfileCS has {channels}",
+        table.len()
+    );
+    (table.len() != channels)
+        .then(|| Finding::new(X5_N_COLORANT_TABLE_COUNT, message).citing("7.2"))
+        .into_iter()
+        .collect()
+}
+
+/// ISO 15930-8 7.2 (X5-Q4): `3CLR` does not stand for RGB, nor `4CLR` for CMYK, told by `/ColorantTable` naming exactly
+/// those inks. A warning: the names are the only sign.
+pub(super) fn x5n_3clr_4clr(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let cs = reference(doc).and_then(|r| string(doc, r, b"ProfileCS"));
+    let Some(mut table) = colorant_table(doc) else {
+        return Vec::new();
+    };
+    table.sort_unstable();
+    let process = match cs {
+        Some(b"3CLR") if table == [b"Blue".as_slice(), b"Green", b"Red"] => "RGB",
+        Some(b"4CLR") if table == [b"Black".as_slice(), b"Cyan", b"Magenta", b"Yellow"] => "CMYK",
+        _ => return Vec::new(),
+    };
+    let message = format!("/ProfileCS is an xCLR space whose /ColorantTable is the {process} process inks");
+    vec![Finding::new(X5_N_3CLR_4CLR_NOT_RGB_CMYK, message).citing("7.2")]
+}
+
+/// ISO 15930-8 7.1: the external profile is an ISO 15076-1 (ICC version 4.2 or later) output profile. Without it, the
+/// reference's `/ICCVersion` can still show an earlier version.
+pub(super) fn x5n_profile_iso15076(doc: &Document, settings: &Settings) -> Result<Vec<Finding>, String> {
+    let Some(reference) = reference(doc) else {
+        return Ok(Vec::new());
+    };
+    let before_15076 = |major: u8, minor: u8| major < 4 || (major == 4 && minor < 0x20);
+    let finding = |m: String| Finding::new(X5_N_PROFILE_ISO15076, m).citing("7.1");
+    match profile(doc, settings) {
+        Ok((path, data)) => {
+            let shown = path.display();
+            let Some(header) = icc::header(&data) else {
+                return Ok(vec![finding(format!("{shown} is not an ICC profile"))]);
+            };
+            let [major, minor] = data
+                .get(8..10)
+                .and_then(|v| v.first_chunk::<2>())
+                .copied()
+                .unwrap_or_default();
+            let mut out = Vec::new();
+            if before_15076(major, minor) {
+                out.push(finding(format!(
+                    "{shown} is ICC version {}.{}, earlier than ISO 15076-1",
+                    header.version.0, header.version.1
+                )));
+            }
+            if header.class != *b"prtr" {
+                out.push(finding(format!(
+                    "{shown} has class {}, not prtr",
+                    String::from_utf8_lossy(&header.class)
+                )));
+            }
+            Ok(out)
+        }
+        Err(why) => match string(doc, reference, b"ICCVersion").and_then(<[u8]>::first_chunk::<2>) {
+            Some([major, minor]) if before_15076(*major, *minor) => Ok(vec![finding(format!(
+                "/ICCVersion is {major}.{}, earlier than ISO 15076-1",
+                minor >> 4
+            ))]),
+            _ => Err(why),
+        },
+    }
+}
+
+/// ISO 15930-8 7.2: `/ColorantTable` names the colorants of the external profile's `colorantTableTag`, in its order.
+pub(super) fn x5n_colorant_table_matches_profile(doc: &Document, settings: &Settings) -> Result<Vec<Finding>, String> {
+    let Some(table) = colorant_table(doc) else {
+        return Ok(Vec::new());
+    };
+    let (path, data) = profile(doc, settings)?;
+    let message = match icc::colorant_names(&data) {
+        Some(names) if names.iter().map(String::as_bytes).eq(table.iter().copied()) => return Ok(Vec::new()),
+        Some(names) => format!(
+            "/ColorantTable is not the colorants of {}, which are {}",
+            path.display(),
+            names.join(", ")
+        ),
+        None => format!("{} has no colorantTableTag", path.display()),
+    };
+    Ok(vec![
+        Finding::new(X5_N_COLORANT_TABLE_MATCHES_PROFILE, message).citing("7.2"),
+    ])
 }
 
 #[cfg(test)]
@@ -626,5 +807,225 @@ mod tests {
         let rgb = doc(&reference(&profile, "(p.icc)").replace("(CMYK)", "(RGB )"));
         assert_eq!(is_intent_without_profile(&rgb, b"other"), Some(false));
         assert_eq!(is_intent_without_profile(&doc(""), b"other"), None);
+    }
+
+    /// An n-colorant profile: `space`, version `major`.`minor`, class `class` and a `clrt` tag naming `inks`.
+    fn xclr(space: [u8; 4], major: u8, class: [u8; 4], inks: &[&str]) -> Vec<u8> {
+        let mut clrt = b"clrt\0\0\0\0".to_vec();
+        clrt.extend(u32::try_from(inks.len()).unwrap().to_be_bytes());
+        for ink in inks {
+            let mut entry = ink.as_bytes().to_vec();
+            entry.resize(38, 0);
+            clrt.extend(entry);
+        }
+        let mut out = vec![0u8; 128];
+        out[8] = major;
+        out[9] = 0x30;
+        out[12..16].copy_from_slice(&class);
+        out[16..20].copy_from_slice(&space);
+        out[36..40].copy_from_slice(b"acsp");
+        out.extend(1u32.to_be_bytes());
+        out.extend(b"clrt");
+        out.extend(144u32.to_be_bytes());
+        out.extend(u32::try_from(clrt.len()).unwrap().to_be_bytes());
+        out.extend(clrt);
+        out
+    }
+
+    /// A file whose PDF/X intent has `entries`, with `more` objects.
+    fn doc_with(entries: &str, more: &[(u32, Vec<u8>)]) -> Document {
+        let catalog = format!("<< /Pages 2 0 R /OutputIntents [<< /S /GTS_PDFX {entries} >>] >>");
+        let mut objects: Vec<(u32, &[u8])> = vec![
+            (1, catalog.as_bytes()),
+            (2, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+            (3, b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>"),
+        ];
+        objects.extend(more.iter().map(|(n, b)| (*n, b.as_slice())));
+        Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap()
+    }
+
+    #[test]
+    fn pdf_x_5n_reference_rows() {
+        let x5n = Level::X5n.into();
+        let found = |entries: &str, run: fn(&Document, &Settings) -> Vec<Finding>| -> Vec<String> {
+            messages(run(
+                &doc_with(&format!("/DestOutputProfileRef << {entries} >>"), &[]),
+                &x5n,
+            ))
+        };
+        assert_eq!(
+            found("", x5n_profile_cs_xclr),
+            ["/DestOutputProfileRef has no /ProfileCS string"]
+        );
+        for bad in ["CMYK", "1CLR", "GCLR"] {
+            let message = format!("/ProfileCS is {bad:?}, not an xCLR signature");
+            assert_eq!(found(&format!("/ProfileCS ({bad})"), x5n_profile_cs_xclr), [message]);
+        }
+        assert_eq!(found("/ProfileCS (FCLR)", x5n_profile_cs_xclr), Vec::<String>::new());
+        assert_eq!(
+            found("", x5n_colorant_table_present),
+            ["/DestOutputProfileRef has no /ColorantTable"]
+        );
+        let not_names = "/ColorantTable [/Cyan 5]";
+        assert_eq!(
+            found(not_names, x5n_colorant_table_present),
+            ["/ColorantTable is not an array of names"]
+        );
+        assert_eq!(
+            found("/ColorantTable 5", x5n_colorant_table_present),
+            ["/ColorantTable is not an array of names"]
+        );
+        let dangling = "/ColorantTable [/Cyan 99 0 R]";
+        assert_eq!(
+            found(dangling, x5n_colorant_table_present),
+            ["/ColorantTable is not an array of names"]
+        );
+        let four = "/ProfileCS (5CLR) /ColorantTable [/Cyan /Magenta /Yellow /Black]";
+        assert_eq!(
+            found(four, x5n_colorant_table_count),
+            ["/ColorantTable names 4 colorants, but /ProfileCS has 5"]
+        );
+        assert_eq!(found(four, x5n_colorant_table_present), Vec::<String>::new());
+        assert_eq!(
+            found(
+                "/ProfileCS (4CLR) /ColorantTable [/A /B /C /D]",
+                x5n_colorant_table_count
+            ),
+            Vec::<String>::new()
+        );
+        let rgb = "/ProfileCS (3CLR) /ColorantTable [/Red /Green /Blue]";
+        assert_eq!(
+            found(rgb, x5n_3clr_4clr),
+            ["/ProfileCS is an xCLR space whose /ColorantTable is the RGB process inks"]
+        );
+        let cmyk = "/ProfileCS (4CLR) /ColorantTable [/Yellow /Black /Cyan /Magenta]";
+        assert_eq!(
+            found(cmyk, x5n_3clr_4clr),
+            ["/ProfileCS is an xCLR space whose /ColorantTable is the CMYK process inks"]
+        );
+        assert_eq!(found(four, x5n_3clr_4clr), Vec::<String>::new());
+        assert_eq!(found("", x5n_3clr_4clr), Vec::<String>::new());
+    }
+
+    #[test]
+    fn pdf_x_5n_profiles_may_be_embedded() {
+        let good = xclr(*b"2CLR", 4, *b"prtr", &["Orange", "Green"]);
+        let here = Settings {
+            files: Files::Set(std::env::temp_dir()),
+            ..Level::X5n.into()
+        };
+        let sum = |d: &[u8]| hex(&md5::compute(d).0);
+        // A URL file specification may embed the profile (7.2); one with no URL or an /EF that is not a stream names none.
+        let embedded = |ef: &str| {
+            doc_with(
+                &format!(
+                    "/DestOutputProfileRef << /URLs [<< /FS /URL /F (e.icc) /EF << /F {ef} >> >> << /FS /URL >>] /CheckSum <{}> >>",
+                    sum(&good)
+                ),
+                &[(9, {
+                    let mut s = format!("<< /Length {} >>\nstream\n", good.len()).into_bytes();
+                    s.extend(&good);
+                    s.extend(b"\nendstream");
+                    s
+                })],
+            )
+        };
+        assert!(matches!(external(&embedded("9 0 R"), &here), External::Found { .. }));
+        assert!(matches!(
+            external(&embedded("<< >>"), &here),
+            External::Unresolved { .. }
+        ));
+        let no_file = format!(
+            "/DestOutputProfileRef << /URLs [<< /FS /URL /F (e.icc) /EF << >> >>] /CheckSum <{}> >>",
+            sum(&good)
+        );
+        assert!(matches!(
+            external(&doc_with(&no_file, &[]), &here),
+            External::Unresolved { .. }
+        ));
+    }
+
+    #[test]
+    fn pdf_x_5n_profile_rows() {
+        let folder = std::env::temp_dir().join(format!("proof-pdf-x5n-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let good = xclr(*b"2CLR", 4, *b"prtr", &["Orange", "Green"]);
+        let old = xclr(*b"2CLR", 2, *b"mntr", &["Orange", "Green"]);
+        let mut bare = good.clone();
+        bare[128..132].copy_from_slice(&0u32.to_be_bytes());
+        for (name, data) in [
+            ("good.icc", &good),
+            ("old.icc", &old),
+            ("bare.icc", &bare),
+            ("text.icc", &b"text".to_vec()),
+        ] {
+            std::fs::write(folder.join(name), data).unwrap();
+        }
+        let here = Settings {
+            files: Files::Set(folder.clone()),
+            ..Level::X5n.into()
+        };
+        let sum = |d: &[u8]| hex(&md5::compute(d).0);
+        let refer = |file: &str, data: &[u8], extra: &str| {
+            doc_with(
+                &format!(
+                    "/DestOutputProfileRef << /URLs [({file})] /CheckSum <{}> /ColorantTable [/Orange /Green] {extra} >>",
+                    sum(data)
+                ),
+                &[],
+            )
+        };
+        let shown = |f: &str| folder.join(f).display().to_string();
+        let both = |d: &Document| {
+            (
+                x5n_profile_iso15076(d, &here).map(messages),
+                x5n_colorant_table_matches_profile(d, &here).map(messages),
+            )
+        };
+        assert_eq!(both(&refer("good.icc", &good, "")), (Ok(vec![]), Ok(vec![])));
+        let (iso, _) = both(&refer("old.icc", &old, ""));
+        assert_eq!(
+            iso,
+            Ok(vec![
+                format!("{} is ICC version 2.3, earlier than ISO 15076-1", shown("old.icc")),
+                format!("{} has class mntr, not prtr", shown("old.icc")),
+            ])
+        );
+        let (_, matches) = both(&refer("bare.icc", &bare, ""));
+        assert_eq!(
+            matches,
+            Ok(vec![format!("{} has no colorantTableTag", shown("bare.icc"))])
+        );
+        let (iso, _) = both(&refer("text.icc", b"text", ""));
+        assert_eq!(iso, Ok(vec![format!("{} is not an ICC profile", shown("text.icc"))]));
+        let swapped = doc_with(
+            &format!(
+                "/DestOutputProfileRef << /URLs [(good.icc)] /CheckSum <{}> /ColorantTable [/Green /Orange] >>",
+                sum(&good)
+            ),
+            &[],
+        );
+        let (_, matches) = both(&swapped);
+        let want = format!(
+            "/ColorantTable is not the colorants of {}, which are Orange, Green",
+            shown("good.icc")
+        );
+        assert_eq!(matches, Ok(vec![want]));
+        // Without the profile, /ICCVersion can still show an earlier version.
+        let alone = Settings::from(Level::X5n);
+        let v2 = refer("good.icc", &good, "/ICCVersion <02100000>");
+        assert_eq!(
+            x5n_profile_iso15076(&v2, &alone).map(messages),
+            Ok(vec!["/ICCVersion is 2.1, earlier than ISO 15076-1".to_owned()])
+        );
+        let v4 = refer("good.icc", &good, "/ICCVersion <04300000>");
+        assert!(x5n_profile_iso15076(&v4, &alone).is_err());
+        assert_eq!(x5n_profile_iso15076(&doc_with("", &[]), &alone), Ok(vec![]));
+        assert_eq!(
+            x5n_colorant_table_matches_profile(&doc_with("", &[]), &alone),
+            Ok(vec![])
+        );
+        assert!(x5n_colorant_table_matches_profile(&v2, &alone).is_err());
+        std::fs::remove_dir_all(&folder).unwrap();
     }
 }

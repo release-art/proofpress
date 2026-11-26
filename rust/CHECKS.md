@@ -164,22 +164,22 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x5.g-same-printing-condition` | Container and targets share a printing condition | iso-15930-8:8.5 | error | x5g, x5pg | implemented |
 | `x5.g-target-no-ocg` | Targets have no optional content | iso-15930-8:8.7 | error | x5g, x5pg | implemented |
 | `x5.g-proxy-bbox-target-page` | A proxy's BBox is in the target page's space | iso-15930-8:8.5 | error | x5g, x5pg | skip: 8.5 says how a reader places the target page in a proxy's BBox; any BBox can be read so, so the file holds nothing to check |
-| `x5.n-profile-iso15076` | The n-colorant profile is ICC version 4 | iso-15930-8:7.1 | error | x5n | todo |
-| `x5.n-trapnet-pcm` | TrapNet process colour model is DeviceN | iso-15930-8:7.1 | error | x5n | todo |
-| `x5.n-trapnet-separations` | TrapNet lists every output-intent colorant | iso-15930-8:7.1 | error | x5n | todo |
-| `x5.n-urls-ef-allowed` | A profile URL may embed the profile | iso-15930-8:7.2 | error | x5n | todo |
-| `x5.n-profilecs-xclr` | The profile colour space is an n-colour signature | iso-15930-8:7.2 | error | x5n | todo |
-| `x5.n-3clr-4clr-not-rgb-cmyk` | Three or four colorants do not stand for RGB or CMYK | iso-15930-8:7.2 | error | x5n | todo |
-| `x5.n-subtractive` | The printing condition is subtractive | iso-15930-8:7.2 | error | x5n | todo |
-| `x5.n-colorant-table-present` | The profile reference has a colorant table | iso-15930-8:7.2 | error | x5n | todo |
-| `x5.n-colorant-table-count` | The colorant table matches the channel count | iso-15930-8:7.2 | error | x5n | todo |
-| `x5.n-colorant-table-matches-profile` | The colorant table matches the profile | iso-15930-8:7.2 | error | x5n | todo |
-| `x5.n-devicegray-needs-black` | DeviceGray needs a Black colorant | iso-15930-8:7.3 | error | x5n | todo |
-| `x5.n-devicecmyk-needs-cmyk` | DeviceCMYK needs all four process colorants | iso-15930-8:7.3 | error | x5n | todo |
-| `x5.n-no-devicergb` | DeviceRGB is not used | iso-15930-8:7.3 | error | x5n | todo |
-| `x5.n-devicen-subtype` | DeviceN attributes are not NChannel | iso-15930-8:7.3 | error | x5n | todo |
-| `x5.n-devicen-no-process` | DeviceN attributes have no Process | iso-15930-8:7.3 | error | x5n | todo |
-| `x5.n-transparency-group-cs` | Pages with transparency declare a group colour space | iso-15930-8:7.3 | error | x5n | todo |
+| `x5.n-profile-iso15076` | The n-colorant profile is ICC version 4 | iso-15930-8:7.1 | error | x5n | implemented |
+| `x5.n-trapnet-pcm` | TrapNet process colour model is DeviceN | iso-15930-8:7.1 | error | x5n | implemented |
+| `x5.n-trapnet-separations` | TrapNet lists every output-intent colorant | iso-15930-8:7.1 | error | x5n | implemented |
+| `x5.n-urls-ef-allowed` | A profile URL may embed the profile | iso-15930-8:7.2 | error | x5n | implemented |
+| `x5.n-profilecs-xclr` | The profile colour space is an n-colour signature | iso-15930-8:7.2 | error | x5n | implemented |
+| `x5.n-3clr-4clr-not-rgb-cmyk` | Three or four colorants do not stand for RGB or CMYK | iso-15930-8:7.2 | warning | x5n | implemented |
+| `x5.n-subtractive` | The printing condition is subtractive | iso-15930-8:7.2 | error | x5n | skip: Whether a printing condition is subtractive is not recorded in an ICC profile or the file |
+| `x5.n-colorant-table-present` | The profile reference has a colorant table | iso-15930-8:7.2 | error | x5n | implemented |
+| `x5.n-colorant-table-count` | The colorant table matches the channel count | iso-15930-8:7.2 | warning | x5n | implemented |
+| `x5.n-colorant-table-matches-profile` | The colorant table matches the profile | iso-15930-8:7.2 | error | x5n | implemented |
+| `x5.n-devicegray-needs-black` | DeviceGray needs a Black colorant | iso-15930-8:7.3 | error | x5n | implemented |
+| `x5.n-devicecmyk-needs-cmyk` | DeviceCMYK needs all four process colorants | iso-15930-8:7.3 | error | x5n | implemented |
+| `x5.n-no-devicergb` | DeviceRGB is not used | iso-15930-8:7.3 | error | x5n | implemented |
+| `x5.n-devicen-subtype` | DeviceN attributes are not NChannel | iso-15930-8:7.3 | error | x5n | implemented |
+| `x5.n-devicen-no-process` | DeviceN attributes have no Process | iso-15930-8:7.3 | error | x5n | implemented |
+| `x5.n-transparency-group-cs` | Pages with transparency declare a group colour space | iso-15930-8:7.3 | error | x5n | implemented |
 | `x5.reader.writer-level` | A writer produces at least one X-5 level | iso-15930-8:5 | error | x5g, x5pg, x5n | skip: A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4) |
 | `x5.reader.reader-levels` | A reader handles its levels plus X-4 and X-4p | iso-15930-8:5 | error | x5g, x5pg, x5n | skip: A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4) |
 | `x5.reader.documentation` | Products name the levels they support | iso-15930-8:5 | error | x5g, x5pg, x5n | skip: A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4) |

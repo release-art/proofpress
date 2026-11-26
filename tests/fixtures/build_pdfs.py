@@ -28,6 +28,7 @@ from PIL import Image, ImageCms
 OUT = pathlib.Path(__file__).parent / "pdfs"
 # Font programs of our own for the Rust core's font tests (`rust/src/common/glyphs.rs`).
 FONTS = pathlib.Path(__file__).parent / "fonts"
+ICC = pathlib.Path(__file__).parent / "icc"
 # The LaTeX samples (samples/NAME.tex, built by samples/build.py) put their PDFs in this same directory.
 SAMPLES = {p.stem for p in (pathlib.Path(__file__).parent / "samples").glob("*.tex")}
 
@@ -1058,6 +1059,214 @@ def _with_proxy(
     return pdf
 
 
+# PDF/X-5n (ISO 15930-8 clause 7): n-colorant ICC v4 output profiles of our own, and the colorants they name.
+XCLR_INKS = {
+    5: ["Cyan", "Magenta", "Yellow", "Black", "Orange"],
+    6: ["Cyan", "Magenta", "Yellow", "Black", "Orange", "Green"],
+}
+
+
+def _xclr_profile(inks: list[str]) -> bytes:
+    """A small ISO 15076-1 (ICC 4.3) output profile for an n-colorant printing condition (`nCLR`): the tags an output
+    profile needs (``desc``, ``cprt``, ``wtpt``, ``A2B0``, ``B2A0``, ``gamt``) and the ``clrt`` colorant table 7.2 asks
+    for. Its tables are two-point grids: each ink darkens Lab L* by an equal share. Not a real printing condition."""
+    n = len(inks)
+
+    def mluc(text: str) -> bytes:
+        utf16 = text.encode("utf-16-be")
+        return (
+            b"mluc"
+            + bytes(4)
+            + (1).to_bytes(4, "big")
+            + (12).to_bytes(4, "big")
+            + b"enUS"
+            + len(utf16).to_bytes(4, "big")
+            + (28).to_bytes(4, "big")
+            + utf16
+        )
+
+    def lut16(inputs: int, outputs: int, clut: list[list[float]]) -> bytes:
+        identity = (1 << 16).to_bytes(4, "big")
+        matrix = b"".join(identity if r == c else bytes(4) for r in range(3) for c in range(3))
+        out = b"mft2" + bytes(4) + bytes([inputs, outputs, 2, 0]) + matrix + (2).to_bytes(2, "big") * 2
+        out += b"".join(b"\x00\x00\xff\xff" for _ in range(inputs))
+        out += b"".join(round(v * 65535).to_bytes(2, "big") for entry in clut for v in entry)
+        out += b"".join(b"\x00\x00\xff\xff" for _ in range(outputs))
+        return out
+
+    def grid(inputs: int) -> list[tuple[int, ...]]:
+        return [tuple((i >> (inputs - 1 - b)) & 1 for b in range(inputs)) for i in range(2**inputs)]
+
+    # Device to Lab: L* falls with the ink total; a* and b* stay neutral (0.5 of the 16-bit Lab encoding).
+    a2b = [[1 - sum(g) / n, 0.5, 0.5] for g in grid(n)]
+    # Lab to device: the ink each grid corner needs is 1 - L*, shared alike; gamt says every colour is in gamut.
+    b2a = [[1.0 - g[0]] * n for g in grid(3)]
+    gamut = [[0.0] for _ in grid(3)]
+    clrt = b"clrt" + bytes(4) + n.to_bytes(4, "big")
+    clrt += b"".join(ink.encode().ljust(32, b"\0") + bytes(6) for ink in inks)
+    xyz = b"XYZ " + bytes(4) + b"".join(round(v * 65536).to_bytes(4, "big") for v in (0.9642, 1.0, 0.8249))
+    tags = [
+        (b"desc", mluc(f"proofpress test {n}-colorant profile")),
+        (b"cprt", mluc("No copyright, use freely")),
+        (b"wtpt", xyz),
+        (b"A2B0", lut16(n, 3, a2b)),
+        (b"B2A0", lut16(3, n, b2a)),
+        (b"gamt", lut16(3, 1, gamut)),
+        (b"clrt", clrt),
+    ]
+    table_size = 4 + 12 * len(tags)
+    offset, table, data = 128 + table_size, b"", b""
+    for sig, body in tags:
+        body += bytes(-len(body) % 4)
+        table += sig + (offset + len(data)).to_bytes(4, "big") + len(body).to_bytes(4, "big")
+        data += body
+    size = 128 + table_size + len(data)
+    header = (
+        size.to_bytes(4, "big")
+        + b"lcms"
+        + bytes([4, 0x30, 0, 0])
+        + b"prtr"
+        + f"{n:X}CLR".encode()
+        + b"Lab "
+        + bytes([2026 >> 8, 2026 & 255, 0, 11, 0, 25, 0, 12, 0, 0, 0, 0])
+        + b"acsp"
+        + b"APPL"
+        + bytes(4)
+        + bytes(8)
+        + bytes(8)
+        + bytes(4)
+        + b"".join(round(v * 65536).to_bytes(4, "big") for v in (0.9642, 1.0, 0.8249))
+        + bytes(4)
+    )
+    header += bytes(128 - len(header))
+    return header + len(tags).to_bytes(4, "big") + table + data
+
+
+def _xclr_profiles() -> dict[str, bytes]:
+    """The n-colorant profiles the X-5n fixtures refer to, written to tests/fixtures/icc/; LittleCMS must open them."""
+    out = {f"xclr-{n}.icc": _xclr_profile(inks) for n, inks in XCLR_INKS.items()}
+    for data in out.values():
+        ImageCms.ImageCmsProfile(io.BytesIO(data))
+    return out
+
+
+def _x5n(
+    n: int = 5,
+    *,
+    embed: bool = False,
+    inks: list[str] | None = None,
+    profile: bytes | None = None,
+    **ref: pikepdf.Object | None,
+) -> pikepdf.Pdf:
+    """x4p relabelled PDF/X-5n: its intent refers to the n-colorant profile ``xclr-<n>.icc`` (embedded in the URL file
+    specification when ``embed``, 7.2), with its colorants as ``/ColorantTable``; ``ref`` replaces entries."""
+    data = _xclr_profile(XCLR_INKS[n]) if profile is None else profile
+    pdf = _x4p(data)
+    url = pikepdf.Dictionary(Type=pikepdf.Name.Filespec, FS=pikepdf.Name.URL, F=pikepdf.String(f"../icc/xclr-{n}.icc"))
+    if embed:
+        url["/F"] = pikepdf.String("xclr-embedded.icc")
+        url["/EF"] = pikepdf.Dictionary(F=pdf.make_indirect(pdf.make_stream(data, Type=pikepdf.Name.EmbeddedFile)))
+    entries = {
+        "ProfileName": pikepdf.String(f"proofpress test {n}-colorant profile"),
+        "URLs": pikepdf.Array([url]),
+        "ColorantTable": pikepdf.Array([pikepdf.Name(f"/{i}") for i in (inks or XCLR_INKS[n])]),
+        **ref,
+    }
+    reference = pdf.Root.OutputIntents[0].DestOutputProfileRef
+    for key, value in entries.items():
+        if value is None:
+            if f"/{key}" in reference:
+                del reference[f"/{key}"]
+        else:
+            reference[f"/{key}"] = value
+    # 7.3: the page's DeviceCMYK text stands for the profile's Cyan, Magenta, Yellow and Black colorants.
+    return _relabel(pdf, "PDF/X-5n")
+
+
+def _x5n_fixtures() -> dict[str, pikepdf.Pdf]:
+    """PDF/X-5n: a good file with its profile beside it or embedded, and one defect in each (expected.toml)."""
+    name, text = pikepdf.Name, pikepdf.String
+    trapnet_rect = [100.0, 100.0, 120.0, 120.0]
+
+    def with_page(pdf: pikepdf.Pdf, paint: bytes, spaces: dict[str, pikepdf.Object] | None = None) -> pikepdf.Pdf:
+        page = pdf.pages[0].obj
+        page["/Contents"] = pdf.make_indirect(pdf.make_stream(GOOD_X4_CONTENT + b"\n" + paint))
+        if spaces:
+            page.Resources["/ColorSpace"] = pikepdf.Dictionary({f"/{k}": v for k, v in spaces.items()})
+        return pdf
+
+    def trapnet(pdf: pikepdf.Pdf, **appearance: pikepdf.Object) -> pikepdf.Pdf:
+        pdf.Root.Metadata.write(bytes(pdf.Root.Metadata.read_bytes()).replace(b">False<", b">True<"))
+        pdf.docinfo["/Trapped"] = pikepdf.Name("/True")
+        _with_annot(pdf, "TrapNet", trapnet_rect, LastModified=text(X4_DATE_PDF), Version=pikepdf.Array())
+        annot = pdf.pages[0].obj.Annots[-1]
+        stream = pdf.make_stream(b"")
+        stream["/BBox"] = trapnet_rect
+        for key, value in appearance.items():
+            stream[f"/{key}"] = value
+        annot["/AP"] = pikepdf.Dictionary(N=pdf.make_indirect(stream))
+        return pdf
+
+    def device_n(pdf: pikepdf.Pdf, **attributes: pikepdf.Object) -> pikepdf.Object:
+        tint = pdf.make_stream(b"{dup dup dup}", FunctionType=4, Domain=[0, 1], Range=[0, 1] * 4)
+        return pikepdf.Array(
+            [
+                name.DeviceN,
+                pikepdf.Array([name.Cyan]),
+                name.DeviceCMYK,
+                pdf.make_indirect(tint),
+                pikepdf.Dictionary({f"/{k}": v for k, v in attributes.items()}),
+            ]
+        )
+
+    seps = pikepdf.Array([name(f"/{i}") for i in XCLR_INKS[5]])
+    dn_subtype = _x5n()
+    dn_process = _x5n()
+    group = _x5n()
+    group.pages[0].obj.Resources["/ExtGState"] = pikepdf.Dictionary(GS=pikepdf.Dictionary(ca=0.5))
+    return {
+        "x5n-good": _x5n(),
+        "x5n-good-6": _x5n(6),
+        "x5n-good-embedded": _x5n(embed=True),
+        "x5n-good-alone": _x5n(),
+        "x5n-profile-cs-cmyk": _x5n(ProfileCS=text(b"CMYK")),
+        "x5n-no-colorant-table": _x5n(ColorantTable=None),
+        "x5n-colorant-table-count": _x5n(inks=XCLR_INKS[5][:4]),
+        "x5n-colorant-table-order": _x5n(inks=list(reversed(XCLR_INKS[5]))),
+        "x5n-4clr-cmyk": _x5n(ProfileCS=text(b"4CLR"), inks=["Black", "Cyan", "Magenta", "Yellow"]),
+        "x5n-url-mac": _x5n(
+            URLs=pikepdf.Array([pikepdf.Dictionary(FS=name.URL, F=text("../icc/xclr-5.icc"), Mac=text("x"))])
+        ),
+        "x5n-icc-version-2": _x5n(ICCVersion=text(b"\x02\x10\x00\x00")),
+        "x5n-icc-version-2-alone": _x5n(ICCVersion=text(b"\x02\x10\x00\x00")),
+        # An ICC 2.1 n-colorant profile, embedded so it is found: not ISO 15076-1 (7.1).
+        "x5n-profile-v2": _x5n(
+            embed=True, profile=bytes([*_xclr_profile(XCLR_INKS[5])[:8], 2, 0x10, *_xclr_profile(XCLR_INKS[5])[10:]])
+        ),
+        "x5n-no-black": _x5n(inks=["Cyan", "Magenta", "Yellow", "Orange", "Violet"]),
+        "x5n-rgb": with_page(_x5n(), b"q 1 0 0 rg 300 300 10 10 re f Q"),
+        "x5n-devicen-nchannel": with_page(
+            dn_subtype, b"q /N cs 1 sc 300 300 10 10 re f Q", {"N": device_n(dn_subtype, Subtype=name.NChannel)}
+        ),
+        "x5n-devicen-process": with_page(
+            dn_process,
+            b"q /N cs 1 sc 300 300 10 10 re f Q",
+            {
+                "N": device_n(
+                    dn_process,
+                    Process=pikepdf.Dictionary(
+                        ColorSpace=name.DeviceCMYK,
+                        Components=pikepdf.Array([name.Cyan, name.Magenta, name.Yellow, name.Black]),
+                    ),
+                )
+            },
+        ),
+        "x5n-transparency-no-group": with_page(group, b"q /GS gs 300 300 10 10 re f Q"),
+        "x5n-trapnet-pcm-cmyk": trapnet(_x5n(), PCM=name.DeviceCMYK, SeparationColorNames=seps),
+        "x5n-trapnet-separations": trapnet(_x5n(), PCM=name.DeviceN, SeparationColorNames=pikepdf.Array([name.Cyan])),
+    }
+
+
 def _proxy_edit(pdf: pikepdf.Pdf, change: Callable[[pikepdf.Object], None]) -> pikepdf.Pdf:
     """``pdf`` with its proxy form changed."""
     change(pdf.pages[0].obj.Resources.XObject.P)
@@ -1715,6 +1924,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_font_fixtures(),
         **_x4p_fixtures(),
         **_x5_targets(),
+        **_x5n_fixtures(),
         **_print_fixtures(),
         "x4-pre-separated": _x4_pre_separated(),
     }
@@ -1870,6 +2080,7 @@ def main() -> int:
     args = parser.parse_args()
     built = render()
     fonts = _font_programs()
+    profiles = _xclr_profiles()
     if args.check:
         stale = [
             n
@@ -1877,6 +2088,7 @@ def main() -> int:
             if not (OUT / f"{n}.pdf").is_file() or (OUT / f"{n}.pdf").read_bytes() != data
         ]
         stale += [n for n, data in fonts.items() if not (FONTS / n).is_file() or (FONTS / n).read_bytes() != data]
+        stale += [n for n, data in profiles.items() if not (ICC / n).is_file() or (ICC / n).read_bytes() != data]
         stale += [p.stem for p in OUT.glob("*.pdf") if p.stem not in built and p.stem not in SAMPLES]
         if stale:
             print(f"stale fixtures: {', '.join(sorted(stale))}; run build_pdfs.py", file=sys.stderr)
@@ -1888,6 +2100,8 @@ def main() -> int:
     FONTS.mkdir(exist_ok=True)
     for name, data in fonts.items():
         (FONTS / name).write_bytes(data)
+    for name, data in profiles.items():
+        (ICC / name).write_bytes(data)
     print(f"wrote {len(built)} PDFs to {OUT}")
     return 0
 

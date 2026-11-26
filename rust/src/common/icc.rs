@@ -111,14 +111,29 @@ pub(crate) fn descriptions(profile: &[u8]) -> Vec<String> {
     }
 }
 
+/// The colorant names of a profile's `colorantTableTag` (`clrt`, ISO 15076-1 9.2.14), in order, each up to its first
+/// NUL; `None` when the profile has no such tag.
+pub(crate) fn colorant_names(profile: &[u8]) -> Option<Vec<String>> {
+    let tag = tag(profile, *b"clrt")?;
+    let count = tag.get(8..).and_then(<[u8]>::first_chunk::<4>).map(|c| length(*c))?;
+    (0..count)
+        .map(|i| tag.get(12 + 38 * i..).and_then(|e| e.get(..32)).map(ascii))
+        .collect()
+}
+
 /// The `desc` tag's data, when the profile has a header and the tag.
 fn desc_tag(profile: &[u8]) -> Option<&[u8]> {
+    tag(profile, *b"desc")
+}
+
+/// The data of the tag `signature`, when the profile has a header and the tag.
+fn tag(profile: &[u8], signature: [u8; 4]) -> Option<&[u8]> {
     header(profile)?;
     let word = |at: usize| profile.get(at..).and_then(<[u8]>::first_chunk::<4>).map(|w| length(*w));
     let count = word(128)?;
     (0..count).find_map(|i| {
         let entry = 132 + 12 * i;
-        (profile.get(entry..)?.first_chunk::<4>()? == b"desc").then_some(())?;
+        (*profile.get(entry..)?.first_chunk::<4>()? == signature).then_some(())?;
         profile.get(word(entry + 4)?..)?.get(..word(entry + 8)?)
     })
 }
@@ -356,5 +371,34 @@ mod tests {
         assert_eq!(description(&table[..134]), None, "an entry cut short");
         assert_eq!(description(&table[..138]), None, "an entry without its offset");
         assert_eq!(description(b"not a profile"), None);
+    }
+
+    #[test]
+    fn colorant_names_come_from_the_colorant_table_tag() {
+        let mut clrt = b"clrt\0\0\0\0\0\0\0\x02".to_vec();
+        for name in [b"Cyan".as_slice(), b"Orange"] {
+            let mut entry = name.to_vec();
+            entry.resize(38, 0);
+            clrt.extend(entry);
+        }
+        let mut table = 1u32.to_be_bytes().to_vec();
+        table.extend(b"clrt");
+        table.extend(144u32.to_be_bytes());
+        table.extend(u32::try_from(clrt.len()).unwrap().to_be_bytes());
+        table.extend(&clrt);
+        let profile = headed(&table);
+        assert_eq!(
+            colorant_names(&profile),
+            Some(vec!["Cyan".to_owned(), "Orange".to_owned()])
+        );
+        assert_eq!(colorant_names(&headed(b"")), None);
+        assert_eq!(colorant_names(&profile[..144 + 8]), None);
+        assert_eq!(colorant_names(&profile[..144 + 30]), None);
+        let mut short = 1u32.to_be_bytes().to_vec();
+        short.extend(b"clrt");
+        short.extend(144u32.to_be_bytes());
+        short.extend(8u32.to_be_bytes());
+        short.extend(b"clrt\0\0\0\0");
+        assert_eq!(colorant_names(&headed(&short)), None);
     }
 }
