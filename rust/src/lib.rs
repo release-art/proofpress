@@ -7,6 +7,8 @@ pub mod findings;
 pub mod pipeline;
 
 pub mod checks;
+#[cfg(feature = "cli")]
+pub mod cli;
 mod common;
 pub mod content;
 pub mod document;

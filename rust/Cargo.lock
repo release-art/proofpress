@@ -1190,8 +1190,10 @@ dependencies = [
 name = "proof-pdf"
 version = "0.0.0"
 dependencies = [
+ "clap",
  "cucumber",
  "futures",
+ "globset",
  "hayro-ccitt",
  "hayro-cmap",
  "hayro-jpeg2000",

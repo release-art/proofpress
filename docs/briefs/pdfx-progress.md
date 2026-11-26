@@ -32,7 +32,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 6** (the CLI and the Python API, the PDF/X-4 milestone) next. Phase 5 finished 2026-11-26; see its
+- **Phase 6** (the CLI and the Python API, the PDF/X-4 milestone): every X-4 row that needs no external file is
+  implemented; the Rust `verify` command exists without config files and tools, which come next. Phase 5 finished 2026-11-26; see its
   stage report. Phase 4 finished 2026-11-26; see its stage report. The walk places what it paints
   (CTM, clip, path, text and image extents) and reads colours as the print checks do; 32 print checks run in Rust:
   what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
@@ -100,7 +101,8 @@ record it as not conforming to that one rule).
 | 5.2, 5.3 | `c72d1aa` | Font programs read with `read-fonts` (TrueType and OpenType tables, bare CFF, Type 1) and CMaps with `hayro-cmap` (Adobe's predefined CMaps bundled); `x4.font.glyphs-present`, `x4.font.no-notdef` and `x4.font.widths-consistent` (6.5.1 to 6.5.3); test font programs of our own in `tests/fixtures/fonts/`; 5 fixtures |
 | 6 (rows) | `38c2d71` | The X-4 rows the milestone needs that phases 2 and 4 left: 6.25's lexical and graphics limits (the walk now reports each page's deepest graphics-state nesting) and 6.6's recommendation for other names; 7 fixtures |
 | 6 (rows) | `7aacf55`, `53843a0` | `x4.pdf-reference.conforms` (6.1.1) implemented: it was coded in phase 2 to fail on every error the reading tiers find, and waited for the content tier, which now reports; 9 fixtures' expectations gain it |
-| 6 (rows) | the commit after `53843a0` | `x4.complete.resources-inside` (6.3): resource names content uses that its resources do not define, and composite fonts whose CMap is neither embedded nor in ISO 32000-1 Table 118; 1 fixture. Every X-4 row that needs no external file is now implemented |
+| 6 (rows) | `111c62d` | `x4.complete.resources-inside` (6.3): resource names content uses that its resources do not define, and composite fonts whose CMap is neither embedded nor in ISO 32000-1 Table 118; 1 fixture. Every X-4 row that needs no external file is now implemented |
+| 6.1 (part) | the commit after `9ec9174` | The Rust `proof-pdf verify` (feature `cli`, `src/cli/`, binary `src/bin/proof-pdf.rs`): the Python command's options, the print checks they switch on and the PDF/X level (`--pdfx x4` by default, `--no-pdfx`), files and directories with `--exclude` and `--exempt`, `--jobs` threads, the text report and `--json`, and the brief's exit codes. Config files, veraPDF and Ghostscript are next |
 
 ## Register coverage
 
@@ -368,6 +370,7 @@ Oracle consultations:
 - Phase 6, 6.1.1: with `x4.pdf-reference.conforms` implemented, each damage fixture at PDF/X-4 fails its tier's check and 6.1.1, as plan task 2.2 designed (classified: decided reading, not a regression); the scenarios for them say so. Ghent and Altona pass it.
 - Process slip, 2026-11-26: `7aacf55` was committed with a red gate. The gate line piped `bin/rust/check.sh` into `grep`, which hid its exit status; a unit test counting the checks judged from the tiers, and 4 fixtures' expectations, still needed 6.1.1. The next commit fixes both; the gates now run through a script that stops at the first failing step.
 - Phase 6, 6.3 (oracle, 2026-11-26): a missing resource is reported once, under 6.3, narrowed to what renders (`/OC` property names only, pattern names only under a Pattern space, device names never). The predefined CMaps are Table 118's 61 names, not every CMap `hayro-cmap` bundles. veraPDF 6-2-11-3-3-t01-fail-a fails it; t02 (WMode) and t03 (a `/UseCMap` naming an embedded CMap, which is in the file) are PDF/A-only rules and pass. Not judged: forms without `/Resources`, appearance streams and Type 3 glyph procedures (marked `ponytail:`). Missing `/Widths` is 6.1.1's, not 6.3's (6.5.3 lets the program supply widths).
+- Task 6.1, the Rust `verify`: PDF/A (`--pdfa`) and peak ink (`--tac`) are opt-in, the default the brief assumes and the decision log's open question records; the switches that were `--x/--no-x` pairs keep their default and gain only the flag that changes it (`--no-colour`, `--no-fonts`, `--no-missing-glyphs`, `--no-pdfx`), with the config file to set the rest. The JSON is one record per file: the core's report (schema 1, so severity is `warning`, not the Python's `warn`) with `path`, `ok`, `exempt` and `unreadable`. A file that cannot be read exits 2, as a refused one does. The version is the crate's until the release wiring (6.3) passes the package's in.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 

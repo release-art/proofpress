@@ -12,11 +12,19 @@ publish = false
 # cdylib for the Python extension (maturin, with the python feature), rlib for the tests and the command line.
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "proof-pdf"
+required-features = ["cli"]
+
 [features]
 # The Python module proof_pdf._core, built by maturin.
 python = ["dep:pyo3", "dep:serde_json"]
+# The proof-pdf command line (src/cli.rs, src/bin/proof-pdf.rs).
+cli = ["dep:clap", "dep:globset", "dep:serde_json"]
 
 [dependencies]
+clap = { version = "4.6", features = ["derive", "env"], optional = true }
+globset = { version = "0.4.22", optional = true }
 hayro-ccitt = "0.5.0"
 hayro-cmap = "0.1.1"
 hayro-jpeg2000 = { version = "0.5.0", default-features = false, features = ["std"] }
