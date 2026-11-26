@@ -25,10 +25,12 @@ mod page;
 mod painted;
 mod resolution;
 mod spots;
+mod targets;
 mod text;
 mod walk;
 mod x4;
 mod x4p;
+mod x5g;
 
 use crate::document::Document;
 use crate::findings::{
@@ -37,6 +39,7 @@ use crate::findings::{
     X4_NAMES_HEX_ESCAPED, X4_NAMES_UTF8, X4_PDF_REFERENCE_CONFORMS, X4_PERMS_UR_ONLY,
 };
 use crate::pipeline::Limits;
+use std::path::{Path, PathBuf};
 
 /// A check's code: what it finds in an open document with the settings it runs with.
 type Run = fn(&Document, &Settings) -> Vec<Finding>;
@@ -44,6 +47,9 @@ type Run = fn(&Document, &Settings) -> Vec<Finding>;
 /// A check's code when it may be unable to judge: what it finds, or why it could not tell (a file it needs is not
 /// there).
 type Judge = fn(&Document, &Settings) -> Result<Vec<Finding>, String>;
+
+/// A check's code over a PDF/X-5 file set: what it finds in the document and its targets, or why it could not tell.
+type SetJudge = fn(&Document, &Settings, &targets::Set) -> Result<Vec<Finding>, String>;
 
 /// What the checks run with: the level a file is verified at, and the parameters the print checks take from the
 /// profile.
@@ -75,7 +81,7 @@ pub enum Files {
     #[default]
     Alone,
     /// The file set: relative URLs resolve against this folder, the file's own, and a referenced file must be there.
-    Set(std::path::PathBuf),
+    Set(PathBuf),
 }
 
 /// The print checks' parameters, each defaulting to today's profile's value.
@@ -118,6 +124,9 @@ pub struct Params {
     pub min_delta_l: Option<f64>,
     /// `contrast`: the ICC profile to measure through, a file path, instead of the output intents' profiles.
     pub proof_profile: Option<String>,
+    /// `x5.g-target-version-policy` (ISO 15930-8 8.4, X5-Q5): whether a target that is another version of the
+    /// document a reference names is accepted; with no choice made, such a target is not evaluated.
+    pub accept_target_versions: Option<bool>,
 }
 
 /// The colour model a job is held to.
@@ -154,6 +163,7 @@ impl Default for Params {
             safe_mm: None,
             min_delta_l: None,
             proof_profile: None,
+            accept_target_versions: None,
         }
     }
 }
@@ -192,6 +202,19 @@ impl Geometry {
 
 /// Every implemented check that reads an open document, with its code. A test holds this list and the
 /// `implemented` entries of `rust/checks.toml` equal, apart from the checks judged from tiers 1 to 5's own findings.
+/// Every implemented check over a PDF/X-5 file set, with its code.
+const SET_JUDGES: &[(&Check, SetJudge)] = &[
+    (f::X5_G_TARGET_CONFORMANCE_LEVEL, targets::conformance_level),
+    (f::X5_G_TARGET_CONFORMS, targets::conforms),
+    (f::X5_G_NO_CIRCULAR_REFS, targets::no_circular),
+    (f::X5_G_TARGET_XMP_IDS, targets::xmp_ids),
+    (f::X5_G_TARGET_IDENTITY, targets::target_identity),
+    (f::X5_G_TARGET_VERSION_POLICY, targets::version_policy),
+    (f::X5_G_TARGET_PAGE_EXISTS, targets::page_exists),
+    (f::X5_G_SAME_PRINTING_CONDITION, targets::same_printing_condition),
+    (f::X5_G_TARGET_NO_OCG, targets::no_ocg),
+];
+
 /// Every implemented check whose code may be unable to judge, with its code; a test counts these with [`RUNS`].
 const JUDGES: &[(&Check, Judge)] = &[
     (f::X4_ICC_CMYK_NOT_INTENT_PROFILE, colour::not_intent_profile_at_level),
@@ -300,6 +323,14 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_TRAPNET_FONT_FAUXING_EMPTY, annots::font_fauxing),
     (f::X4_TRAPNET_PCM_MATCHES_INTENT, annots::pcm_matches_intent),
     (f::PAGE_MEDIA_BOX, page::media_box_present),
+    (f::X5_IDENTIFICATION_VALUE, metadata::x5_version_value),
+    (f::X5_G_REF_PRESENT, x5g::ref_present),
+    (f::X5_G_PROXY_IS_FORM, x5g::proxy_is_form),
+    (f::X5_G_REF_ID_REQUIRED, x5g::ref_id_required),
+    (f::X5_G_REF_FILESPEC_EXTERNAL, keys::filespec_embedded_x5),
+    (f::X5_G_PROXY_METADATA, x5g::proxy_metadata),
+    (f::X5_G_PROXY_RENDITION_OF, x5g::proxy_rendition_of),
+    (f::X5_G_DOCUMENT_ID_UUID, x5g::document_id_uuid),
     (f::X4P_OUTPUT_INTENT_DEST_PROFILE_REF, x4p::dest_profile_ref),
     (f::X4P_OUTPUT_INTENT_NO_DEST_PROFILE, x4p::no_dest_profile),
     (f::X4P_REF_PROFILE_NAME, x4p::profile_name),
@@ -406,19 +437,33 @@ pub fn verify_settings(file: &str, bytes: &[u8], settings: &Settings) -> Report 
     verify_in(file, bytes, settings, &Limits::default())
 }
 
-/// A check's code, of either kind.
+/// A check's code, of any kind.
 #[derive(Clone, Copy)]
 enum Code {
     Run(Run),
     Judge(Judge),
+    Set(SetJudge),
 }
 
 fn verify_in(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits) -> Report {
+    verify_chain(file, bytes, settings, limits, &[])
+}
+
+/// [`verify_in`] for a file that is a target of the files in `chain`, outermost first (ISO 15930-8 8.2).
+fn verify_chain(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits, outer: &[PathBuf]) -> Report {
+    // The files being verified, this one last, to tell a reference that loops back.
+    let mut chain = outer.to_vec();
+    if let Files::Set(folder) = &settings.files {
+        let path = folder.join(Path::new(file).file_name().unwrap_or_default());
+        chain.push(std::fs::canonicalize(&path).unwrap_or(path));
+    }
+    let set = std::cell::OnceCell::new();
     let level = settings.level;
     let applies = |check: &Check| check.applies.contains(&level) && check.status == Status::Implemented;
     let runs = RUNS.iter().map(|&(check, run)| (check, Code::Run(run)));
     let judges = JUDGES.iter().map(|&(check, judge)| (check, Code::Judge(judge)));
-    let enabled = runs.chain(judges).filter(|(check, _)| applies(check));
+    let set_judges = SET_JUDGES.iter().map(|&(check, judge)| (check, Code::Set(judge)));
+    let enabled = runs.chain(judges).chain(set_judges).filter(|(check, _)| applies(check));
     let unwritten = f::ALL
         .iter()
         .filter(|check| check.applies.contains(&level) && check.status == Status::Todo)
@@ -453,12 +498,19 @@ fn verify_in(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits) -> 
                     Outcome::NotEvaluated("objects it would read could not be read".into())
                 } else {
                     let unjudged = std::cell::RefCell::new(None);
-                    let found = guarded(id, &|| match code {
-                        Code::Run(run) => run(&doc, settings),
-                        Code::Judge(judge) => judge(&doc, settings).unwrap_or_else(|why| {
+                    let or_note = |result: Result<Vec<Finding>, String>| {
+                        result.unwrap_or_else(|why| {
                             unjudged.replace(Some(why));
                             Vec::new()
-                        }),
+                        })
+                    };
+                    let found = guarded(id, &|| match code {
+                        Code::Run(run) => run(&doc, settings),
+                        Code::Judge(judge) => or_note(judge(&doc, settings)),
+                        Code::Set(judge) => {
+                            let set = set.get_or_init(|| targets::resolve(&doc, settings, limits, &chain));
+                            or_note(judge(&doc, settings, set))
+                        }
                     });
                     let outcome = match unjudged.into_inner() {
                         Some(why) => Outcome::NotEvaluated(why),
@@ -588,7 +640,9 @@ mod tests {
     fn every_implemented_check_has_code() {
         let judged = [X4_ENCRYPT_ABSENT, X4_PDF_REFERENCE_CONFORMS];
         for check in crate::findings::ALL.iter().filter(|c| c.status == Status::Implemented) {
-            let run = RUNS.iter().any(|(c, _)| c == check) || JUDGES.iter().any(|(c, _)| c == check);
+            let run = RUNS.iter().any(|(c, _)| c == check)
+                || JUDGES.iter().any(|(c, _)| c == check)
+                || SET_JUDGES.iter().any(|(c, _)| c == check);
             let (judged, tiers) = (judged.contains(check), check.applies.contains(&Level::Print));
             assert!(
                 run | judged | tiers,
@@ -596,7 +650,13 @@ mod tests {
                 check.id
             );
         }
-        for check in RUNS.iter().map(|(c, _)| c).chain(JUDGES.iter().map(|(c, _)| c)) {
+        let set = SET_JUDGES.iter().map(|(c, _)| c);
+        for check in RUNS
+            .iter()
+            .map(|(c, _)| c)
+            .chain(JUDGES.iter().map(|(c, _)| c))
+            .chain(set)
+        {
             assert_eq!(
                 check.status,
                 Status::Implemented,
@@ -651,24 +711,30 @@ mod tests {
             "/../tests/fixtures/pdfs/x4-good.pdf"
         ))
         .unwrap();
-        let x5g = verify("x4-good.pdf", &bytes, Level::X5g);
-        assert!(x5g.checks.iter().all(|c| c.id.applies.contains(&Level::X5g)), "{x5g:?}");
+        let x5n = verify("x4-good.pdf", &bytes, Level::X5n);
+        assert!(x5n.checks.iter().all(|c| c.id.applies.contains(&Level::X5n)), "{x5n:?}");
         let todo = f::ALL
             .iter()
-            .filter(|c| c.applies.contains(&Level::X5g) && c.status == Status::Todo)
+            .filter(|c| c.applies.contains(&Level::X5n) && c.status == Status::Todo)
             .count();
         assert_eq!(
-            x5g.checks.len(),
-            RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count()
+            x5n.checks.len(),
+            RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5n)).count()
                 + todo
-                + JUDGES.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count()
+                + JUDGES.iter().filter(|(c, _)| c.applies.contains(&Level::X5n)).count()
+                + SET_JUDGES
+                    .iter()
+                    .filter(|(c, _)| c.applies.contains(&Level::X5n))
+                    .count()
+                // x4.encrypt.absent and x4.pdf-reference.conforms, which X-5n inherits.
+                + 2
         );
         // Its checks still to be written are not evaluated, so the file cannot pass yet.
-        let unwritten = x5g
+        let unwritten = x5n
             .checks
             .iter()
-            .filter(|c| matches!(c.outcome, Outcome::NotEvaluated(_)));
-        assert_eq!((unwritten.count(), x5g.verdict), (todo, Verdict::Fail));
+            .filter(|c| c.outcome == Outcome::NotEvaluated("not written yet".into()));
+        assert_eq!((unwritten.count(), x5n.verdict), (todo, Verdict::Fail));
         let x4 = RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X4)).count()
             + JUDGES.iter().filter(|(c, _)| c.applies.contains(&Level::X4)).count();
         // And the two judged from tiers 1 to 5's findings: x4.encrypt.absent and x4.pdf-reference.conforms.

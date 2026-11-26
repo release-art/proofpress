@@ -34,7 +34,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 8** (PDF/X-5) is next. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
+- **Phase 8** (PDF/X-5): 8.1 to 8.3 (identification, inheritance, X-5g and X-5pg with their file sets) done; X-5n
+  (8.4) is next. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
   owner said to carry on past the PDF/X-4 milestone (phase 6, finished 2026-11-26).
 
 ## Done
@@ -103,6 +104,8 @@ record it as not conforming to that one rule).
 | 6 (fix) | the milestone commit | `page.media-box` (ISO 32000-2 7.7.3.3, every level; fixture `x4-no-media-box`): a page without a MediaBox passed once the Python `boxes` check went; `bleedbox`, `boxes`, `structure` become `skip`; an empty FlateDecode stream reads as empty |
 | 7.1-7.3 | the phase 7 commit | `Settings.files` (alone or a file set rooted at the PDF's folder), `common/url.rs` (local or network, never fetched), `checks/x4p.rs`: the 12 Annex A rows, the external profile found by `/CheckSum`, judges that may answer "not evaluated" (`JUDGES`); the X-4 colour-space rows and 6.4.3.3 under X-4p; 6.7's `/URLs` exemption; `--file-alone` and `file-alone` |
 | 7.4 | same commit | 19 `x4p-*` fixtures (the Little-CMS profile beside them by a relative URL), both modes; `expected.toml` gains `alone` and `unjudged`; feature `x4p-annex-a` |
+| 8.1 | the phase 8 (X-5g) commit | The inheritance map as `applies` (140 rows reach the X-5 levels), `x5.identification-value`; the `/URLs` exemption of 6.7 made unconditional; three rows settled as warning or skip |
+| 8.2, 8.3 | same commit | `checks/x5g.rs` (proxies, `/Ref`, `/ID`, metadata, `RenditionOf`, the X-5 6.7 rule), `checks/targets.rs` (the file set, read once and verified recursively; nine rows), `common/labels.rs`; `Location::File`, `Limits::target_depth`, `--target-versions`; 39 fixtures `x5*`, feature `x5g-clause-8`. X-5g and X-5pg: every row implemented or skip |
 
 ## Register coverage
 
@@ -111,7 +114,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
 | PDF/X-4 and X-4p | 137 | 0 | 4 |
-| PDF/X-5 | 0 | 35 | 18 |
+| PDF/X-5 | 17 | 16 | 20 |
 | House and structure checks | 54 | 0 | 4 (`internal`, `bleedbox`, `boxes`, `structure`) |
 
 ## Gates
@@ -145,7 +148,8 @@ Decision log in [`../README.md`](../README.md), 2026-11-25:
 - Ghent's X-4 positives are the 35 of 39 claims pdfToolbox passes; GWG151 and GWG152 fail 6.24 (oracle agreed, no
   escalation).
 - Altona fails 6.4.3.3 only (two hits per file) and stays a positive otherwise; owner approved; plan edited.
-- X4-Q6 stands: no corrigendum to ISO 15930-7:2010 found; 15930-8 Cor 1:2011 exists and is not held (task 0.2).
+- X4-Q6 stands: no corrigendum to ISO 15930-7:2010 found. 15930-8 Cor 1:2011 was supplied by the owner on 2026-11-26
+  (test-db `15fad03e`): it corrects the `stRef` spellings of 8.3 and 8.4, as X5-Q6 read them.
 - ICC profile version (6.4.2.1, 6.4.3.3): major version 2 or 4 passes, any minor; 5 fails. From pdfToolbox's verdicts on
   seven probes (`x4-good` with only the output profile's version field changed: 2.0, 2.1, 2.4, 4.2, 4.3, 4.4 pass; 5.0 fails,
   "newer than version 4"). The profile was confirmed to bite: 12 errors on `good.pdf`, 2 on `pdfx-x4-rgb-image.pdf`.
@@ -392,8 +396,6 @@ Oracle consultations:
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.
-- **Before phase 8:** get ISO 15930-8:2010/Cor 1:2011 (one page; ISO corrigenda are usually free, but iso.org refuses
-  scripts). Not blocking until then.
 - **Later, X5-Q9:** ISO 15930-1, -3, -4 and -6 are listed in test-db's `docs/standards-wanted.md`; not to buy now.
 
 - Task 7.4: the three veraPDF files that reference an absent path are Reference XObjects, so they are X-5g material:

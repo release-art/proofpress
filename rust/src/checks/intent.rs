@@ -303,7 +303,7 @@ pub(super) fn profile_version(doc: &Document, _: &Settings) -> Vec<Finding> {
 }
 
 /// The PDF/X intent's entry `key` as text.
-fn text_entry(doc: &Document, key: &[u8]) -> Option<String> {
+pub(super) fn text_entry(doc: &Document, key: &[u8]) -> Option<String> {
     match &doc.resolve(the_intent(doc)?.get(key)?)?.value {
         Value::String(bytes, _) => text::decode(bytes),
         _ => None,

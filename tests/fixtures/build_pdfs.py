@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import io
 import pathlib
+import re
 import sys
 import zlib
 from collections.abc import Callable
@@ -993,6 +994,183 @@ def _x4p_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+# PDF/X-5 (ISO 15930-8). The identifiers x4-good's XMP gives (6.10.4), which a proxy's xmpMM:RenditionOf repeats.
+X4_IDS = {"documentID": "uuid:5f0b8a8e-6f0e-4a57-9d55-2c1f3f1d0a40", "versionID": "1", "renditionClass": "default"}
+
+
+def _relabel(pdf: pikepdf.Pdf, version: str) -> pikepdf.Pdf:
+    """``pdf`` (x4-good or x4p) identified as ``version`` in its XMP and Info (6.2 of 15930-8, 6.11 of 15930-7)."""
+    xmp = bytes(pdf.Root.Metadata.read_bytes())
+    tag = re.compile(rb"<pdfxid:GTS_PDFXVersion>[^<]*</pdfxid:GTS_PDFXVersion>")
+    assert len(tag.findall(xmp)) == 1
+    metadata = pdf.make_stream(tag.sub(f"<pdfxid:GTS_PDFXVersion>{version}</pdfxid:GTS_PDFXVersion>".encode(), xmp))
+    metadata["/Type"], metadata["/Subtype"] = pikepdf.Name.Metadata, pikepdf.Name.XML
+    pdf.Root["/Metadata"] = pdf.make_indirect(metadata)
+    pdf.docinfo["/GTS_PDFXVersion"] = pikepdf.String(version)
+    return pdf
+
+
+def _rendition_xmp(fields: dict[str, str]) -> bytes:
+    """A proxy's XMP: xmpMM:RenditionOf, a stRef:ResourceRef structure with ``fields`` (8.3)."""
+    refs = "".join(f"<stRef:{k}>{v}</stRef:{k}>" for k, v in fields.items())
+    return (
+        '<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>\n<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+        '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about=""'
+        ' xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:stRef="http://ns.adobe.com/xap/1.0/sType/ResourceRef#">'
+        f'<xmpMM:RenditionOf rdf:parseType="Resource">{refs}</xmpMM:RenditionOf>'
+        '</rdf:Description></rdf:RDF></x:xmpmeta>\n<?xpacket end="w"?>'
+    ).encode()
+
+
+def _with_proxy(
+    pdf: pikepdf.Pdf,
+    target: str,
+    file_id: list[bytes] | None,
+    *,
+    page: pikepdf.Object | None = None,
+    fields: dict[str, str] | None = None,
+    metadata: bool = True,
+    subtype: str = "Form",
+    spec: pikepdf.Object | None = None,
+) -> pikepdf.Pdf:
+    """``pdf`` with a reference XObject painted on its page, placing page 0 of the file ``target`` beside it (8.2):
+    ``file_id`` as its /ID, ``fields`` (x4-good's identifiers by default) in its XMP's xmpMM:RenditionOf."""
+    stream = pdf.make_stream(b"0 0 100 100 re S" if subtype == "Form" else b"\0" * 4)
+    reference = pikepdf.Dictionary(
+        F=spec if spec is not None else pikepdf.Dictionary(Type=pikepdf.Name.Filespec, F=pikepdf.String(target)),
+        Page=page if page is not None else 0,
+    )
+    if file_id is not None:
+        reference["/ID"] = pikepdf.Array([pikepdf.String(i) for i in file_id])
+    stream["/Type"], stream["/Subtype"], stream["/Ref"] = pikepdf.Name.XObject, pikepdf.Name(f"/{subtype}"), reference
+    if subtype == "Form":
+        stream["/BBox"] = [0, 0, 100, 100]
+    else:
+        stream["/Width"], stream["/Height"], stream["/BitsPerComponent"] = 2, 2, 8
+        stream["/ColorSpace"] = pikepdf.Name.DeviceGray
+    if metadata:
+        xmp = pdf.make_stream(_rendition_xmp(X4_IDS if fields is None else fields))
+        xmp["/Type"], xmp["/Subtype"] = pikepdf.Name.Metadata, pikepdf.Name.XML
+        stream["/Metadata"] = pdf.make_indirect(xmp)
+    page_obj = pdf.pages[0].obj
+    page_obj.Resources["/XObject"] = pikepdf.Dictionary(P=pdf.make_indirect(stream))
+    page_obj["/Contents"] = pdf.make_indirect(pdf.make_stream(GOOD_X4_CONTENT + b"\nq 1 0 0 1 100 100 cm /P Do Q"))
+    return pdf
+
+
+def _proxy_edit(pdf: pikepdf.Pdf, change: Callable[[pikepdf.Object], None]) -> pikepdf.Pdf:
+    """``pdf`` with its proxy form changed."""
+    change(pdf.pages[0].obj.Resources.XObject.P)
+    return pdf
+
+
+def _ref_edit(pdf: pikepdf.Pdf, change: Callable[[pikepdf.Object], None]) -> pikepdf.Pdf:
+    """``pdf`` with its proxy's /Ref changed."""
+    return _proxy_edit(pdf, lambda form: change(form.Ref))
+
+
+def _x5_targets() -> dict[str, pikepdf.Pdf]:
+    """X-4 files for X-5 containers to refer to, each different from x4-good in one way 8.2-8.7 looks at."""
+    ocg = _x4_good()
+    _with_oc(
+        ocg,
+        pikepdf.Dictionary(
+            Name=pikepdf.String("Print"), Order=pikepdf.Array([pikepdf.String("one"), pikepdf.String("two")])
+        ),
+    )
+    other = _x4_good()
+    other.Root.OutputIntents[0]["/OutputConditionIdentifier"] = pikepdf.String("FOGRA39")
+    x1a = _relabel(_x4_good(), "PDF/X-4")
+    # An X-1a file of its time: identified in Info, its XMP without the identifiers X-4 brought (8.3 asks for them).
+    xmp = bytes(x1a.Root.Metadata.read_bytes())
+    for drop in (
+        b"<pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion>",
+        f"<xmpMM:DocumentID>{X4_IDS['documentID']}</xmpMM:DocumentID>".encode(),
+        b"<xmpMM:VersionID>1</xmpMM:VersionID><xmpMM:RenditionClass>default</xmpMM:RenditionClass>",
+    ):
+        assert xmp.count(drop) == 1
+        xmp = xmp.replace(drop, b"")
+    x1a.Root.Metadata.write(xmp)
+    x1a.docinfo["/GTS_PDFXVersion"] = pikepdf.String("PDF/X-1:2001")
+    x1a.docinfo["/GTS_PDFXConformance"] = pikepdf.String("PDF/X-1a:2001")
+    labelled = _x4_good()
+    labelled.Root["/PageLabels"] = pikepdf.Dictionary(Nums=pikepdf.Array([0, pikepdf.Dictionary(S=pikepdf.Name.r)]))
+    profiled = _x4_good()
+    data = bytearray(X4_PROFILE.read_bytes())
+    data[-1] ^= 1  # the same printing condition, characterised by a profile that differs in one byte
+    profile = profiled.make_stream(bytes(data))
+    profile["/N"] = 4
+    profiled.Root.OutputIntents[0]["/DestOutputProfile"] = profiled.make_indirect(profile)
+    return {
+        "x5-target-labelled": labelled,
+        "x5-target-other-profile": profiled,
+        "x5-target-ocg": ocg,
+        "x5-target-other-condition": other,
+        "x5-target-x1a": x1a,
+        "x5-target-x2": _relabel(_x4_good(), "PDF/X-2"),
+    }
+
+
+def _x5_fixtures(built: dict[str, bytes]) -> dict[str, pikepdf.Pdf]:
+    """PDF/X-5g and X-5pg containers, built once their targets are: each proxy carries its target's trailer /ID."""
+
+    def file_id(name: str) -> list[bytes]:
+        with pikepdf.open(io.BytesIO(built[name])) as pdf:
+            return [bytes(i) for i in pdf.trailer.ID]
+
+    good_id = file_id("x4-good")
+
+    def x5g(target: str = "x4-good.pdf", ids: list[bytes] | None = good_id, **proxy: object) -> pikepdf.Pdf:
+        return _with_proxy(_relabel(_x4_good(), "PDF/X-5g"), target, ids, **proxy)  # type: ignore[arg-type]
+
+    attachment = _relabel(_x4_good(), "PDF/X-5g")
+    _with_proxy(attachment, "x4-good.pdf", good_id)
+    attachment.Root["/AF"] = pikepdf.Array(
+        [pikepdf.Dictionary(Type=pikepdf.Name.Filespec, F=pikepdf.String("notes.txt"))]
+    )
+    wrong_case = {"DocumentID": X4_IDS["documentID"], "versionID": "1", "renditionClass": "default"}
+    return {
+        "x5g-good": x5g(),
+        "x5g-good-alone": x5g(),
+        "x5g-no-proxy": _relabel(_x4_good(), "PDF/X-5g"),
+        "x5g-wrong-version": _relabel(x5g(), "PDF/X-5n"),
+        "x5g-ref-on-image": x5g(subtype="Image"),
+        "x5g-ref-no-id": x5g(ids=None),
+        "x5g-filespec-not-embedded": attachment,
+        "x5g-proxy-no-metadata": x5g(metadata=False),
+        "x5g-rendition-wrong-case": x5g(fields=wrong_case),
+        "x5g-target-docid-not-uuid": x5g(
+            "x4-xmp-document-id-not-uuid.pdf",
+            file_id("x4-xmp-document-id-not-uuid"),
+            fields={**X4_IDS, "documentID": X4_IDS["documentID"].replace("uuid:", "xmp.did:")},
+        ),
+        "x5g-target-missing": x5g("missing.pdf"),
+        "x5g-target-network": x5g(
+            spec=pikepdf.Dictionary(FS=pikepdf.Name.URL, F=pikepdf.String("https://example.com/x4-good.pdf"))
+        ),
+        "x5g-target-wrong-id": x5g(ids=[bytes(16), good_id[1]]),
+        "x5g-target-other-version": x5g(ids=[good_id[0], bytes(16)]),
+        "x5g-target-other-version-accepted": x5g(ids=[good_id[0], bytes(16)]),
+        "x5g-target-other-version-rejected": x5g(ids=[good_id[0], bytes(16)]),
+        "x5g-target-page-missing": x5g(page=5),
+        "x5g-target-label-missing": x5g(page=pikepdf.String("ix")),
+        "x5g-target-nonconforming": x5g("x4-lzw.pdf", file_id("x4-lzw")),
+        "x5g-target-ocg": x5g("x5-target-ocg.pdf", file_id("x5-target-ocg")),
+        "x5g-target-other-condition": x5g("x5-target-other-condition.pdf", file_id("x5-target-other-condition")),
+        "x5g-target-x1a": x5g("x5-target-x1a.pdf", file_id("x5-target-x1a")),
+        "x5g-target-x2": x5g("x5-target-x2.pdf", file_id("x5-target-x2")),
+        "x5g-cycle": x5g("x5g-cycle.pdf", None),
+        "x5pg-good": _with_proxy(_relabel(_x4p(), "PDF/X-5pg"), "x4-good.pdf", good_id),
+        "x5g-target-no-f": _ref_edit(x5g(), lambda ref: ref.__delitem__("/F")),
+        "x5g-target-f-not-file": _ref_edit(x5g(), lambda ref: ref.__setitem__("/F", 5)),
+        "x5g-target-other-document": x5g(fields={**X4_IDS, "documentID": "uuid:00000000-0000-4000-8000-000000000000"}),
+        "x5g-target-labelled": x5g("x5-target-labelled.pdf", file_id("x5-target-labelled"), page=pikepdf.String("i")),
+        "x5g-ref-page-name": x5g(page=pikepdf.Name.First),
+        "x5g-target-other-profile": x5g("x5-target-other-profile.pdf", file_id("x5-target-other-profile")),
+        "x5g-proxy-metadata-dict": _proxy_edit(x5g(), lambda form: form.__setitem__("/Metadata", pikepdf.Dictionary())),
+    }
+
+
 def _x4_font_fixtures() -> dict[str, pikepdf.Pdf]:
     """The negatives of 6.5.4 (expected.toml says what each raises)."""
     differences = pikepdf.Dictionary(BaseEncoding=pikepdf.Name.WinAnsiEncoding, Differences=[65, pikepdf.Name.A])
@@ -1536,6 +1714,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_jpx_fixtures(),
         **_x4_font_fixtures(),
         **_x4p_fixtures(),
+        **_x5_targets(),
         **_print_fixtures(),
         "x4-pre-separated": _x4_pre_separated(),
     }
@@ -1560,6 +1739,16 @@ def render() -> dict[str, bytes]:
             out[name] = path.read_bytes()
         out["corrupt"] = out["good"][: len(out["good"]) // 2]  # truncated mid-file
         out.update(_x4_variants(out["x4-good"], scratch))
+        for name, pdf in _x5_fixtures(out).items():
+            path = scratch / f"{name}.pdf"
+            pdf.save(
+                path,
+                deterministic_id=True,
+                min_version="1.7",
+                compress_streams=False,
+                object_stream_mode=pikepdf.ObjectStreamMode.disable,
+            )
+            out[name] = path.read_bytes()
         assert out["x4-crypt-filter"].count(b"/Xilter /Crypt") == 1
         out["x4-crypt-filter"] = out["x4-crypt-filter"].replace(b"/Xilter /Crypt", b"/Filter /Crypt")
     finally:

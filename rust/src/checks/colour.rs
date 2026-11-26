@@ -12,7 +12,7 @@ use super::{intent, x4p};
 use crate::common::icc;
 use crate::document::{Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Level, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
+    Check, Finding, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
     X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_PRE_SEPARATED_ABSENT, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
     X4_TRANSPARENCY_GROUP_CS_RESTRICTED,
 };
@@ -309,11 +309,11 @@ pub(super) fn not_intent_profile(doc: &Document, _: &Settings) -> Vec<Finding> {
     same_as_intent(doc, &same).0
 }
 
-/// 6.4.3.3 at the level being verified. Under PDF/X-4p the intent's profile is the external one, compared by identity;
+/// 6.4.3.3 at the level being verified. At a level built on PDF/X-4p the intent's profile is the external one, compared by identity;
 /// without it, a profile whose MD5 is the `/CheckSum` is the intent's, and none is when the intent is not CMYK
 /// (pdfx-oracle, 2026-11-26). Otherwise it is not evaluated.
 pub(super) fn not_intent_profile_at_level(doc: &Document, settings: &Settings) -> Result<Vec<Finding>, String> {
-    if settings.level != Level::X4p {
+    if !x4p::external_profile_level(settings.level) {
         return Ok(not_intent_profile(doc, settings));
     }
     match x4p::profile(doc, settings) {

@@ -136,6 +136,8 @@ pub enum Location {
     Object(u32, u16),
     /// A page, counted from 1.
     Page(u32),
+    /// Another file of the file set, as it was found: the steps after it are in that file.
+    File(String),
 }
 
 /// Something a check found.

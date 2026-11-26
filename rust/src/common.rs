@@ -12,6 +12,7 @@ pub(crate) mod jbig2;
 pub(crate) mod jpeg;
 pub(crate) mod jpx;
 pub(crate) mod lab;
+pub(crate) mod labels;
 pub(crate) mod program;
 pub(crate) mod pyfmt;
 pub(crate) mod raster;

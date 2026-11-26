@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- PDF/X-5g and X-5pg (`--pdfx x5g|x5pg`, ISO 15930-8) are checked: every inherited X-4 and X-4p row, the version, the
+  reference XObject proxies and their XMP, and, for the file set, every target: read beside the container (or embedded),
+  compared with its reference's `/ID` and XMP identifiers, checked for its page, printing condition and optional
+  content, and verified at the level it claims, with loops and nesting caught. `--target-versions accept|reject`
+  (config `target-versions`) decides whether a target of another version passes. X-5n is not checked yet.
+- A finding can now point into another file of a file set (`"file"` in its JSON chain).
 - PDF/X-4p (`--pdfx x4p`, ISO 15930-7 Annex A) is checked in full: the PDF/X intent's `/DestOutputProfileRef` and
   its entries, and, for the file set, the external profile it names. The profile is looked for at the reference's
   `/URLs` that are files on this computer (relative ones beside the PDF); nothing is fetched over a network. The file

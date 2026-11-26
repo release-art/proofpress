@@ -45,6 +45,13 @@ pub(crate) enum Binding {
     Right,
 }
 
+/// Whether a PDF/X-5 target that is another version of the document a reference names is accepted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub(crate) enum TargetVersions {
+    Accept,
+    Reject,
+}
+
 /// The PDF/X level `--pdfx` holds files to.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
 pub(crate) enum Pdfx {
@@ -79,6 +86,10 @@ pub(crate) struct Verify {
     /// Per-tool timeout, in seconds [default: 900].
     #[arg(long)]
     pub(crate) timeout: Option<f64>,
+    /// PDF/X-5: accept or reject a target that is another version of the document a reference names. With neither,
+    /// such a target is not evaluated.
+    #[arg(long, value_enum)]
+    pub(crate) target_versions: Option<TargetVersions>,
     /// Verify each file alone: checks that need a file it refers to (a PDF/X-4p file's external profile) are not
     /// evaluated. By default the files a PDF refers to are looked for beside it.
     #[arg(long)]

@@ -123,9 +123,15 @@ fn resolved(external: External) -> Result<(PathBuf, Vec<u8>), String> {
     }
 }
 
-/// The intent's colour space under PDF/X-4p: the external profile's, else the reference's `/ProfileCS`.
+/// Whether `level` is built on PDF/X-4p, so its output profile is external: X-4p itself, X-5pg and X-5n (ISO 15930-8
+/// 7.1, 9).
+pub(super) fn external_profile_level(level: Level) -> bool {
+    matches!(level, Level::X4p | Level::X5pg | Level::X5n)
+}
+
+/// The intent's colour space at a level built on PDF/X-4p: the external profile's, else the reference's `/ProfileCS`.
 pub(super) fn space(doc: &Document, settings: &Settings) -> Option<[u8; 4]> {
-    if settings.level != Level::X4p {
+    if !external_profile_level(settings.level) {
         return None;
     }
     match profile(doc, settings) {

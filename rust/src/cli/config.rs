@@ -165,6 +165,7 @@ pub(crate) fn apply(o: &mut Verify, table: &Table, base: &Path, at: &str) -> Res
             },
             "no-pdfx" => o.layers.no_pdfx |= flag()?,
             "file-alone" => o.file_alone |= flag()?,
+            "target-versions" => fill(&mut o.target_versions, enumerated(&text()?, bad("accept or reject"))?),
             "pdfa" => o.layers.pdfa |= flag()?,
             "flavour" => fill(&mut o.layers.flavour, text()?),
             "tac" => o.layers.tac |= flag()?,
@@ -261,7 +262,7 @@ fn float(n: i64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::args::{Binding, Cli, ColourMode, Command, Pdfx};
+    use crate::cli::args::{Binding, Cli, ColourMode, Command, Pdfx, TargetVersions};
     use clap::Parser;
 
     /// A fresh directory for one test.
@@ -404,10 +405,13 @@ mod tests {
             (o.verapdf.as_deref(), o.gs.as_deref()),
             (Some("/opt/verapdf"), Some("gswin64c"))
         );
-        let off: Table = "pdfx = false\nexempt = ['a=b']\nfile-alone = true\n".parse().unwrap();
+        let off: Table = "pdfx = false\nexempt = ['a=b']\nfile-alone = true\ntarget-versions = 'accept'\n"
+            .parse()
+            .unwrap();
         let mut o = options(&[]);
         apply(&mut o, &off, Path::new("/"), "t").unwrap();
         assert!(o.layers.no_pdfx && o.file_alone);
+        assert_eq!(o.target_versions, Some(TargetVersions::Accept));
         assert_eq!(o.exempt, ["a=b"]);
     }
 
@@ -425,6 +429,7 @@ mod tests {
         assert!(wrong("exempt = 1").contains("a table of glob = reason"));
         assert!(wrong("exempt = { a = 1 }").contains("a table of glob = reason"));
         assert!(wrong("pdfx = 'x9'").contains("x4, x4p, x5g, x5pg or x5n"));
+        assert!(wrong("target-versions = 'maybe'").contains("accept or reject"));
         assert!(wrong("jobs = 0").contains("a whole number from 1"));
         assert!(wrong("pages-multiple-of = 'two'").contains("a whole number from 1"));
         assert!(wrong("bleed = 3").contains("[verify] has no option \"bleed\""));
@@ -434,6 +439,7 @@ mod tests {
             "pdfx",
             "no-pdfx",
             "file-alone",
+            "target-versions",
             "pdfa",
             "flavour",
             "tac",

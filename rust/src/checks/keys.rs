@@ -6,11 +6,12 @@ use super::Settings;
 use super::walk::{Node, dicts};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Level, Location, X4_ACROFORM_NO_XFA, X4_ACTIONS_ABSENT, X4_EXTGSTATE_NO_HTP, X4_EXTGSTATE_NO_TR,
+    Check, Finding, Location, X4_ACROFORM_NO_XFA, X4_ACTIONS_ABSENT, X4_EXTGSTATE_NO_HTP, X4_EXTGSTATE_NO_TR,
     X4_EXTGSTATE_TR2_DEFAULT, X4_FILESPEC_EMBEDDED, X4_HALFTONE_NO_NAME, X4_HALFTONE_TRANSFER_FUNCTION,
     X4_HALFTONE_TYPE_1_OR_5, X4_IMAGE_NO_DEFAULT_FOR_PRINTING, X4_JAVASCRIPT_ABSENT,
     X4_NAMES_NO_ALTERNATE_PRESENTATIONS, X4_PAGE_NO_PRES_STEPS, X4_STREAM_NO_EXTERNAL_F, X4_VIEWER_PREFS_AREAS,
     X4_XOBJECT_NO_OPI, X4_XOBJECT_NO_POSTSCRIPT, X4_XOBJECT_NO_REF, X4_XOBJECT_NO_SUBTYPE2_PS,
+    X5_G_REF_FILESPEC_EXTERNAL,
 };
 
 /// The action types of ISO 32000-1, 12.6.4, Table 198, and the obsolete `SetState` and `NOP` of PDF 1.2 (PDF 1.6
@@ -100,11 +101,30 @@ pub(super) fn no_external_f(doc: &Document, _: &Settings) -> Vec<Finding> {
 }
 
 /// 6.7: every file specification embeds its file. File specifications are found by `/Type /Filespec` and where they
-/// are written (`/FS`, `/AF`); a string there is a file specification without `/EF`. Under PDF/X-4p the URL
-/// specifications of the external profile's `/URLs` are exempt, since A.2 forbids them `/EF` (X4-Q12).
-pub(super) fn filespec_embedded(doc: &Document, settings: &Settings) -> Vec<Finding> {
-    let exempt = |n: &Node<'_>| settings.level == Level::X4p && n.under(b"URLs");
-    let mut out = each(doc, X4_FILESPEC_EMBEDDED, "6.7", &|n| {
+/// are written (`/FS`, `/AF`); a string there is a file specification without `/EF`. The URL specifications of an
+/// external profile's `/URLs` are exempt, since A.2 forbids them `/EF` (X4-Q12); at PDF/X-4 the reference itself fails
+/// `x4.output-intent.no-dest-profile-ref`.
+pub(super) fn filespec_embedded(doc: &Document, _: &Settings) -> Vec<Finding> {
+    filespec_rule(doc, X4_FILESPEC_EMBEDDED, "6.7", &|_| false)
+}
+
+/// ISO 15930-8 8.2 relaxes 6.7 for PDF/X-5g and X-5pg: the file a reference `XObject`'s `/Ref` names need not be
+/// embedded, though it may be (X5-Q3). Every other file specification still embeds its file.
+pub(super) fn filespec_embedded_x5(doc: &Document, _: &Settings) -> Vec<Finding> {
+    filespec_rule(doc, X5_G_REF_FILESPEC_EXTERNAL, "8.2", &|n| {
+        n.under(b"F") && n.inside(b"Ref")
+    })
+}
+
+/// 6.7's rule, as `check`, for every file specification but `/URLs` ones and those `exempt` picks out.
+fn filespec_rule(
+    doc: &Document,
+    check: &'static Check,
+    clause: &str,
+    exempt: &dyn Fn(&Node<'_>) -> bool,
+) -> Vec<Finding> {
+    let exempt = |n: &Node<'_>| n.under(b"URLs") || exempt(n);
+    let mut out = each(doc, check, clause, &|n| {
         let filespec = n.name(b"Type") == Some(b"Filespec") || n.under(b"FS") || n.under(b"AF");
         when(
             filespec && !exempt(n) && n.dict.get(b"EF").is_none(),
@@ -124,10 +144,10 @@ pub(super) fn filespec_embedded(doc: &Document, settings: &Settings) -> Vec<Find
             };
             out.extend((0..strings).map(|_| {
                 finding(
-                    X4_FILESPEC_EMBEDDED,
+                    check,
                     node.num,
                     "a file specification that is a string, with no /EF",
-                    "6.7",
+                    clause,
                 )
             }));
         }

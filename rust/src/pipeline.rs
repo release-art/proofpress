@@ -82,6 +82,8 @@ pub struct Limits {
     pub xref_sections: usize,
     /// Indirect objects in the file.
     pub objects: usize,
+    /// Files a PDF/X-5 file set follows references through, the file itself not counted (X5-Q13).
+    pub target_depth: usize,
 }
 
 impl Default for Limits {
@@ -91,6 +93,7 @@ impl Default for Limits {
             decoded_bytes: 1 << 30,
             xref_sections: 1000,
             objects: 10_000_000,
+            target_depth: 16,
         }
     }
 }

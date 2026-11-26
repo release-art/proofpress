@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use globset::{Glob, GlobMatcher};
 
-use super::args::{Binding, ColourMode, Pdfx, Verify};
+use super::args::{Binding, ColourMode, Pdfx, TargetVersions, Verify};
 use super::tools;
 use crate::checks::{self, Files, Geometry, Params, Settings};
 use crate::findings::{Check, CheckResult, Finding, Level, PDFA, Report, TAC, Verdict};
@@ -102,6 +102,7 @@ pub(crate) fn plan(o: &Verify) -> Result<Plan, Usage> {
     }
     let geometry = o.sizes.trim_mm.as_deref().map(|trim| geometry(o, trim)).transpose()?;
     let params = Params {
+        accept_target_versions: o.target_versions.map(|v| v == TargetVersions::Accept),
         small_text_pt: o.inks.small_text_pt.unwrap_or(12.0),
         uniform_pages: o.sizes.uniform_pages,
         pages_multiple_of: o.sizes.pages_multiple_of,

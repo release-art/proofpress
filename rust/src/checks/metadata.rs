@@ -17,14 +17,14 @@ use crate::findings::{
     X4_TRAPPED_PRESENT, X4_TRAPPED_TRUE_OR_FALSE, X4_XMP_AGENT_NAMES, X4_XMP_CONFORMS, X4_XMP_CREATE_DATE,
     X4_XMP_DOCUMENT_ID, X4_XMP_DOCUMENT_ID_UUID, X4_XMP_METADATA_DATE, X4_XMP_MODIFY_DATE, X4_XMP_NAMESPACE_PREFIXES,
     X4_XMP_NO_BYTES_ENCODING_ATTRS, X4_XMP_PRESENT, X4_XMP_RENDITION_CLASS, X4_XMP_TITLE, X4_XMP_UNFILTERED,
-    X4_XMP_VERSION_ID, X4_XMP_WELL_FORMED,
+    X4_XMP_VERSION_ID, X4_XMP_WELL_FORMED, X5_IDENTIFICATION_VALUE,
 };
 
 const DC: &str = "http://purl.org/dc/elements/1.1/";
 const PDF: &str = "http://ns.adobe.com/pdf/1.3/";
 const XMP: &str = "http://ns.adobe.com/xap/1.0/";
-const MM: &str = "http://ns.adobe.com/xap/1.0/mm/";
-const PDFXID: &str = "http://www.npes.org/pdfx/ns/id/";
+pub(super) const MM: &str = "http://ns.adobe.com/xap/1.0/mm/";
+pub(super) const PDFXID: &str = "http://www.npes.org/pdfx/ns/id/";
 
 /// Table 2 of 6.10.1: the prefix each namespace must be written with.
 const PREFIXES: [(&str, &str); 5] = [
@@ -121,7 +121,7 @@ fn document_metadata(doc: &Document) -> Option<u32> {
 }
 
 /// The document's XMP, parsed, when there is a catalog metadata stream that parses.
-fn document_xmp(doc: &Document) -> Option<Packet> {
+pub(super) fn document_xmp(doc: &Document) -> Option<Packet> {
     xmp::parse(&doc.stream_data(document_metadata(doc)?)?).ok()
 }
 
@@ -336,6 +336,21 @@ pub(super) fn version_value(doc: &Document, settings: &Settings) -> Vec<Finding>
     } else {
         "PDF/X-4"
     };
+    version_is(doc, X4_IDENTITY_VERSION_VALUE, want, "6.11")
+}
+
+/// ISO 15930-8 6.2: the version is exactly the X-5 level's name, `PDF/X-5g`, `PDF/X-5pg` or `PDF/X-5n`.
+pub(super) fn x5_version_value(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let want = match settings.level {
+        Level::X5pg => "PDF/X-5pg",
+        Level::X5n => "PDF/X-5n",
+        _ => "PDF/X-5g",
+    };
+    version_is(doc, X5_IDENTIFICATION_VALUE, want, "6.2")
+}
+
+/// A finding from `check` when the XMP version is not `want`.
+fn version_is(doc: &Document, check: &'static Check, want: &str, clause: &str) -> Vec<Finding> {
     let packet = document_xmp(doc);
     let Some(value) = packet.as_ref().and_then(|p| p.get(PDFXID, "GTS_PDFXVersion")) else {
         return Vec::new();
@@ -344,13 +359,13 @@ pub(super) fn version_value(doc: &Document, settings: &Settings) -> Vec<Finding>
         Some(v) if v == want => Vec::new(),
         other => vec![
             Finding::new(
-                X4_IDENTITY_VERSION_VALUE,
+                check,
                 format!(
                     "pdfxid:GTS_PDFXVersion is {:?}, not {want:?}",
                     other.unwrap_or("not text")
                 ),
             )
-            .citing("6.11"),
+            .citing(clause),
         ],
     }
 }

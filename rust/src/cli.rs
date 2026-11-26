@@ -394,10 +394,10 @@ mod tests {
 
     #[test]
     fn a_check_left_unjudged_is_named_with_why() {
-        let (code, out, _) = cli(&["verify", &fixture("x4-good"), "--pdfx", "x5g"]);
+        let (code, out, _) = cli(&["verify", &fixture("x4-good"), "--pdfx", "x5n"]);
         assert_eq!(code, 1);
         assert!(
-            out.contains("x not evaluated, not written yet: x5.identification-value, "),
+            out.contains("x not evaluated, not written yet: x5.n-profile-iso15076, "),
             "{out}"
         );
     }
@@ -411,6 +411,20 @@ mod tests {
         assert!(
             out.contains("not evaluated, the file is verified alone, without its external profile"),
             "{out}"
+        );
+    }
+
+    #[test]
+    fn a_target_of_another_version_passes_only_when_accepted() {
+        let file = fixture("x5g-target-other-version");
+        assert_eq!(cli(&["verify", &file, "--pdfx", "x5g"]).0, 1);
+        assert_eq!(
+            cli(&["verify", &file, "--pdfx", "x5g", "--target-versions", "accept"]).0,
+            0
+        );
+        assert_eq!(
+            cli(&["verify", &file, "--pdfx", "x5g", "--target-versions", "reject"]).0,
+            1
         );
     }
 

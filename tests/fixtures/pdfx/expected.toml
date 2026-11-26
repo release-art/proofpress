@@ -952,3 +952,166 @@ levels = ["x4p"]
 alone = true
 expect = { "x4.icc.cmyk-not-intent-profile" = "the same, told by its MD5 equal to /CheckSum without the external profile" }
 unjudged = { "x4p.fileset.checksum-matches" = "verified alone", "x4p.fileset.fields-match" = "verified alone", "x4p.fileset.profile-valid" = "verified alone" }
+
+# PDF/X-5g and X-5pg (ISO 15930-8 clauses 8, 9). A container is x4-good relabelled, with a proxy placing page 0 of a
+# file beside it in tests/fixtures/pdfs; verified as a file set unless `alone`.
+[x5g-good]
+levels = ["x5g"]
+expect = {}
+
+[x5pg-good]
+levels = ["x5pg"]
+expect = {}
+
+[x5g-good-alone]
+levels = ["x5g"]
+alone = true
+expect = {}
+unjudged = { "x5.g-target-conformance-level" = "verified alone", "x5.g-target-conforms" = "verified alone", "x5.g-no-circular-refs" = "verified alone", "x5.g-target-xmp-ids" = "verified alone", "x5.g-target-identity" = "verified alone", "x5.g-target-version-policy" = "verified alone", "x5.g-target-page-exists" = "verified alone", "x5.g-same-printing-condition" = "verified alone", "x5.g-target-no-ocg" = "verified alone" }
+
+[x5g-wrong-version]
+levels = ["x5g"]
+expect = { "x5.identification-value" = "XMP and Info say PDF/X-5n at X-5g (6.2)" }
+
+[x5g-no-proxy]
+levels = ["x5g"]
+expect = { "x5.g-ref-present" = "nothing is placed from another file, a warning (X5-Q1)" }
+
+[x5g-ref-on-image]
+levels = ["x5g"]
+expect = { "x5.g-proxy-is-form" = "/Ref on an image XObject (8.2)", "x5.g-ref-present" = "so no form proxy either (warning)" }
+
+[x5g-ref-no-id]
+levels = ["x5g"]
+expect = { "x5.g-ref-id-required" = "a /Ref without /ID (8.2)" }
+
+[x5g-filespec-not-embedded]
+levels = ["x5g"]
+expect = { "x5.g-ref-filespec-external" = "an /AF file specification without /EF; only the reference's may be external (8.2, 6.7)" }
+
+[x5g-proxy-no-metadata]
+levels = ["x5g"]
+expect = { "x5.g-proxy-metadata" = "a proxy without /Metadata (8.3)" }
+
+[x5g-rendition-wrong-case]
+levels = ["x5g"]
+expect = { "x5.g-proxy-rendition-of" = "stRef:DocumentID, not stRef:documentID (8.3, X5-Q6)" }
+
+[x5g-target-docid-not-uuid]
+levels = ["x5g"]
+expect = { "x5.g-document-id-uuid" = "the target's document ID is xmp.did:, not uuid: (8.3, warning)" }
+
+[x5g-target-missing]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "no file at missing.pdf: the file set is incomplete" }
+unjudged = { "x5.g-target-conformance-level" = "no target to read", "x5.g-target-conforms" = "no target to read", "x5.g-no-circular-refs" = "no target to read", "x5.g-target-xmp-ids" = "no target to read", "x5.g-target-version-policy" = "no target to read", "x5.g-target-page-exists" = "no target to read", "x5.g-same-printing-condition" = "no target to read", "x5.g-target-no-ocg" = "no target to read" }
+
+[x5g-target-network]
+levels = ["x5g"]
+expect = {}
+unjudged = { "x5.g-target-conformance-level" = "the target is only at an https URL, which is not fetched", "x5.g-target-conforms" = "the target is only at an https URL, which is not fetched", "x5.g-no-circular-refs" = "the target is only at an https URL, which is not fetched", "x5.g-target-xmp-ids" = "the target is only at an https URL, which is not fetched", "x5.g-target-identity" = "the target is only at an https URL, which is not fetched", "x5.g-target-version-policy" = "the target is only at an https URL, which is not fetched", "x5.g-target-page-exists" = "the target is only at an https URL, which is not fetched", "x5.g-same-printing-condition" = "the target is only at an https URL, which is not fetched", "x5.g-target-no-ocg" = "the target is only at an https URL, which is not fetched" }
+
+[x5g-target-wrong-id]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "the reference's first /ID is not the target's (8.4)" }
+
+[x5g-target-other-version]
+levels = ["x5g"]
+expect = {}
+unjudged = { "x5.g-target-version-policy" = "another version of the target, and no choice made (X5-Q5)" }
+
+[x5g-target-other-version-accepted]
+levels = ["x5g"]
+params = { accept_target_versions = true }
+expect = {}
+
+[x5g-target-other-version-rejected]
+levels = ["x5g"]
+params = { accept_target_versions = false }
+expect = { "x5.g-target-version-policy" = "another version of the target, which the job rejects (8.4 NOTE 2)" }
+
+[x5g-target-page-missing]
+levels = ["x5g"]
+expect = { "x5.g-target-page-exists" = "page index 5 of a one-page target (ISO 32000-1 8.10.4)" }
+
+[x5g-target-label-missing]
+levels = ["x5g"]
+expect = { "x5.g-target-page-exists" = "a page label the target does not have" }
+
+[x5g-target-nonconforming]
+levels = ["x5g"]
+expect = { "x5.g-target-conforms" = "the target x4-lzw fails PDF/X-4 (8.2)" }
+
+[x5g-target-ocg]
+levels = ["x5g"]
+expect = { "x5.g-target-no-ocg" = "an X-4 target with optional content (8.7)" }
+
+[x5g-target-other-condition]
+levels = ["x5g"]
+expect = { "x5.g-same-printing-condition" = "the target's intent names FOGRA39 (8.5, X5-Q7)" }
+
+[x5g-target-x1a]
+levels = ["x5g"]
+expect = { "x5.g-target-xmp-ids" = "an X-1a target without xmpMM:DocumentID, VersionID or RenditionClass (8.3)" }
+unjudged = { "x5.g-target-conforms" = "an X-1a target: its standard is not held (X5-Q9)" }
+
+[x5g-target-x2]
+levels = ["x5g"]
+expect = { "x5.g-target-conformance-level" = "the target claims PDF/X-2 (8.2)" }
+unjudged = { "x5.g-target-conforms" = "not a level a target may have, so not verified" }
+
+[x5g-cycle]
+levels = ["x5g"]
+expect = { "x5.g-no-circular-refs" = "the container refers to itself (8.2)", "x5.g-ref-id-required" = "and its reference has no /ID" }
+unjudged = { "x5.g-target-conforms" = "a loop is not verified again" }
+
+# The X-4 files X-5 containers refer to.
+[x5-target-ocg]
+levels = ["x4"]
+expect = {}
+
+[x5-target-other-condition]
+levels = ["x4"]
+expect = {}
+
+[x5-target-x2]
+levels = ["x4"]
+expect = { "x4.identity.version-value" = "it claims PDF/X-2" }
+
+[x5g-target-no-f]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "a /Ref without /F names no target" }
+unjudged = { "x5.g-target-conformance-level" = "no target to read", "x5.g-target-conforms" = "no target to read", "x5.g-no-circular-refs" = "no target to read", "x5.g-target-xmp-ids" = "no target to read", "x5.g-target-version-policy" = "no target to read", "x5.g-target-page-exists" = "no target to read", "x5.g-same-printing-condition" = "no target to read", "x5.g-target-no-ocg" = "no target to read" }
+
+[x5g-target-f-not-file]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "a /Ref whose /F is a number names no file" }
+unjudged = { "x5.g-target-conformance-level" = "no target to read", "x5.g-target-conforms" = "no target to read", "x5.g-no-circular-refs" = "no target to read", "x5.g-target-xmp-ids" = "no target to read", "x5.g-target-version-policy" = "no target to read", "x5.g-target-page-exists" = "no target to read", "x5.g-same-printing-condition" = "no target to read", "x5.g-target-no-ocg" = "no target to read" }
+
+[x5g-target-other-document]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "the proxy names another document ID than the target's (8.4)" }
+
+[x5g-target-labelled]
+levels = ["x5g"]
+expect = {}
+
+[x5g-ref-page-name]
+levels = ["x5g"]
+expect = { "x5.g-target-page-exists" = "/Page is a name, neither an index nor a label" }
+
+[x5g-target-other-profile]
+levels = ["x5g"]
+expect = { "x5.g-same-printing-condition" = "the same condition with a profile that differs, a warning (X5-Q7)" }
+
+[x5g-proxy-metadata-dict]
+levels = ["x5g"]
+expect = { "x5.g-proxy-metadata" = "/Metadata is a dictionary, not a stream (8.3)" }
+
+[x5-target-labelled]
+levels = ["x4"]
+expect = {}
+
+[x5-target-other-profile]
+levels = ["x4"]
+expect = {}
