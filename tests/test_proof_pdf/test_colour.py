@@ -880,22 +880,21 @@ class TestSpotDefinitions:
 
     def test_one_ink_defined_two_ways_is_an_error(self):
         pdf = self._pdf(_separation("PANTONE 165 C", [0, 0.6, 1, 0]), _separation("PANTONE 165 C", [0, 0.5, 1, 0]))
-        [finding] = colour.check_spot_definitions(pdf)
+        [finding] = _ported(pdf, "spot-definition")
         assert finding.severity is Severity.ERROR and "PANTONE 165 C" in finding.message
 
     def test_the_same_definition_twice_and_within_a_percent_is_fine(self):
         pdf = self._pdf(_separation("Foil", [0, 0.6, 1, 0]), _separation("Foil", [0, 0.604, 1, 0]))
-        assert colour.check_spot_definitions(pdf) == []
+        assert _ported(pdf, "spot-definition") == []
 
     def test_different_inks_do_not_clash(self):
         assert (
-            colour.check_spot_definitions(self._pdf(_separation("A", [1, 0, 0, 0]), _separation("B", [0, 1, 0, 0])))
-            == []
+            _ported(self._pdf(_separation("A", [1, 0, 0, 0]), _separation("B", [0, 1, 0, 0])), "spot-definition") == []
         )
 
     def test_alternates_in_different_spaces_are_not_compared(self):
         pdf = self._pdf(_separation("Black", [1], pikepdf.Name.DeviceGray), _separation("Black", [0, 0, 0, 1]))
-        assert colour.check_spot_definitions(pdf) == []
+        assert _ported(pdf, "spot-definition") == []
 
 
 _SRGB_NAME = "sRGB built-in".encode("utf-16-be")  # lcms writes v4 descriptions as UTF-16

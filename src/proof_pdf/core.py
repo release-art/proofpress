@@ -123,7 +123,6 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
             findings += ported.check(path, profile)
             findings += _text_checks(pdf, profile)
             if profile.colour:
-                findings += colour.check_spot_definitions(pdf)
                 if profile.colour_mode is ColourMode.GRAY:
                     findings += colour.check_gray_only(pdf, allow_k_only=profile.allow_k_only)
     except (pikepdf.PdfError, pikepdf.PasswordError) as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash

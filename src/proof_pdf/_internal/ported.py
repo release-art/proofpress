@@ -44,6 +44,7 @@ PORTED = frozenset(
         "text-size",
         "hairline",
         "safe-area",
+        "spot-definition",
     }
 )
 _SEVERITY = {"error": Severity.ERROR, "warning": Severity.WARN}
@@ -75,7 +76,10 @@ def check(path: pathlib.Path, profile: Profile) -> list[Finding]:
         (profile.fonts, ("font-embedded", "font-type3")),
         (profile.colour and cmyk, ("overprint", "white-overprint", "rich-black", "colour-space")),
         (profile.colour and rgb, ("rgb-only",)),
-        (profile.colour, ("blend-space", "icc-profile", "image-dpi", "image-dpi-max", "image-stretch")),
+        (
+            profile.colour,
+            ("blend-space", "icc-profile", "image-dpi", "image-dpi-max", "image-stretch", "spot-definition"),
+        ),
         (profile.k_only_text, ("k-only-text",)),
         (profile.geometry is not None, ("geometry", "bleed", "centring")),
         (profile.uniform_pages, ("page-size", "page-rotate")),

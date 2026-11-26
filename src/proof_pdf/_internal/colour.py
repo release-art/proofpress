@@ -32,9 +32,9 @@ import pikepdf
 from PIL import Image, ImageMath
 
 from ..models import Finding, Severity
-from . import proc, spots
+from . import proc
 from .paint import Fill, Paint, paint_events
-from .spaces import CMYK, GRAY, RGB, intent_family, reachable, spot_names
+from .spaces import CMYK, GRAY, RGB, intent_family, spot_names
 
 logger = logging.getLogger(__name__)
 
@@ -268,41 +268,6 @@ def _cmy_ink(image: pikepdf.Object, samples: bytes) -> list[int] | None:
         return None
     # An inverted channel (/Decode [1 0]) is empty when every sample is 255, so measure its distance from that.
     return [max(((255 - b) if decode[2 * c] else b) for b in samples[c::4]) if samples else 0 for c in range(3)]
-
-
-# --------------------------------------------------------- spot definitions ----
-def check_spot_definitions(pdf: pikepdf.Pdf) -> list[Finding]:
-    """Flag a spot ink defined more than one way: same name, different alternate space or full-tint look.
-
-    The name is what a printer matches to an ink, but the alternate is what proofs and the screen show. Two
-    definitions of PANTONE 165 C mean two different oranges in the proof, and usually mean one file came from another
-    workflow. Only definitions whose tint transform could be evaluated are compared, to within 1%, and only against
-    definitions in the same alternate space.
-    """
-    # ponytail: alternates in different spaces (Black as Gray 0 vs CMYK 0/0/0/100) are not compared, as that needs a
-    # conversion; add one if mixed-space definitions turn out to matter.
-    definitions: dict[tuple[tuple[str, ...], str | None], dict[tuple, str]] = {}
-    for obj in reachable(pdf):
-        if not (isinstance(obj, pikepdf.Array) and len(obj) >= 4 and str(obj[0]) in ("/Separation", "/DeviceN")):
-            continue
-        try:
-            spot = spots.read(obj)
-        except IndexError, KeyError, TypeError, ValueError, pikepdf.PdfError:
-            continue
-        if spot.alternate is None or any(n in ("All", "None") for n in spot.names):
-            continue
-        look = (spot.alternate_space, tuple(round(v, 2) for v in spot.alternate))
-        definitions.setdefault((spot.names, spot.alternate_space), {}).setdefault(look, f"{spot.alternate}")
-    return [
-        Finding(
-            "spot-definition",
-            Severity.ERROR,
-            f"spot ink {' + '.join(names)} is defined {len(looks)} different ways in {space}: "
-            f"{'; '.join(looks.values())}",
-        )
-        for (names, space), looks in sorted(definitions.items(), key=str)
-        if len(looks) > 1
-    ]
 
 
 # ---------------------------------------------- K-only colours (gray proofing) ----

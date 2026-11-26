@@ -11,10 +11,13 @@ use super::ink::describe;
 use super::painted::page_of;
 use super::{ColourMode, Settings};
 use crate::common::family::{self, Family};
+use crate::common::function;
 use crate::common::icc;
-use crate::common::pyfmt::repr;
+use crate::common::pyfmt::{repr, repr_float};
 use crate::document::{Document, Object, Value};
-use crate::findings::{BLEND_SPACE, COLOUR_SPACE, Finding, ICC_PROFILE, Location, RGB_ONLY, SPOT_INK, Severity};
+use crate::findings::{
+    BLEND_SPACE, COLOUR_SPACE, Finding, ICC_PROFILE, Location, RGB_ONLY, SPOT_DEFINITION, SPOT_INK, Severity,
+};
 use crate::graphics::{self, Event, Kind, Role};
 
 /// A family's name in messages.
@@ -301,6 +304,135 @@ fn reachable(doc: &Document) -> Vec<&Object> {
         out.push(resolved);
     }
     out
+}
+
+/// A name's text without leading slashes, as the print checks have always shown ink names; `None` when it is not
+/// UTF-8.
+fn ink_name(doc: &Document, object: &Object) -> Option<String> {
+    let name = doc.resolve(object)?.name()?;
+    Some(std::str::from_utf8(name).ok()?.trim_start_matches('/').to_owned())
+}
+
+/// A spot colour space read as the print checks read it: its ink names, its alternate space's label, and the
+/// alternate's components at full tint (rounded to four places); `None` for a space they skip.
+fn spot(
+    doc: &Document,
+    separation: bool,
+    [names, alternate, transform]: [&Object; 3],
+) -> Option<(Inks, Option<Vec<f64>>)> {
+    let names = if separation {
+        vec![ink_name(doc, names)?]
+    } else {
+        doc.resolve(names)?
+            .array()?
+            .iter()
+            .map(|n| ink_name(doc, n))
+            .collect::<Option<_>>()?
+    };
+    let label = match family::classify(doc, Some(alternate), None) {
+        Family::Gray => Some("DeviceGray".to_owned()),
+        Family::Rgb => Some("DeviceRGB".to_owned()),
+        Family::Cmyk => Some("DeviceCMYK".to_owned()),
+        Family::Other => match &doc.resolve(alternate)?.value {
+            Value::Name(_) => Some(ink_name(doc, alternate)?),
+            Value::Array(parts) => match parts.first() {
+                None => None,
+                Some(first) => {
+                    let head = ink_name(doc, first)?;
+                    if head == "ICCBased" {
+                        let profile = doc.resolve(parts.get(1)?)?.dict()?;
+                        #[expect(clippy::cast_possible_truncation, reason = "a component count, truncated")]
+                        let n = match profile.get(b"N").and_then(|n| doc.resolve(n)).map(|n| &n.value) {
+                            None => 0,
+                            Some(Value::Integer(n)) => *n,
+                            Some(Value::Real(r)) => *r as i64,
+                            Some(_) => return None,
+                        };
+                        Some(format!("ICCBased({n})"))
+                    } else {
+                        Some(head)
+                    }
+                }
+            },
+            _ => None,
+        },
+    };
+    let values = function::evaluate(doc, transform, &vec![1.0; names.len()])
+        .map(|v| v.into_iter().map(|x| rounded(x, 4)).collect());
+    Some(((names, label), values))
+}
+
+/// `round(v, places)` as Python gives it: the nearest decimal, ties to even on the exact binary value.
+fn rounded(v: f64, places: usize) -> f64 {
+    format!("{v:.places$}").parse().unwrap_or(v)
+}
+
+/// A spot ink: its names and its alternate space's label.
+type Inks = (Vec<String>, Option<String>);
+
+/// What a spot ink looks like: its alternate space's label and its full-tint components to two places.
+type Look = (Option<String>, Vec<f64>);
+
+/// A spot ink (same names, same alternate space) defined with different full-tint colours.
+pub(super) fn spot_definition(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let mut definitions: Vec<(Inks, Vec<(Look, String)>)> = Vec::new();
+    for object in reachable(doc) {
+        let Some([head, names, alternate, transform, ..]) = object.array() else {
+            continue;
+        };
+        let separation = match doc.resolve(head).and_then(Object::name) {
+            Some(b"Separation") => true,
+            Some(b"DeviceN") => false,
+            _ => continue,
+        };
+        let Some(((names, label), Some(alternate))) = spot(doc, separation, [names, alternate, transform]) else {
+            continue;
+        };
+        if names.iter().any(|n| n == "All" || n == "None") {
+            continue;
+        }
+        let look: Look = (label.clone(), alternate.iter().map(|v| rounded(*v, 2)).collect());
+        let shown = format!(
+            "[{}]",
+            alternate.iter().map(|v| repr_float(*v)).collect::<Vec<_>>().join(", ")
+        );
+        let key = (names, label);
+        match definitions.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, looks)) => {
+                if !looks.iter().any(|(l, _)| *l == look) {
+                    looks.push((look, shown));
+                }
+            }
+            None => definitions.push((key, vec![(look, shown)])),
+        }
+    }
+    let key_repr = |(names, label): &Inks| {
+        let names: Vec<String> = names.iter().map(|n| repr(n)).collect();
+        let comma = if names.len() == 1 { "," } else { "" };
+        format!(
+            "(({}{comma}), {})",
+            names.join(", "),
+            label.as_deref().map_or_else(|| "None".to_owned(), repr)
+        )
+    };
+    definitions.sort_by_cached_key(|(key, _)| key_repr(key));
+    definitions
+        .into_iter()
+        .filter(|(_, looks)| looks.len() > 1)
+        .map(|((names, label), looks)| {
+            let shown: Vec<&str> = looks.iter().map(|(_, s)| s.as_str()).collect();
+            Finding::new(
+                SPOT_DEFINITION,
+                format!(
+                    "spot ink {} is defined {} different ways in {}: {}",
+                    names.join(" + "),
+                    looks.len(),
+                    label.as_deref().unwrap_or("None"),
+                    shown.join("; ")
+                ),
+            )
+        })
+        .collect()
 }
 
 /// A profile's data colour space: its family and component count, and its name in messages.
@@ -841,6 +973,68 @@ mod tests {
             run(&paged(&[("", "")], "", &[]), rgb, rgb_only),
             [],
             "no CMYK intent, nothing painted"
+        );
+    }
+
+    #[test]
+    fn spot_definitions() {
+        let tint = |c1: &str| format!("<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [{c1}] /N 1 >>");
+        let (a, b) = (tint("0 0.3 1 0"), tint("0 0.6 1 0"));
+        let gray = "<< /FunctionType 2 /Domain [0 1] /C1 [0.5] /N 1 >>";
+        let spaces = [
+            format!("[/Separation /Foil /DeviceCMYK {a}]"),
+            format!("[/Separation /Foil /DeviceCMYK {a}]"),
+            format!("[/Separation /Foil /DeviceCMYK {b}]"),
+            format!("[/Separation /Foil [/ICCBased 7 0 R] {b}]"),
+            format!("[/Separation /Gold /Lab {gray}]"),
+            "[/Separation /Gold /Lab << /FunctionType 2 /Domain [0 1] /C1 [0.25] /N 1 >>]".to_string(),
+            format!("[/Separation /Ink [/ICCBased 8 0 R] {gray}]"),
+            "[/Separation /Ink [/ICCBased 8 0 R] << /FunctionType 2 /Domain [0 1] /C1 [0.75] /N 1 >>]".to_string(),
+            format!("[/Separation /Odd [/Foo] {gray}] [/Separation /Odd [/Foo] {a}]"),
+            format!("[/Separation /Bare 5 {gray}] [/Separation /Bare 5 {a}]"),
+            format!("[/DeviceN [/A /B] /DeviceRGB {gray}] [/DeviceN [/A /B] /DeviceRGB {a}]"),
+            format!("[/Separation /All /DeviceCMYK {a}] [/Separation /All /DeviceCMYK {b}] [/Separation /None /DeviceGray {gray}]"),
+            "[/Separation /Broken /DeviceCMYK << /FunctionType 9 >>] [/Separation 5 /DeviceCMYK 6] [/DeviceN 5 /DeviceCMYK 6] [/Separation]".to_owned(),
+            format!("[/Separation /Bad [/ICCBased 5] {gray}] [/Separation /Ugly [/ICCBased << /N /X >>] {gray}] [/Indexed /DeviceRGB 1 <00>]"),
+            format!("[/Separation /Q [/ICCBased << >>] {gray}] [/Separation /Q [/ICCBased << >>] {a}] [/Separation /R [/ICCBased << /N 3.0 >>] {gray}]"),
+            format!("[/DeviceN 99 0 R /DeviceCMYK {gray}] [/Separation 99 0 R /DeviceCMYK {gray}] [/Separation /#FF /DeviceCMYK {gray}]"),
+            format!("[/Separation /Lb /#FE {gray}] [/Separation /Lc [/ICCBased] {gray}] [/DeviceN [/#FF] /DeviceCMYK {gray}]"),
+            format!("[/Separation /Ld 99 0 R {gray}] [/Separation /Le [5] {gray}] [/Separation /Lf [/ICCBased 99 0 R] {gray}]"),
+            format!("[/Separation /Two [/ICCBased << /N 2.0 >>] {gray}] [/Separation /Two [/ICCBased << /N 2.0 >>] {a}]"),
+            format!("[/Separation /Empty [] {gray}] [/Separation /Empty [] {a}]"),
+            "[/DeviceN [/A /B] /DeviceGray 9 0 R] [/DeviceN [/A /B] /DeviceGray 10 0 R]".to_owned(),
+        ];
+        let more = [
+            (7, b"<< /N 4 /Length 3 >>\nstream\nabc\nendstream".to_vec()),
+            (8, profile(*b"Lab ", "Lab", "/N 3")),
+            (
+                9,
+                b"<< /FunctionType 4 /Domain [0 1 0 1] /Range [0 1] /Length 7 >>\nstream\n{ pop }\nendstream".to_vec(),
+            ),
+            (
+                10,
+                b"<< /FunctionType 4 /Domain [0 1 0 1] /Range [0 1] /Length 15 >>\nstream\n{ pop pop 0.5 }\nendstream"
+                    .to_vec(),
+            ),
+        ];
+        let doc = paged(&[("", "")], &format!("/S [{}]", spaces.join(" ")), &more);
+        let found: Vec<String> = run(&doc, Params::default(), spot_definition)
+            .into_iter()
+            .map(|f| f.2)
+            .collect();
+        assert_eq!(
+            found,
+            [
+                "spot ink A + B is defined 2 different ways in DeviceGray: [0.5]; [1.0]",
+                "spot ink Bare is defined 2 different ways in None: [0.0, 0.3, 1.0, 0.0]; [0.5]",
+                "spot ink Empty is defined 2 different ways in None: [0.0, 0.3, 1.0, 0.0]; [0.5]",
+                "spot ink Foil is defined 2 different ways in DeviceCMYK: [0.0, 0.6, 1.0, 0.0]; [0.0, 0.3, 1.0, 0.0]",
+                "spot ink Gold is defined 2 different ways in Lab: [0.25]; [0.5]",
+                "spot ink Ink is defined 2 different ways in ICCBased(3): [0.75]; [0.5]",
+                "spot ink Odd is defined 2 different ways in Foo: [0.0, 0.3, 1.0, 0.0]; [0.5]",
+                "spot ink Q is defined 2 different ways in ICCBased(0): [0.0, 0.3, 1.0, 0.0]; [0.5]",
+                "spot ink Two is defined 2 different ways in ICCBased(2): [0.0, 0.3, 1.0, 0.0]; [0.5]",
+            ]
         );
     }
 }

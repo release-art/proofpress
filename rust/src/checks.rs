@@ -301,6 +301,7 @@ const RUNS: &[(&Check, Run)] = &[
     (f::COLOUR_SPACE, modes::colour_space),
     (f::RGB_ONLY, modes::rgb_only),
     (f::ICC_PROFILE, modes::icc_profile),
+    (f::SPOT_DEFINITION, modes::spot_definition),
     (f::IMAGE_DPI, resolution::image_dpi),
     (f::IMAGE_DPI_MAX, resolution::image_dpi_max),
     (f::IMAGE_STRETCH, resolution::image_stretch),

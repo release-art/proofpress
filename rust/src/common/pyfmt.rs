@@ -33,6 +33,40 @@ pub(crate) fn g(x: f64) -> String {
     trim(&format!("{x:.decimals$}"))
 }
 
+/// `repr(x)` for a Python float: the shortest digits that read back the same, in fixed notation from 1e-4 to 1e16 (with
+/// `.0` when whole), in exponent notation (`1e-05`, `1.5e+16`) beyond.
+pub(crate) fn repr_float(x: f64) -> String {
+    if !x.is_finite() {
+        return if x.is_nan() {
+            "nan".into()
+        } else if x > 0.0 {
+            "inf".into()
+        } else {
+            "-inf".into()
+        };
+    }
+    if x == 0.0 {
+        return if x.is_sign_negative() {
+            "-0.0".into()
+        } else {
+            "0.0".into()
+        };
+    }
+    let scientific = format!("{x:e}");
+    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
+    let exponent: i32 = exponent.parse().unwrap_or(0);
+    if (-4..16).contains(&exponent) {
+        let fixed = format!("{x}");
+        return if fixed.contains('.') {
+            fixed
+        } else {
+            format!("{fixed}.0")
+        };
+    }
+    let sign = if exponent < 0 { '-' } else { '+' };
+    format!("{mantissa}e{sign}{:02}", exponent.abs())
+}
+
 /// `repr(s)` for a Python string: single quotes unless the string holds a single quote and no double quote, with
 /// backslashes, the quote, and control characters escaped (other characters Python counts unprintable are kept).
 pub(crate) fn repr(s: &str) -> String {
@@ -83,6 +117,22 @@ mod tests {
         ];
         for (x, want) in cases {
             assert_eq!(g(x), want, "{x}");
+        }
+        let floats = [
+            (1.0, "1.0"),
+            (0.55, "0.55"),
+            (-0.0, "-0.0"),
+            (0.0, "0.0"),
+            (0.0001, "0.0001"),
+            (0.000_015, "1.5e-05"),
+            (1e16, "1e+16"),
+            (123.25, "123.25"),
+            (f64::NAN, "nan"),
+            (f64::INFINITY, "inf"),
+            (f64::NEG_INFINITY, "-inf"),
+        ];
+        for (x, want) in floats {
+            assert_eq!(repr_float(x), want, "{x}");
         }
         assert_eq!(repr("FOGRA39"), "'FOGRA39'");
         assert_eq!(repr("a'b"), "\"a'b\"");

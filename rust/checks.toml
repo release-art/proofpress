@@ -1660,7 +1660,7 @@ title = "A spot ink has one definition"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "icc-profile"

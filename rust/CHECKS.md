@@ -207,7 +207,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `k-only-text` | Text is 100% black only |  | error | print | implemented |
 | `rich-black` | Small text is not in rich black |  | warning | print | implemented |
 | `spot-ink` | Spot inks are on the allowed list |  | error | print | implemented |
-| `spot-definition` | A spot ink has one definition |  | error | print | todo |
+| `spot-definition` | A spot ink has one definition |  | error | print | implemented |
 | `icc-profile` | Embedded ICC profiles are sound and suit the job |  | error | print | implemented |
 | `blend-space` | Transparency declares its blend space |  | error | print | implemented |
 | `image-dpi` | Images meet the resolution floor |  | error | print | implemented |

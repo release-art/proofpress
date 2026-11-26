@@ -728,3 +728,13 @@ params = { min_stroke_pt = 0.25 }
 levels = ["print"]
 expect = { "safe-area" = "text reaching within 3 mm of the trim", "font-embedded" = "and its font is not embedded" }
 params = { safe_mm = 3.0 }
+
+# Today's spot colour fixtures, verified for print.
+
+[spot-colour]
+levels = ["print"]
+expect = {}
+
+[spot-conflict]
+levels = ["print"]
+expect = { "spot-definition" = "the ink Foil with two different CMYK alternates" }
