@@ -21,3 +21,8 @@ Feature: PDF/X-4 6.4.3.4 and 6.20, spot colours and transparency
       | x4-solidities-clash | x4.spot.solidities-consistent |
       | x4-group-rgb | x4.transparency.group-cs-restricted |
       | x4-blend-mode-unknown | x4.transparency.blend-modes |
+
+  Scenario: Transparency on a page without a group blends in the intent's space and passes
+    Given the fixture "x4-transparency-no-group"
+    When it is verified as PDF/X-4
+    Then it passes

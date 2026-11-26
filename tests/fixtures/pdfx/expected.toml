@@ -528,6 +528,11 @@ expect = { "x4.transparency.group-cs-restricted" = "a page group with /CS /Devic
 levels = ["x4"]
 expect = { "x4.transparency.blend-modes" = "an ExtGState with /BM /Funky (6.20, X4-Q19)" }
 
+# 6.20's positive (x4-test-material §3 item 16): a Multiply fill at half opacity on a page without /Group passes.
+[x4-transparency-no-group]
+levels = ["x4"]
+expect = {}
+
 # PDF/X-4 6.27: JPEG 2000 images. Each adds an image XObject to x4-good.
 
 [x4-jpx-five-channels]

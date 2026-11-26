@@ -675,6 +675,12 @@ def _x4_spot_fixtures() -> dict[str, pikepdf.Pdf]:
         "x4-solidities-clash": _x4_painted(two, {"S": _nchannel(solidity=1.0), "T": _nchannel(solidity=0.5)}),
         "x4-group-rgb": group,
         "x4-blend-mode-unknown": _x4_painted(b"q /GS gs Q", {}, blend),
+        # A positive: transparency with no page /Group blends in the intent's space (6.20).
+        "x4-transparency-no-group": _x4_painted(
+            b"q /GS gs 0 0 0 1 k 0 0 10 10 re f Q",
+            {},
+            pikepdf.Dictionary(Type=name.ExtGState, BM=name.Multiply, ca=0.5),
+        ),
     }
 
 
