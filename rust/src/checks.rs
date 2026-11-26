@@ -5,6 +5,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 mod annots;
 mod boxes;
+mod codecs;
 mod colour;
 mod contents;
 mod contrast;
@@ -285,7 +286,9 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_SPOT_PRINTING_ORDER_CONSISTENT, spots::printing_order),
     (f::X4_SPOT_SOLIDITIES_CONSISTENT, spots::solidities),
     (f::X4_TRANSPARENCY_BLEND_MODES, spots::blend_modes),
+    (f::X4_IMAGE_DCT_VALID, codecs::dct_valid),
     (f::X4_IMAGE_JPX_VALID, jpx::valid),
+    (f::X4_IMAGE_JBIG2_VALID, codecs::jbig2_valid),
     (f::X4_JPX_BASELINE, jpx::baseline),
     (f::X4_JPX_CHANNELS, jpx::channels),
     (f::X4_JPX_ONE_COLOUR_SPACE, jpx::one_colour_space),

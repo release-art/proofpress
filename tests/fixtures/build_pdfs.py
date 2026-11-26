@@ -21,7 +21,7 @@ import zlib
 from collections.abc import Callable
 
 import pikepdf
-from PIL import ImageCms
+from PIL import Image, ImageCms
 
 OUT = pathlib.Path(__file__).parent / "pdfs"
 # The LaTeX samples (samples/NAME.tex, built by samples/build.py) put their PDFs in this same directory.
@@ -726,12 +726,13 @@ def _jpx(depths: list[int], colours: list[int], *, jp2_only: bool = False) -> by
     )
 
 
-def _x4_jpx(data: bytes, *, space: bool = True, rgb_intent: bool = False) -> pikepdf.Pdf:
-    """x4-good with a JPEG 2000 image XObject holding ``data`` in its resources, with a DeviceCMYK /ColorSpace unless
-    ``space`` is false; with ``rgb_intent`` the output profile's header says RGB."""
+def _x4_jpx(data: bytes, *, space: bool = True, rgb_intent: bool = False, codec: str = "JPXDecode") -> pikepdf.Pdf:
+    """x4-good with an image XObject under the filter ``codec`` (JPEG 2000 by default) holding ``data`` in its
+    resources, with a DeviceCMYK /ColorSpace unless ``space`` is false; with ``rgb_intent`` the output profile's header
+    says RGB."""
     pdf = _x4_intent("", header=(16, b"RGB ")) if rgb_intent else _x4_good()
     image = pdf.make_stream(data, Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image, Width=1, Height=1)
-    image["/Filter"] = pikepdf.Name.JPXDecode
+    image["/Filter"] = pikepdf.Name(f"/{codec}")
     if space:
         image["/ColorSpace"] = pikepdf.Name.DeviceCMYK
     _resource(pdf, "XObject", pdf.make_indirect(image))
@@ -750,7 +751,19 @@ def _x4_jpx_fixtures() -> dict[str, pikepdf.Pdf]:
         "x4-jpx-plain-jp2": _x4_jpx(_jpx([8] * 4, [12], jp2_only=True)),
         "x4-jpx-bare-codestream": _x4_jpx(_j2c([8] * 4)),
         "x4-jpx-not-jpeg2000": _x4_jpx(b"not JPEG 2000 data"),
+        # 6.8: a JPEG cut off inside its scan; JBIG2 whose one segment says it holds more data than there is.
+        "x4-dct-truncated": _x4_jpx(_jpeg_cmyk()[:-40], codec="DCTDecode"),
+        "x4-jbig2-truncated": _x4_jpx(
+            b"\x00\x00\x00\x01\x30\x00\x01\x00\x00\x00\x13" + bytes(5), space=False, codec="JBIG2Decode"
+        ),
     }
+
+
+def _jpeg_cmyk() -> bytes:
+    """An 8 by 8 CMYK JPEG, as Pillow writes it."""
+    out = io.BytesIO()
+    Image.new("CMYK", (8, 8), (0, 0, 0, 255)).save(out, "JPEG")
+    return out.getvalue()
 
 
 def _print_fixtures() -> dict[str, pikepdf.Pdf]:

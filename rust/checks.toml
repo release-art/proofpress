@@ -413,7 +413,7 @@ title = "JPEG data is valid"
 clauses = ["iso-15930-7:6.8"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.image.jpx-valid"
@@ -429,7 +429,7 @@ title = "JBIG2 data is valid"
 clauses = ["iso-15930-7:6.8"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.trapped.present"

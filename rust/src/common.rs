@@ -6,6 +6,8 @@ pub(crate) mod family;
 pub(crate) mod font;
 pub(crate) mod function;
 pub(crate) mod icc;
+pub(crate) mod jbig2;
+pub(crate) mod jpeg;
 pub(crate) mod jpx;
 pub(crate) mod lab;
 pub(crate) mod pyfmt;

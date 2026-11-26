@@ -571,6 +571,14 @@ expect = { "x4.jpx.baseline" = "a bare codestream, not the JPX file format (6.27
 levels = ["x4"]
 expect = { "x4.image.jpx-valid" = "JPXDecode data that is not JPEG 2000 (6.8)" }
 
+[x4-dct-truncated]
+levels = ["x4"]
+expect = { "x4.image.dct-valid" = "a JPEG cut off inside its scan (6.8)" }
+
+[x4-jbig2-truncated]
+levels = ["x4"]
+expect = { "x4.image.jbig2-valid" = "a JBIG2 page information segment shorter than its data length (6.8)" }
+
 # PDF/X-4 6.1.2: pre-separated pages (X4-Q2).
 
 [x4-pre-separated]

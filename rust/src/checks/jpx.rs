@@ -9,10 +9,10 @@
 //! whose header cannot be read is left to `x4.image.jpx-valid`.
 
 use super::Settings;
+use super::codecs::coded;
 use super::intent;
-use super::walk::dicts;
 use crate::common::jpx::{self, Jpx};
-use crate::document::{Document, Value};
+use crate::document::Document;
 use crate::findings::{
     Check, Finding, Location, X4_IMAGE_JPX_VALID, X4_JPX_BASELINE, X4_JPX_BIT_DEPTH, X4_JPX_CHANNELS,
     X4_JPX_CMYK_AS_DEVICE, X4_JPX_NO_CIEJAB, X4_JPX_ONE_COLOUR_SPACE, X4_JPX_UNIFORM_DEPTH,
@@ -30,22 +30,10 @@ const BASELINE_SPACES: [u32; 9] = [CMYK, 14, 16, 17, 18, CIEJAB, 20, 21, 24];
 /// Every JPEG 2000 image: its object number, whether its dictionary gives a `/ColorSpace`, and its header, `None` when
 /// the data is not JPEG 2000. Images whose data cannot be unfiltered up to `JPXDecode` are left to the filter checks.
 fn images(doc: &Document) -> Vec<(u32, bool, Option<Jpx>)> {
-    let mut out = Vec::new();
-    for node in dicts(doc) {
-        let filters = node.dict.get(b"Filter").and_then(|f| doc.resolve(f));
-        let jpx_filter = match filters.map(|f| &f.value) {
-            Some(Value::Name(n)) => n == b"JPXDecode",
-            Some(Value::Array(items)) => items.iter().any(|i| i.name() == Some(b"JPXDecode")),
-            _ => false,
-        };
-        if !(node.stream && jpx_filter && node.name(b"Subtype") == Some(b"Image")) {
-            continue;
-        }
-        if let Some(data) = doc.image_data(node.num) {
-            out.push((node.num, node.dict.get(b"ColorSpace").is_some(), jpx::read(&data)));
-        }
-    }
-    out
+    coded(doc, b"JPXDecode")
+        .into_iter()
+        .map(|(num, dict, _, data)| (num, dict.get(b"ColorSpace").is_some(), jpx::read(&data)))
+        .collect()
 }
 
 fn each(doc: &Document, check: &'static Check, judge: &dyn Fn(&Jpx, bool) -> Option<String>) -> Vec<Finding> {
