@@ -5,7 +5,7 @@ Feature: The inks a page puts down
   Scenario: Solid black text under overprint is the normal case
     Given the fixture "black-text"
     When it is verified for print
-    Then it passes
+    Then no check fails but "font-embedded"
 
   Scenario: Cyan text under overprint
     Given the fixture "cyan-text"

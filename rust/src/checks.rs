@@ -18,6 +18,7 @@ mod page;
 mod painted;
 mod resolution;
 mod spots;
+mod text;
 mod walk;
 mod x4;
 
@@ -79,6 +80,12 @@ pub struct Params {
     pub max_dpi: Option<f64>,
     /// `image-stretch`: how much more one axis may be scaled than the other, in percent.
     pub max_stretch_pct: Option<f64>,
+    /// `text-size`: the smallest text allowed, in points.
+    pub min_text_pt: Option<f64>,
+    /// `hairline`: the thinnest stroke allowed, in points.
+    pub min_stroke_pt: Option<f64>,
+    /// `safe-area`: how far inside the trim text must stay, in millimetres.
+    pub safe_mm: Option<f64>,
 }
 
 /// The colour model a job is held to.
@@ -109,6 +116,9 @@ impl Default for Params {
             warn_dpi: None,
             max_dpi: None,
             max_stretch_pct: None,
+            min_text_pt: None,
+            min_stroke_pt: None,
+            safe_mm: None,
         }
     }
 }
@@ -294,6 +304,12 @@ const RUNS: &[(&Check, Run)] = &[
     (f::IMAGE_DPI, resolution::image_dpi),
     (f::IMAGE_DPI_MAX, resolution::image_dpi_max),
     (f::IMAGE_STRETCH, resolution::image_stretch),
+    (f::MISSING_GLYPH, text::missing_glyph),
+    (f::FONT_EMBEDDED, text::font_embedded),
+    (f::FONT_TYPE3, text::font_type3),
+    (f::TEXT_SIZE, text::text_size),
+    (f::HAIRLINE, text::hairline),
+    (f::SAFE_AREA, text::safe_area),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5

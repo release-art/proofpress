@@ -38,6 +38,12 @@ PORTED = frozenset(
         "image-dpi",
         "image-dpi-max",
         "image-stretch",
+        "missing-glyph",
+        "font-embedded",
+        "font-type3",
+        "text-size",
+        "hairline",
+        "safe-area",
     }
 )
 _SEVERITY = {"error": Severity.ERROR, "warning": Severity.WARN}
@@ -64,7 +70,9 @@ def check(path: pathlib.Path, profile: Profile) -> list[Finding]:
     """The findings of the ported checks *profile* turns on."""
     cmyk, rgb = profile.colour_mode is ColourMode.CMYK, profile.colour_mode is ColourMode.RGB
     switches = (
-        (True, ("outside-media", "xobject-missing", "page-count")),
+        (True, ("outside-media", "xobject-missing", "page-count", "text-size", "hairline", "safe-area")),
+        (profile.missing_glyphs, ("missing-glyph",)),
+        (profile.fonts, ("font-embedded", "font-type3")),
         (profile.colour and cmyk, ("overprint", "white-overprint", "rich-black", "colour-space")),
         (profile.colour and rgb, ("rgb-only",)),
         (profile.colour, ("blend-space", "icc-profile", "image-dpi", "image-dpi-max", "image-stretch")),
@@ -95,4 +103,7 @@ def params(profile: Profile) -> dict[str, object]:
         "warn_dpi": profile.warn_dpi,
         "max_dpi": profile.max_dpi,
         "max_stretch_pct": profile.max_stretch_pct,
+        "min_text_pt": profile.min_text_pt,
+        "min_stroke_pt": profile.min_stroke_pt,
+        "safe_mm": profile.safe_mm,
     }

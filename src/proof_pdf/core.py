@@ -17,7 +17,7 @@ import pathlib
 
 import pikepdf
 
-from ._internal import colour, contrast, pdfx, ported, text, verapdf
+from ._internal import colour, contrast, pdfx, ported, verapdf
 from .models import ColourMode, FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)
@@ -133,16 +133,6 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
 
 def _text_checks(pdf: pikepdf.Pdf, profile: Profile) -> list[Finding]:
     findings: list[Finding] = []
-    if profile.missing_glyphs:
-        findings += text.check_missing_glyphs(pdf)
-    if profile.fonts:
-        findings += text.check_fonts(pdf)
-    if profile.min_text_pt is not None:
-        findings += text.check_min_text_size(pdf, profile.min_text_pt)
-    if profile.min_stroke_pt is not None:
-        findings += text.check_min_stroke(pdf, profile.min_stroke_pt)
-    if profile.safe_mm is not None:
-        findings += text.check_safe_area(pdf, profile.safe_mm)
     if profile.min_delta_l is not None:
         findings += contrast.check_contrast(pdf, profile.min_delta_l, profile.proof_profile)
     return findings

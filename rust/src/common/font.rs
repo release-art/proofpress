@@ -7,6 +7,8 @@
 //! and one that has no descriptor to the usual ascent and descent, so a run in an unembedded standard font is placed
 //! approximately. A malformed font dictionary gives the same fallback font as a missing one.
 
+use std::collections::BTreeSet;
+
 use crate::document::{Dict, Document, Object, Value};
 
 /// An advance width, in thousandths of the font size, for a font that gives none.
@@ -25,6 +27,19 @@ pub(crate) struct Font {
     /// In thousandths of the font size.
     pub(crate) ascent: f64,
     pub(crate) descent: f64,
+    /// The `/BaseFont` without a subset prefix (`ABCDEF+`); `?` without one.
+    pub(crate) name: String,
+    /// The `/Subtype` without its slash: `Type1`, `TrueType`, `Type3`, `Type0` and so on.
+    pub(crate) subtype: String,
+    /// Whether the font program is in the file: a Type 3 font, or a descriptor with `/FontFile`, `/FontFile2` or
+    /// `/FontFile3` (a composite font's descendant's).
+    pub(crate) embedded: bool,
+    /// The codes a simple font's `/Differences` maps to `.notdef`.
+    notdef: BTreeSet<i64>,
+    /// For a composite font, whether its encoding is `Identity-H` or `Identity-V`, so that code 0 is CID 0, `.notdef`.
+    identity: Option<bool>,
+    /// Whether it was read from a font dictionary, rather than standing in for a missing or malformed one.
+    pub(crate) known: bool,
 }
 
 impl Default for Font {
@@ -36,6 +51,12 @@ impl Default for Font {
             widths: Vec::new(),
             ascent: DEFAULT_ASCENT,
             descent: DEFAULT_DESCENT,
+            name: "?".to_owned(),
+            subtype: "unknown".to_owned(),
+            embedded: false,
+            notdef: BTreeSet::new(),
+            identity: None,
+            known: false,
         }
     }
 }
@@ -48,6 +69,20 @@ impl Font {
             .rev()
             .find(|(first, last, _)| (*first..=*last).contains(&u64::from(code)))
             .map_or(self.default_width, |(_, _, w)| *w)
+    }
+
+    /// Whether `code` shows `.notdef`: code 0 in a composite font with an identity encoding, or a code a simple font's
+    /// `/Differences` maps there.
+    pub(crate) fn is_notdef(&self, code: u32) -> bool {
+        match self.identity {
+            Some(identity) => identity && code == 0,
+            None => self.notdef.contains(&i64::from(code)),
+        }
+    }
+
+    /// Whether the font declares any glyph widths, so a run's extent is measured rather than estimated.
+    pub(crate) fn measured(&self) -> bool {
+        self.widths.iter().any(|(first, last, _)| first <= last)
     }
 
     /// The character codes in a shown string; a composite font's odd last byte is padded with a zero.
@@ -102,6 +137,37 @@ fn number_or(doc: &Document, dict: Option<&Dict>, key: &[u8], default: f64) -> O
     }
 }
 
+/// Whether a font descriptor holds a font program: `/FontFile`, `/FontFile2` or `/FontFile3`, a null entry or one
+/// referring to nothing being as good as absent (7.3.7).
+fn embeds(doc: &Document, descriptor: &Dict) -> bool {
+    [b"FontFile".as_slice(), b"FontFile2", b"FontFile3"].iter().any(|key| {
+        descriptor
+            .get(key)
+            .and_then(|v| doc.resolve(v))
+            .is_some_and(|v| v.value != Value::Null)
+    })
+}
+
+/// A font's `/BaseFont` without a subset prefix (six capitals and a plus sign, 9.6.4); `?` without one.
+fn base_name(doc: &Document, font: &Dict) -> String {
+    let Some(name) = font
+        .get(b"BaseFont")
+        .and_then(|n| doc.resolve(n))
+        .and_then(Object::name)
+    else {
+        return "?".to_owned();
+    };
+    let prefixed = name
+        .get(..7)
+        .is_some_and(|p| p.iter().take(6).all(u8::is_ascii_uppercase) && p.get(6) == Some(&b'+'));
+    String::from_utf8_lossy(if prefixed {
+        name.get(7..).unwrap_or_default()
+    } else {
+        name
+    })
+    .into_owned()
+}
+
 fn read(doc: &Document, font: &Dict) -> Option<Font> {
     let composite = font.get(b"Subtype").and_then(Object::name) == Some(b"Type0");
     let source = if composite {
@@ -116,13 +182,29 @@ fn read(doc: &Document, font: &Dict) -> Option<Font> {
     };
     let ascent = number_or(doc, descriptor, b"Ascent", DEFAULT_ASCENT)?;
     let descent = number_or(doc, descriptor, b"Descent", DEFAULT_DESCENT)?;
+    let program = descriptor.is_some_and(|d| embeds(doc, d));
+    let name = base_name(doc, font);
+    let subtype = font
+        .get(b"Subtype")
+        .and_then(Object::name)
+        .map_or_else(String::new, |s| String::from_utf8_lossy(s).into_owned());
     if composite {
+        let encoding = font
+            .get(b"Encoding")
+            .and_then(|e| doc.resolve(e))
+            .and_then(Object::name);
         return Some(Font {
             code_bytes: 2,
             default_width: number_or(doc, Some(source), b"DW", 1000.0)?,
             widths: cid_widths(doc, source.get(b"W"))?,
             ascent,
             descent,
+            name,
+            subtype,
+            embedded: program,
+            notdef: BTreeSet::new(),
+            identity: Some(matches!(encoding, Some(b"Identity-H" | b"Identity-V"))),
+            known: true,
         });
     }
     let scale = match font.get(b"FontMatrix") {
@@ -155,7 +237,45 @@ fn read(doc: &Document, font: &Dict) -> Option<Font> {
         widths,
         ascent,
         descent,
+        embedded: subtype == "Type3" || program,
+        name,
+        subtype,
+        notdef: notdef_codes(doc, font.get(b"Encoding"))?,
+        identity: None,
+        known: true,
     })
+}
+
+/// The codes an encoding dictionary's `/Differences` (9.6.5.1) maps to `.notdef`; `None` when an entry is neither a
+/// code nor a name.
+fn notdef_codes(doc: &Document, encoding: Option<&Object>) -> Option<BTreeSet<i64>> {
+    let mut out = BTreeSet::new();
+    let Some(differences) = encoding
+        .and_then(|e| doc.resolve(e))
+        .and_then(Object::dict)
+        .and_then(|e| e.get(b"Differences"))
+        .and_then(|d| doc.resolve(d))
+        .and_then(Object::array)
+    else {
+        return Some(out);
+    };
+    let mut code = 0i64;
+    for item in differences {
+        let item = doc.resolve(item)?;
+        match &item.value {
+            Value::Name(name) => {
+                if name == b".notdef" {
+                    out.insert(code);
+                }
+                code = code.saturating_add(1);
+            }
+            #[expect(clippy::cast_possible_truncation, reason = "a code is truncated to a whole number")]
+            Value::Real(r) => code = *r as i64,
+            Value::Integer(n) => code = *n,
+            _ => return None,
+        }
+    }
+    Some(out)
 }
 
 /// A CID font's `/W` (9.7.4.3): `c [w1 w2 ...]` and `c_first c_last w` entries; `None` when it is malformed.
@@ -292,5 +412,76 @@ mod tests {
         ] {
             assert_eq!(font(dict, &[]), unknown, "{dict}");
         }
+    }
+
+    #[test]
+    fn names_embedding_and_notdef() {
+        assert!(
+            !font(
+                "<< /Subtype /Type1 /FontDescriptor << /FontFile3 null /FontFile 99 0 R >> >>",
+                &[]
+            )
+            .embedded,
+            "null and dangling"
+        );
+        let simple = font(
+            "<< /Subtype /TrueType /BaseFont /ABCDEF+Nunito /FontDescriptor << /FontFile2 5 >> \
+             /Encoding << /Differences [32 /.notdef /a 40.0 /.notdef] >> /FirstChar 3 /Widths [] >>",
+            &[],
+        );
+        assert_eq!(
+            (
+                simple.name.as_str(),
+                simple.subtype.as_str(),
+                simple.embedded,
+                simple.known
+            ),
+            ("Nunito", "TrueType", true, true)
+        );
+        assert_eq!(
+            [32, 33, 40, 41].map(|c| simple.is_notdef(c)),
+            [true, false, true, false]
+        );
+        assert!(!simple.measured(), "an empty /Widths");
+        let plain = font(
+            "<< /Subtype /Type1 /BaseFont /Abcdef+Not /Encoding /WinAnsiEncoding /Widths [500] >>",
+            &[],
+        );
+        assert_eq!(
+            (plain.name.as_str(), plain.embedded, plain.measured()),
+            ("Abcdef+Not", false, true)
+        );
+        let type3 = font("<< /Subtype /Type3 /BaseFont 5 >>", &[]);
+        assert_eq!((type3.name.as_str(), type3.embedded), ("?", true));
+        let unnamed = font("<< >>", &[]);
+        assert_eq!((unnamed.subtype.as_str(), unnamed.name.as_str()), ("", "?"));
+        let identity = font(
+            "<< /Subtype /Type0 /BaseFont /Zed /Encoding /Identity-V /DescendantFonts [<< /FontDescriptor << /FontFile3 5 >> >>] >>",
+            &[],
+        );
+        assert_eq!(
+            (identity.is_notdef(0), identity.is_notdef(1), identity.embedded),
+            (true, false, true)
+        );
+        let cmap = font(
+            "<< /Subtype /Type0 /Encoding /UniJIS-UCS2-H /DescendantFonts [<< /W [5 1 9] >>] >>",
+            &[],
+        );
+        assert_eq!(
+            (cmap.is_notdef(0), cmap.measured()),
+            (false, false),
+            "a range with its ends reversed declares nothing"
+        );
+        assert_eq!(
+            font("<< /Encoding << /Differences [(x)] >> >>", &[]),
+            Font::default(),
+            "a malformed /Differences"
+        );
+        assert_eq!(
+            font("<< /Encoding << /Differences [99 0 R] >> >>", &[]),
+            Font::default(),
+            "a dangling entry"
+        );
+        assert!(!Font::default().known);
     }
 }

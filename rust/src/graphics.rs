@@ -116,6 +116,13 @@ pub(crate) struct Ink {
     pub(crate) matrix: Option<Matrix>,
     /// An image's `/Width` and `/Height` in samples, when both are positive numbers.
     pub(crate) pixels: Option<(i64, i64)>,
+    /// A text run's font, and how many of its codes it shows and how many of them show `.notdef`.
+    pub(crate) font: Option<Rc<Font>>,
+    pub(crate) glyphs: usize,
+    pub(crate) notdef: usize,
+    /// A stroked path's line width on the page: the line width by the CTM's scale (the square root of its
+    /// determinant).
+    pub(crate) stroke_width: Option<f64>,
 }
 
 /// What kind of thing a paint is.
@@ -206,6 +213,7 @@ struct State {
     rise: f64,
     leading: f64,
     text_mode: i64,
+    line_width: f64,
 }
 
 impl Default for State {
@@ -235,6 +243,7 @@ impl Default for State {
             rise: 0.0,
             leading: 0.0,
             text_mode: 0,
+            line_width: 1.0,
         }
     }
 }
@@ -500,7 +509,15 @@ fn text_state(op: &Op, state: &mut State, cursor: &mut Cursor) -> bool {
 }
 
 /// Show a text run (9.4.3): where it lands on the page, with the text matrix moved past it.
-fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> (Option<Rect>, f64) {
+/// A text run shown: where it lands, its size on the page, how many codes it shows and how many show `.notdef`.
+struct Run {
+    bbox: Option<Rect>,
+    size: f64,
+    glyphs: usize,
+    notdef: usize,
+}
+
+fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
     let name = op.name.as_slice();
     if name == b"\"" {
         state.word_spacing = number(op.operands.first());
@@ -516,9 +533,12 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> (Option<Rect>, f64) 
     };
     let (font, size, scale) = (&state.font, state.size, state.scale);
     let mut advance = 0.0;
+    let (mut glyphs, mut notdef) = (0, 0);
     for item in items {
         if let Value::String(bytes, _) = &item.value {
             for code in font.codes(bytes) {
+                glyphs += 1;
+                notdef += usize::from(font.is_notdef(code));
                 advance += (font.width(code) / 1000.0 * size + state.char_spacing) * scale;
                 if font.code_bytes == 1 && code == 32 {
                     advance += state.word_spacing * scale;
@@ -537,7 +557,12 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> (Option<Rect>, f64) 
     );
     let vertical = trm.map_or(1.0, |m| m[2].hypot(m[3]));
     cursor.text = mul(&translation(advance, 0.0), &cursor.text);
-    (bbox, size * vertical)
+    Run {
+        bbox,
+        size: size * vertical,
+        glyphs,
+        notdef,
+    }
 }
 
 /// What the print checks read from a paint made in `state`.
@@ -552,6 +577,10 @@ fn ink(state: &State, size: f64, space: Option<Family>) -> Ink {
         name: Vec::new(),
         matrix: None,
         pixels: None,
+        font: None,
+        glyphs: 0,
+        notdef: 0,
+        stroke_width: None,
     }
 }
 
@@ -859,6 +888,7 @@ impl Walker<'_> {
                 },
                 b"cm" => state.ctm = state.ctm.map(|ctm| mul(&matrix(op.operands.iter().map(real)), &ctm)),
                 b"Tf" => self.font(op, resources, &mut state),
+                b"w" => state.line_width = number(op.operands.first()),
                 b"f" | b"F" | b"f*" | b"S" | b"s" | b"B" | b"B*" | b"b" | b"b*" => {
                     let roles: &[Role] = match op.name.as_slice() {
                         b"f" | b"F" | b"f*" => &[Role::Fill],
@@ -870,23 +900,34 @@ impl Walker<'_> {
                         filled: roles.contains(&Role::Fill),
                         stroked: roles.contains(&Role::Stroke),
                     };
-                    let painted = ink(&state, 0.0, None);
+                    let scale = state
+                        .ctm
+                        .map_or(1.0, |[sx, ry, rx, sy, _, _]| (sx * sy - ry * rx).abs().sqrt());
+                    let painted = Ink {
+                        stroke_width: roles.contains(&Role::Stroke).then_some(state.line_width * scale),
+                        ..ink(&state, 0.0, None)
+                    };
                     self.paint(resources, kind, roles, &state, frames, page, bbox, painted);
                     cursor.end(&mut state, bbox);
                 }
                 b"n" => cursor.end(&mut state, None),
                 b"W" | b"W*" => cursor.clip = true,
                 b"Tj" | b"TJ" | b"'" | b"\"" => {
-                    let (bbox, size) = show(op, &mut state, &mut cursor);
+                    let run = show(op, &mut state, &mut cursor);
                     let roles: &[Role] = match state.text_mode {
                         0 | 4 => &[Role::Fill],
                         1 | 5 => &[Role::Stroke],
                         2 | 6 => &[Role::Fill, Role::Stroke],
                         _ => &[],
                     };
-                    let painted = ink(&state, size, None);
+                    let painted = Ink {
+                        font: Some(Rc::clone(&state.font)),
+                        glyphs: run.glyphs,
+                        notdef: run.notdef,
+                        ..ink(&state, run.size, None)
+                    };
                     let kind = Kind::Text(state.text_mode);
-                    self.paint(resources, kind, roles, &state, frames, page, bbox, painted);
+                    self.paint(resources, kind, roles, &state, frames, page, run.bbox, painted);
                 }
                 b"sh" => {
                     let shading = last
@@ -1211,6 +1252,9 @@ impl Walker<'_> {
             .and_then(Object::integer)
         {
             state.opm = mode;
+        }
+        if let Some(width) = gs.get(b"LW").and_then(|w| self.doc.resolve(w)) {
+            state.line_width = real(width).unwrap_or(0.0);
         }
         let doc = self.doc;
         let get = |key: &[u8]| gs.get(key).and_then(|v| doc.resolve(v));

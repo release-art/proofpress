@@ -213,13 +213,13 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `image-dpi` | Images meet the resolution floor |  | error | print | implemented |
 | `image-dpi-max` | Images do not exceed the resolution ceiling |  | warning | print | implemented |
 | `image-stretch` | Images are not stretched unevenly |  | warning | print | implemented |
-| `text-size` | Text meets the size floor |  | error | print | todo |
-| `hairline` | Strokes meet the width floor |  | error | print | todo |
+| `text-size` | Text meets the size floor |  | error | print | implemented |
+| `hairline` | Strokes meet the width floor |  | error | print | implemented |
 | `contrast` | Text contrasts with its background |  | error | print | todo |
-| `safe-area` | Text stays inside the safe area |  | error | print | todo |
-| `missing-glyph` | Text shows no missing glyphs |  | error | print | todo |
-| `font-embedded` | Fonts are embedded |  | error | print | todo |
-| `font-type3` | Type 3 fonts are reported |  | error | print | todo |
+| `safe-area` | Text stays inside the safe area |  | error | print | implemented |
+| `missing-glyph` | Text shows no missing glyphs |  | error | print | implemented |
+| `font-embedded` | Fonts are embedded |  | error | print | implemented |
+| `font-type3` | Type 3 fonts are reported |  | warning | print | implemented |
 | `geometry` | Pages are the expected trim size |  | error | print | implemented |
 | `bleed` | Pages carry the expected bleed |  | error | print | implemented |
 | `centring` | The trim is centred in the bleed |  | error | print | implemented |

@@ -582,19 +582,19 @@ expect = { "xobject-missing" = "the page paints /Nothing, which its resources do
 
 [black-text]
 levels = ["print"]
-expect = {}
+expect = { "font-embedded" = "its text font, Helvetica, is not embedded" }
 
 [cyan-text]
 levels = ["print"]
-expect = { "overprint" = "cyan text under overprint (advisory)", "k-only-text" = "the text is C100 (k-only-text is opt-in; the core reports it and the profile decides)" }
+expect = { "overprint" = "cyan text under overprint (advisory)", "k-only-text" = "the text is C100 (k-only-text is opt-in; the core reports it and the profile decides)", "font-embedded" = "and its text font, Helvetica, is not embedded" }
 
 [white-overprint]
 levels = ["print"]
-expect = { "white-overprint" = "white text set to overprint", "overprint" = "and so overprint on something other than solid black text (advisory)" }
+expect = { "white-overprint" = "white text set to overprint", "overprint" = "and so overprint on something other than solid black text (advisory)", "font-embedded" = "and its text font, Helvetica, is not embedded" }
 
 [rich-black-text]
 levels = ["print"]
-expect = { "rich-black" = "12 pt text in C60 M50 Y40 K90, at the default 12 pt limit (advisory)", "k-only-text" = "and so not K only" }
+expect = { "rich-black" = "12 pt text in C60 M50 Y40 K90, at the default 12 pt limit (advisory)", "k-only-text" = "and so not K only", "font-embedded" = "and its text font, Helvetica, is not embedded" }
 
 # Today's page-geometry fixtures, verified for print with the parameters a profile would give.
 
@@ -698,3 +698,33 @@ params = { max_stretch_pct = 5.0 }
 levels = ["print"]
 expect = { "image-dpi-max" = "an image placed at 1016 dpi, above a 600 dpi ceiling (warning)" }
 params = { max_dpi = 600.0 }
+
+# Today's text fixtures, verified for print with the profile's text limits.
+
+[embedded-text]
+levels = ["print"]
+expect = {}
+params = { min_text_pt = 6.0, min_stroke_pt = 0.25, safe_mm = 3.0 }
+
+[notdef-text]
+levels = ["print"]
+expect = { "missing-glyph" = "code 0 in an Identity-H font, shown as .notdef", "font-embedded" = "and the font is not embedded" }
+
+[type3-text]
+levels = ["print"]
+expect = { "font-type3" = "text in a Type 3 font (warning)" }
+
+[small-text]
+levels = ["print"]
+expect = { "text-size" = "text below the 6 pt floor", "font-embedded" = "and its font is not embedded" }
+params = { min_text_pt = 6.0 }
+
+[hairline]
+levels = ["print"]
+expect = { "hairline" = "a stroke below the 0.25 pt floor" }
+params = { min_stroke_pt = 0.25 }
+
+[edge-text]
+levels = ["print"]
+expect = { "safe-area" = "text reaching within 3 mm of the trim", "font-embedded" = "and its font is not embedded" }
+params = { safe_mm = 3.0 }

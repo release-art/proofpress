@@ -1708,7 +1708,7 @@ title = "Text meets the size floor"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "hairline"
@@ -1716,7 +1716,7 @@ title = "Strokes meet the width floor"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "contrast"
@@ -1732,7 +1732,7 @@ title = "Text stays inside the safe area"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "missing-glyph"
@@ -1740,7 +1740,7 @@ title = "Text shows no missing glyphs"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "font-embedded"
@@ -1748,15 +1748,15 @@ title = "Fonts are embedded"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "font-type3"
 title = "Type 3 fonts are reported"
 clauses = []
-severity = "error"
+severity = "warning"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "geometry"

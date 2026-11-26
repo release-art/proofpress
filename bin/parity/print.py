@@ -26,7 +26,7 @@ from proof_pdf._internal import _core
 from proof_pdf.models import Finding, Severity
 
 # The parameters both sides run with, as the core takes them (ported.params gives them for a profile).
-PARAMS: dict[str, object] = {"min_dpi": 300.0, "warn_dpi": 450.0, "max_dpi": 1200.0, "max_stretch_pct": 5.0}
+PARAMS: dict[str, object] = {"min_text_pt": 6.0, "min_stroke_pt": 0.25, "safe_mm": 3.0}
 RGB_PARAMS: dict[str, object] = {**PARAMS, "colour_mode": "rgb"}
 
 # Each check being ported, by id, with the Python it replaces, run with PARAMS. A check leaves when its Python is
