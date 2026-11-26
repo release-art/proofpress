@@ -4,6 +4,7 @@
 //! A panic outside any check exits 70 (`EX_SOFTWARE`); each check's own panics are findings.
 
 mod args;
+mod config;
 mod output;
 mod run;
 
@@ -50,14 +51,38 @@ pub fn main(args: impl IntoIterator<Item = OsString>, out: &mut dyn Write, err: 
             return USAGE;
         }
     };
-    let Command::Verify(options) = cli.command;
-    match verify(&options, out, colour) {
+    let Command::Verify(mut options) = cli.command;
+    let configured = configure(&mut options, cli.config.as_deref(), cli.profile.as_deref());
+    match configured.and_then(|shown| match shown {
+        Some(table) => {
+            let _ = write!(out, "{table}");
+            Ok(output::PASS)
+        }
+        None => verify(&options, out, colour),
+    }) {
         Ok(code) => code,
         Err(Usage(message)) => {
             let _ = writeln!(err, "error: {message}");
             USAGE
         }
     }
+}
+
+/// Fill `o` from the config file, if there is one; with `--show-profile`, the merged settings to print instead.
+fn configure(o: &mut Verify, path: Option<&std::path::Path>, profile: Option<&str>) -> Result<Option<String>, Usage> {
+    let here = std::env::current_dir().unwrap_or_default();
+    let Some(path) = path.map(std::path::Path::to_owned).or_else(|| config::find(&here)) else {
+        return match profile {
+            Some(_) => Err(Usage("--profile needs a config file, and none was found".to_owned())),
+            None => Ok(o.output.show_profile.then(String::new)),
+        };
+    };
+    let table = config::load(&path, profile)?;
+    let base = path.parent().unwrap_or(&here);
+    config::apply(o, &table, base, &path.display().to_string())?;
+    Ok(o.output
+        .show_profile
+        .then(|| toml::to_string(&table).unwrap_or_default()))
 }
 
 fn verify(o: &Verify, out: &mut dyn Write, colour: bool) -> Result<i32, Usage> {
@@ -293,6 +318,40 @@ mod tests {
         assert_eq!(records[1]["ok"], true);
         let (_, out, _) = cli(&["verify", "no-such.pdf", "--json"]);
         assert!(out.contains("\"unreadable\": \"cannot read the file"), "{out}");
+    }
+
+    #[test]
+    fn config_files_and_profiles() {
+        let dir = std::env::temp_dir().join(format!("proof-pdf-cli-config-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("proof-pdf.toml");
+        std::fs::write(
+            &file,
+            "[verify]\ntrim-mm = '210x297'\n[profiles.big.verify]\ntrim-mm = '297x420'\n",
+        )
+        .unwrap();
+        let config = file.to_str().unwrap();
+        let (code, out, _) = cli(&["--config", config, "verify", &fixture("x4-good")]);
+        assert_eq!(code, 1);
+        assert!(out.contains("expected 210 x 297 mm"), "{out}");
+        let (_, out, _) = cli(&["--config", config, "--profile", "big", "verify", &fixture("x4-good")]);
+        assert!(out.contains("expected 297 x 420 mm"), "{out}");
+        let (code, out, _) = cli(&["--config", config, "--profile", "big", "verify", "--show-profile"]);
+        assert_eq!((code, out.as_str()), (0, "trim-mm = \"297x420\"\n"));
+        assert_eq!(cli(&["verify", "--show-profile"]), (0, String::new(), String::new()));
+        let (code, _, err) = cli(&["--profile", "big", "verify", &fixture("x4-good")]);
+        assert_eq!(code, 64);
+        assert!(err.contains("--profile needs a config file"), "{err}");
+        let (code, _, err) = cli(&["--config", config, "--profile", "none", "verify", &fixture("x4-good")]);
+        assert_eq!(code, 64);
+        assert!(err.contains("has no profile \"none\""), "{err}");
+        std::fs::write(&file, "[verify]\nbleed = 3\n").unwrap();
+        assert!(
+            cli(&["--config", config, "verify", &fixture("x4-good")])
+                .2
+                .contains("has no option")
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

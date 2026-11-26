@@ -222,4 +222,7 @@ pub(crate) struct Output {
     /// Exit code only, for CI.
     #[arg(long)]
     pub(crate) quiet: bool,
+    /// Print the settings the config file and profile give, and exit.
+    #[arg(long)]
+    pub(crate) show_profile: bool,
 }
