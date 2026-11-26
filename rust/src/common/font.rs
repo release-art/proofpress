@@ -34,6 +34,8 @@ pub(crate) struct Font {
     /// Whether the font program is in the file: a Type 3 font, or a descriptor with `/FontFile`, `/FontFile2` or
     /// `/FontFile3` (a composite font's descendant's).
     pub(crate) embedded: bool,
+    /// Whether the font dictionary has a `/ToUnicode` entry.
+    pub(crate) to_unicode: bool,
     /// The codes a simple font's `/Differences` maps to `.notdef`.
     notdef: BTreeSet<i64>,
     /// For a composite font, whether its encoding is `Identity-H` or `Identity-V`, so that code 0 is CID 0, `.notdef`.
@@ -56,6 +58,7 @@ impl Default for Font {
             name: "?".to_owned(),
             subtype: "unknown".to_owned(),
             embedded: false,
+            to_unicode: false,
             notdef: BTreeSet::new(),
             identity: None,
             known: false,
@@ -205,6 +208,7 @@ fn read(doc: &Document, font: &Dict) -> Option<Font> {
             name,
             subtype,
             embedded: program,
+            to_unicode: font.get(b"ToUnicode").is_some(),
             notdef: BTreeSet::new(),
             identity: Some(matches!(encoding, Some(b"Identity-H" | b"Identity-V"))),
             known: true,
@@ -242,6 +246,7 @@ fn read(doc: &Document, font: &Dict) -> Option<Font> {
         ascent,
         descent,
         embedded: subtype == "Type3" || program,
+        to_unicode: font.get(b"ToUnicode").is_some(),
         name,
         subtype,
         notdef: notdef_codes(doc, font.get(b"Encoding"))?,

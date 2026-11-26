@@ -158,7 +158,7 @@ def inspect_cmd(
     for target in targets:
         try:
             facts = asyncio.run(inventory.inspect_file(target, proof_profile=proof_profile, with_contrast=contrast))
-        except (pikepdf.PdfError, pikepdf.PasswordError) as exc:
+        except inventory.UnreadablePdfError as exc:
             typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             failed = True
             continue

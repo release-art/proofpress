@@ -21,3 +21,9 @@ def crop(data: bytes, page: int, bounds: tuple[float, float, float, float], pad:
     the PDF ``data`` out as a one-page PDF. Raises ``ValueError`` for a missing page or a box that misses it, and
     ``UnreadablePdfError`` for a file that cannot be read.
     """
+
+def inspect(data: bytes, proof_profile: bytes | None = None, with_contrast: bool = True) -> str:
+    """What is in the PDF ``data``, as JSON (the fields of ``proof_pdf.inventory.Inventory`` but ``path``), contrast
+    measured through ``proof_profile`` (an ICC profile's bytes) or else the output intents' profiles. Raises
+    ``UnreadablePdfError`` for a file that cannot be read.
+    """

@@ -19,10 +19,10 @@ use crate::document::{Document, Object, Value};
 use crate::findings::{CONTRAST, Finding, Location, Severity};
 use crate::graphics::{Fill, Kind};
 
-const NO_CMYK: &str = "no CMYK profile: the PDF has no CMYK output intent and none was given";
+pub(super) const NO_CMYK: &str = "no CMYK profile: the PDF has no CMYK output intent and none was given";
 
 /// The output intents' profiles, in order.
-fn intent_profiles(doc: &Document) -> Vec<Vec<u8>> {
+pub(crate) fn intent_profiles(doc: &Document) -> Vec<Vec<u8>> {
     let intents = doc
         .catalog()
         .and_then(|c| c.get(b"OutputIntents"))
@@ -40,7 +40,7 @@ fn intent_profiles(doc: &Document) -> Vec<Vec<u8>> {
         .collect()
 }
 
-fn fill(family: Family, value: &[f64]) -> Fill {
+pub(super) fn fill(family: Family, value: &[f64]) -> Fill {
     Fill {
         family,
         value: value.to_vec(),
@@ -52,38 +52,56 @@ fn fill(family: Family, value: &[f64]) -> Fill {
 
 /// `fill` as L*a*b* and in words: `None` for a colour no profile describes (a spot or pattern colour), an error for
 /// CMYK with no CMYK profile. Gray is the K plate when there is a CMYK profile.
-fn measured(model: &Model, fill: &Fill) -> Result<Option<(Lab, String)>, ()> {
+pub(crate) fn measured(model: &Model, fill: &Fill) -> Result<Option<(Lab, String)>, ()> {
+    let lab = match (fill.family, fill.value.as_slice()) {
+        (Family::Cmyk, [c, m, y, k, ..]) => model.cmyk([*c, *m, *y, *k]).ok_or(())?,
+        (Family::Rgb, [r, g, b, ..]) => model.rgb([*r, *g, *b]),
+        (Family::Gray, [gray, ..]) => model
+            .cmyk([0.0, 0.0, 0.0, 1.0 - gray])
+            .unwrap_or_else(|| model.rgb([*gray; 3])),
+        _ => return Ok(None),
+    };
+    Ok(Some((lab, describe(Some(fill)))))
+}
+
+/// `fill` in words, as the reports write it; `None` is an image or shading.
+pub(crate) fn describe(fill: Option<&Fill>) -> String {
     // Python's `round()` gives an integer: never "-0".
     let percent = |v: f64| (v * 100.0).round_ties_even() + 0.0;
-    let cmyk = |c: [f64; 4]| model.cmyk(c).ok_or(());
-    Ok(Some(match (fill.family, fill.value.as_slice()) {
+    let Some(fill) = fill else {
+        return "an image or shading".to_owned();
+    };
+    match (fill.family, fill.value.as_slice()) {
         (Family::Cmyk, [c, m, y, k, ..]) => {
-            let words = format!("C{} M{} Y{} K{}", percent(*c), percent(*m), percent(*y), percent(*k));
-            (cmyk([*c, *m, *y, *k])?, words)
+            format!("C{} M{} Y{} K{}", percent(*c), percent(*m), percent(*y), percent(*k))
         }
+        (Family::Gray, [gray, ..]) => format!("gray {}%", percent(*gray)),
         (Family::Rgb, [r, g, b, ..]) => {
             let byte = |v: f64| (v * 255.0).round_ties_even() + 0.0;
-            (
-                model.rgb([*r, *g, *b]),
-                format!("RGB({},{},{})", byte(*r), byte(*g), byte(*b)),
-            )
+            format!("RGB({},{},{})", byte(*r), byte(*g), byte(*b))
         }
-        (Family::Gray, [gray, ..]) => {
-            let lab = model
-                .cmyk([0.0, 0.0, 0.0, 1.0 - gray])
-                .unwrap_or_else(|| model.rgb([*gray; 3]));
-            (lab, format!("gray {}%", percent(*gray)))
+        _ if !fill.spot.is_empty() => {
+            let names: Vec<String> = fill
+                .spot
+                .iter()
+                .map(|n| String::from_utf8_lossy(n).into_owned())
+                .collect();
+            let tint = match (fill.spot.as_slice(), fill.value.first()) {
+                ([_], Some(v)) => format!(" {}%", percent(*v)),
+                _ => String::new(),
+            };
+            format!("spot {}{tint}", names.join("+"))
         }
-        _ => return Ok(None),
-    }))
+        _ => "a spot or pattern colour".to_owned(),
+    }
 }
 
 /// One text colour on one background on a page: the background (`None` for an image or shading), whether that is the
 /// paper, and the sizes of its runs.
-type Pair = (Fill, Option<Fill>, bool, Vec<f64>);
+pub(crate) type Pair = (Fill, Option<Fill>, bool, Vec<f64>);
 
 /// The distinct (text colour, background) pairs of each page, in the order first met.
-fn pairs(doc: &Document, paper: &Fill) -> Vec<(u32, Pair)> {
+pub(crate) fn pairs(doc: &Document, paper: &Fill) -> Vec<(u32, Pair)> {
     let unbounded = Rect {
         x0: f64::NEG_INFINITY,
         y0: f64::NEG_INFINITY,

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `inspect` runs in the Rust core, on the same walk as `verify`: identical facts on 9,463 of 9,705 comparable corpus files, every difference explained (the core reads damaged files strictly, names fonts whose names are not UTF-8, and counts a few glyphs pikepdf misattributed). `inspect_pdf` raises `proof_pdf.inventory.UnreadablePdfError` instead of `pikepdf.PdfError`. A page with no MediaBox reports none rather than Letter, and a `--proof-profile` that is not an ICC profile is reported as the contrast error instead of failing.
 - `crop` runs in the Rust core, on a writer of our own: the piece's streams are copied as they are, so it renders
   pixel for pixel as before (586 of 586 comparable files). `crop_page` raises `proof_pdf.crop.UnreadablePdfError` instead of
   `pikepdf.PdfError` for a file that cannot be read, and now also for a page that needs objects the file holds damaged,

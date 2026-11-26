@@ -69,6 +69,11 @@ impl Model {
         )
     }
 
+    /// Whether `data` is an ICC profile `LittleCMS` can read.
+    pub(crate) fn readable(data: &[u8]) -> bool {
+        Profile::new_icc(data).is_ok()
+    }
+
     /// Whether CMYK can be converted.
     pub(crate) fn has_cmyk(&self) -> bool {
         self.cmyk.is_some()

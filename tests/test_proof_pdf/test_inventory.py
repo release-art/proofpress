@@ -78,7 +78,7 @@ class TestInventory:
         assert inventory.inspect_pdf(tmp_path / "spot.pdf").spot_inks == ["PANTONE 185 C"]
 
     def test_a_file_that_will_not_open_raises(self):
-        with pytest.raises(pikepdf.PdfError):
+        with pytest.raises(inventory.UnreadablePdfError):
             inventory.inspect_pdf(PDFS / "corrupt.pdf")
 
     async def test_the_async_wrapper_matches(self):

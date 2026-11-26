@@ -14,6 +14,7 @@ mod fonts;
 mod gray;
 mod ink;
 mod intent;
+pub mod inventory;
 mod jpx;
 mod keys;
 mod limits;

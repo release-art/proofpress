@@ -43,6 +43,18 @@ fn run(py: Python<'_>, argv: Vec<String>, colour: bool) -> (i32, String, String)
     })
 }
 
+/// What is in the PDF `data`, as JSON: its pages, fonts, text colours, spot inks, images and, unless `with_contrast`
+/// is false, the contrast of each text and background pair, measured through `proof_profile` (the bytes of an ICC
+/// profile) or else the output intents' profiles. Raises `UnreadablePdfError` for a file that cannot be read.
+#[pyfunction]
+#[pyo3(signature = (data, proof_profile = None, with_contrast = true))]
+fn inspect(py: Python<'_>, data: &[u8], proof_profile: Option<&[u8]>, with_contrast: bool) -> PyResult<String> {
+    let inventory = py
+        .detach(|| checks::inventory::inspect(data, proof_profile, with_contrast))
+        .map_err(UnreadablePdfError::new_err)?;
+    serde_json::to_string(&inventory).map_err(value_error)
+}
+
 /// A `ValueError` saying `message`.
 fn value_error(message: impl Display) -> PyErr {
     PyValueError::new_err(message.to_string())
@@ -82,7 +94,7 @@ fn crop(py: Python<'_>, data: &[u8], page: usize, bounds: [f64; 4], pad: f64) ->
 #[pymodule]
 mod _core {
     #[pymodule_export]
-    use super::{UnreadablePdfError, crop, run, verify};
+    use super::{UnreadablePdfError, crop, inspect, run, verify};
 }
 
 #[cfg(test)]
@@ -135,6 +147,21 @@ mod tests {
                 .unwrap();
             assert_eq!(code, 64);
             assert!(err.contains("--bogus"), "{err}");
+        });
+    }
+
+    #[test]
+    fn inspect_returns_the_inventory_as_json() {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = pyo3::wrap_pymodule!(_core)(py);
+            let inspect = module.bind(py).getattr("inspect").unwrap();
+            let file = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/pdfs/good.pdf")).unwrap();
+            let json: String = inspect.call1((file.as_slice(),)).unwrap().extract().unwrap();
+            let facts: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert_eq!(facts["pages"][0]["number"], 1);
+            let error = inspect.call1((b"x".as_slice(),)).unwrap_err().to_string();
+            assert!(error.starts_with("UnreadablePdfError"), "{error}");
         });
     }
 

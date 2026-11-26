@@ -34,8 +34,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 9** (the writer and the other commands): the writer and `crop` are done; `inspect`, `extract`, `preview`,
-  `layout` and `texlog` are next. Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
+- **Phase 9** (the writer and the other commands): the writer, `crop` and `inspect` are done; `preview` (hayro) and
+  `extract` are next. `layout` and `texlog` stay Python (decision log, 2026-11-26). Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
   and X-5 row is implemented or skip. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
   owner said to carry on past the PDF/X-4 milestone (phase 6, finished 2026-11-26).
 
@@ -109,6 +109,7 @@ record it as not conforming to that one rule).
 | 8.2, 8.3 | same commit | `checks/x5g.rs` (proxies, `/Ref`, `/ID`, metadata, `RenditionOf`, the X-5 6.7 rule), `checks/targets.rs` (the file set, read once and verified recursively; nine rows), `common/labels.rs`; `Location::File`, `Limits::target_depth`, `--target-versions`; 39 fixtures `x5*`, feature `x5g-clause-8`. X-5g and X-5pg: every row implemented or skip |
 | 8.4, 8.5 | the phase 8 (X-5n) commit | X-5n's 15 rows (`x4p.rs` reference and profile rows, `colour.rs`/`jpx.rs` device bans, `spots.rs` DeviceN attributes, `modes.rs` group `/CS`, `annots.rs` TrapNet), `icc::colorant_names`; `x5.n-subtractive` skipped; two generated n-colorant v4 profiles (`tests/fixtures/icc/xclr-5.icc`, `xclr-6.icc`) and 21 fixtures `x5n-*`, feature `x5n-clause-7` |
 | 9 (part) | the writer commit | `writer.rs` (graft map, raw streams, damaged objects reported, Identity `/Crypt` dropped) and `writer/crop.rs`; `_core.crop` and `UnreadablePdfError`; `proof_pdf.crop` no longer uses pikepdf. Parity: 588 crops of fixtures and test-db samples rendered by Ghostscript at 72 dpi; 586 pixel-identical, 2 damaged files now refused (pikepdf had repaired them); 14 skipped (pikepdf or Ghostscript could not open them) |
+| 9 (part) | the inspect commit | `checks/inventory.rs` on the print walk and the contrast measure; `_core.inspect`; `proof_pdf.inventory` no longer uses pikepdf. Parity with the Python on the fixtures (339 identical, 5 damaged fixtures read strictly) and 10,475 test-db files (see Deviations) |
 
 ## Register coverage
 
@@ -381,6 +382,17 @@ Oracle consultations:
 - Task 6.1, the config file: a file without `schema` reads as schema 1, so today's files keep working; tables for the commands still in Python (`inspect`, `preview`, `texlog`, `extract`, `crop`) are left alone. `extends` merges `[verify]` key by key, ancestor first; a cycle is an error. `--show-profile` prints the merged `[verify]` table from the file, not the command line's own options.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
+
+- Phase 9, `inspect`: parity of the Python `inspect_pdf` (as at `b00d354`) against `_core.inspect` on every test-db
+  sample set but `kura-bench` and `iust-pdfcorpus` (10,475 files): 9,463 identical, 242 different, 523 the core refuses,
+  223 pikepdf cannot open, 24 on which the Python crashes. Of the 242: 44 differ only in the last digit of an unrounded
+  size; 51 name fonts whose names are not UTF-8 (the Python drops them); 136 are the reading differences already
+  explained (68 objects beyond `/Size`, 57 damaged objects, 9 damaged content, a duplicate key, a header offset); 3 have
+  no MediaBox, where qpdf supplies Letter; and 8 others: 3 non-UTF-8 fonts whose text boxes move the grounds under them,
+  1 output intent profile in ASCIIHex without `>`, 1 `/BaseFont` written as a string (both fonts then read as "?"), 2
+  pages pikepdf stops reading at an inline image, and 1 where the Python counts 33 glyphs against the wrong font (the
+  core agrees with a count from the content). The unit test's expectations were corrected first: they had been written
+  without running.
 
 ## Owner requests
 
