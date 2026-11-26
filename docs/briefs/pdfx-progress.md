@@ -97,7 +97,8 @@ record it as not conforming to that one rule).
 | 4.4 (rest) | `ec48911`, `90e82c4` | `x4.image.dct-valid` and `x4.image.jbig2-valid` (6.8) at the marker and segment level, `/JBIG2Globals` included; 2 fixtures |
 | 5.1 | `8ee8994` | 6.5.4's four TrueType encoding rows, the `cmap` count from the program's table directory (`common::sfnt`); the walk's fonts carry their object number; 4 fixtures |
 | 5.2 (part) | `3f971fd` | `x4.font.embedded` (6.5.1): a font any visible text run uses is embedded, render mode 3 exempt; 2 fixtures |
-| 5.2, 5.3 | the commit after `3f971fd` | Font programs read with `read-fonts` (TrueType and OpenType tables, bare CFF, Type 1) and CMaps with `hayro-cmap` (Adobe's predefined CMaps bundled); `x4.font.glyphs-present`, `x4.font.no-notdef` and `x4.font.widths-consistent` (6.5.1 to 6.5.3); test font programs of our own in `tests/fixtures/fonts/`; 5 fixtures |
+| 5.2, 5.3 | `c72d1aa` | Font programs read with `read-fonts` (TrueType and OpenType tables, bare CFF, Type 1) and CMaps with `hayro-cmap` (Adobe's predefined CMaps bundled); `x4.font.glyphs-present`, `x4.font.no-notdef` and `x4.font.widths-consistent` (6.5.1 to 6.5.3); test font programs of our own in `tests/fixtures/fonts/`; 5 fixtures |
+| 6 (rows) | the commit after `c72d1aa` | The X-4 rows the milestone needs that phases 2 and 4 left: 6.25's lexical and graphics limits (the walk now reports each page's deepest graphics-state nesting) and 6.6's recommendation for other names; 7 fixtures |
 
 ## Register coverage
 
@@ -105,7 +106,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 120 | 17 | 4 |
+| PDF/X-4 and X-4p | 123 | 14 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 51 | 5 | 1 (`internal`) |
 
@@ -361,6 +362,7 @@ Oracle consultations:
 - Task 5.1, 6.5.4 (oracle, 2026-11-26): only fonts that text runs use are judged (6.1.3's print elements, X4-Q3), whatever their render mode, hidden optional content included; Symbolic is the `/Flags` bit 3 alone, no descriptor counting as non-symbolic; the `cmap` row needs an embedded program, `/FontFile2` or an OpenType `/FontFile3`, and a program without a `cmap` fails it. A font written directly in a resource dictionary is not judged (marked `ponytail:`). veraPDF 6-2-11-6 and Isartor 6-3-7 agree file for file but for 6-2-11-6-t02-pass-d and BFO 6-2-11-6-t01-pass, whose non-symbolic `/Differences` PDF/A-2 allows and X-4 does not, as the register says. Ghent and Altona raise nothing.
 - Task 5.2, `x4.font.embedded`: Isartor 6-3-4 and veraPDF 6-2-11-4-1 t01 fail it as they should. Isartor 6-3-4-t01-fail-f uses its fonts only in an annotation appearance, a non-print element, and passes. Isartor 6-3-4-t01-fail-g shows unembedded Helvetica inside a Type 3 glyph procedure, which the walk does not enter (phase 4's recorded limit), so it passes for now; glyph presence needs `CharProcs` and takes it up. veraPDF 6-2-11-4-1 t02 (glyphs missing from an embedded program) is `x4.font.glyphs-present`'s.
 - Tasks 5.2 and 5.3, glyphs, `.notdef` and widths (oracle and owner, 2026-11-26): every veraPDF 6-2-11-4-1, 6-2-11-5 and 6-2-11-8 file and Isartor 6-3-5 t01 and 6-3-6 fail the row they test; 6-2-11-4-1-t02-fail-c fails `.notdef` and widths, where veraPDF 1.30 also puts it; Isartor 6-3-5 t02 and t03 (PDF/A's CharSet and CIDSet) pass, X-4 having no such rule. Ghent and Altona raise nothing but Ghent's two GWG051 font-report pages, which show all 256 codes of a 58-glyph subset (not X-4 claims). Readings: `WinAnsiEncoding`'s unused codes above octal 40 are its bullet (ISO 32000-1 Annex D); a symbolic TrueType font with neither a (3,0) nor a (1,0) `cmap` leaves its glyphs to the reader (9.6.6.4), so they are not judged; an unembedded font is judged only for `.notdef` its encoding settles; a Type 3 font's widths are its glyph procedures' `d0`/`d1`. Widths agree within 1/1000 em (X4-Q16). Not covered: Type 3 glyph procedures are not walked, so a font used only inside one (Isartor 6-3-4-t01-fail-g) is not judged, and composite codes are split two bytes at a time, so a predefined CMap with one-byte codes (the RKSJ and EUC ones) is read only for its two-byte codes.
+- Phase 6, the milestone's rows: 6.25's lexical row, moved to phase 4 in task 2.2, had not been done (phase 4's done list does not name it); it and the graphics row are done now, with the oracle's readings (decision log). On veraPDF 6-1-13 and BFO 6-1-13: integers, names, content strings, nesting and CIDs agree; t03-fail-d (a long string outside any content stream), BFO t05 and t09 (reals nearer 0 than 1.175e-38) and the page-size files pass, which PDF/X-4 allows. 6.6's recommendation judges dictionary keys and content-stream names on UTF-8 only, as their raw spelling is not kept (marked `ponytail:`).
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 

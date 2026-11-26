@@ -6,3 +6,16 @@ Feature: PDF/X-4 6.25, architectural limits
     When it is verified as PDF/X-4
     Then check "x4.limits.objects" fails
     And no check fails but "x4.limits.objects"
+
+  Scenario Outline: One value or construct beyond Table C.1 fails its check and nothing else
+    Given the fixture "<fixture>"
+    When it is verified as PDF/X-4
+    Then check "<check>" fails
+    And no check fails but "<check>"
+
+    Examples:
+      | fixture            | check              |
+      | x4-limit-integer   | x4.limits.lexical  |
+      | x4-limit-name      | x4.limits.lexical  |
+      | x4-limit-nesting   | x4.limits.graphics |
+      | x4-limit-devicen   | x4.limits.graphics |

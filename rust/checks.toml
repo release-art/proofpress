@@ -349,7 +349,7 @@ title = "Other names are UTF-8 and escaped too"
 clauses = ["iso-15930-7:6.6"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.xobject.no-opi"
@@ -962,7 +962,7 @@ title = "Numbers, strings and names stay within PDF 1.6 limits"
 clauses = ["iso-15930-7:6.25"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.limits.objects"
@@ -978,7 +978,7 @@ title = "Graphics-state nesting, DeviceN and CIDs stay within limits"
 clauses = ["iso-15930-7:6.25"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.acroform.no-xfa"

@@ -15,8 +15,10 @@ mod ink;
 mod intent;
 mod jpx;
 mod keys;
+mod limits;
 mod metadata;
 mod modes;
+mod names;
 mod optional;
 mod page;
 mod painted;
@@ -176,8 +178,11 @@ const RUNS: &[(&Check, Run)] = &[
     (X4_FILTER_STANDARD_ONLY, |d, _| x4::standard_only(d)),
     (X4_PERMS_UR_ONLY, |d, _| x4::ur_only(d)),
     (X4_LIMITS_OBJECTS, |d, _| x4::object_count(d)),
+    (f::X4_LIMITS_LEXICAL, limits::lexical),
+    (f::X4_LIMITS_GRAPHICS, limits::graphics),
     (X4_NAMES_UTF8, |d, _| x4::names_utf8(d)),
     (X4_NAMES_HEX_ESCAPED, |d, _| x4::names_escaped(d)),
+    (f::X4_NAMES_OTHER_RECOMMENDED, names::other_recommended),
     (f::X4_TRAPPED_PRESENT, metadata::trapped_present),
     (f::X4_TRAPPED_TRUE_OR_FALSE, metadata::trapped_true_or_false),
     (f::X4_XMP_PRESENT, metadata::present),

@@ -922,6 +922,13 @@ def _x4_font_fixtures() -> dict[str, pikepdf.Pdf]:
         "x4-font-widths": _x4_widths(),
         # Text in an unembedded font inside optional content that is off still fails 6.5.1 (6.24).
         "x4-font-hidden-oc": _x4_hidden_text(),
+        # 6.25's limits (the PDF 1.6 Reference's Table C.1) and 6.6's recommendation for other names.
+        "x4-limit-integer": _x4_page(b"2147483648 0 m"),
+        "x4-limit-name": _x4_with(lambda p: p.pages[0].obj.__setitem__("/" + "N" * 128, 1)),
+        "x4-limit-nesting": _x4_page(b"q " * 29 + b"Q " * 29),
+        "x4-limit-devicen": _x4_painted(
+            b"", {"S": _device_n([f"Ink{i}" for i in range(33)], Colorants=pikepdf.Dictionary())}
+        ),
         # A positive: a code with no glyph, shown only in render mode 3 (owner, 2026-11-26).
         "x4-font-invisible-missing": _x4_page(b"BT 3 Tr /F1 12 Tf 100 100 Td (\\351) Tj ET"),
     }
@@ -1483,6 +1490,8 @@ def _x4_variants(good: bytes, scratch: pathlib.Path) -> dict[str, bytes]:
         "x4-name-not-utf8": good.replace(b"/ProofBox", b"/Proof#FF"),
         # 6.6: a font name holding UTF-8 bytes outside 33 to 126 written raw, not as #xx.
         "x4-name-unescaped": good.replace(b"/ProofBox", "/Pr\u00e9fBox".encode()),
+        # 6.6's recommendation: a descriptor key that is not UTF-8 once decoded (a warning).
+        "x4-name-other-not-utf8": good.replace(b"/CapHeight", b"/CapHei#FF"),
         "x4-encrypted": encrypted,
         "x4-too-many-objects": _too_many_objects(good),
         # Damage to the file's own structure, each a same-length edit (ISO 32000-2 rules, checked at every level).

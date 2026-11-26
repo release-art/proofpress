@@ -177,6 +177,13 @@ pub(crate) enum Event {
     },
     /// Something that kept part of a page from being walked, or that the walk had to stand in for.
     Problem { problem: Problem, frames: Vec<Location> },
+    /// A page's deepest graphics-state nesting: states saved by `q` and, around them, by the forms and tiling patterns
+    /// being walked (each saves the state as if by `q`, 8.10.1). Only for a page that uses `q`.
+    Nesting {
+        explicit: usize,
+        implicit: usize,
+        frames: Vec<Location>,
+    },
 }
 
 /// What tier 7 found wrong while walking.
@@ -272,6 +279,10 @@ struct Walker<'a> {
     fonts: BTreeMap<u32, Rc<Font>>,
     /// The tiling patterns whose families are being worked out, by object number.
     patterns: BTreeSet<u32>,
+    /// Graphics states saved by `q` in the contents being walked, enclosing ones included.
+    q_depth: usize,
+    /// The page's deepest nesting so far: states saved by `q`, and by the forms and patterns around them.
+    deepest: (usize, usize),
 }
 
 /// Every page's events, in page order.
@@ -283,6 +294,8 @@ pub(crate) fn walk(doc: &Document) -> Vec<Event> {
         ancestors: BTreeSet::new(),
         fonts: BTreeMap::new(),
         patterns: BTreeSet::new(),
+        q_depth: 0,
+        deepest: (0, 0),
     };
     for (i, page) in doc.pages().iter().enumerate() {
         let frames = vec![Location::Page(u32::try_from(i + 1).unwrap_or(u32::MAX))];
@@ -300,7 +313,16 @@ pub(crate) fn walk(doc: &Document) -> Vec<Event> {
         }
         let streams = stream_numbers(doc, page.get(b"Contents"));
         let data: Vec<Vec<u8>> = streams.iter().filter_map(|&n| doc.stream_data(n)).collect();
+        walker.deepest = (0, 0);
         walker.content(&data, resources, resources, &frames, State::default());
+        let (explicit, implicit) = walker.deepest;
+        if explicit > 0 {
+            walker.events.push(Event::Nesting {
+                explicit,
+                implicit,
+                frames,
+            });
+        }
     }
     walker.events
 }
@@ -852,6 +874,27 @@ impl Walker<'_> {
     }
 
     /// Interpret one content with `resources` in effect, from the graphics state `initial`.
+    /// `q`: the state saved, and the page's deepest nesting updated.
+    fn save(&mut self, stack: &mut Vec<State>, state: &State) {
+        stack.push(state.clone());
+        self.q_depth += 1;
+        let (explicit, implicit) = self.deepest;
+        if self.q_depth + self.ancestors.len() > explicit + implicit {
+            self.deepest = (self.q_depth, self.ancestors.len());
+        }
+    }
+
+    /// `Q`: the saved state back; an unbalanced `Q` keeps the state but puts the CTM back to where this content began.
+    fn restore(&mut self, stack: &mut Vec<State>, state: &mut State, base: Option<Matrix>) {
+        match stack.pop() {
+            Some(saved) => {
+                *state = saved;
+                self.q_depth -= 1;
+            }
+            None => state.ctm = base,
+        }
+    }
+
     fn content(
         &mut self,
         data: &[Vec<u8>],
@@ -889,12 +932,8 @@ impl Walker<'_> {
             }
             let last = op.operands.last();
             match op.name.as_slice() {
-                b"q" => stack.push(state.clone()),
-                // An unbalanced `Q` keeps the state but puts the CTM back to where this content began.
-                b"Q" => match stack.pop() {
-                    Some(saved) => state = saved,
-                    None => state.ctm = base,
-                },
+                b"q" => self.save(&mut stack, &state),
+                b"Q" => self.restore(&mut stack, &mut state, base),
                 b"cm" => state.ctm = state.ctm.map(|ctm| mul(&matrix(op.operands.iter().map(real)), &ctm)),
                 b"Tf" => self.font(op, resources, &mut state),
                 b"w" => state.line_width = number(op.operands.first()),
@@ -960,6 +999,8 @@ impl Walker<'_> {
                 _ => {}
             }
         }
+        // States this content saved and never restored end with it.
+        self.q_depth -= stack.len();
     }
 
     /// An inline image: its unit square, in its colour space or, for a mask, the fill colour.
@@ -1151,6 +1192,8 @@ impl Walker<'_> {
                     ancestors: BTreeSet::new(),
                     fonts: BTreeMap::new(),
                     patterns: self.patterns.iter().copied().chain([num]).collect(),
+                    q_depth: 0,
+                    deepest: (0, 0),
                 };
                 let cell = State {
                     ctm: None,
@@ -1642,7 +1685,15 @@ mod tests {
             "a pattern written directly is not walked"
         );
         let page_without = run("<< >>", "q", &[(3, b"<< /Type /Page /Contents 4 0 R >>".to_vec())]);
-        assert_eq!(page_without, []);
+        // Only the first page's `q`, as its nesting; the page without contents adds nothing.
+        assert!(matches!(
+            page_without.as_slice(),
+            [Event::Nesting {
+                explicit: 1,
+                implicit: 0,
+                ..
+            }]
+        ));
         let pdf = classic(
             &[(1, b"<< /R << /ColorSpace 5 /XObject << /F 9 0 R /K << /Subtype /Form >> >> /Pattern << /P 5 >> >> /S << /ColorSpace 9 0 R >> >>")],
             "<< /Size SIZE /Root 1 0 R >>",
@@ -1968,6 +2019,8 @@ mod tests {
             ancestors: BTreeSet::new(),
             fonts: BTreeMap::new(),
             patterns: BTreeSet::new(),
+            q_depth: 0,
+            deepest: (0, 0),
         };
         let five = Object {
             value: Value::Integer(5),

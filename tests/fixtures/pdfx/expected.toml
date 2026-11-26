@@ -834,3 +834,25 @@ expect = { "x4.font.embedded" = "an unembedded font in optional content that is 
 [x4-font-invisible-missing]
 levels = ["x4"]
 expect = {}
+
+# PDF/X-4 6.25: the limits of the PDF 1.6 Reference's Table C.1.
+[x4-limit-integer]
+levels = ["x4"]
+expect = { "x4.limits.lexical" = "the integer 2147483648 in a content stream (6.25)" }
+
+[x4-limit-name]
+levels = ["x4"]
+expect = { "x4.limits.lexical" = "a page key 128 bytes long (6.25)" }
+
+[x4-limit-nesting]
+levels = ["x4"]
+expect = { "x4.limits.graphics" = "29 levels of q (6.25)" }
+
+[x4-limit-devicen]
+levels = ["x4"]
+expect = { "x4.limits.graphics" = "a DeviceN space of 33 inks (6.25)" }
+
+# PDF/X-4 6.6's recommendation for names other than font and separation names (a warning).
+[x4-name-other-not-utf8]
+levels = ["x4"]
+expect = { "x4.names.other-recommended" = "a name that is not UTF-8 (6.6)" }

@@ -25,17 +25,17 @@ const INTENTS: [&[u8]; 4] = [
 ];
 
 /// One content: where it lives, the object numbers of its streams, and what tier 6 read.
-struct Read {
+pub(super) struct Read {
     /// The page (counted from 1) or the object the content belongs to.
     owner: Location,
     streams: Vec<u32>,
     /// The streams whose filters could not be decoded.
     undecoded: Vec<u32>,
-    content: Content,
+    pub(super) content: Content,
 }
 
 /// Every content in the file, read.
-fn contents(doc: &Document) -> Vec<Read> {
+pub(super) fn contents(doc: &Document) -> Vec<Read> {
     let limits = Limits::default();
     let mut out = Vec::new();
     for (i, page) in doc.pages().iter().enumerate() {
@@ -86,7 +86,7 @@ fn read(doc: &Document, owner: Location, streams: Vec<u32>, resources: Option<&O
 
 impl Read {
     /// The location chain of a point in this content.
-    fn at(&self, at: At) -> Vec<Location> {
+    pub(super) fn at(&self, at: At) -> Vec<Location> {
         let mut chain = vec![self.owner.clone()];
         if let Some(&num) = self.streams.get(at.stream)
             && self.owner != Location::Object(num, 0)

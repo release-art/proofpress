@@ -46,7 +46,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.font.truetype-symbolic-one-cmap` | Symbolic TrueType has exactly one cmap subtable | iso-15930-7:6.5.4 | error | x4, x4p | implemented |
 | `x4.names.utf8` | Font and separation names are UTF-8 | iso-15930-7:6.6 | error | x4, x4p | implemented |
 | `x4.names.hex-escaped` | Bytes outside printable ASCII in those names are escaped | iso-15930-7:6.6 | error | x4, x4p | implemented |
-| `x4.names.other-recommended` | Other names are UTF-8 and escaped too | iso-15930-7:6.6 | warning | x4, x4p | todo |
+| `x4.names.other-recommended` | Other names are UTF-8 and escaped too | iso-15930-7:6.6 | warning | x4, x4p | implemented |
 | `x4.xobject.no-opi` | XObjects carry no OPI | iso-15930-7:6.7 | error | x4, x4p | implemented |
 | `x4.xobject.no-ref` | Form XObjects are not reference XObjects | iso-15930-7:6.7 | error | x4, x4p | implemented |
 | `x4.filespec.embedded` | File specifications embed their file | iso-15930-7:6.7 | error | x4 | implemented |
@@ -122,9 +122,9 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.oc.config-name-unique` | Optional-content configuration names are unique | iso-15930-7:6.24 | error | x4, x4p | implemented |
 | `x4.oc.order-complete` | An Order lists every optional-content group, or none | iso-15930-7:6.24 | error | x4, x4p | implemented |
 | `x4.oc.no-as` | Optional-content configurations have no AS | iso-15930-7:6.24 | error | x4, x4p | implemented |
-| `x4.limits.lexical` | Numbers, strings and names stay within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | todo |
+| `x4.limits.lexical` | Numbers, strings and names stay within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | implemented |
 | `x4.limits.objects` | The indirect-object count stays within PDF 1.6 limits | iso-15930-7:6.25 | error | x4, x4p | implemented |
-| `x4.limits.graphics` | Graphics-state nesting, DeviceN and CIDs stay within limits | iso-15930-7:6.25 | error | x4, x4p | todo |
+| `x4.limits.graphics` | Graphics-state nesting, DeviceN and CIDs stay within limits | iso-15930-7:6.25 | error | x4, x4p | implemented |
 | `x4.acroform.no-xfa` | Forms have no XFA | iso-15930-7:6.26 | error | x4, x4p | implemented |
 | `x4.jpx.baseline` | JPEG 2000 uses the JPX format, baseline features only | iso-15930-7:6.27 | error | x4, x4p | implemented |
 | `x4.jpx.channels` | JPEG 2000 has 1, 3 or 4 channels | iso-15930-7:6.27 | error | x4, x4p | implemented |
