@@ -40,10 +40,10 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.font.glyphs-present` | Embedded fonts have every glyph they show | iso-15930-7:6.5.1 | error | x4, x4p | todo |
 | `x4.font.no-notdef` | Text never shows the .notdef glyph | iso-15930-7:6.5.2 | error | x4, x4p | todo |
 | `x4.font.widths-consistent` | Declared widths match the font program | iso-15930-7:6.5.3 | error | x4, x4p | todo |
-| `x4.font.truetype-nonsymbolic-encoding` | Non-symbolic TrueType uses MacRoman or WinAnsi | iso-15930-7:6.5.4 | error | x4, x4p | todo |
-| `x4.font.truetype-nonsymbolic-no-differences` | Non-symbolic TrueType has no Differences | iso-15930-7:6.5.4 | error | x4, x4p | todo |
-| `x4.font.truetype-symbolic-no-encoding` | Symbolic TrueType has no Encoding | iso-15930-7:6.5.4 | error | x4, x4p | todo |
-| `x4.font.truetype-symbolic-one-cmap` | Symbolic TrueType has exactly one cmap subtable | iso-15930-7:6.5.4 | error | x4, x4p | todo |
+| `x4.font.truetype-nonsymbolic-encoding` | Non-symbolic TrueType uses MacRoman or WinAnsi | iso-15930-7:6.5.4 | error | x4, x4p | implemented |
+| `x4.font.truetype-nonsymbolic-no-differences` | Non-symbolic TrueType has no Differences | iso-15930-7:6.5.4 | error | x4, x4p | implemented |
+| `x4.font.truetype-symbolic-no-encoding` | Symbolic TrueType has no Encoding | iso-15930-7:6.5.4 | error | x4, x4p | implemented |
+| `x4.font.truetype-symbolic-one-cmap` | Symbolic TrueType has exactly one cmap subtable | iso-15930-7:6.5.4 | error | x4, x4p | implemented |
 | `x4.names.utf8` | Font and separation names are UTF-8 | iso-15930-7:6.6 | error | x4, x4p | implemented |
 | `x4.names.hex-escaped` | Bytes outside printable ASCII in those names are escaped | iso-15930-7:6.6 | error | x4, x4p | implemented |
 | `x4.names.other-recommended` | Other names are UTF-8 and escaped too | iso-15930-7:6.6 | warning | x4, x4p | todo |

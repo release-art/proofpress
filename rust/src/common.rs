@@ -13,5 +13,6 @@ pub(crate) mod lab;
 pub(crate) mod pyfmt;
 pub(crate) mod raster;
 pub(crate) mod rect;
+pub(crate) mod sfnt;
 pub(crate) mod text;
 pub(crate) mod xmp;

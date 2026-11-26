@@ -23,7 +23,7 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 5** (fonts, 6.5) next. Phase 4 finished 2026-11-26; see its stage report. The walk places what it paints
+- **Phase 5** (fonts, 6.5): 5.1 done, 5.2 (reading font programs) next. Phase 4 finished 2026-11-26; see its stage report. The walk places what it paints
   (CTM, clip, path, text and image extents) and reads colours as the print checks do; 32 print checks run in Rust:
   what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
   (`overprint`, `white-overprint`, `rich-black`, `k-only-text`), the page geometry (`geometry`, `bleed`, `centring`,
@@ -84,7 +84,8 @@ record it as not conforming to that one rule).
 | 4.6 (part) | `522af3a` | Colour to L*a*b* in the core through `lcms2` (static, LittleCMS 2.20); `contrast` ported, parity-proved and its Python check deleted (the measuring stays for the inventory and extract reports) |
 | 4.3 (rest) | the commit after `522af3a` | `x4.spot.colorants-match-devicen` (6.4.3.4, a should): each `/Colorants` Separation compared with its DeviceN colorant alone at four tints, in Lab; sampled functions interpolate (ISO 32000 7.10.2); 1 fixture |
 | 4.7 | `f88d01b` | Phase 4 test material: Ghent's 39 X-4 claims (transparency, DeviceN, ICC v4, JPEG 2000, 16-bit, overprint) and Altona clean under every colour check; the veraPDF "same rule" colour files agree (see Deviations); §3 items 4, 5, 16 and 19 built, the last being 16's positive `x4-transparency-no-group` |
-| 4.4 (rest) | the commit after `f88d01b` | `x4.image.dct-valid` and `x4.image.jbig2-valid` (6.8) at the marker and segment level, `/JBIG2Globals` included; 2 fixtures |
+| 4.4 (rest) | `ec48911`, `90e82c4` | `x4.image.dct-valid` and `x4.image.jbig2-valid` (6.8) at the marker and segment level, `/JBIG2Globals` included; 2 fixtures |
+| 5.1 | the commit after `90e82c4` | 6.5.4's four TrueType encoding rows, the `cmap` count from the program's table directory (`common::sfnt`); the walk's fonts carry their object number; 4 fixtures |
 
 ## Register coverage
 
@@ -92,7 +93,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 112 | 25 | 4 |
+| PDF/X-4 and X-4p | 116 | 21 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 51 | 5 | 1 (`internal`) |
 
@@ -345,6 +346,7 @@ Oracle consultations:
   checked"), where the Python checked whatever pikepdf repaired: the behaviour change the brief lists.
 - Task 4.7, the veraPDF PDF/A-2b "same rule" colour files, each read by the X-4 check it maps to: 6-2-2 (operators, rendering intents), 6-2-4-4 t02 and t03, 6-2-5 t05, 6-2-6 and 6-2-8-1 t03 agree file for file; 6-2-2-t01-fail-a and b fail `x4.content.known-operators` rather than the `BX`/`EX` row, which is right. The six 6-2-4-2 t02 (OPM) files have no output intent, so 6.4.3.3's "CMYK printing condition" never applies; with a CMYK GTS_PDFX intent added they agree. 6-2-10 passes 6.20 throughout (PDF/A's missing blend space is not an X-4 rule), except t02-fail-a, whose `/BM /Custom` fails `x4.transparency.blend-modes`: the same rule, though test-db's register says 2b has no such test.
 - Task 4.4 (rest), 6.8's JPEG and JBIG2 validity, read at the marker and segment level (T.81 Annex B, T.88 7.2; neither is held in test-db, so no page numbers). Against `djpeg` and `jbig2dec` on every corpus image under the one filter (31,698 JPEG, 3,252 JBIG2): no image we fail decodes. We pass 5 JPEGs whose entropy-coded data is corrupt (the header-level ceiling, marked `ponytail:`) and 21 JBIG2 images `jbig2dec` cannot decode: pdf.js and pdfium refinement test files, which both render, and pdf.js's file-header case. A JBIG2 file header, which PDF 1.6 3.3.6 says should be removed, is read past when its segments are sequential; the random-access organisation fails.
+- Task 5.1, 6.5.4 (oracle, 2026-11-26): only fonts that text runs use are judged (6.1.3's print elements, X4-Q3), whatever their render mode, hidden optional content included; Symbolic is the `/Flags` bit 3 alone, no descriptor counting as non-symbolic; the `cmap` row needs an embedded program, `/FontFile2` or an OpenType `/FontFile3`, and a program without a `cmap` fails it. A font written directly in a resource dictionary is not judged (marked `ponytail:`). veraPDF 6-2-11-6 and Isartor 6-3-7 agree file for file but for 6-2-11-6-t02-pass-d and BFO 6-2-11-6-t01-pass, whose non-symbolic `/Differences` PDF/A-2 allows and X-4 does not, as the register says. Ghent and Altona raise nothing.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 

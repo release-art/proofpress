@@ -40,6 +40,8 @@ pub(crate) struct Font {
     identity: Option<bool>,
     /// Whether it was read from a font dictionary, rather than standing in for a missing or malformed one.
     pub(crate) known: bool,
+    /// The font dictionary's object number, when the walk selected an indirect one; `load` leaves it `None`.
+    pub(crate) object: Option<u32>,
 }
 
 impl Default for Font {
@@ -57,6 +59,7 @@ impl Default for Font {
             notdef: BTreeSet::new(),
             identity: None,
             known: false,
+            object: None,
         }
     }
 }
@@ -205,6 +208,7 @@ fn read(doc: &Document, font: &Dict) -> Option<Font> {
             notdef: BTreeSet::new(),
             identity: Some(matches!(encoding, Some(b"Identity-H" | b"Identity-V"))),
             known: true,
+            object: None,
         });
     }
     let scale = match font.get(b"FontMatrix") {
@@ -243,6 +247,7 @@ fn read(doc: &Document, font: &Dict) -> Option<Font> {
         notdef: notdef_codes(doc, font.get(b"Encoding"))?,
         identity: None,
         known: true,
+        object: None,
     })
 }
 

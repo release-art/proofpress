@@ -9,6 +9,7 @@ mod codecs;
 mod colour;
 mod contents;
 mod contrast;
+mod fonts;
 mod gray;
 mod ink;
 mod intent;
@@ -286,6 +287,13 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_SPOT_PRINTING_ORDER_CONSISTENT, spots::printing_order),
     (f::X4_SPOT_SOLIDITIES_CONSISTENT, spots::solidities),
     (f::X4_TRANSPARENCY_BLEND_MODES, spots::blend_modes),
+    (f::X4_FONT_TRUETYPE_NONSYMBOLIC_ENCODING, fonts::nonsymbolic_encoding),
+    (
+        f::X4_FONT_TRUETYPE_NONSYMBOLIC_NO_DIFFERENCES,
+        fonts::nonsymbolic_no_differences,
+    ),
+    (f::X4_FONT_TRUETYPE_SYMBOLIC_NO_ENCODING, fonts::symbolic_no_encoding),
+    (f::X4_FONT_TRUETYPE_SYMBOLIC_ONE_CMAP, fonts::symbolic_one_cmap),
     (f::X4_IMAGE_DCT_VALID, codecs::dct_valid),
     (f::X4_IMAGE_JPX_VALID, jpx::valid),
     (f::X4_IMAGE_JBIG2_VALID, codecs::jbig2_valid),

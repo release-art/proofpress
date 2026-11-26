@@ -785,3 +785,20 @@ expect = {}
 [spot-conflict]
 levels = ["print"]
 expect = { "spot-definition" = "the ink Foil with two different CMYK alternates" }
+
+# PDF/X-4 6.5.4: the encodings of TrueType fonts. Each changes x4-good's one TrueType font.
+[x4-tt-no-encoding]
+levels = ["x4"]
+expect = { "x4.font.truetype-nonsymbolic-encoding" = "a non-symbolic TrueType font without /Encoding (6.5.4)" }
+
+[x4-tt-differences]
+levels = ["x4"]
+expect = { "x4.font.truetype-nonsymbolic-no-differences" = "WinAnsiEncoding with /Differences (6.5.4)" }
+
+[x4-tt-symbolic-encoding]
+levels = ["x4"]
+expect = { "x4.font.truetype-symbolic-no-encoding" = "a symbolic TrueType font with /Encoding (6.5.4)" }
+
+[x4-tt-symbolic-two-cmaps]
+levels = ["x4"]
+expect = { "x4.font.truetype-symbolic-one-cmap" = "a symbolic TrueType program with two cmap subtables (6.5.4)" }

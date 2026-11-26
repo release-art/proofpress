@@ -1191,9 +1191,11 @@ impl Walker<'_> {
         state.size = number(op.operands.get(1));
         let named = op.operands.first().and_then(Object::name);
         state.font = match named.and_then(|n| resource_ref(doc, resources, b"Font", n)) {
-            Some((Some(num), dict)) => {
-                Rc::clone(self.fonts.entry(num).or_insert_with(|| Rc::new(font::load(doc, dict))))
-            }
+            Some((Some(num), dict)) => Rc::clone(self.fonts.entry(num).or_insert_with(|| {
+                let mut font = font::load(doc, dict);
+                font.object = Some(num);
+                Rc::new(font)
+            })),
             Some((None, dict)) => Rc::new(font::load(doc, dict)),
             None => Rc::new(Font::default()),
         };

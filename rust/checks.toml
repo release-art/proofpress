@@ -301,7 +301,7 @@ title = "Non-symbolic TrueType uses MacRoman or WinAnsi"
 clauses = ["iso-15930-7:6.5.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.font.truetype-nonsymbolic-no-differences"
@@ -309,7 +309,7 @@ title = "Non-symbolic TrueType has no Differences"
 clauses = ["iso-15930-7:6.5.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.font.truetype-symbolic-no-encoding"
@@ -317,7 +317,7 @@ title = "Symbolic TrueType has no Encoding"
 clauses = ["iso-15930-7:6.5.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.font.truetype-symbolic-one-cmap"
@@ -325,7 +325,7 @@ title = "Symbolic TrueType has exactly one cmap subtable"
 clauses = ["iso-15930-7:6.5.4"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.names.utf8"

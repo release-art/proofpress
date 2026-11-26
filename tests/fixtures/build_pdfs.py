@@ -380,8 +380,9 @@ X4_XMP = f"""<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <?xpacket end="w"?>""".encode()
 
 
-def _truetype() -> bytes:
-    """A TrueType font of our own: every printable ASCII character is a 600-unit box (space is empty), 1000 units/em."""
+def _truetype(*, one_cmap: bool = False) -> bytes:
+    """A TrueType font of our own: every printable ASCII character is a 600-unit box (space is empty), 1000 units/em.
+    Its ``cmap`` has fontTools' two subtables, (0, 3) and (3, 1), or with ``one_cmap`` only the (3, 1) one."""
     from fontTools.fontBuilder import FontBuilder
     from fontTools.pens.ttGlyphPen import TTGlyphPen
 
@@ -398,6 +399,8 @@ def _truetype() -> bytes:
     fb = FontBuilder(1000, isTTF=True)
     fb.setupGlyphOrder(names)
     fb.setupCharacterMap({ord(c): n for c, n in zip(chars, names[1:], strict=True)})
+    if one_cmap:
+        fb.font["cmap"].tables = [t for t in fb.font["cmap"].tables if (t.platformID, t.platEncID) == (3, 1)]
     fb.setupGlyf(glyphs)
     fb.setupHorizontalMetrics({n: (600, 0 if n == "uni0020" else 50) for n in names})
     fb.setupHorizontalHeader(ascent=800, descent=-200)
@@ -764,6 +767,34 @@ def _jpeg_cmyk() -> bytes:
     out = io.BytesIO()
     Image.new("CMYK", (8, 8), (0, 0, 0, 255)).save(out, "JPEG")
     return out.getvalue()
+
+
+def _x4_truetype(
+    *, flags: int = 32, encoding: object = pikepdf.Name.WinAnsiEncoding, one_cmap: bool = False
+) -> pikepdf.Pdf:
+    """x4-good with its TrueType font's descriptor /Flags, /Encoding (``None`` for none) and program changed."""
+    pdf = _x4_good()
+    font = pdf.pages[0].Resources.Font.F1
+    font.FontDescriptor.Flags = flags
+    if encoding is None:
+        del font["/Encoding"]
+    else:
+        font.Encoding = encoding
+    program = _truetype(one_cmap=one_cmap)
+    font.FontDescriptor.FontFile2.write(zlib.compress(program), filter=pikepdf.Name.FlateDecode)
+    font.FontDescriptor.FontFile2.Length1 = len(program)
+    return pdf
+
+
+def _x4_font_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.5.4 (expected.toml says what each raises)."""
+    differences = pikepdf.Dictionary(BaseEncoding=pikepdf.Name.WinAnsiEncoding, Differences=[65, pikepdf.Name.A])
+    return {
+        "x4-tt-no-encoding": _x4_truetype(encoding=None),
+        "x4-tt-differences": _x4_truetype(encoding=differences),
+        "x4-tt-symbolic-encoding": _x4_truetype(flags=4, one_cmap=True),
+        "x4-tt-symbolic-two-cmaps": _x4_truetype(flags=4, encoding=None),
+    }
 
 
 def _print_fixtures() -> dict[str, pikepdf.Pdf]:
@@ -1239,6 +1270,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_colour_fixtures(),
         **_x4_spot_fixtures(),
         **_x4_jpx_fixtures(),
+        **_x4_font_fixtures(),
         **_print_fixtures(),
         "x4-pre-separated": _x4_pre_separated(),
     }
