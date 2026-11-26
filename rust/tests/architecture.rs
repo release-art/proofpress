@@ -34,7 +34,7 @@ const ALLOWED: &[(&str, &[&str])] = &[
         &["pipeline", "findings", "document", "common", "content", "graphics"],
     ),
     // The Python module sits beside the tiers: it hands whole files to the checks and reports back.
-    ("python", &["findings", "checks"]),
+    ("python", &["findings", "checks", "cli"]),
     // The command line, like the Python module, hands whole files to the checks and reports back.
     ("cli", &["findings", "checks"]),
     // The binaries are separate crates: they reach the library as `proof_pdf::`, never by `crate::` paths.

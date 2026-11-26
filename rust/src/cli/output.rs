@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::args::{Pdfx, Verify};
 use super::run::{FileReport, Plan};
-use crate::findings::{Finding, Severity, Verdict};
+use crate::findings::{Finding, Outcome, Severity, Verdict};
 
 /// The exit codes (brief, stage 4): with several files the worst wins, refused, then a timeout, then findings.
 pub(crate) const PASS: i32 = 0;
@@ -71,10 +71,31 @@ pub(crate) fn text(reports: &[FileReport], o: &Verify, plan: &Plan, style: &Styl
             };
             lines.push(format!("      {mark} {}", labelled(finding, &pages)));
         }
+        for (reason, ids) in unjudged(report) {
+            let mark = style.paint("31", "x");
+            lines.push(format!("      {mark} not evaluated, {reason}: {}", ids.join(", ")));
+        }
     }
     lines.push(String::new());
     lines.push(summary(reports, o, plan, style));
     lines.join("\n") + "\n"
+}
+
+/// The checks that could not be judged, grouped by why, in first-seen order: a damaged file leaves most of them
+/// unjudged for the same reason, which is one line, not one per check.
+fn unjudged(report: &FileReport) -> Vec<(&str, Vec<&str>)> {
+    let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
+    let results = report.report.iter().flat_map(|r| &r.checks);
+    for (id, reason) in results.filter_map(|c| match &c.outcome {
+        Outcome::NotEvaluated(reason) => Some((c.id.id, reason.as_str())),
+        Outcome::Pass | Outcome::Fail => None,
+    }) {
+        match groups.iter_mut().find(|(r, _)| *r == reason) {
+            Some((_, ids)) => ids.push(id),
+            None => groups.push((reason, vec![id])),
+        }
+    }
+    groups
 }
 
 /// Findings that differ only by page, as one line naming the pages, in first-seen order.
@@ -197,6 +218,8 @@ pub(crate) fn json(reports: &[FileReport]) -> String {
             record.insert("ok".into(), r.ok().into());
             record.insert("exempt".into(), r.exempt.clone().into());
             record.insert("unreadable".into(), r.unreadable.clone().into());
+            record.insert("findings".into(), serde_json::Value::Array(Vec::new()));
+            record.insert("checks".into(), serde_json::Value::Array(Vec::new()));
             let core = r.report.as_ref().and_then(|c| serde_json::to_value(c).ok());
             record.extend(
                 core.as_ref()

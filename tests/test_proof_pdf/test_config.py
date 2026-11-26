@@ -21,7 +21,8 @@ class _Command:
 
 
 COMMANDS = {
-    "verify": _Command(
+    # A stand-in for a command whose options the Python reads; `verify` is the Rust command's, left to it.
+    "preview": _Command(
         _Param("files", kind="argument"),
         _Param("min_text_pt", type_name="float"),
         _Param("colour"),
@@ -70,34 +71,34 @@ class TestFind:
 
 class TestDefaultMap:
     def test_keys_may_use_dashes_underscores_or_the_flag_name(self, tmp_path):
-        path = _write(tmp_path, '[verify]\nmin-text-pt = 6\ncolour = false\nverapdf = "/opt/verapdf"\n')
+        path = _write(tmp_path, '[preview]\nmin-text-pt = 6\ncolour = false\nverapdf = "/opt/verapdf"\n')
         assert config.default_map(path, None, COMMANDS) == {
-            "verify": {"min_text_pt": 6, "colour": False, "verapdf_bin": "/opt/verapdf"}
+            "preview": {"min_text_pt": 6, "colour": False, "verapdf_bin": "/opt/verapdf"}
         }
-        again = _write(tmp_path, '[verify]\nmin_text_pt = 6\nverapdf_bin = "/opt/verapdf"\n')
-        assert config.default_map(again, None, COMMANDS)["verify"]["min_text_pt"] == 6
+        again = _write(tmp_path, '[preview]\nmin_text_pt = 6\nverapdf_bin = "/opt/verapdf"\n')
+        assert config.default_map(again, None, COMMANDS)["preview"]["min_text_pt"] == 6
 
     def test_an_exempt_table_becomes_glob_equals_reason_options(self, tmp_path):
-        path = _write(tmp_path, '[verify.exempt]\n"manual.pdf" = "internal docs"\n"res/**" = "inputs"\n')
-        assert config.default_map(path, None, COMMANDS)["verify"]["exempt"] == [
+        path = _write(tmp_path, '[preview.exempt]\n"manual.pdf" = "internal docs"\n"res/**" = "inputs"\n')
+        assert config.default_map(path, None, COMMANDS)["preview"]["exempt"] == [
             "manual.pdf=internal docs",
             "res/**=inputs",
         ]
 
     def test_lists_pass_through(self, tmp_path):
-        path = _write(tmp_path, '[verify]\nallow-spot = ["Dieline", "Foil"]\n')
-        assert config.default_map(path, None, COMMANDS)["verify"]["allow_spot"] == ["Dieline", "Foil"]
+        path = _write(tmp_path, '[preview]\nallow-spot = ["Dieline", "Foil"]\n')
+        assert config.default_map(path, None, COMMANDS)["preview"]["allow_spot"] == ["Dieline", "Foil"]
 
     def test_paths_are_relative_to_the_config_file_not_the_working_directory(self, tmp_path):
         (tmp_path / "icc").mkdir()
-        path = _write(tmp_path, '[verify]\nproof-profile = "icc/fogra51.icc"\n')
-        assert config.default_map(path, None, COMMANDS)["verify"]["proof_profile"] == str(
+        path = _write(tmp_path, '[preview]\nproof-profile = "icc/fogra51.icc"\n')
+        assert config.default_map(path, None, COMMANDS)["preview"]["proof_profile"] == str(
             (tmp_path / "icc" / "fogra51.icc").resolve()
         )
 
     def test_an_absolute_path_is_left_alone(self, tmp_path):
-        path = _write(tmp_path, '[verify]\nproof-profile = "/abs/p.icc"\n')
-        assert config.default_map(path, None, COMMANDS)["verify"]["proof_profile"] == "/abs/p.icc"
+        path = _write(tmp_path, '[preview]\nproof-profile = "/abs/p.icc"\n')
+        assert config.default_map(path, None, COMMANDS)["preview"]["proof_profile"] == "/abs/p.icc"
 
     def test_pyproject_uses_the_tool_table(self, tmp_path):
         path = _write(tmp_path, "[tool.proof-pdf.texlog]\nmax-overfull-pt = 10\n", "pyproject.toml")
@@ -106,20 +107,20 @@ class TestDefaultMap:
 
 class TestProfiles:
     TEXT = (
-        "[verify]\nmin-text-pt = 6\ncolour = true\n"
-        "[profiles.deluxe.verify]\nmin-text-pt = 8\n"
+        "[preview]\nmin-text-pt = 6\ncolour = true\n"
+        "[profiles.deluxe.preview]\nmin-text-pt = 8\n"
         "[profiles.deluxe.texlog]\nmax-overfull-pt = 5\n"
     )
 
     def test_a_profile_overrides_the_base_per_option(self, tmp_path):
         path = _write(tmp_path, self.TEXT)
         result = config.default_map(path, "deluxe", COMMANDS)
-        assert result["verify"] == {"min_text_pt": 8, "colour": True}
+        assert result["preview"] == {"min_text_pt": 8, "colour": True}
         assert result["texlog"] == {"max_overfull_pt": 5}
 
     def test_without_a_profile_only_the_base_applies(self, tmp_path):
         assert config.default_map(_write(tmp_path, self.TEXT), None, COMMANDS) == {
-            "verify": {"min_text_pt": 6, "colour": True}
+            "preview": {"min_text_pt": 6, "colour": True}
         }
 
     def test_an_unknown_profile_lists_the_known_ones(self, tmp_path):
@@ -128,20 +129,20 @@ class TestProfiles:
 
     def test_a_profile_with_no_profiles_table_says_none(self, tmp_path):
         with pytest.raises(config.ConfigError, match="profiles: none"):
-            config.default_map(_write(tmp_path, "[verify]\n"), "x", COMMANDS)
+            config.default_map(_write(tmp_path, "[preview]\n"), "x", COMMANDS)
 
 
 class TestErrors:
     def test_a_misspelled_option_is_rejected_with_the_valid_ones(self, tmp_path):
-        with pytest.raises(config.ConfigError, match=r"\[verify\] has no option 'min-txt-pt'.*min-text-pt"):
-            config.default_map(_write(tmp_path, "[verify]\nmin-txt-pt = 6\n"), None, COMMANDS)
+        with pytest.raises(config.ConfigError, match=r"\[preview\] has no option 'min-txt-pt'.*min-text-pt"):
+            config.default_map(_write(tmp_path, "[preview]\nmin-txt-pt = 6\n"), None, COMMANDS)
 
     def test_a_positional_argument_cannot_be_set(self, tmp_path):
         with pytest.raises(config.ConfigError, match="no option 'files'"):
-            config.default_map(_write(tmp_path, '[verify]\nfiles = ["a.pdf"]\n'), None, COMMANDS)
+            config.default_map(_write(tmp_path, '[preview]\nfiles = ["a.pdf"]\n'), None, COMMANDS)
 
     def test_an_unknown_command_table_is_rejected(self, tmp_path):
-        with pytest.raises(config.ConfigError, match=r"\[nope\] is not a command.*texlog, verify"):
+        with pytest.raises(config.ConfigError, match=r"\[nope\] is not a command.*preview, texlog"):
             config.default_map(_write(tmp_path, "[nope]\nx = 1\n"), None, COMMANDS)
 
     def test_invalid_toml_is_a_config_error_not_a_traceback(self, tmp_path):
@@ -151,3 +152,25 @@ class TestErrors:
     def test_a_pyproject_without_the_table_is_an_error_if_named_explicitly(self, tmp_path):
         with pytest.raises(config.ConfigError, match=r"no \[tool.proof-pdf\]"):
             config.default_map(_write(tmp_path, "[project]\n", "pyproject.toml"), None, COMMANDS)
+
+
+class TestRustCommandTables:
+    def test_verify_is_left_to_the_rust_command(self, tmp_path):
+        path = _write(tmp_path, "schema = 1\n[verify]\nanything = 1\n[texlog]\nmax-overfull-pt = 2\n")
+        assert config.default_map(path, None, COMMANDS) == {"texlog": {"max_overfull_pt": 2}}
+
+    def test_a_higher_schema_is_refused(self, tmp_path):
+        with pytest.raises(config.ConfigError, match="schema other than 1"):
+            config.default_map(_write(tmp_path, "schema = 2\n"), None, COMMANDS)
+
+    def test_profiles_extend_one_another_ancestor_first(self, tmp_path):
+        text = (
+            "[profiles.base.texlog]\nmax-overfull-pt = 1\n"
+            "[profiles.big]\nextends = 'base'\ntexlog = { max-overfull-pt = 5 }\n"
+            "[profiles.loop]\nextends = 'loop'\n"
+        )
+        path = _write(tmp_path, text)
+        assert config.default_map(path, "big", COMMANDS) == {"texlog": {"max_overfull_pt": 5}}
+        assert config.default_map(path, "base", COMMANDS) == {"texlog": {"max_overfull_pt": 1}}
+        with pytest.raises(config.ConfigError, match="extends itself"):
+            config.default_map(path, "loop", COMMANDS)

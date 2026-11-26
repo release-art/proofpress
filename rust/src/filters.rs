@@ -109,7 +109,11 @@ pub(crate) fn decode(data: &[u8], chain: &[(Filter, Params)], budget: usize) -> 
     Ok(Decoded::Plain(bytes))
 }
 
+/// Zero bytes decode to zero bytes: there is nothing to misread, and qpdf writes an empty stream so.
 fn flate(data: &[u8], budget: usize) -> Result<Vec<u8>, Damage> {
+    if data.is_empty() {
+        return Ok(Vec::new());
+    }
     decompress_to_vec_zlib_with_limit(data, budget).map_err(|e| match e.status {
         TINFLStatus::HasMoreOutput => Damage::OverBudget(budget),
         _ => Damage::Corrupt(Filter::Flate),
@@ -546,6 +550,12 @@ mod tests {
         assert_eq!(Filter::from_name(b"Crypt"), Some(Filter::Crypt));
         assert_eq!(Filter::from_name(b"JPXDecode"), Some(Filter::Image));
         assert_eq!(Filter::from_name(b"Rot13Decode"), None);
+    }
+
+    #[test]
+    fn empty_flate_is_empty() {
+        assert_eq!(flate(&[], 10), Ok(Vec::new()));
+        assert_eq!(flate(&[1], 10), Err(Damage::Corrupt(Filter::Flate)));
     }
 
     #[test]

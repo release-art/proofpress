@@ -1821,7 +1821,8 @@ title = "Pages with a trim have a BleedBox"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "skip"
+reason = "Replaced by the x4.boxes rows (a BleedBox inside the MediaBox) and the geometry checks' bleed"
 
 [[check]]
 id = "boxes"
@@ -1829,7 +1830,8 @@ title = "Each page has a MediaBox"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "skip"
+reason = "Replaced by page.media-box and the x4.boxes rows"
 
 [[check]]
 id = "page-size"
@@ -1878,7 +1880,8 @@ title = "The file can be read"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "skip"
+reason = "Not a check: whether the file could be read is the report's own structure and verdict"
 
 [[check]]
 id = "internal"
@@ -2025,6 +2028,14 @@ status = "implemented"
 id = "content.compatibility"
 title = "BX and EX pair up"
 clauses = ["iso-32000-2:7.8.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+status = "implemented"
+
+[[check]]
+id = "page.media-box"
+title = "Every page has a MediaBox, its own or inherited"
+clauses = ["iso-32000-2:7.7.3.3"]
 severity = "error"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
 status = "implemented"

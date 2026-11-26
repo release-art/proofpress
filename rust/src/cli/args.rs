@@ -12,6 +12,9 @@ pub(crate) struct Cli {
     /// Defaults file (default: the nearest proof-pdf.toml, or [tool.proof-pdf] in pyproject.toml).
     #[arg(long, global = true, env = "PROOF_PDF_CONFIG")]
     pub(crate) config: Option<PathBuf>,
+    /// Read no config file, even one nearby.
+    #[arg(long, global = true, conflicts_with = "config")]
+    pub(crate) no_config: bool,
     /// Named profile in the config file, e.g. a printer.
     #[arg(long, global = true, env = "PROOF_PDF_PROFILE")]
     pub(crate) profile: Option<String>,
@@ -86,6 +89,10 @@ pub(crate) struct Verify {
     pub(crate) sizes: Sizes,
     #[command(flatten)]
     pub(crate) output: Output,
+    #[command(flatten)]
+    pub(crate) legacy: Legacy,
+    #[command(flatten)]
+    pub(crate) legacy_text: LegacyText,
 }
 
 /// Which layers run: the PDF/X level, PDF/A and peak ink.
@@ -98,7 +105,7 @@ pub(crate) struct Layers {
     #[arg(long, conflicts_with = "pdfx")]
     pub(crate) no_pdfx: bool,
     /// Run veraPDF's PDF/A validation (needs veraPDF).
-    #[arg(long)]
+    #[arg(long, overrides_with = "no_pdfa")]
     pub(crate) pdfa: bool,
     /// veraPDF PDF/A flavour: 2b, 2a, 2u, 1b, 3b, 4...
     #[arg(long)]
@@ -118,7 +125,7 @@ pub(crate) struct Layers {
 #[derive(Debug, Default, Args)]
 pub(crate) struct Inks {
     /// Skip the ink, overprint, RGB, rich black and image resolution checks.
-    #[arg(long)]
+    #[arg(long, overrides_with = "colour")]
     pub(crate) no_colour: bool,
     /// Colour model the job is proofed against.
     #[arg(long, value_enum)]
@@ -165,10 +172,10 @@ pub(crate) struct Type {
     #[arg(long)]
     pub(crate) k_only_text: bool,
     /// Do not flag characters shown with the .notdef glyph.
-    #[arg(long)]
+    #[arg(long, overrides_with = "missing_glyphs")]
     pub(crate) no_missing_glyphs: bool,
     /// Do not flag fonts that are not embedded, or Type 3 fonts.
-    #[arg(long)]
+    #[arg(long, overrides_with = "fonts")]
     pub(crate) no_fonts: bool,
     /// Fail text set smaller than this, in points. No default.
     #[arg(long)]
@@ -225,4 +232,22 @@ pub(crate) struct Output {
     /// Print the settings the config file and profile give, and exit.
     #[arg(long)]
     pub(crate) show_profile: bool,
+}
+
+/// The Python command's spellings of the defaults, still accepted: the last of `--x` and `--no-x` wins.
+#[derive(Debug, Default, Args)]
+pub(crate) struct Legacy {
+    #[arg(long, hide = true, overrides_with = "pdfa")]
+    pub(crate) no_pdfa: bool,
+    #[arg(long, hide = true, overrides_with = "no_colour")]
+    pub(crate) colour: bool,
+    #[arg(long, hide = true, overrides_with = "no_fonts")]
+    pub(crate) fonts: bool,
+}
+
+/// More of the Python command's spellings of the defaults.
+#[derive(Debug, Default, Args)]
+pub(crate) struct LegacyText {
+    #[arg(long, hide = true, overrides_with = "no_missing_glyphs")]
+    pub(crate) missing_glyphs: bool,
 }

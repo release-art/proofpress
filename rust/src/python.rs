@@ -22,6 +22,23 @@ fn verify(py: Python<'_>, file: &str, data: &[u8], level: &str, params: &str) ->
     serde_json::to_string(&report).map_err(value_error)
 }
 
+/// Run the `proof-pdf` command line with `argv` (the program name first) and return its exit code, standard output and
+/// standard error; `colour` when the output goes to a terminal. The wheel's `proof-pdf verify` and the Python API both
+/// come here.
+#[pyfunction]
+#[pyo3(signature = (argv, colour = false))]
+fn run(py: Python<'_>, argv: Vec<String>, colour: bool) -> (i32, String, String) {
+    py.detach(|| {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = crate::cli::main(argv.into_iter().map(Into::into), &mut out, &mut err, colour);
+        (
+            code,
+            String::from_utf8_lossy(&out).into_owned(),
+            String::from_utf8_lossy(&err).into_owned(),
+        )
+    })
+}
+
 /// A `ValueError` saying `message`.
 fn value_error(message: impl Display) -> PyErr {
     PyValueError::new_err(message.to_string())
@@ -31,7 +48,7 @@ fn value_error(message: impl Display) -> PyErr {
 #[pymodule]
 mod _core {
     #[pymodule_export]
-    use super::verify;
+    use super::{run, verify};
 }
 
 #[cfg(test)]
@@ -65,6 +82,25 @@ mod tests {
                 .call1(("x.pdf", b"".as_slice(), "print", r#"{"nope": 1}"#))
                 .unwrap_err();
             assert!(error.to_string().contains("bad params"), "{error}");
+        });
+    }
+
+    #[test]
+    fn run_returns_the_exit_code_and_output() {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = pyo3::wrap_pymodule!(_core)(py);
+            let run = module.bind(py).getattr("run").unwrap();
+            let (code, out, err): (i32, String, String) =
+                run.call1((vec!["proof-pdf", "--version"],)).unwrap().extract().unwrap();
+            assert_eq!((code, out.starts_with("proof-pdf "), err.as_str()), (0, true, ""));
+            let (code, _, err): (i32, String, String) = run
+                .call1((vec!["proof-pdf", "verify", "--bogus"], true))
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert_eq!(code, 64);
+            assert!(err.contains("--bogus"), "{err}");
         });
     }
 }

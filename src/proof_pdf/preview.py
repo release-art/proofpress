@@ -15,12 +15,12 @@ import asyncio
 import dataclasses
 import logging
 import pathlib
+import shutil
 
 import pikepdf
 from PIL import Image, ImageDraw, ImageFont
 
 from ._internal import proc, structure
-from ._internal.colour import GhostscriptError, gs_available
 from .models import MM_PER_IN, PT_PER_IN
 
 logger = logging.getLogger(__name__)
@@ -31,9 +31,14 @@ _TRIM_RGB = (214, 34, 34)
 _BLEED_RGB = (0, 110, 210)
 _SAFE_RGB = (0, 150, 70)
 
-# Re-exported so the CLI can gate on the tool without reaching into colour.
-gs_available = gs_available
-GhostscriptError = GhostscriptError
+
+class GhostscriptError(RuntimeError):
+    """Ghostscript exited non-zero, or timed out, while rendering."""
+
+
+def gs_available(binary: str) -> bool:
+    """Whether the Ghostscript *binary* resolves, so a caller can stop before a long run."""
+    return shutil.which(binary) is not None
 
 
 @dataclasses.dataclass(frozen=True)

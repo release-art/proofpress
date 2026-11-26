@@ -94,6 +94,11 @@ expect = { "stream.eol" = "the page content's data runs straight into a space an
 levels = ["x4"]
 expect = { "stream.filter" = "a stream names the filter /FlateDecodX (7.4.1)", "x4.filter.standard-only" = "the same name is not one of PDF 1.6's filters (6.8)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
+# ISO 32000-2 7.7.3.3: every page has a MediaBox.
+[x4-no-media-box]
+levels = ["x4"]
+expect = { "page.media-box" = "the page has none, its own or inherited (7.7.3.3)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
 [x4-damaged-object]
 levels = ["x4"]
 expect = { "object.damaged" = "the Info dictionary starts [<, which cannot be read; every other check is then not evaluated", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }

@@ -1,5 +1,6 @@
 """The artwork-bleed check, and the clip tracking it relies on."""
 
+import asyncio
 import dataclasses
 import pathlib
 import re
@@ -7,10 +8,10 @@ import re
 import pikepdf
 import pytest
 
-from proof_pdf._internal import paint, ported
+from proof_pdf._internal import paint
 from proof_pdf.models import PageGeometry, Severity
 
-from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W, ported_findings
+from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W, core_run, ported_findings
 
 T = BLEED  # the trim's lower-left corner, in points
 TR, TT = BLEED + TRIM_W, BLEED + TRIM_H  # and its upper-right
@@ -235,15 +236,15 @@ class TestOutsideBleed:
         from proof_pdf.models import Profile
 
         path = _pdf(tmp_path, MARK, boxes=SHEET)
-        findings, _ = core._check_pdf(path, Profile(pdfx=False, no_marks=True))
-        assert "outside-bleed" in {f.check for f in findings}
-        findings, _ = core._check_pdf(path, Profile(pdfx=False))
-        assert "outside-bleed" not in {f.check for f in findings}
+        report = asyncio.run(core.verify_file(path, Profile(pdfx=False, no_marks=True)))
+        assert "outside-bleed" in {f.check for f in report.findings}
+        report = asyncio.run(core.verify_file(path, Profile(pdfx=False)))
+        assert "outside-bleed" not in {f.check for f in report.findings}
 
 
 class TestOutsideMedia:
     def _media(self, path):
-        return [f for f in ported.run(path) if f.check == "outside-media"]
+        return [f for f in core_run(path) if f.check == "outside-media"]
 
     def test_an_object_wholly_beyond_the_page_is_a_warning(self, tmp_path):
         [finding] = self._media(_pdf(tmp_path, b"BT /F1 6 Tf 400 380 Td (hidden) Tj ET", boxes=SHEET))
@@ -264,8 +265,8 @@ class TestOutsideMedia:
         from proof_pdf.models import Profile
 
         path = _pdf(tmp_path, b"BT /F1 6 Tf 400 380 Td (hidden) Tj ET", boxes=SHEET)
-        findings, _ = core._check_pdf(path, Profile(pdfx=False))
-        assert "outside-media" in {f.check for f in findings}
+        report = asyncio.run(core.verify_file(path, Profile(pdfx=False)))
+        assert "outside-media" in {f.check for f in report.findings}
 
 
 class TestMissingXObjects:
@@ -280,7 +281,7 @@ class TestMissingXObjects:
             pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=xobject(pdf)))
         path = tmp_path / "xobject.pdf"
         pdf.save(path)
-        return [f for f in ported.run(path) if f.check == "xobject-missing"]
+        return [f for f in core_run(path) if f.check == "xobject-missing"]
 
     @pytest.mark.parametrize(
         "xobject",
@@ -308,7 +309,7 @@ class TestMissingXObjects:
         data, count = re.subn(rb"/Im0 (\d+) 0 R", lambda m: b"/Im0 " + b"9" * len(m[1]) + b" 0 R", path.read_bytes())
         assert count == 1
         path.write_bytes(data)
-        [finding] = [f for f in ported.run(path) if f.check == "xobject-missing"]
+        [finding] = [f for f in core_run(path) if f.check == "xobject-missing"]
         assert finding.check == "xobject-missing"
 
     def test_a_real_image_passes(self, tmp_path):
@@ -318,6 +319,10 @@ class TestMissingXObjects:
     def test_a_file_the_core_cannot_read_fails_rather_than_passes(self, tmp_path):
         path = tmp_path / "junk.pdf"
         path.write_bytes(b"%PDF-1.4 not a PDF")
-        assert {(f.check, f.severity, f.message) for f in ported.run(path)} == {
-            (check, Severity.ERROR, "could not be checked: the file was refused") for check in ported.PORTED
+        findings = core_run(path)
+        unjudged = [f for f in findings if not f.check.startswith("file.")]
+        assert "outside-media" in {f.check for f in unjudged}
+        assert {(f.severity, f.message) for f in unjudged} == {
+            (Severity.ERROR, "could not be checked: the file was refused")
         }
+        assert any(f.check.startswith("file.") for f in findings), "the reason the file was refused"

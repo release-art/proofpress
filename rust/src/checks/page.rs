@@ -13,7 +13,8 @@ use crate::common::rect::{Rect, rect};
 use crate::common::text;
 use crate::document::{Document, Object, Page, Value};
 use crate::findings::{
-    BLEED, CENTRING, Check, Finding, GEOMETRY, Location, OUTPUT_CONDITION, PAGE_COUNT, PAGE_ROTATE, PAGE_SIZE,
+    BLEED, CENTRING, Check, Finding, GEOMETRY, Location, OUTPUT_CONDITION, PAGE_COUNT, PAGE_MEDIA_BOX, PAGE_ROTATE,
+    PAGE_SIZE,
 };
 
 /// Two pages whose sizes differ by less than this, in millimetres, are the same size.
@@ -35,6 +36,24 @@ pub(super) fn own_box(doc: &Document, page: &Page<'_>, key: &[u8]) -> Option<Rec
 /// The page's media box, its own or inherited.
 pub(super) fn media_box(doc: &Document, page: &Page<'_>) -> Option<Rect> {
     page.get(b"MediaBox").and_then(|b| rect(doc, b))
+}
+
+/// ISO 32000-2 7.7.3.3: every page has a `/MediaBox` of four numbers, its own or inherited from the page tree.
+pub(super) fn media_box_present(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let pages = doc.pages();
+    let missing = pages
+        .iter()
+        .enumerate()
+        .filter(|(_, page)| media_box(doc, page).is_none());
+    missing
+        .map(|(i, page)| {
+            let message = match page.get(b"MediaBox") {
+                Some(_) => "the page's MediaBox is not four numbers",
+                None => "the page has no MediaBox, its own or inherited",
+            };
+            on_page(PAGE_MEDIA_BOX, i + 1, message.to_owned()).citing("7.7.3.3")
+        })
+        .collect()
 }
 
 /// Whether `/Rotate` turns the page: its value truncated to a whole number is not a multiple of 360.
@@ -322,6 +341,22 @@ mod tests {
             .flat_map(|run| run(doc, &settings))
             .map(|f| (f.page, f.message))
             .collect()
+    }
+
+    #[test]
+    fn a_page_needs_a_media_box_of_four_numbers() {
+        let doc = paged(
+            &[("/MediaBox [0 0 10 10]", ""), ("", ""), ("/MediaBox [0 0 10]", "")],
+            "",
+            &[],
+        );
+        assert_eq!(
+            found(&doc, Params::default(), &[media_box_present]),
+            [
+                (Some(2), "the page has no MediaBox, its own or inherited".to_owned()),
+                (Some(3), "the page's MediaBox is not four numbers".to_owned()),
+            ]
+        );
     }
 
     /// A 1 by 2 inch trim with 1/8 inch bleed: 72 by 144 points, 9 points of bleed.

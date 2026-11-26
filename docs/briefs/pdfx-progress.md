@@ -5,6 +5,11 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
+**Open, 2026-11-26 (the PDF/X-4 milestone, end of phase 6):** every PDF/X-4 row that needs no external file is
+implemented (125 implemented, 4 skip; the 12 todo rows are X-4p, phase 7), and `proof-pdf verify` is the Rust core's
+command, with veraPDF and Ghostscript, the config file and a thin async Python API. Gates green, Docker included. Carry
+on to phases 7–10 (file sets and X-4p, PDF/X-5, then the rest)?
+
 Answered 2026-11-26 (oracle escalation, task 5.2, glyph presence 6.5.1 and `.notdef` 6.5.2):
 - (a) Render mode 3: a glyph (a font's code) is skipped only when every appearance of it is in mode 3; one visible
   appearance among any number of invisible ones and it is judged (owner).
@@ -32,19 +37,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 6** (the CLI and the Python API, the PDF/X-4 milestone): every X-4 row that needs no external file is
-  implemented; the Rust `verify` runs the core's checks, veraPDF and Ghostscript, with its config file. Next:
-  `test_cli.py` against the binary, level selection (6.2) and the Python API (6.3). Phase 5 finished 2026-11-26; see its
-  stage report. Phase 4 finished 2026-11-26; see its stage report. The walk places what it paints
-  (CTM, clip, path, text and image extents) and reads colours as the print checks do; 32 print checks run in Rust:
-  what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
-  (`overprint`, `white-overprint`, `rich-black`, `k-only-text`), the page geometry (`geometry`, `bleed`, `centring`,
-  `page-count`, `page-size`, `page-rotate`, `output-condition`), the colour mode (`blend-space`, `spot-ink`,
-  `colour-space`, `rgb-only`, `gray-only`, `icc-profile`, `spot-definition`), image resolution (`image-dpi`,
-  `image-dpi-max`, `image-stretch`) and text (`missing-glyph`, `font-embedded`, `font-type3`, `text-size`, `hairline`,
-  `safe-area`, `contrast`). Profile parameters reach the core as JSON (`Settings`, `Params`). Every print check that
-  reads the PDF is ported; `tac`, `pdfa` and `structure` are tool orchestration and file-level outcomes for the CLI
-  stage. The brief's pace checkpoint for `paint.py` falls on 2026-12-02; the port it measures is finished.
+- **The PDF/X-4 milestone is reached** (phase 6 finished 2026-11-26; see its stage report). Waiting for the owner's
+  answer to the stop question above before phase 7.
 
 ## Done
 
@@ -106,6 +100,10 @@ record it as not conforming to that one rule).
 | 6.1 (part) | `2cff6ac` | The Rust `proof-pdf verify` (feature `cli`, `src/cli/`, binary `src/bin/proof-pdf.rs`): the Python command's options, the print checks they switch on and the PDF/X level (`--pdfx x4` by default, `--no-pdfx`), files and directories with `--exclude` and `--exempt`, `--jobs` threads, the text report and `--json`, and the brief's exit codes. Config files, veraPDF and Ghostscript are next |
 | 6.1 (part) | `68fbc6c` | The config file for the Rust `verify`: `proof-pdf.toml` or `[tool.proof-pdf]` in `pyproject.toml`, found walking up or named with `--config`; `schema = 1`, profiles with `--profile` and `extends`, the Python key spellings, `--show-profile` |
 | 6.1 (part) | the commit after `68fbc6c` | veraPDF (`--pdfa`) and Ghostscript (`--tac`) for the Rust `verify`, through `process-wrap` (a process group, or a job object on Windows, killed on timeout or drop), beside the core's checks; peak ink read from `tiffsep`'s uncompressed plates with `tiff`; a timeout exits 3. `checks.toml` gains a `tool` field: `pdfa` and `tac` are implemented, tested with stand-in tools rather than fixtures |
+| 6.1 | the milestone commit | `test_cli.py` rewritten against the Rust command (behaviour on real fixtures; option parsing is tested in Rust); the Python `verify` passes its arguments through `_core.run`; `--no-config`; the Python spellings `--no-pdfa`, `--colour`, `--fonts`, `--missing-glyphs` kept |
+| 6.2 | the milestone commit | Levels `--pdfx x4\|x4p\|x5g\|x5pg\|x5n` (in `2cff6ac`), `--no-pdfx` and `pdfx = false`; a level's `todo` rows are reported as not evaluated, so X-4p and X-5 cannot pass yet; the text report lists unjudged checks by reason |
+| 6.3 | the milestone commit | `core.verify_file`/`verify_files` keep their async signatures over `_core.run`; `config.load_profile` reads the profile the Rust command resolves (`--show-profile`); the Python veraPDF, colour, ported and PDF/X modules are deleted |
+| 6 (fix) | the milestone commit | `page.media-box` (ISO 32000-2 7.7.3.3, every level; fixture `x4-no-media-box`): a page without a MediaBox passed once the Python `boxes` check went; `bleedbox`, `boxes`, `structure` become `skip`; an empty FlateDecode stream reads as empty |
 
 ## Register coverage
 
@@ -115,15 +113,15 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 125 | 12 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 51 | 5 | 1 (`internal`) |
+| House and structure checks | 54 | 0 | 4 (`internal`, `bleedbox`, `boxes`, `structure`) |
 
 ## Gates
 
 | Gate | Last result |
 |---|---|
 | `bin/rust/check.sh` | green, 2026-11-26 (100% lines, regions, functions) |
-| Python (ruff, pyright, pytest) | green, 2026-11-26: 1157 passed |
-| `bin/docker/test.sh` | green at the end of phase 5, 2026-11-26: 1157 passed |
+| Python (ruff, pyright, pytest) | green, 2026-11-26: 1073 passed (the Python checks' own tests went with them) |
+| `bin/docker/test.sh` | green at the end of phase 6, 2026-11-26: 1073 passed |
 | `bin/suites/pdfx.sh` | 2026-11-26: 39 files, 39 accepted, 0 problems |
 
 ## Corpus and oracle
@@ -525,3 +523,18 @@ Oracle consultations:
   (TrueType, CFF, CID-keyed CFF and a hand-made Type 1), so none carries a third-party licence.
 - **Departures.** Type 3 glyph procedures are still not walked; composite codes are split two bytes at a time; a
   font dictionary written directly in a resource dictionary is not judged. See "Deviations from the plan".
+
+### Phase 6 (the CLI and the Python API, the PDF/X-4 milestone), finished 2026-11-26
+
+- **What changed.** `proof-pdf verify` is the Rust core's command (clap): the Python command's options and config keys,
+  PDF/X levels, veraPDF and Ghostscript through `process-wrap`, `proof-pdf.toml` with `schema = 1` and `extends`, the
+  brief's exit codes and JSON. The Python `verify` and `core.verify_file` are thin layers over `_core.run`. Every X-4 row
+  that needs no external file is implemented: 125 implemented, 12 todo (X-4p), 4 skip.
+- **Decisions.** PDF/A and total ink run only when asked. A level's unwritten rows are not evaluated, so no level passes
+  on rows nobody checks. See the decision log.
+- **Test material.** `test_cli.py`, `test_core.py` and `test_integration.py` run the real command on the built fixtures;
+  the samples and the Altona and Ghent suites keep their expectations, now with the X-4 findings (classified (b) or (c)
+  in `expected.toml`). The PDF/X suite: 39 files, 0 problems.
+- **Unexpected.** Retiring the Python `boxes` check left a page without a MediaBox passing at every level; it is now
+  `page.media-box`. Selecting X-5g passed an X-4 file on the inherited rows alone; fixed as above.
+- **Departures.** None from the plan's tasks; X-4p's rows wait for phase 7 as planned.

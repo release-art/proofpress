@@ -7,12 +7,13 @@ import tempfile
 
 import pikepdf
 import pytest
-from PIL import Image, ImageCms
+from PIL import ImageCms
 
-from proof_pdf._internal import colour, ported, proc, spaces
-from proof_pdf.models import ColourMode, Finding, Severity
+from proof_pdf import core
+from proof_pdf._internal import spaces
+from proof_pdf.models import ColourMode, Finding, Profile, Severity
 
-from .conftest import ported_findings
+from .conftest import core_run, ported_findings
 from .test_contrast import CMYK_PROFILE, needs_cmyk_profile
 
 
@@ -21,7 +22,7 @@ def _ported(pdf: pikepdf.Pdf, check: str) -> list[Finding]:
     with tempfile.TemporaryDirectory() as tmp:
         path = pathlib.Path(tmp) / "ported.pdf"
         pdf.save(path)
-        return [f for f in ported.run(path) if f.check == check]
+        return [f for f in core_run(path) if f.check == check]
 
 
 def _checks(findings) -> set[str]:
@@ -36,91 +37,6 @@ def _page_with(pdf: pikepdf.Pdf, stream: bytes, resources: pikepdf.Dictionary) -
         Resources=resources,
     )
     pdf.pages.append(pikepdf.Page(pdf.make_indirect(page)))
-
-
-class TestTotalAreaCoverage:
-    async def test_peak_over_limit_is_an_error(self, mocker):
-        mocker.patch.object(colour, "_page_tac_peaks", return_value=[250.0, 340.0])
-        findings = await colour.check_tac("gs", "x.pdf", 300.0)
-        assert [f.page for f in findings] == [2]
-        assert findings[0].severity is Severity.ERROR
-
-    async def test_the_warn_tier_is_between_the_level_and_the_limit(self, mocker):
-        mocker.patch.object(colour, "_page_tac_peaks", return_value=[240.0, 250.0, 260.0, 300.0, 340.0])
-        findings = await colour.check_tac("gs", "x.pdf", 300.0, warn_tac=250.0)
-        assert [(f.page, f.severity) for f in findings] == [
-            (3, Severity.WARN),
-            (4, Severity.WARN),  # exactly at the limit is still within it
-            (5, Severity.ERROR),
-        ]
-        assert "advisory" in findings[0].message and "limit" in findings[2].message
-
-    async def test_without_a_warn_level_nothing_warns(self, mocker):
-        mocker.patch.object(colour, "_page_tac_peaks", return_value=[260.0, 299.0])
-        assert await colour.check_tac("gs", "x.pdf", 300.0) == []
-
-    async def test_all_under_limit_is_clean(self, mocker):
-        mocker.patch.object(colour, "_page_tac_peaks", return_value=[250.0, 299.9])
-        assert await colour.check_tac("gs", "x.pdf", 300.0) == []
-
-    def test_peak_tac_sums_the_plates(self, tmp_path):
-        """A tiffsep plate is 0 where the ink is full; every plate, spots included, counts once."""
-        plates = []
-        for name, value in (("Cyan", 0), ("Magenta", 0), ("Yellow", 255), ("PANTONE 185 C", 128)):
-            plates.append(tmp_path / f"page-001({name}).tif")
-            Image.new("L", (4, 4), value).save(plates[-1])
-        assert colour._peak_tac(plates) == pytest.approx(200.0 + 127 / 255 * 100)
-        assert colour._peak_tac([]) == 0.0
-
-    async def test_rasters_are_deleted_as_they_are_read(self, tmp_path, fake_run):
-        """A 50-page deck must not keep every TIFF on disk at once."""
-        seen: list[int] = []
-
-        def _write_pages(argv, **kwargs):
-            out = next(a for a in argv if a.startswith("-sOutputFile=")).removeprefix("-sOutputFile=")
-            for i in (1, 2, 3):
-                Image.new("CMYK", (2, 2), (0, 0, 0, 0)).save(out % i)
-                Image.new("L", (2, 2), 255).save((out % i).replace(".tif", "(Black).tif"))
-            seen.append(len(list(pathlib.Path(out).parent.glob("*.tif"))))
-
-        fake_run(side_effect=_write_pages)
-        peaks = await colour._page_tac_peaks("gs", str(tmp_path / "in.pdf"))
-        assert len(peaks) == 3
-        assert seen == [6]  # all written by gs...
-        # ...and none left behind once each peak was read.
-        assert not list(tmp_path.glob("**/page-*.tif"))
-
-    async def test_pages_sort_numerically_not_lexicographically(self, tmp_path, fake_run):
-        """`page-1000.tif` must not sort before `page-999.tif`."""
-
-        def _write(argv, **kwargs):
-            out = next(a for a in argv if a.startswith("-sOutputFile=")).removeprefix("-sOutputFile=")
-            base = pathlib.Path(out).parent
-            for i, plate in ((999, 255), (1000, 0)):
-                Image.new("CMYK", (2, 2), (0, 0, 0, 0)).save(base / f"page-{i}.tif")
-                Image.new("L", (2, 2), plate).save(base / f"page-{i}(Black).tif")
-
-        fake_run(side_effect=_write)
-        peaks = await colour._page_tac_peaks("gs", "in.pdf")
-        assert peaks == [pytest.approx(0.0), pytest.approx(100.0)]
-
-    @pytest.mark.parametrize(
-        ("stderr", "expected"), [("boom", "boom"), ("", "ghostscript failed")], ids=["detail", "default"]
-    )
-    async def test_ghostscript_failure_raises(self, fake_run, stderr, expected):
-        fake_run(returncode=1, stderr=stderr)
-        with pytest.raises(colour.GhostscriptError, match=expected):
-            await colour._page_tac_peaks("gs", "in.pdf")
-
-    async def test_timeout_raises(self, mocker):
-        mocker.patch.object(proc, "run", side_effect=proc.ProcTimeoutError("timed out"))
-        with pytest.raises(colour.GhostscriptError, match="timed out"):
-            await colour._page_tac_peaks("gs", "in.pdf", timeout=5)
-
-    def test_gs_available(self, mocker):
-        mocker.patch.object(colour.shutil, "which", side_effect=lambda b: "/usr/bin/gs" if b == "gs" else None)
-        assert colour.gs_available("gs")
-        assert not colour.gs_available("nope")
 
 
 class TestOverprint:
@@ -664,12 +580,11 @@ class TestKOnlyText:
 
 
 @pytest.mark.skipif(shutil.which("gs") is None, reason="Ghostscript not installed")
-async def test_page_tac_peaks_against_real_ghostscript(make_content_pdf):
-    """One end-to-end pass through the real binary, on a deliberately tiny file."""
+async def test_peak_ink_against_real_ghostscript(make_content_pdf):
+    """One end-to-end pass through the real binary, on a deliberately tiny file: paper white is no ink."""
     path = make_content_pdf(b"0 0 0 0 k 0 0 50 50 re f", font=False)
-    peaks = await colour._page_tac_peaks("gs", str(path), timeout=10)
-    assert len(peaks) == 1
-    assert 0.0 <= peaks[0] <= 400.0
+    report = await core.verify_file(path, Profile(pdfx=False, tac=True, max_tac=1.0), timeout=30)
+    assert "tac" not in {f.check for f in report.findings}
 
 
 GS_OP = {"/GS1": pikepdf.Dictionary(OP=True, op=True)}

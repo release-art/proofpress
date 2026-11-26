@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `proof-pdf verify` is now the Rust core's command; the Python `verify` passes its arguments straight through. Every
+  option and config key keeps its spelling; `--no-pdfa`, `--colour`, `--fonts` and `--missing-glyphs` are still
+  accepted. What changes:
+  - The whole of PDF/X-4 is checked by default (`--pdfx x4`): 125 rows of ISO 15930-7 instead of the page boxes,
+    `/Trapped` and identity. `--pdfx x4p|x5g|x5pg|x5n` selects another level; `--no-pdfx` and `pdfx = false` still turn
+    it off. A level whose rows are not all written yet (X-4p, the X-5 levels) cannot pass: those rows are reported as
+    "not evaluated, not written yet".
+  - PDF/A (veraPDF) and total ink (Ghostscript) run only when asked, with `--pdfa` and `--tac`; `Profile.pdfa` and the
+    new `Profile.tac` default to `False`. A timeout exits 3; a usage error exits 64.
+  - `--json` records always carry `findings` and `checks`; a finding's severity is `"error"` or `"warning"`.
+  - Checks that could not be judged are listed under the file as "not evaluated", one line per reason, and fail it.
+  - Config files may set `schema = 1` (a later schema is refused) and `extends` another profile.
+  - `verify_file` and `verify_files` keep their signatures; they now call the core.
+
 - The print checks that read the PDF now run in the Rust core: placement (`outside-media`, `xobject-missing`,
   `artwork-bleed`, `outside-bleed`), inks (`overprint`, `white-overprint`, `rich-black`, `k-only-text`), page geometry,
   the colour mode (`blend-space`, `spot-ink`, `spot-definition`, `colour-space`, `rgb-only`, `gray-only`,
@@ -40,10 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `proof_pdf._internal.verapdf` (and `VeraPdfError`), `_internal.colour`, `_internal.ported` and `_internal.pdfx`:
+  the Rust command does their work.
+- The print checks `bleedbox` and `boxes`: PDF/X-4's `x4.boxes.*` rows and the new `page.media-box` replace them.
+
 - `--pdfx-version`, `Profile.pdfx_version`, `PdfxVersion` and the config key `pdfx-version`: x1a and x3 had no checks, so
   selecting them could only fail. The x4 rule table is unchanged; `pdfx/COVERAGE.md` and its generator are gone too.
 
 ### Fixed
+
+- A page with no MediaBox, its own or inherited, now fails (`page.media-box`, ISO 32000-2 7.7.3.3, and 6.1.1 at
+  PDF/X-4). New fixture `x4-no-media-box`.
+- An empty FlateDecode stream (zero bytes, as qpdf writes it) is read as empty, not as damaged.
 
 - A page that paints an image or form that is not there no longer passes: a `Do` whose name resolves to no XObject is
   an error, `xobject-missing` (a missing resource, a non-stream, or a reference to an object the file does not have).

@@ -7,6 +7,7 @@ each test asks for the one shape it needs -- so a new case adds a call, not a
 new block of setup.
 """
 
+import json
 import pathlib
 import tempfile
 import types
@@ -16,8 +17,8 @@ from typing import Any, cast
 import pikepdf
 import pytest
 
-from proof_pdf._internal import ported, proc
-from proof_pdf.models import Finding, PageGeometry
+from proof_pdf._internal import _core, proc
+from proof_pdf.models import Finding, PageGeometry, Severity
 
 # An A6 card (105x148 mm) centred inside a 3 mm bleed: the "correct" baseline.
 A6 = PageGeometry(trim_w_mm=105.0, trim_h_mm=148.0, bleed_mm=3.0)
@@ -32,12 +33,26 @@ GOOD_BOXES = {
 }
 
 
+def core_run(path: pathlib.Path, params: dict[str, object] | None = None) -> list[Finding]:
+    """Every print check's findings on the PDF at *path*, from the Rust core, with the print checks' *params* (the
+    core's defaults for any left out); a check the core could not judge fails as "could not be checked"."""
+    report = json.loads(_core.verify(str(path), path.read_bytes(), "print", json.dumps(params or {})))
+    severity = {"error": Severity.ERROR, "warning": Severity.WARN}
+    findings = [Finding(f["check"], severity[f["severity"]], f["message"], f["page"]) for f in report["findings"]]
+    findings += [
+        Finding(c["id"], Severity.ERROR, f"could not be checked: {c['reason']}")
+        for c in report["checks"]
+        if c["status"] == "not_evaluated"
+    ]
+    return findings
+
+
 def ported_findings(pdf: pikepdf.Pdf, checks: set[str], **params: object) -> list[Finding]:
     """The Rust core's findings of *checks* on *pdf*, with the print checks' *params*."""
     with tempfile.TemporaryDirectory() as tmp:
         path = pathlib.Path(tmp) / "ported.pdf"
         pdf.save(path)
-        return [f for f in ported.run(path, params) if f.check in checks]
+        return [f for f in core_run(path, params) if f.check in checks]
 
 
 @pytest.fixture

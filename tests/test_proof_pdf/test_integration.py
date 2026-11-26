@@ -37,9 +37,17 @@ def runner():
     return typer.testing.CliRunner()
 
 
+# The layers the print fixtures are judged by: PDF/A and peak ink, which are opt-in, and not the PDF/X level, which the
+# print fixtures (built from ``good.pdf``) do not claim; a test about PDF/X names its level itself.
+LAYERS = ["--pdfa", "--tac"]
+
+
 def _verify(runner, *args: object) -> tuple[int, list[dict]]:
     """Run ``proof-pdf verify ... --json`` and return the exit code and the parsed records."""
-    result = runner.invoke(cli.pdf_app, ["verify", *map(str, args), "--json"])
+    words = [*map(str, args)]
+    pdfx = [] if any(w.startswith("--pdfx") or w == "--no-pdfx" for w in words) else ["--no-pdfx"]
+    # The defaults go first, so a test's own --no-pdfa wins (the last of a pair does).
+    result = runner.invoke(cli.pdf_app, ["verify", *LAYERS, *pdfx, *words, "--json"])
     return result.exit_code, json.loads(result.stdout)
 
 
@@ -66,16 +74,18 @@ class TestPassingFile:
         assert (code, record["findings"]) == (0, [])
 
     async def test_through_the_library(self):
-        profile = Profile(geometry=PageGeometry(trim_w_mm=105, trim_h_mm=148, bleed_mm=3))
+        geometry = PageGeometry(trim_w_mm=105, trim_h_mm=148, bleed_mm=3)
+        profile = Profile(pdfx=False, pdfa=True, tac=True, geometry=geometry)
         report = await core.verify_file(PDFS / "good.pdf", profile)
         assert report.ok and report.findings == []
 
 
 class TestOffendingFiles:
     def test_a_default_latex_style_file_fails_the_standards(self, runner):
-        code, [record] = _verify(runner, PDFS / "plain.pdf", *A6)
+        code, [record] = _verify(runner, PDFS / "plain.pdf", *A6, "--pdfx", "x4")
         assert code == 1
-        assert {"pdfa", "trimbox", "trapped", "pdfx-xmp", "pdfx-intent"} <= _checks(record)
+        pdfx = {"x4.boxes.trim-or-art", "x4.trapped.present", "x4.xmp.present", "x4.output-intent.present"}
+        assert {"pdfa", *pdfx} <= _checks(record)
 
     def test_the_wrong_trim_size_is_caught_by_geometry_alone(self, runner):
         code, [record] = _verify(runner, PDFS / "wrong-size.pdf", *A6)
@@ -130,19 +140,19 @@ class TestOffendingFiles:
 
     def test_a_truncated_file_fails_cleanly_with_a_readable_message(self, runner):
         code, [record] = _verify(runner, PDFS / "corrupt.pdf", *A6)
-        assert code == 1
-        assert "cannot open the PDF" in _messages(record, "structure")[0]
+        assert (code, record["verdict"]) == (2, "refused")
+        assert any(check.startswith("file.") for check in _checks(record))
         [pdfa_message] = _messages(record, "pdfa")
         assert "valid PDF" in pdfa_message and "Final field" not in pdfa_message  # no JVM noise
 
 
 class TestOutputIntentHint:
     def test_verapdf_failure_names_the_cause(self, runner):
-        code, [record] = _verify(runner, PDFS / "no-output-intent.pdf", *A6)
+        code, [record] = _verify(runner, PDFS / "no-output-intent.pdf", *A6, "--pdfx", "x4")
         assert code == 1
         hinted = [m for m in _messages(record, "pdfa") if "6.2.4.3" in m]
         assert hinted and "hint: the file has no PDF/A output intent" in hinted[0]
-        assert "pdfx-intent" in _checks(record)
+        assert "x4.output-intent.present" in _checks(record)
 
 
 class TestTextRules:
@@ -152,7 +162,7 @@ class TestTextRules:
         code, [record] = _verify(runner, PDFS / "cyan-text.pdf", *A6, "--no-pdfa", "--no-fonts", "--k-only-text")
         assert code == 1
         assert _checks(record, severity="error") == {"k-only-text"}
-        assert _checks(record, severity="warn") == {"overprint"}
+        assert _checks(record, severity="warning") == {"overprint"}
         assert "C100" in _messages(record, "k-only-text")[0]
 
     def test_k_only_is_opt_in(self, runner):
@@ -166,7 +176,7 @@ class TestTextRules:
     def test_rich_black_small_text_is_a_warning_that_does_not_fail(self, runner):
         code, [record] = _verify(runner, PDFS / "rich-black-text.pdf", *A6, "--no-pdfa", "--no-fonts")
         assert code == 0
-        assert _checks(record, severity="warn") == {"rich-black"} and _checks(record, severity="error") == set()
+        assert _checks(record, severity="warning") == {"rich-black"} and _checks(record, severity="error") == set()
 
 
 class TestDirectoriesAndExemptions:
@@ -200,7 +210,7 @@ class TestDirectoriesAndExemptions:
     def test_the_human_report_summarises_a_mixed_run(self, runner, tmp_path):
         for name in ("good", "wrong-size"):
             shutil.copy(PDFS / f"{name}.pdf", tmp_path / f"{name}.pdf")
-        result = runner.invoke(cli.pdf_app, ["verify", str(tmp_path), *A6])
+        result = runner.invoke(cli.pdf_app, ["verify", str(tmp_path), *A6, "--no-pdfx"])
         assert result.exit_code == 1
         assert "OK" in result.stdout and "FAIL" in result.stdout
         assert "1 of 2 file(s) failed" in result.stdout
@@ -338,7 +348,7 @@ class TestPrintReadiness:
         code, [record] = _verify(runner, PDFS / "white-overprint.pdf", *NO_STANDARDS, "--no-fonts")
         assert code == 1
         assert _checks(record, severity="error") == {"white-overprint"}
-        assert _checks(record, severity="warn") == {"overprint"}
+        assert _checks(record, severity="warning") == {"overprint"}
 
     def test_an_unembedded_font_fails_even_without_pdfa(self, runner):
         code, [record] = _verify(runner, PDFS / "cyan-text.pdf", *NO_STANDARDS, "--no-colour")
@@ -349,7 +359,7 @@ class TestPrintReadiness:
         code, [record] = _verify(runner, PDFS / "embedded-text.pdf", *NO_STANDARDS, "--no-colour")
         assert (code, record["findings"]) == (0, [])
         code, [record] = _verify(runner, PDFS / "type3-text.pdf", *NO_STANDARDS, "--no-colour")
-        assert code == 0 and _checks(record, severity="warn") == {"font-type3"}
+        assert code == 0 and _checks(record, severity="warning") == {"font-type3"}
 
     def test_a_spot_ink_off_the_list_is_named(self, runner):
         code, [record] = _verify(runner, PDFS / "spot-ink.pdf", *NO_STANDARDS, "--allow-spot", "Dieline")
@@ -372,7 +382,7 @@ class TestPrintReadiness:
         unset = _verify(runner, PDFS / "transparent-undeclared.pdf", *NO_STANDARDS)
         assert (ok[0], ok[1][0]["findings"]) == (0, [])
         assert bad[0] == 1 and _checks(bad[1][0], severity="error") == {"blend-space"}
-        assert unset[0] == 0 and _checks(unset[1][0], severity="warn") == {"blend-space"}
+        assert unset[0] == 0 and _checks(unset[1][0], severity="warning") == {"blend-space"}
 
     def test_output_condition_must_name_the_expected_printing_condition(self, runner):
         assert _verify(runner, PDFS / "good.pdf", *A6, "--output-condition", "sRGB")[0] == 0

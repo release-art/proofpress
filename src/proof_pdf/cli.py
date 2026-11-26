@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import pathlib
+import sys
 import typing
 
 import pikepdf
@@ -25,18 +26,12 @@ import typer
 
 from . import core, crop, extract, inventory, preview, texlog
 from ._internal import (
+    _core,
     config as config_file,
-    verapdf,
 )
 from .models import (
-    DEFAULT_MAX_TAC,
-    DEFAULT_MIN_DPI,
-    DEFAULT_SMALL_TEXT_PT,
-    ColourMode,
     FileReport,
     Finding,
-    PageGeometry,
-    Profile,
     Severity,
 )
 
@@ -109,13 +104,6 @@ PathsArg = typing.Annotated[
 ]
 GsOpt = typing.Annotated[str, typer.Option("--gs", help="Ghostscript executable.")]
 TimeoutOpt = typing.Annotated[float, typer.Option("--timeout", help="Per-tool timeout, in seconds.")]
-ExemptOpt = typing.Annotated[
-    list[str] | None,
-    typer.Option(
-        "--exempt",
-        help="GLOB=reason: skip matching PDFs, list them with the reason. Matches at any directory level.",
-    ),
-]
 ExcludeOpt = typing.Annotated[
     list[str] | None,
     typer.Option("--exclude", help="Glob, relative to a directory argument, of PDFs to skip. Repeatable."),
@@ -123,186 +111,26 @@ ExcludeOpt = typing.Annotated[
 QuietOpt = typing.Annotated[bool, typer.Option("--quiet", help="Exit code only, for CI.")]
 
 
-@pdf_app.command("verify")
-def verify_cmd(
-    files: PathsArg = None,
-    exclude: ExcludeOpt = None,
-    exempt: ExemptOpt = None,
-    flavour: typing.Annotated[
-        str, typer.Option("--flavour", help="veraPDF PDF/A flavour: 2b, 2a, 2u, 1b, 3b, 4...")
-    ] = "2b",
-    pdfa: typing.Annotated[bool, typer.Option("--pdfa/--no-pdfa", help="Run the veraPDF PDF/A layer.")] = True,
-    pdfx: typing.Annotated[bool, typer.Option("--pdfx/--no-pdfx", help="Check the PDF/X-4 identity.")] = True,
-    colour: typing.Annotated[
-        bool, typer.Option("--colour/--no-colour", help="Check ink, overprint, RGB, rich black and image DPI.")
-    ] = True,
-    trim_mm: typing.Annotated[
-        str | None,
-        typer.Option(
-            "--trim-mm", help="Expected finished size as WxH in mm, e.g. 105x148. Enables the geometry layer."
-        ),
-    ] = None,
-    bleed_mm: typing.Annotated[float, typer.Option("--bleed-mm", help="Expected bleed per side, in mm.")] = 3.0,
-    binding_bleed_mm: typing.Annotated[
-        float | None,
-        typer.Option(
-            "--binding-bleed-mm",
-            min=0,
-            help="Bleed on the binding edge, in mm (default: --bleed-mm). Book interiors: 0.",
-        ),
-    ] = None,
-    binding: typing.Annotated[
-        str,
-        typer.Option(
-            "--binding", help="Which edge of page 1 is bound, left or right; the other side on page 2, and so on."
-        ),
-    ] = "left",
-    tolerance_mm: typing.Annotated[
-        float, typer.Option("--tolerance-mm", help="Allowed geometry deviation, in mm.")
-    ] = 0.25,
-    max_tac: typing.Annotated[
-        float, typer.Option("--max-tac", help="Total-ink-coverage ceiling, in percent.")
-    ] = DEFAULT_MAX_TAC,
-    warn_tac: typing.Annotated[
-        float | None,
-        typer.Option(
-            "--warn-tac", help="Warn when total ink peaks above this, below --max-tac, in percent. No default."
-        ),
-    ] = None,
-    small_text_pt: typing.Annotated[
-        float, typer.Option("--small-text-pt", help="Rich-black cutoff (pt).")
-    ] = DEFAULT_SMALL_TEXT_PT,
-    min_dpi: typing.Annotated[
-        float, typer.Option("--min-dpi", help="Minimum effective resolution for placed images.")
-    ] = DEFAULT_MIN_DPI,
-    warn_dpi: typing.Annotated[
-        float | None,
-        typer.Option("--warn-dpi", help="Warn on images below this resolution but at or above --min-dpi. No default."),
-    ] = None,
-    max_dpi: typing.Annotated[
-        float | None,
-        typer.Option("--max-dpi", help="Warn on images placed above this resolution (file size). No default."),
-    ] = None,
-    max_stretch_pct: typing.Annotated[
-        float | None,
-        typer.Option(
-            "--max-stretch-pct", help="Warn when an image's two axes differ by more than this percent. No default."
-        ),
-    ] = None,
-    strict_cmyk: typing.Annotated[
-        bool, typer.Option("--strict-cmyk", help="Fail, rather than warn, on RGB vector fills.")
-    ] = False,
-    colour_mode: typing.Annotated[
-        ColourMode,
-        typer.Option(
-            "--colour-mode",
-            help="Colour model the job is proofed against. rgb fails CMYK artwork, gray fails anything but gray; "
-            "both skip the ink checks.",
-        ),
-    ] = ColourMode.CMYK,
-    allow_k_only: typing.Annotated[
-        bool,
-        typer.Option(
-            "--allow-k-only",
-            help="With --colour-mode gray, also accept DeviceCMYK that uses only the K plate (decodes CMYK images).",
-        ),
-    ] = False,
-    k_only_text: typing.Annotated[
-        bool, typer.Option("--k-only-text", help="Fail text painted with any ink but K (house rule; off by default).")
-    ] = False,
-    missing_glyphs: typing.Annotated[
-        bool, typer.Option("--missing-glyphs/--no-missing-glyphs", help="Flag characters shown with the .notdef glyph.")
-    ] = True,
-    min_text_pt: typing.Annotated[
-        float | None, typer.Option("--min-text-pt", help="Fail text set smaller than this (pt). No default.")
-    ] = None,
-    min_stroke_pt: typing.Annotated[
-        float | None, typer.Option("--min-stroke-pt", help="Fail lines thinner than this (pt). No default.")
-    ] = None,
-    safe_mm: typing.Annotated[
-        float | None,
-        typer.Option("--safe-mm", help="Fail text outside this inset from the trim edge, in mm. No default."),
-    ] = None,
-    fonts: typing.Annotated[
-        bool, typer.Option("--fonts/--no-fonts", help="Flag fonts that are not embedded, and Type 3 fonts.")
-    ] = True,
-    allow_spot: typing.Annotated[
-        list[str] | None,
-        typer.Option(
-            "--allow-spot", help="Fail any spot ink not named here (exact match; repeatable; 'All' needs naming)."
-        ),
-    ] = None,
-    output_condition: typing.Annotated[
-        str | None,
-        typer.Option(
-            "--output-condition", help="Fail unless an output intent names this printing condition, e.g. FOGRA51."
-        ),
-    ] = None,
-    require_bleed: typing.Annotated[
-        bool,
-        typer.Option(
-            "--require-bleed", help="Fail artwork that reaches the trim edge but stops short of the bleed edge."
-        ),
-    ] = False,
-    no_marks: typing.Annotated[
-        bool,
-        typer.Option("--no-marks", help="Fail anything painted beyond the bleed region: printer's marks, slug text."),
-    ] = False,
-    uniform_pages: typing.Annotated[
-        bool, typer.Option("--uniform-pages", help="Fail pages whose finished size differs from the first page's.")
-    ] = False,
-    pages_multiple_of: typing.Annotated[
-        int | None, typer.Option("--pages-multiple-of", min=1, help="Fail a page count that is not a multiple of N.")
-    ] = None,
-    min_delta_l: typing.Annotated[
-        float | None,
-        typer.Option(
-            "--min-delta-l", help="Fail text whose L* difference from its background is below this. No default."
-        ),
-    ] = None,
-    proof_profile: typing.Annotated[
-        pathlib.Path | None,
-        typer.Option(
-            "--proof-profile", help="ICC profile to measure contrast through (default: the PDF's output intent)."
-        ),
-    ] = None,
-    jobs: typing.Annotated[
-        int, typer.Option("--jobs", "-j", min=1, help="Files to verify at once.")
-    ] = core.DEFAULT_JOBS,
-    verapdf_bin: typing.Annotated[str, typer.Option("--verapdf", help="veraPDF executable.")] = "verapdf",
-    gs_bin: GsOpt = "gs",
-    timeout: TimeoutOpt = DEFAULT_TIMEOUT,
-    as_json: typing.Annotated[
-        bool, typer.Option("--json", help="Emit machine-readable findings instead of a report.")
-    ] = False,
-    quiet: QuietOpt = False,
-) -> None:
-    """Verify each PDF is a valid dual PDF/X-4 + PDF/A file."""
-    targets = core.expand_targets(files or [], exclude or [])
-    if not targets:
-        typer.echo("no PDFs to verify", err=True)
-        raise typer.Exit(1)
+@pdf_app.command(
+    "verify",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True, "help_option_names": []},
+    add_help_option=False,
+)
+def verify_cmd(ctx: typer.Context) -> None:
+    """Verify each PDF: its PDF/X level, the print checks and, when asked, PDF/A and peak ink (see verify --help).
 
-    profile = build_profile(locals())
-    reports = asyncio.run(
-        core.verify_files(
-            targets,
-            profile,
-            exemptions=_parse_exemptions(exempt or []),
-            jobs=jobs,
-            verapdf_bin=verapdf_bin,
-            gs_bin=gs_bin,
-            timeout=timeout,
-        )
-    )
-
-    if as_json:
-        typer.echo(json.dumps([_as_record(r) for r in reports], indent=2))
-    elif not quiet:
-        for report in reports:
-            _print_report(report)
-        _print_summary(reports, profile)
-    raise typer.Exit(1 if any(not r.ok for r in reports) else 0)
+    The command is the Rust core's: its options, config file and reports are documented by ``proof-pdf verify --help``.
+    """
+    params = ctx.parent.params if ctx.parent else {}
+    argv = ["proof-pdf"]
+    if params.get("config"):
+        argv += ["--config", str(params["config"])]
+    if params.get("profile"):
+        argv += ["--profile", params["profile"]]
+    code, out, err = _core.run([*argv, "verify", *ctx.args], sys.stdout.isatty())
+    typer.echo(out, nl=False)
+    typer.echo(err, nl=False, err=True)
+    raise typer.Exit(code)
 
 
 @pdf_app.command("inspect")
@@ -546,84 +374,6 @@ def preview_cmd(
         typer.secho(f"\nOK -- {len(written)} page(s){note} from {len(targets)} file(s)", fg=typer.colors.GREEN)
 
 
-def _parse_exemptions(specs: list[str]) -> dict[str, str]:
-    """``GLOB=reason`` options as a mapping; a missing reason is rejected, since the reason is the point."""
-    exemptions: dict[str, str] = {}
-    for spec in specs:
-        glob, _, reason = spec.partition("=")
-        if not glob.strip() or not reason.strip():
-            raise typer.BadParameter(f"--exempt must look like GLOB=reason, got {spec!r}")
-        exemptions[glob.strip()] = reason.strip()
-    return exemptions
-
-
-def build_profile(options: typing.Mapping[str, typing.Any]) -> Profile:
-    """The :class:`Profile` the ``verify`` options (by parameter name) describe; also used by ``load_profile``."""
-    o = options
-    if o["warn_tac"] is not None and o["warn_tac"] >= o["max_tac"]:
-        raise typer.BadParameter(f"--warn-tac ({o['warn_tac']:g}) must be below --max-tac ({o['max_tac']:g})")
-    if o["warn_dpi"] is not None and o["warn_dpi"] <= o["min_dpi"]:
-        raise typer.BadParameter(f"--warn-dpi ({o['warn_dpi']:g}) must be above --min-dpi ({o['min_dpi']:g})")
-    return Profile(
-        flavour=o["flavour"],
-        pdfa=o["pdfa"],
-        pdfx=o["pdfx"],
-        colour=o["colour"],
-        geometry=_page_geometry(o["trim_mm"], o["bleed_mm"], o["tolerance_mm"], o["binding_bleed_mm"], o["binding"])
-        if o["trim_mm"]
-        else None,
-        max_tac=o["max_tac"],
-        warn_tac=o["warn_tac"],
-        small_text_pt=o["small_text_pt"],
-        min_dpi=o["min_dpi"],
-        warn_dpi=o["warn_dpi"],
-        max_dpi=o["max_dpi"],
-        max_stretch_pct=o["max_stretch_pct"],
-        strict_cmyk=o["strict_cmyk"],
-        colour_mode=ColourMode(o["colour_mode"]),
-        allow_k_only=o["allow_k_only"],
-        k_only_text=o["k_only_text"],
-        missing_glyphs=o["missing_glyphs"],
-        min_text_pt=o["min_text_pt"],
-        min_stroke_pt=o["min_stroke_pt"],
-        safe_mm=o["safe_mm"],
-        min_delta_l=o["min_delta_l"],
-        proof_profile=o["proof_profile"],
-        fonts=o["fonts"],
-        allow_spots=tuple(o["allow_spot"]) if o["allow_spot"] else None,
-        output_condition=o["output_condition"],
-        require_bleed=o["require_bleed"],
-        no_marks=o["no_marks"],
-        uniform_pages=o["uniform_pages"],
-        pages_multiple_of=o["pages_multiple_of"],
-    )
-
-
-def _page_geometry(
-    trim_mm: str, bleed_mm: float, tolerance_mm: float, binding_bleed_mm: float | None = None, binding: str = "left"
-) -> PageGeometry:
-    """Parse ``--trim-mm WxH`` into a :class:`PageGeometry`."""
-    parts = trim_mm.lower().replace("*", "x").split("x")
-    if len(parts) != 2:
-        raise typer.BadParameter(f"--trim-mm must look like 105x148, got {trim_mm!r}")
-    try:
-        width, height = (float(p) for p in parts)
-    except ValueError as exc:
-        raise typer.BadParameter(f"--trim-mm must be two numbers, got {trim_mm!r}") from exc
-    if width <= 0 or height <= 0:
-        raise typer.BadParameter(f"--trim-mm must be positive, got {trim_mm!r}")
-    if binding not in ("left", "right"):
-        raise typer.BadParameter(f"--binding must be left or right, got {binding!r}")
-    return PageGeometry(
-        trim_w_mm=width,
-        trim_h_mm=height,
-        bleed_mm=bleed_mm,
-        tolerance_mm=tolerance_mm,
-        binding_bleed_mm=binding_bleed_mm,
-        binding=binding,
-    )
-
-
 def _print_inventory(facts: inventory.Inventory) -> None:
     pages = len(facts.pages)
     typer.echo(f"{_rel(pathlib.Path(facts.path))}  ({pages} page{'s' if pages != 1 else ''})")
@@ -714,43 +464,3 @@ def _ranges(pages: list[int]) -> str:
         else:
             spans.append((page, page))
     return ", ".join(str(lo) if lo == hi else f"{lo}-{hi}" for lo, hi in spans)
-
-
-def _print_summary(reports: list[FileReport], profile: Profile) -> None:
-    layers = ", ".join(
-        name
-        for name, on in (
-            (f"PDF/A-{profile.flavour}", profile.pdfa),
-            ("PDF/X-4", profile.pdfx),
-            ("geometry", profile.geometry is not None),
-            ("colour", profile.colour),
-            ("K-only text", profile.k_only_text),
-            ("missing glyphs", profile.missing_glyphs),
-            ("min text size", profile.min_text_pt is not None),
-            ("hairlines", profile.min_stroke_pt is not None),
-            ("safe area", profile.safe_mm is not None),
-            ("contrast", profile.min_delta_l is not None),
-            ("fonts", profile.fonts),
-            ("spot inks", profile.allow_spots is not None),
-            ("output condition", profile.output_condition is not None),
-            ("artwork bleed", profile.require_bleed),
-            ("no marks", profile.no_marks),
-            ("page set", profile.uniform_pages or bool(profile.pages_multiple_of)),
-        )
-        if on
-    )
-    failed = [r for r in reports if not r.ok]
-    exempt = [r for r in reports if r.exempt is not None]
-    checked = len(reports) - len(exempt)
-    typer.echo("")
-    if failed:
-        typer.secho(f"FAIL -- {len(failed)} of {checked} file(s) failed: {layers}", fg=typer.colors.RED)
-        return
-    warnings = sum(len(r.warnings) for r in reports)
-    notes = ([f"{warnings} advisory warning(s)"] if warnings else []) + ([f"{len(exempt)} exempt"] if exempt else [])
-    note = f" ({', '.join(notes)})" if notes else ""
-    typer.secho(f"OK -- all {checked} file(s) passed: {layers}{note}", fg=typer.colors.GREEN)
-
-
-# Re-exported so callers can special-case a genuine tool failure if they wish.
-VeraPdfError = verapdf.VeraPdfError

@@ -1,28 +1,22 @@
-"""Orchestrate a full verification of one PDF.
+"""Verify PDFs from Python: a thin layer over the Rust core's ``proof-pdf verify``.
 
-Runs the veraPDF PDF/A layer, then -- when the profile asks for them -- the
-PDF/X-4 structural checks, the finished-card geometry, and the colour-sanity
-checks, collecting everything into one :class:`FileReport`.
-
-A check that cannot run -- its external tool is missing or errors -- is a
-failure, not a silent pass: the point of the tool is to *confirm* conformance, so
-an unconfirmable file must not read as OK.
+:func:`verify_file` runs the same command the CLI does, on one file, with the :class:`Profile` as its options and no
+config file, and returns its findings. The PDF/X level, the print checks, and veraPDF (``Profile.pdfa``) and
+Ghostscript (``Profile.tac``) when asked all run there. A check that cannot run, because its tool is missing or fails
+or the file could not be read, is a failure, not a silent pass.
 """
 
 import asyncio
 import collections.abc
-import logging
+import json
 import os
 import pathlib
+import shutil
 
-import pikepdf
+from ._internal import _core
+from .models import FileReport, Finding, Profile, Severity
 
-from ._internal import colour, pdfx, ported, verapdf
-from .models import ColourMode, FileReport, Finding, Profile, Severity
-
-logger = logging.getLogger(__name__)
-
-# Each file already fans out to veraPDF (a JVM) and Ghostscript, so a handful in flight is plenty.
+# Each file may fan out to veraPDF (a JVM) and Ghostscript, so a handful in flight is plenty.
 DEFAULT_JOBS = min(4, os.cpu_count() or 1)
 
 
@@ -36,41 +30,85 @@ async def verify_file(
 ) -> FileReport:
     """Verify *path* against *profile* and return the collected findings.
 
-    veraPDF, the Ghostscript ink scan and the in-process PDF checks run concurrently; the external tools run as
-    subprocesses, and the pikepdf checks in a worker thread, so the event loop stays free throughout.
+    The core runs in a worker thread with the GIL released, so the event loop stays free throughout. A profile the
+    command refuses raises :class:`ValueError`.
     """
-    report = FileReport(path=path)
-    vera = asyncio.create_task(_run_verapdf(path, profile, verapdf_bin, timeout)) if profile.pdfa else None
-    tac = (
-        asyncio.create_task(_run_tac(path, profile, gs_bin, timeout))
-        if profile.colour and profile.colour_mode is ColourMode.CMYK
-        else None
+    argv = ["proof-pdf", "--no-config", "verify", str(path), "--json", "--verapdf", verapdf_bin, "--gs", gs_bin]
+    argv += arguments(profile)
+    if timeout is not None:
+        argv += ["--timeout", repr(float(timeout))]
+    code, out, err = await asyncio.to_thread(_core.run, argv)
+    if code == 64:
+        raise ValueError(err.strip())
+    record = json.loads(out)[0]
+    findings = [
+        Finding(f["check"], Severity.ERROR if f["severity"] == "error" else Severity.WARN, f["message"], f["page"])
+        for f in record.get("findings", [])
+    ]
+    findings += [
+        Finding(c["id"], Severity.ERROR, f"could not be checked: {c['reason']}")
+        for c in record.get("checks", [])
+        if c["status"] == "not_evaluated"
+    ]
+    if record["unreadable"]:
+        findings.append(Finding("structure", Severity.ERROR, record["unreadable"]))
+    return FileReport(path=path, findings=findings)
+
+
+def arguments(profile: Profile) -> list[str]:
+    """*profile* as ``proof-pdf verify`` options."""
+    number = _number
+    args = ["--flavour", profile.flavour, "--colour-mode", str(profile.colour_mode)]
+    flags = (
+        ("--pdfa", profile.pdfa),
+        ("--no-pdfx", not profile.pdfx),
+        ("--tac", profile.tac),
+        ("--no-colour", not profile.colour),
+        ("--strict-cmyk", profile.strict_cmyk),
+        ("--allow-k-only", profile.allow_k_only),
+        ("--k-only-text", profile.k_only_text),
+        ("--no-missing-glyphs", not profile.missing_glyphs),
+        ("--no-fonts", not profile.fonts),
+        ("--require-bleed", profile.require_bleed),
+        ("--no-marks", profile.no_marks),
+        ("--uniform-pages", profile.uniform_pages),
     )
-    try:
-        structural, opened = await asyncio.to_thread(_check_pdf, path, profile)
-        if vera:
-            report.findings += await vera
-        report.findings += structural
-        if opened and tac:
-            report.findings += await tac
-    finally:
-        for task in (vera, tac):
-            if task and not task.done():
-                task.cancel()
-    return report
+    args += [flag for flag, on in flags if on]
+    args += number("--max-tac", profile.max_tac) + number("--warn-tac", profile.warn_tac)
+    args += number("--small-text-pt", profile.small_text_pt) + number("--min-dpi", profile.min_dpi)
+    args += number("--warn-dpi", profile.warn_dpi) + number("--max-dpi", profile.max_dpi)
+    args += number("--max-stretch-pct", profile.max_stretch_pct) + number("--min-text-pt", profile.min_text_pt)
+    args += number("--min-stroke-pt", profile.min_stroke_pt) + number("--safe-mm", profile.safe_mm)
+    args += number("--min-delta-l", profile.min_delta_l)
+    if profile.proof_profile is not None:
+        args += ["--proof-profile", str(profile.proof_profile)]
+    if profile.allow_spots is not None:
+        # An empty allowlist still turns the check on: no spot ink is allowed.
+        args += [a for spot in (profile.allow_spots or ("",)) for a in ("--allow-spot", spot)]
+    if profile.output_condition is not None:
+        args += ["--output-condition", profile.output_condition]
+    if profile.pages_multiple_of:
+        args += ["--pages-multiple-of", str(profile.pages_multiple_of)]
+    if (g := profile.geometry) is not None:
+        args += ["--trim-mm", f"{g.trim_w_mm!r}x{g.trim_h_mm!r}", "--binding", g.binding]
+        args += number("--bleed-mm", g.bleed_mm) + number("--tolerance-mm", g.tolerance_mm)
+        args += number("--binding-bleed-mm", g.binding_bleed_mm)
+    return args
+
+
+def _number(flag: str, value: float | None) -> list[str]:
+    """A number option, or nothing when *value* is not set."""
+    return [flag, repr(float(value))] if value is not None else []
 
 
 def missing_tools(profile: Profile, *, verapdf_bin: str = "verapdf", gs_bin: str = "gs") -> list[str]:
     """The external tools *profile* needs that cannot be found, by the executable names given (empty if all are there).
 
-    veraPDF is needed for the PDF/A layer and Ghostscript for the colour layer (total ink). :func:`verify_file` reports
-    a missing tool as a failing finding; this lets a caller stop before a long run with one message of its own.
+    veraPDF is needed for PDF/A (``pdfa``) and Ghostscript for peak ink (``tac``). :func:`verify_file` reports a
+    missing tool as a failing finding; this lets a caller stop before a long run with one message of its own.
     """
-    needed = (
-        (verapdf_bin, profile.pdfa, verapdf.available),
-        (gs_bin, profile.colour and profile.colour_mode is ColourMode.CMYK, colour.gs_available),
-    )
-    return [binary for binary, wanted, found in needed if wanted and not found(binary)]
+    needed = ((verapdf_bin, profile.pdfa), (gs_bin, profile.tac))
+    return [binary for binary, wanted in needed if wanted and shutil.which(binary) is None]
 
 
 def exemption(path: pathlib.PurePath, exemptions: collections.abc.Mapping[str, str]) -> str | None:
@@ -111,40 +149,6 @@ async def verify_files(
             return await verify_file(path, profile, verapdf_bin=verapdf_bin, gs_bin=gs_bin, timeout=timeout)
 
     return await asyncio.gather(*(one(p) for p in paths))
-
-
-def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], bool]:
-    """The checks that read the PDF's object graph (CPU-bound, so run in a thread); False if it would not open."""
-    findings: list[Finding] = []
-    try:
-        with pikepdf.open(path) as pdf:
-            if profile.pdfx:
-                findings += pdfx.check(pdf)
-            findings += ported.check(path, profile)
-    except (pikepdf.PdfError, pikepdf.PasswordError) as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
-        return [Finding("structure", Severity.ERROR, f"cannot open the PDF (corrupt or encrypted): {exc}")], False
-    return findings, True
-
-
-async def _run_verapdf(path: pathlib.Path, profile: Profile, binary: str, timeout: float | None) -> list[Finding]:
-    if not verapdf.available(binary):
-        return [
-            Finding("pdfa", Severity.ERROR, f"veraPDF not found ({binary}) -- cannot confirm PDF/A-{profile.flavour}")
-        ]
-    try:
-        stdout = await verapdf.run(binary, profile.flavour, str(path), timeout=timeout)
-        return verapdf.parse(stdout, profile.flavour)
-    except verapdf.VeraPdfError as exc:
-        return [Finding("pdfa", Severity.ERROR, f"veraPDF could not validate the file: {exc}")]
-
-
-async def _run_tac(path: pathlib.Path, profile: Profile, binary: str, timeout: float | None) -> list[Finding]:
-    if not colour.gs_available(binary):
-        return [Finding("tac", Severity.ERROR, f"Ghostscript not found ({binary}) -- cannot measure ink coverage")]
-    try:
-        return await colour.check_tac(binary, str(path), profile.max_tac, warn_tac=profile.warn_tac, timeout=timeout)
-    except colour.GhostscriptError as exc:
-        return [Finding("tac", Severity.ERROR, f"Ghostscript could not rasterise the file: {exc}")]
 
 
 def expand_targets(

@@ -227,14 +227,14 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `outside-bleed` | Nothing is painted beyond the bleed |  | error | print | implemented |
 | `outside-media` | Nothing is painted wholly off the page |  | warning | print | implemented |
 | `xobject-missing` | Painted XObjects exist |  | error | print | implemented |
-| `bleedbox` | Pages with a trim have a BleedBox |  | error | print | todo |
-| `boxes` | Each page has a MediaBox |  | error | print | todo |
+| `bleedbox` | Pages with a trim have a BleedBox |  | error | print | skip: Replaced by the x4.boxes rows (a BleedBox inside the MediaBox) and the geometry checks' bleed |
+| `boxes` | Each page has a MediaBox |  | error | print | skip: Replaced by page.media-box and the x4.boxes rows |
 | `page-size` | Pages share one size |  | error | print | implemented |
 | `page-count` | The page count fits the rule |  | error | print | implemented |
 | `page-rotate` | Pages are not rotated |  | warning | print | implemented |
 | `output-condition` | The output intent names the expected condition |  | error | print | implemented |
 | `pdfa` | veraPDF passes the PDF/A flavour |  | error | print | implemented (veraPDF) |
-| `structure` | The file can be read |  | error | print | todo |
+| `structure` | The file can be read |  | error | print | skip: Not a check: whether the file could be read is the report's own structure and verdict |
 | `internal` | The engine itself failed on this file |  | error | x4, x4p, x5g, x5pg, x5n, print | skip: Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it |
 | `file.header` | The file starts with a %PDF- header in its first 1024 bytes | iso-32000-2:7.5.2 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `file.header-offset` | The header is at the very start of the file | iso-32000-2:7.5.2 | warning | x4, x4p, x5g, x5pg, x5n, print | implemented |
@@ -253,5 +253,6 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `content.damaged` | Every content stream can be read to its end | iso-32000-2:7.8.2, iso-32000-2:8.9.7 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `content.operator` | Undefined operators appear only inside BX and EX | iso-32000-2:7.8.2 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `content.compatibility` | BX and EX pair up | iso-32000-2:7.8.2 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
+| `page.media-box` | Every page has a MediaBox, its own or inherited | iso-32000-2:7.7.3.3 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `object.damaged` | Every object reachable from the trailer can be read | iso-32000-2:7.3, iso-32000-2:7.3.8.1, iso-32000-2:7.3.10, iso-32000-2:7.5.7 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |
 | `object.dangling-reference` | References point at objects that exist | iso-32000-2:7.3.10 | warning | x4, x4p, x5g, x5pg, x5n, print | implemented |

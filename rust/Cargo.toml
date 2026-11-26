@@ -18,7 +18,7 @@ required-features = ["cli"]
 
 [features]
 # The Python module proof_pdf._core, built by maturin.
-python = ["dep:pyo3", "dep:serde_json"]
+python = ["dep:pyo3", "dep:serde_json", "cli"]
 # The proof-pdf command line (src/cli.rs, src/bin/proof-pdf.rs).
 cli = ["dep:clap", "dep:globset", "dep:process-wrap", "dep:serde_json", "dep:tiff", "dep:toml"]
 

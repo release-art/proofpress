@@ -925,6 +925,8 @@ def _x4_font_fixtures() -> dict[str, pikepdf.Pdf]:
         # 6.25's limits (the PDF 1.6 Reference's Table C.1) and 6.6's recommendation for other names.
         # 6.3: the page draws an XObject its resources do not define.
         "x4-resource-missing": _x4_page(b"q /Nowhere Do Q"),
+        # ISO 32000-2 7.7.3.3: a page with no MediaBox, its own or inherited (6.1.1 at PDF/X-4).
+        "x4-no-media-box": _x4_with(lambda p: p.pages[0].obj.__delitem__("/MediaBox")),
         "x4-limit-integer": _x4_page(b"2147483648 0 m"),
         "x4-limit-name": _x4_with(lambda p: p.pages[0].obj.__setitem__("/" + "N" * 128, 1)),
         "x4-limit-nesting": _x4_page(b"q " * 29 + b"Q " * 29),

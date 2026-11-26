@@ -54,12 +54,17 @@ pub fn main(args: impl IntoIterator<Item = OsString>, out: &mut dyn Write, err: 
         }
     };
     let Command::Verify(mut options) = cli.command;
-    let configured = configure(&mut options, cli.config.as_deref(), cli.profile.as_deref());
+    let configured = if cli.no_config {
+        Ok(options.output.show_profile.then(String::new))
+    } else {
+        configure(&mut options, cli.config.as_deref(), cli.profile.as_deref())
+    };
     match configured.and_then(|shown| match shown {
-        Some(table) => {
+        // The settings are checked as `verify` would check them before they are shown.
+        Some(table) => run::plan(&options).map(|_| {
             let _ = write!(out, "{table}");
-            Ok(output::PASS)
-        }
+            output::PASS
+        }),
         None => verify(&options, out, colour),
     }) {
         Ok(code) => code,
@@ -341,6 +346,16 @@ mod tests {
         let (code, out, _) = cli(&["--config", config, "--profile", "big", "verify", "--show-profile"]);
         assert_eq!((code, out.as_str()), (0, "trim-mm = \"297x420\"\n"));
         assert_eq!(cli(&["verify", "--show-profile"]), (0, String::new(), String::new()));
+        assert_eq!(
+            cli(&["--no-config", "verify", "--show-profile"]),
+            (0, String::new(), String::new())
+        );
+        assert_eq!(
+            cli(&["--no-config", "verify", "--show-profile", "--trim-mm", "x"]).0,
+            64
+        );
+        let (code, _, _) = cli(&["--no-config", "--profile", "big", "verify", &fixture("x4-good")]);
+        assert_eq!(code, 0);
         let (code, _, err) = cli(&["--profile", "big", "verify", &fixture("x4-good")]);
         assert_eq!(code, 64);
         assert!(err.contains("--profile needs a config file"), "{err}");
@@ -354,6 +369,66 @@ mod tests {
                 .contains("has no option")
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn what_the_reading_tiers_find_is_reported_once() {
+        let checks = |args: &[&str]| -> Vec<String> {
+            let (_, out, _) = cli(args);
+            let records: serde_json::Value = serde_json::from_str(&out).unwrap();
+            let findings = records[0]["findings"].as_array().unwrap();
+            findings
+                .iter()
+                .map(|f| f["check"].as_str().unwrap().to_owned())
+                .collect()
+        };
+        assert_eq!(
+            checks(&["verify", &fixture("x4-bad-xref"), "--no-pdfx", "--json"]),
+            ["file.xref"]
+        );
+        assert_eq!(
+            checks(&["verify", &fixture("x4-bad-xref"), "--json"]),
+            ["file.xref", "x4.pdf-reference.conforms"]
+        );
+    }
+
+    #[test]
+    fn a_check_left_unjudged_is_named_with_why() {
+        let (code, out, _) = cli(&["verify", &fixture("x4-good"), "--pdfx", "x5g"]);
+        assert_eq!(code, 1);
+        assert!(
+            out.contains("x not evaluated, not written yet: x5.identification-value, "),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn the_python_spellings_still_work() {
+        let words = [
+            "proof-pdf",
+            "verify",
+            "x.pdf",
+            "--no-colour",
+            "--colour",
+            "--no-pdfa",
+            "--fonts",
+            "--no-fonts",
+        ];
+        let Command::Verify(o) = Cli::try_parse_from(words).unwrap().command;
+        assert_eq!(
+            (o.inks.no_colour, o.layers.pdfa, o.lettering.no_fonts),
+            (false, false, true)
+        );
+        let words = [
+            "proof-pdf",
+            "verify",
+            "x.pdf",
+            "--pdfa",
+            "--no-pdfa",
+            "--missing-glyphs",
+        ];
+        let Command::Verify(o) = Cli::try_parse_from(words).unwrap().command;
+        assert_eq!((o.layers.pdfa, o.lettering.no_missing_glyphs), (false, false));
     }
 
     #[test]

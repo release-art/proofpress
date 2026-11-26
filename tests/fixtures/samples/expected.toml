@@ -219,24 +219,30 @@ gray = ["gray-only/error"]
 options = { pdfa = true }
 
 # PDF/X-4 with a CMYK photo: the standard job.
+# PDF/X-4 in full, since the move to the Rust core: the LaTeX pdfx package writes some keys twice, and Info
+# /Keywords with no pdf:Keywords in the XMP (ISO 15930-7 6.10.2).
 [pdfx-x4-cmyk-image]
-cmyk = []
-rgb = ["rgb-only/error"]
-gray = ["gray-only/error"]
+cmyk = ["syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
+rgb = ["rgb-only/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
+gray = ["gray-only/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
 options = { pdfx = true }
 
 # A real PDF/X-4 from the pdfx package: FOGRA39 output intent, page boxes, XMP identity, all colours CMYK.
+# PDF/X-4 in full, since the move to the Rust core: the LaTeX pdfx package writes some keys twice, and Info
+# /Keywords with no pdf:Keywords in the XMP (ISO 15930-7 6.10.2).
 [pdfx-x4-cmyk]
-cmyk = []
-rgb = ["rgb-only/error"]
-gray = ["gray-only/error"]
+cmyk = ["syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
+rgb = ["rgb-only/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
+gray = ["gray-only/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
 options = { pdfx = true }
 
 # PDF/X-4 with an RGB photo: valid X-4, but an RGB image escaped conversion in a CMYK press job.
+# PDF/X-4 in full, since the move to the Rust core: the LaTeX pdfx package writes some keys twice, and Info
+# /Keywords with no pdf:Keywords in the XMP (ISO 15930-7 6.10.2).
 [pdfx-x4-rgb-image]
-cmyk = ["colour-space/error"]
-rgb = ["rgb-only/error"]
-gray = ["gray-only/error"]
+cmyk = ["colour-space/error", "syntax.duplicate-key/warn", "x4.colour.device-space-matches-intent/error", "x4.info.xmp-analogue-present/error"]
+rgb = ["rgb-only/error", "syntax.duplicate-key/warn", "x4.colour.device-space-matches-intent/error", "x4.info.xmp-analogue-present/error"]
+gray = ["gray-only/error", "syntax.duplicate-key/warn", "x4.colour.device-space-matches-intent/error", "x4.info.xmp-analogue-present/error"]
 options = { pdfx = true }
 
 # A pgfplots chart in a cmyk-option document: axes, grid, a line, bars.
@@ -335,17 +341,21 @@ rgb = ["blend-space/warn", "rgb-only/error"]
 gray = ["blend-space/warn", "gray-only/error"]
 
 # PDF/X-4 with transparency and the page's blend colour space declared as DeviceCMYK, matching the CMYK output intent.
+# PDF/X-4 in full, since the move to the Rust core: the LaTeX pdfx package writes some keys twice, and Info
+# /Keywords with no pdf:Keywords in the XMP (ISO 15930-7 6.10.2).
 [tikz-opacity-group-cmyk]
-cmyk = []
-rgb = ["rgb-only/error"]
-gray = ["gray-only/error"]
+cmyk = ["syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
+rgb = ["rgb-only/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
+gray = ["gray-only/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error"]
 options = { pdfx = true }
 
 # PDF/X-4 with a CMYK output intent but the blend colour space declared as DeviceRGB: overlaps will shift.
+# PDF/X-4 in full, since the move to the Rust core: the LaTeX pdfx package writes some keys twice, and Info
+# /Keywords with no pdf:Keywords in the XMP (ISO 15930-7 6.10.2).
 [tikz-opacity-group-wrong]
-cmyk = ["blend-space/error"]
-rgb = ["blend-space/error", "rgb-only/error"]
-gray = ["blend-space/error", "gray-only/error"]
+cmyk = ["blend-space/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error", "x4.transparency.group-cs-restricted/error"]
+rgb = ["blend-space/error", "rgb-only/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error", "x4.transparency.group-cs-restricted/error"]
+gray = ["blend-space/error", "gray-only/error", "syntax.duplicate-key/warn", "x4.info.xmp-analogue-present/error", "x4.transparency.group-cs-restricted/error"]
 options = { pdfx = true }
 
 # Does the cmyk option reach TikZ patterns?

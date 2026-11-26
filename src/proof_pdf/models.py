@@ -97,9 +97,9 @@ class PageGeometry:
 class Profile:
     """What a PDF is checked against.
 
-    *flavour* is a veraPDF PDF/A flavour string (``2b``, ``2a``, ``2u``, ...) and
-    is passed through verbatim, so the machinery is universal even though the
-    print jobs usually target ``2b``. *pdfx* toggles the PDF/X-4 structural layer;
+    *pdfa* runs veraPDF against *flavour*, a PDF/A flavour string (``2b``, ``2a``, ``2u``, ...) passed through
+    verbatim; *tac* measures peak ink with Ghostscript, against *max_tac*. Both are off unless asked for, since they
+    need those tools. *pdfx* toggles the PDF/X-4 checks;
     *colour* toggles the ink-coverage / overprint / rich-black / colour-space
     layer; *geometry* is the expected finished size, or ``None`` to skip it.
     *k_only_text* is an opt-in house rule: text may be painted with the K plate only.
@@ -120,7 +120,7 @@ class Profile:
     """
 
     flavour: str = "2b"
-    pdfa: bool = True
+    pdfa: bool = False
     pdfx: bool = True
     colour: bool = True
     geometry: PageGeometry | None = None
@@ -148,6 +148,7 @@ class Profile:
     require_bleed: bool = False
     allow_k_only: bool = False
     no_marks: bool = False
+    tac: bool = False
 
 
 @dataclasses.dataclass

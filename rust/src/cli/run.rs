@@ -45,6 +45,8 @@ pub(crate) struct Plan {
     pub(crate) pdfx: Option<Level>,
     pub(crate) settings: Settings,
     pub(crate) wanted: BTreeSet<&'static str>,
+    /// Every print check an option switches, on or off.
+    pub(crate) switchable: BTreeSet<&'static str>,
     pub(crate) tools: Vec<Tool>,
 }
 
@@ -148,10 +150,12 @@ pub(crate) fn plan(o: &Verify) -> Result<Plan, Usage> {
             timeout,
         });
     }
+    let (wanted, switchable) = wanted(o, &params);
     Ok(Plan {
+        wanted,
+        switchable,
         tools,
         pdfx,
-        wanted: wanted(o, &params),
         settings: Settings {
             level: Level::Print,
             params,
@@ -181,8 +185,8 @@ fn geometry(o: &Verify, trim: &str) -> Result<Geometry, Usage> {
     })
 }
 
-/// The print checks the options turn on, as the Python profile did.
-fn wanted(o: &Verify, params: &Params) -> BTreeSet<&'static str> {
+/// The print checks the options turn on, as the Python profile did, and every print check they could.
+fn wanted(o: &Verify, params: &Params) -> (BTreeSet<&'static str>, BTreeSet<&'static str>) {
     let colour = !o.inks.no_colour;
     let mode = o.inks.colour_mode.unwrap_or_default();
     let switches: [(bool, &[&'static str]); 15] = [
@@ -225,11 +229,14 @@ fn wanted(o: &Verify, params: &Params) -> BTreeSet<&'static str> {
         (params.allow_spots.is_some(), &["spot-ink"]),
         (params.min_delta_l.is_some(), &["contrast"]),
     ];
-    switches
-        .iter()
-        .filter(|(on, _)| *on)
-        .flat_map(|(_, ids)| ids.iter().copied())
-        .collect()
+    let all = |on: bool| {
+        switches
+            .iter()
+            .filter(|(o, _)| on || *o)
+            .flat_map(|(_, ids)| ids.iter().copied())
+            .collect()
+    };
+    (all(false), all(true))
 }
 
 /// The PDFs the arguments name: a file as given, a directory as every `.pdf` beneath it, sorted, but for paths
@@ -360,16 +367,16 @@ pub(crate) fn verify(path: &Path, plan: &Plan, exemptions: &[(GlobMatcher, Strin
 
 fn combined(name: &str, bytes: &[u8], plan: &Plan) -> Report {
     let print = checks::verify_settings(name, bytes, &plan.settings);
-    let mut checks: Vec<_> = print
-        .checks
-        .into_iter()
-        .filter(|c| plan.wanted.contains(c.id.id))
-        .collect();
-    let mut findings: Vec<Finding> = print
-        .findings
-        .into_iter()
-        .filter(|f| plan.wanted.contains(f.check.id))
-        .collect();
+    // A print check is kept when its option is on; what the reading tiers found, when no PDF/X level reports it too.
+    let keep = |id: &str| {
+        if plan.switchable.contains(id) {
+            plan.wanted.contains(id)
+        } else {
+            plan.pdfx.is_none()
+        }
+    };
+    let mut checks: Vec<_> = print.checks.into_iter().filter(|c| keep(c.id.id)).collect();
+    let mut findings: Vec<Finding> = print.findings.into_iter().filter(|f| keep(f.check.id)).collect();
     let mut structure = print.structure;
     if let Some(level) = plan.pdfx {
         let settings = Settings {

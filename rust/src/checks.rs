@@ -272,6 +272,7 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_TRAPPED_TRAPNET_IMPLIES_TRUE, annots::trapnet_implies_true),
     (f::X4_TRAPNET_FONT_FAUXING_EMPTY, annots::font_fauxing),
     (f::X4_TRAPNET_PCM_MATCHES_INTENT, annots::pcm_matches_intent),
+    (f::PAGE_MEDIA_BOX, page::media_box_present),
     (f::CONTENT_DAMAGED, contents::damaged),
     (f::CONTENT_OPERATOR, contents::operator),
     (f::CONTENT_COMPATIBILITY, contents::compatibility),
@@ -351,7 +352,8 @@ const RUNS: &[(&Check, Run)] = &[
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5
 /// found, and run every implemented check of the level. A check whose scope holds a gap is not evaluated, and on a
-/// refused file nothing is.
+/// refused file nothing is. The level's checks still to be written are reported as not evaluated, so a level that is
+/// not fully checked yet cannot pass.
 #[must_use]
 pub fn verify(file: &str, bytes: &[u8], level: Level) -> Report {
     verify_with(file, bytes, level, &Limits::default())
@@ -373,13 +375,26 @@ fn verify_in(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits) -> 
     let level = settings.level;
     let applies = |check: &Check| check.applies.contains(&level) && check.status == Status::Implemented;
     let enabled = RUNS.iter().filter(|(check, _)| applies(check));
+    let unwritten = f::ALL
+        .iter()
+        .filter(|check| check.applies.contains(&level) && check.status == Status::Todo)
+        .map(|id| CheckResult {
+            id,
+            outcome: Outcome::NotEvaluated("not written yet".into()),
+        });
     match Document::open(bytes, limits) {
         Err(refusal) => {
             let unread = enabled.map(|(id, _)| CheckResult {
                 id,
                 outcome: Outcome::NotEvaluated("the file was refused".into()),
             });
-            judged_from_structure(file, Structure::Refused, unread.collect(), vec![*refusal], &applies)
+            judged_from_structure(
+                file,
+                Structure::Refused,
+                unread.chain(unwritten).collect(),
+                vec![*refusal],
+                &applies,
+            )
         }
         Ok(doc) => {
             let structure = if doc.damaged() {
@@ -400,6 +415,7 @@ fn verify_in(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits) -> 
                 };
                 checks.push(CheckResult { id, outcome });
             }
+            checks.extend(unwritten);
             judged_from_structure(file, structure, checks, findings, &applies)
         }
     }
@@ -580,12 +596,22 @@ mod tests {
             "/../tests/fixtures/pdfs/x4-good.pdf"
         ))
         .unwrap();
-        let x5g = verify("x4-good.pdf", &bytes, Level::X5g).checks;
-        assert!(x5g.iter().all(|c| c.id.applies.contains(&Level::X5g)), "{x5g:?}");
+        let x5g = verify("x4-good.pdf", &bytes, Level::X5g);
+        assert!(x5g.checks.iter().all(|c| c.id.applies.contains(&Level::X5g)), "{x5g:?}");
+        let todo = f::ALL
+            .iter()
+            .filter(|c| c.applies.contains(&Level::X5g) && c.status == Status::Todo)
+            .count();
         assert_eq!(
-            x5g.len(),
-            RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count()
+            x5g.checks.len(),
+            RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count() + todo
         );
+        // Its checks still to be written are not evaluated, so the file cannot pass yet.
+        let unwritten = x5g
+            .checks
+            .iter()
+            .filter(|c| matches!(c.outcome, Outcome::NotEvaluated(_)));
+        assert_eq!((unwritten.count(), x5g.verdict), (todo, Verdict::Fail));
         let x4 = RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X4)).count();
         // And the two judged from tiers 1 to 5's findings: x4.encrypt.absent and x4.pdf-reference.conforms.
         assert_eq!(verify("x4-good.pdf", &bytes, Level::X4).checks.len(), x4 + 2);

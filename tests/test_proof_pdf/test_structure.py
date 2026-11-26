@@ -5,160 +5,13 @@ import dataclasses
 import pikepdf
 import pytest
 
-from proof_pdf._internal.pdfx import x4
-from proof_pdf.models import PageGeometry, Severity
+from proof_pdf.models import PageGeometry, Profile, Severity
 
-from .conftest import A6, BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W, ported_findings, xmp_bytes
+from .conftest import A6, BLEED, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W, ported_findings
 
 
 def _checks(findings) -> set[str]:
     return {f.check for f in findings}
-
-
-class TestPageBoxes:
-    def test_correct_boxes_are_clean(self, make_pdf):
-        with pikepdf.open(make_pdf()) as pdf:
-            assert x4.check_page_boxes(pdf) == []
-
-    @pytest.mark.parametrize(
-        ("boxes", "expected_check", "expected_severity"),
-        [
-            pytest.param(
-                {"MediaBox": [0, 0, MEDIA_W, MEDIA_H]},
-                "trimbox",
-                Severity.ERROR,
-                id="no-trim-or-art",
-            ),
-            pytest.param(
-                {**GOOD_BOXES, "ArtBox": GOOD_BOXES["TrimBox"]},
-                "trimbox",
-                Severity.ERROR,
-                id="both-trim-and-art",
-            ),
-            pytest.param(
-                {
-                    "MediaBox": [0, 0, MEDIA_W, MEDIA_H],
-                    "TrimBox": [-10, -10, MEDIA_W + 10, MEDIA_H + 10],
-                    "BleedBox": [0, 0, MEDIA_W, MEDIA_H],
-                },
-                "trimbox",
-                Severity.ERROR,
-                id="trim-beyond-media",
-            ),
-            pytest.param(
-                {
-                    "MediaBox": [0, 0, MEDIA_W, MEDIA_H],
-                    "TrimBox": [BLEED, BLEED, BLEED + TRIM_W, BLEED + TRIM_H],
-                },
-                "bleedbox",
-                Severity.WARN,
-                id="missing-bleed-is-advisory",
-            ),
-        ],
-    )
-    def test_violations(self, make_pdf, boxes, expected_check, expected_severity):
-        with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            findings = x4.check_page_boxes(pdf)
-        assert expected_check in _checks(findings)
-        assert any(f.severity is expected_severity for f in findings if f.check == expected_check)
-
-    def test_bleed_smaller_than_trim_fails(self, make_pdf):
-        boxes = {
-            "MediaBox": [0, 0, MEDIA_W, MEDIA_H],
-            "TrimBox": [0, 0, MEDIA_W, MEDIA_H],
-            "BleedBox": [BLEED, BLEED, BLEED + TRIM_W, BLEED + TRIM_H],
-        }
-        with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            findings = x4.check_page_boxes(pdf)
-        assert any("does not contain" in f.message for f in findings)
-
-    def test_no_media_box(self, make_pdf):
-        """Checked in memory: pikepdf re-supplies a default MediaBox on every save."""
-        with pikepdf.open(make_pdf()) as pdf:
-            del pdf.pages[0].obj["/MediaBox"]
-            findings = x4.check_page_boxes(pdf)
-        assert [f.check for f in findings] == ["boxes"]
-
-    def test_media_box_inherited_from_page_tree(self, make_pdf):
-        """MediaBox is the one inheritable box; a page without it walks to /Parent."""
-        path = make_pdf(boxes={"TrimBox": GOOD_BOXES["TrimBox"], "BleedBox": GOOD_BOXES["BleedBox"]})
-        with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-            pdf.Root.Pages["/MediaBox"] = [0, 0, MEDIA_W, MEDIA_H]
-            pdf.save(path)
-        with pikepdf.open(path) as pdf:
-            assert x4.check_page_boxes(pdf) == []
-
-    def test_malformed_rect_is_ignored(self, make_pdf):
-        with pikepdf.open(make_pdf(boxes={**GOOD_BOXES, "TrimBox": [1, 2, 3]})) as pdf:
-            findings = x4.check_page_boxes(pdf)
-        assert "trimbox" in _checks(findings)
-
-
-class TestTrapped:
-    """ISO 15930-7, 6.9 and 6.10.2: trapping is stated in XMP; Info may repeat it, and must then agree."""
-
-    @staticmethod
-    def _check(*, xmp: bytes | None, info: str | None = None):
-        pdf = pikepdf.new()
-        pdf.add_blank_page()
-        if xmp is not None:
-            pdf.Root.Metadata = pdf.make_stream(xmp)
-        if info is not None:
-            pdf.docinfo["/Trapped"] = pikepdf.Name(f"/{info}")
-        return x4.check_trapped(pdf)
-
-    @pytest.mark.parametrize("value", ["True", "False"])
-    def test_true_or_false_in_xmp_passes(self, value):
-        assert self._check(xmp=xmp_bytes(trapped=value)) == []
-        assert self._check(xmp=xmp_bytes(trapped=value), info=value) == []
-
-    def test_unknown_fails(self):
-        [finding] = self._check(xmp=xmp_bytes(trapped="Unknown"))
-        assert "Unknown" in finding.message
-
-    @pytest.mark.parametrize("xmp", [None, xmp_bytes(trapped=None), xmp_bytes(trapped=""), b"not xml"])
-    def test_missing_from_xmp_fails_even_with_info(self, xmp):
-        [finding] = self._check(xmp=xmp, info="False")
-        assert "missing from XMP" in finding.message
-
-    def test_info_that_disagrees_fails(self):
-        [finding] = self._check(xmp=xmp_bytes(trapped="False"), info="True")
-        assert "must agree" in finding.message
-
-
-class TestPdfxIdentity:
-    def _build(self, path, *, xmp: bool, intent: bool):
-        with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-            if xmp:
-                meta = pdf.make_stream(xmp_bytes())
-                meta["/Type"] = pikepdf.Name.Metadata
-                pdf.Root["/Metadata"] = pdf.make_indirect(meta)
-            if intent:
-                pdf.Root["/OutputIntents"] = [
-                    pdf.make_indirect(pikepdf.Dictionary(S=pikepdf.Name("/GTS_PDFX"), OutputCondition="FOGRA51"))
-                ]
-            pdf.save(path)
-
-    def test_complete_identity_is_clean(self, make_pdf):
-        path = make_pdf()
-        self._build(path, xmp=True, intent=True)
-        with pikepdf.open(path) as pdf:
-            assert x4.check_pdfx_identity(pdf) == []
-
-    def test_missing_both(self, make_pdf):
-        with pikepdf.open(make_pdf()) as pdf:
-            findings = x4.check_pdfx_identity(pdf)
-        assert _checks(findings) == {"pdfx-xmp", "pdfx-intent"}
-
-    def test_wrong_intent_subtype(self, make_pdf):
-        path = make_pdf()
-        with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-            pdf.Root["/OutputIntents"] = [
-                pdf.make_indirect(pikepdf.Dictionary(S=pikepdf.Name("/GTS_PDFA1"), OutputCondition="sRGB"))
-            ]
-            pdf.save(path)
-        with pikepdf.open(path) as pdf:
-            assert "pdfx-intent" in _checks(x4.check_pdfx_identity(pdf))
 
 
 class TestGeometry:
@@ -458,11 +311,11 @@ class TestBindingBleed:
             assert all("on every side" in f.message for f in off if f.check == "bleed")
             assert all("expected left minus right" not in f.message for f in off if f.check == "centring")
 
-    def test_the_cli_flags_reach_the_geometry(self):
-        from proof_pdf import cli
+    def test_the_geometry_reaches_the_command(self):
+        from proof_pdf import core
 
-        geometry = cli._page_geometry("105x148", 3.0, 0.25, 0.0, "right")
-        assert geometry.binding_bleed_mm == 0.0 and geometry.binding == "right"
-        assert cli._page_geometry("105x148", 3.0, 0.25).binding_bleed_mm is None
-        with pytest.raises(Exception, match="left or right"):
-            cli._page_geometry("105x148", 3.0, 0.25, None, "top")
+        geometry = PageGeometry(trim_w_mm=105, trim_h_mm=148, bleed_mm=3, binding_bleed_mm=0.0, binding="right")
+        args = core.arguments(Profile(geometry=geometry))
+        assert args[args.index("--binding") + 1] == "right"
+        assert args[args.index("--binding-bleed-mm") + 1] == "0.0"
+        assert "--binding-bleed-mm" not in core.arguments(Profile(geometry=PageGeometry(105, 148, 3)))

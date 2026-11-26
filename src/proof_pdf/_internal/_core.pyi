@@ -6,3 +6,9 @@ def verify(file: str, data: bytes, level: str, params: str = "{}") -> str:
     ``params`` is a JSON object of the print checks' parameters by name (``small_text_pt``); any left out keep their
     defaults. Returns the report as JSON, schema 1. Raises ``ValueError`` for an unknown level or a bad parameter.
     """
+
+def run(argv: list[str], colour: bool = False) -> tuple[int, str, str]:
+    """Run the ``proof-pdf`` command line on ``argv`` (program name first); return its exit code, stdout and stderr.
+
+    ``colour`` styles the text output for a terminal.
+    """
