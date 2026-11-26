@@ -158,6 +158,36 @@ impl Document {
         }
     }
 
+    /// Stream `num`'s data as the file holds it, still encoded, when `num` is a stream the walk read.
+    pub(crate) fn raw_stream(&self, num: u32) -> Option<&[u8]> {
+        match self.slots.get(&num) {
+            Some(Slot::Loaded {
+                stream: Some((start, end)),
+                buffer,
+                ..
+            }) => self.bytes(*buffer).get(*start..*end),
+            _ => None,
+        }
+    }
+
+    /// Indirect object `num`, when the walk read it.
+    pub(crate) fn object(&self, num: u32) -> Option<&Object> {
+        match self.slots.get(&num) {
+            Some(Slot::Loaded { object, .. }) => Some(object),
+            _ => None,
+        }
+    }
+
+    /// Whether object `num` is one the walk could not read: a gap, not an object the file lacks.
+    pub(crate) fn is_damaged(&self, num: u32) -> bool {
+        matches!(self.slots.get(&num), Some(Slot::Damaged(_)))
+    }
+
+    /// The version the file's header names, such as `1.7`.
+    pub(crate) fn version(&self) -> &[u8] {
+        &self.xref.version
+    }
+
     /// Stream `num`'s dictionary, when `num` is a stream the walk read.
     pub(crate) fn stream_dict(&self, num: u32) -> Option<&Dict> {
         match self.slots.get(&num) {

@@ -12,3 +12,12 @@ def run(argv: list[str], colour: bool = False) -> tuple[int, str, str]:
 
     ``colour`` styles the text output for a terminal.
     """
+
+class UnreadablePdfError(Exception):
+    """A PDF that cannot be read: its structure is too damaged, or it is encrypted."""
+
+def crop(data: bytes, page: int, bounds: tuple[float, float, float, float], pad: float = 0.0) -> bytes:
+    """Cut ``bounds`` (x0, y0, x1, y1 in points, either corner order, widened by ``pad``) of page ``page`` (from 1) of
+    the PDF ``data`` out as a one-page PDF. Raises ``ValueError`` for a missing page or a box that misses it, and
+    ``UnreadablePdfError`` for a file that cannot be read.
+    """

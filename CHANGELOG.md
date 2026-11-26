@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `crop` runs in the Rust core, on a writer of our own: the piece's streams are copied as they are, so it renders
+  pixel for pixel as before (586 of 586 comparable files). `crop_page` raises `proof_pdf.crop.UnreadablePdfError` instead of
+  `pikepdf.PdfError` for a file that cannot be read, and now also for a page that needs objects the file holds damaged,
+  which pikepdf repaired silently. An Identity `/Crypt` filter, which no reader applies outside encryption, is dropped.
 - PDF/X-5g and X-5pg (`--pdfx x5g|x5pg`, ISO 15930-8) are checked: every inherited X-4 and X-4p row, the version, the
   reference XObject proxies and their XMP, and, for the file set, every target: read beside the container (or embedded),
   compared with its reference's `/ID` and XMP identifiers, checked for its page, printing condition and optional

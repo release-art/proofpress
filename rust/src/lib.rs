@@ -18,4 +18,4 @@ pub mod graphics;
 #[cfg(feature = "python")]
 mod python;
 mod syntax;
-mod writer;
+pub mod writer;

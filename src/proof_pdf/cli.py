@@ -277,7 +277,7 @@ def crop_cmd(
     except ValueError as exc:
         typer.secho(f"FAIL -- {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from exc
-    except (pikepdf.PdfError, pikepdf.PasswordError) as exc:
+    except crop.UnreadablePdfError as exc:
         typer.secho(f"FAIL -- cannot open {_rel(file)}: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from exc
     typer.echo(f"wrote {_rel(target)}")

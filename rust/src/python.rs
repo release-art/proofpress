@@ -48,11 +48,41 @@ fn value_error(message: impl Display) -> PyErr {
     PyValueError::new_err(message.to_string())
 }
 
+pyo3::create_exception!(
+    _core,
+    UnreadablePdfError,
+    pyo3::exceptions::PyException,
+    "A PDF that cannot be read: its structure is too damaged, or it is encrypted."
+);
+
+/// Cut `bounds` (`x0, y0, x1, y1` in points, either corner order, widened by `pad` on every side) of page `page`,
+/// counting from 1, of the PDF `data` out as a one-page PDF. Raises `ValueError` for a page that does not exist or a box
+/// that misses it, and `UnreadablePdfError` for a file that cannot be read.
+#[pyfunction]
+#[pyo3(signature = (data, page, bounds, pad = 0.0))]
+fn crop(py: Python<'_>, data: &[u8], page: usize, bounds: [f64; 4], pad: f64) -> PyResult<Vec<u8>> {
+    use crate::writer::crop::{CropError, crop};
+    py.detach(|| crop(data, page, bounds, pad)).map_err(|e| match e {
+        CropError::Unreadable(why) => UnreadablePdfError::new_err(why),
+        CropError::Damaged(objects) => {
+            let objects: Vec<String> = objects.iter().map(u32::to_string).collect();
+            UnreadablePdfError::new_err(format!(
+                "page {page} needs objects that cannot be read: {}",
+                objects.join(", ")
+            ))
+        }
+        CropError::NoPage(pages) => value_error(format_args!("the file has {pages} page(s); there is no page {page}")),
+        CropError::Outside([x0, y0, x1, y1]) => value_error(format_args!(
+            "the box {bounds:?} lies outside page {page}, which spans ({x0}, {y0}) to ({x1}, {y1}) points"
+        )),
+    })
+}
+
 /// The module itself, `proof_pdf._internal._core` to Python.
 #[pymodule]
 mod _core {
     #[pymodule_export]
-    use super::{run, verify};
+    use super::{UnreadablePdfError, crop, run, verify};
 }
 
 #[cfg(test)]
@@ -105,6 +135,40 @@ mod tests {
                 .unwrap();
             assert_eq!(code, 64);
             assert!(err.contains("--bogus"), "{err}");
+        });
+    }
+
+    #[test]
+    fn crop_cuts_a_page_or_says_why() {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = pyo3::wrap_pymodule!(_core)(py);
+            let crop = module.bind(py).getattr("crop").unwrap();
+            let file = std::fs::read(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../tests/fixtures/pdfs/x4-good.pdf"
+            ))
+            .unwrap();
+            let box_ = (0.0, 0.0, 100.0, 100.0);
+            let piece: Vec<u8> = crop.call1((file.as_slice(), 1, box_)).unwrap().extract().unwrap();
+            assert!(piece.starts_with(b"%PDF-"));
+            let message = |args: (&[u8], usize, (f64, f64, f64, f64))| crop.call1(args).unwrap_err().to_string();
+            assert!(message((file.as_slice(), 2, box_)).contains("there is no page 2"));
+            assert!(message((file.as_slice(), 1, (9000.0, 9000.0, 9001.0, 9001.0))).contains("lies outside page 1"));
+            assert!(message((b"x".as_slice(), 1, box_)).starts_with("UnreadablePdfError"));
+            // Every stream of the file ends without endstream: damaged objects a piece would lack.
+            let mut damaged = file.clone();
+            let ends: Vec<usize> = damaged
+                .windows(9)
+                .enumerate()
+                .filter(|(_, w)| *w == b"endstream")
+                .map(|(i, _)| i + 8)
+                .collect();
+            for at in ends {
+                damaged[at] = b'X';
+            }
+            let why = message((damaged.as_slice(), 1, box_));
+            assert!(why.contains("page 1 needs objects that cannot be read"), "{why}");
         });
     }
 }

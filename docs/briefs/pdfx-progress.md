@@ -34,8 +34,9 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 9** (the writer and the other commands) is next. Phase 8 (PDF/X-5) finished 2026-11-26; see its stage
-  report. Every PDF/X-4, X-4p and X-5 row is implemented or skip. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
+- **Phase 9** (the writer and the other commands): the writer and `crop` are done; `inspect`, `extract`, `preview`,
+  `layout` and `texlog` are next. Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
+  and X-5 row is implemented or skip. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
   owner said to carry on past the PDF/X-4 milestone (phase 6, finished 2026-11-26).
 
 ## Done
@@ -107,6 +108,7 @@ record it as not conforming to that one rule).
 | 8.1 | the phase 8 (X-5g) commit | The inheritance map as `applies` (140 rows reach the X-5 levels), `x5.identification-value`; the `/URLs` exemption of 6.7 made unconditional; three rows settled as warning or skip |
 | 8.2, 8.3 | same commit | `checks/x5g.rs` (proxies, `/Ref`, `/ID`, metadata, `RenditionOf`, the X-5 6.7 rule), `checks/targets.rs` (the file set, read once and verified recursively; nine rows), `common/labels.rs`; `Location::File`, `Limits::target_depth`, `--target-versions`; 39 fixtures `x5*`, feature `x5g-clause-8`. X-5g and X-5pg: every row implemented or skip |
 | 8.4, 8.5 | the phase 8 (X-5n) commit | X-5n's 15 rows (`x4p.rs` reference and profile rows, `colour.rs`/`jpx.rs` device bans, `spots.rs` DeviceN attributes, `modes.rs` group `/CS`, `annots.rs` TrapNet), `icc::colorant_names`; `x5.n-subtractive` skipped; two generated n-colorant v4 profiles (`tests/fixtures/icc/xclr-5.icc`, `xclr-6.icc`) and 21 fixtures `x5n-*`, feature `x5n-clause-7` |
+| 9 (part) | the writer commit | `writer.rs` (graft map, raw streams, damaged objects reported, Identity `/Crypt` dropped) and `writer/crop.rs`; `_core.crop` and `UnreadablePdfError`; `proof_pdf.crop` no longer uses pikepdf. Parity: 588 crops of fixtures and test-db samples rendered by Ghostscript at 72 dpi; 586 pixel-identical, 2 damaged files now refused (pikepdf had repaired them); 14 skipped (pikepdf or Ghostscript could not open them) |
 
 ## Register coverage
 
