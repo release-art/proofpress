@@ -180,8 +180,8 @@ pub(super) fn baseline(doc: &Document, _: &Settings) -> Vec<Finding> {
 
 /// 6.27: CMYK data (enumerated colour space 12) with no ICC profile and no `/ColorSpace` is `DeviceCMYK`, so 6.4.3.2
 /// allows it only under a CMYK intent.
-pub(super) fn cmyk_as_device(doc: &Document, _: &Settings) -> Vec<Finding> {
-    let intent = intent::profile(doc).map(|h| h.space);
+pub(super) fn cmyk_as_device(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let intent = intent::space(doc, settings);
     if intent.is_none_or(|i| i == *b"CMYK") {
         return Vec::new();
     }

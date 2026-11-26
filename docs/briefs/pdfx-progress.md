@@ -34,8 +34,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 7** (file sets and PDF/X-4p): started 2026-11-26, after the owner said to carry on past the PDF/X-4
-  milestone (phase 6 finished 2026-11-26; see its stage report).
+- **Phase 8** (PDF/X-5) is next. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
+  owner said to carry on past the PDF/X-4 milestone (phase 6, finished 2026-11-26).
 
 ## Done
 
@@ -101,6 +101,8 @@ record it as not conforming to that one rule).
 | 6.2 | the milestone commit | Levels `--pdfx x4\|x4p\|x5g\|x5pg\|x5n` (in `2cff6ac`), `--no-pdfx` and `pdfx = false`; a level's `todo` rows are reported as not evaluated, so X-4p and X-5 cannot pass yet; the text report lists unjudged checks by reason |
 | 6.3 | the milestone commit | `core.verify_file`/`verify_files` keep their async signatures over `_core.run`; `config.load_profile` reads the profile the Rust command resolves (`--show-profile`); the Python veraPDF, colour, ported and PDF/X modules are deleted |
 | 6 (fix) | the milestone commit | `page.media-box` (ISO 32000-2 7.7.3.3, every level; fixture `x4-no-media-box`): a page without a MediaBox passed once the Python `boxes` check went; `bleedbox`, `boxes`, `structure` become `skip`; an empty FlateDecode stream reads as empty |
+| 7.1-7.3 | the phase 7 commit | `Settings.files` (alone or a file set rooted at the PDF's folder), `common/url.rs` (local or network, never fetched), `checks/x4p.rs`: the 12 Annex A rows, the external profile found by `/CheckSum`, judges that may answer "not evaluated" (`JUDGES`); the X-4 colour-space rows and 6.4.3.3 under X-4p; 6.7's `/URLs` exemption; `--file-alone` and `file-alone` |
+| 7.4 | same commit | 19 `x4p-*` fixtures (the Little-CMS profile beside them by a relative URL), both modes; `expected.toml` gains `alone` and `unjudged`; feature `x4p-annex-a` |
 
 ## Register coverage
 
@@ -108,7 +110,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 125 | 12 | 4 |
+| PDF/X-4 and X-4p | 137 | 0 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 54 | 0 | 4 (`internal`, `bleedbox`, `boxes`, `structure`) |
 
@@ -118,7 +120,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|
 | `bin/rust/check.sh` | green, 2026-11-26 (100% lines, regions, functions) |
 | Python (ruff, pyright, pytest) | green, 2026-11-26: 1073 passed (the Python checks' own tests went with them) |
-| `bin/docker/test.sh` | green at the end of phase 6, 2026-11-26: 1073 passed |
+| `bin/docker/test.sh` | green at the end of phase 7, 2026-11-26: 1073 passed |
 | `bin/suites/pdfx.sh` | 2026-11-26: 39 files, 39 accepted, 0 problems |
 
 ## Corpus and oracle
@@ -394,6 +396,15 @@ Oracle consultations:
   scripts). Not blocking until then.
 - **Later, X5-Q9:** ISO 15930-1, -3, -4 and -6 are listed in test-db's `docs/standards-wanted.md`; not to buy now.
 
+- Task 7.4: the three veraPDF files that reference an absent path are Reference XObjects, so they are X-5g material:
+  phase 8 (8.3, targets) reads them. The one test-db file with a `/DestOutputProfileRef` has a PDF/A intent, not a
+  PDF/X one, so X-4p's rows find nothing in it, correctly.
+- Task 7.4, pdfToolbox 17.1 ("Verify compliance with PDFX-4p"): it does not resolve the fixtures' relative URL, so it
+  judges each alone ("Referenced destination profile is not available" on every file). It agrees with every
+  reference row (`/ProfileName`, `/URLs` with `/Mac`, a short `/CheckSum`, `/ProfileCS`, `/ICCVersion`,
+  `/ColorantTable`, an embedded profile) except one: it accepts a bare string in `/URLs`, which A.2 rules out (URL
+  file specifications are dictionaries with `/FS /URL`, PDF 1.6 Reference 3.10.4). Kept as A.2 reads.
+
 ## Environment notes
 
 - The Arlington PDF Model (phase 3.1) is Apache-2.0; master at `cdc485e` (2026-11-19) is the candidate pin.
@@ -535,3 +546,18 @@ Oracle consultations:
 - **Unexpected.** Retiring the Python `boxes` check left a page without a MediaBox passing at every level; it is now
   `page.media-box`. Selecting X-5g passed an X-4 file on the inherited rows alone; fixed as above.
 - **Departures.** None from the plan's tasks; X-4p's rows wait for phase 7 as planned.
+
+### Phase 7 (file sets and PDF/X-4p), finished 2026-11-26
+
+- **What changed.** Every X-4p row is implemented, in both modes: a file set (the default on the command line) and a
+  file alone (`--file-alone`, and the Python `_core.verify`). The external profile is found at the local `/URLs` and
+  confirmed by `/CheckSum`; nothing is fetched. A check can now answer "not evaluated" (`JUDGES`). PDF/X-4 and X-4p
+  stand at 137 implemented, 0 todo, 4 skip.
+- **Decisions.** The oracle settled the readings without escalation: mismatch or missing fails only when no network
+  URL remains; `/ProfileName` matches any description record; 6.4.3.3 applies against the external profile, and
+  without it the `/CheckSum` or a non-CMYK `/ProfileCS` can still decide; 6.4.3.4 needs no profile data. See the
+  decision log.
+- **Test material.** 19 built fixtures, the Little-CMS profile beside them by a relative URL. pdfToolbox agrees with
+  every reference row but the bare-string URL (see "Deviations from the plan").
+- **Unexpected.** pdfToolbox does not resolve relative profile URLs, so it cannot judge a file set here.
+- **Departures.** The three absent-path veraPDF files are Reference XObjects and go to phase 8.

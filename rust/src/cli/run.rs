@@ -8,7 +8,7 @@ use globset::{Glob, GlobMatcher};
 
 use super::args::{Binding, ColourMode, Pdfx, Verify};
 use super::tools;
-use crate::checks::{self, Geometry, Params, Settings};
+use crate::checks::{self, Files, Geometry, Params, Settings};
 use crate::findings::{Check, CheckResult, Finding, Level, PDFA, Report, TAC, Verdict};
 
 /// A usage error: the options do not make sense together.
@@ -48,6 +48,8 @@ pub(crate) struct Plan {
     /// Every print check an option switches, on or off.
     pub(crate) switchable: BTreeSet<&'static str>,
     pub(crate) tools: Vec<Tool>,
+    /// Whether each file is verified without the files it refers to.
+    pub(crate) file_alone: bool,
 }
 
 /// An external tool `verify` runs on each file.
@@ -159,7 +161,9 @@ pub(crate) fn plan(o: &Verify) -> Result<Plan, Usage> {
         settings: Settings {
             level: Level::Print,
             params,
+            files: Files::Alone,
         },
+        file_alone: o.file_alone,
     })
 }
 
@@ -379,9 +383,15 @@ fn combined(name: &str, bytes: &[u8], plan: &Plan) -> Report {
     let mut findings: Vec<Finding> = print.findings.into_iter().filter(|f| keep(f.check.id)).collect();
     let mut structure = print.structure;
     if let Some(level) = plan.pdfx {
+        let folder = Path::new(name).parent().map_or_default(Path::to_owned);
         let settings = Settings {
             level,
             params: plan.settings.params.clone(),
+            files: if plan.file_alone {
+                Files::Alone
+            } else {
+                Files::Set(folder)
+            },
         };
         let pdfx = checks::verify_settings(name, bytes, &settings);
         checks.extend(pdfx.checks);

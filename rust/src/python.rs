@@ -17,7 +17,11 @@ use crate::findings::Level;
 fn verify(py: Python<'_>, file: &str, data: &[u8], level: &str, params: &str) -> PyResult<String> {
     let level = Level::from_name(level).ok_or_else(|| value_error(format_args!("unknown level {level:?}")))?;
     let params = serde_json::from_str(params).map_err(|e| value_error(format_args!("bad params: {e}")))?;
-    let settings = checks::Settings { level, params };
+    let settings = checks::Settings {
+        level,
+        params,
+        files: checks::Files::Alone,
+    };
     let report = py.detach(|| checks::verify_settings(file, data, &settings));
     serde_json::to_string(&report).map_err(value_error)
 }

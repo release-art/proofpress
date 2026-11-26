@@ -164,6 +164,7 @@ pub(crate) fn apply(o: &mut Verify, table: &Table, base: &Path, at: &str) -> Res
                 ),
             },
             "no-pdfx" => o.layers.no_pdfx |= flag()?,
+            "file-alone" => o.file_alone |= flag()?,
             "pdfa" => o.layers.pdfa |= flag()?,
             "flavour" => fill(&mut o.layers.flavour, text()?),
             "tac" => o.layers.tac |= flag()?,
@@ -403,10 +404,10 @@ mod tests {
             (o.verapdf.as_deref(), o.gs.as_deref()),
             (Some("/opt/verapdf"), Some("gswin64c"))
         );
-        let off: Table = "pdfx = false\nexempt = ['a=b']\n".parse().unwrap();
+        let off: Table = "pdfx = false\nexempt = ['a=b']\nfile-alone = true\n".parse().unwrap();
         let mut o = options(&[]);
         apply(&mut o, &off, Path::new("/"), "t").unwrap();
-        assert!(o.layers.no_pdfx);
+        assert!(o.layers.no_pdfx && o.file_alone);
         assert_eq!(o.exempt, ["a=b"]);
     }
 
@@ -432,6 +433,7 @@ mod tests {
             "exclude",
             "pdfx",
             "no-pdfx",
+            "file-alone",
             "pdfa",
             "flavour",
             "tac",

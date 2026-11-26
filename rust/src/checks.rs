@@ -28,6 +28,7 @@ mod spots;
 mod text;
 mod walk;
 mod x4;
+mod x4p;
 
 use crate::document::Document;
 use crate::findings::{
@@ -40,6 +41,10 @@ use crate::pipeline::Limits;
 /// A check's code: what it finds in an open document with the settings it runs with.
 type Run = fn(&Document, &Settings) -> Vec<Finding>;
 
+/// A check's code when it may be unable to judge: what it finds, or why it could not tell (a file it needs is not
+/// there).
+type Judge = fn(&Document, &Settings) -> Result<Vec<Finding>, String>;
+
 /// What the checks run with: the level a file is verified at, and the parameters the print checks take from the
 /// profile.
 #[derive(Clone, Debug, PartialEq)]
@@ -48,6 +53,8 @@ pub struct Settings {
     pub level: Level,
     /// The print checks' parameters.
     pub params: Params,
+    /// Where the files the document refers to are looked for.
+    pub files: Files,
 }
 
 impl From<Level> for Settings {
@@ -55,8 +62,20 @@ impl From<Level> for Settings {
         Self {
             level,
             params: Params::default(),
+            files: Files::Alone,
         }
     }
+}
+
+/// Whether a file is verified alone or with the files it refers to (ISO 15930-7 A.1): a PDF/X-4p file's external
+/// profile. Nothing is fetched over a network.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Files {
+    /// The file alone: a check that needs another file is not evaluated.
+    #[default]
+    Alone,
+    /// The file set: relative URLs resolve against this folder, the file's own, and a referenced file must be there.
+    Set(std::path::PathBuf),
 }
 
 /// The print checks' parameters, each defaulting to today's profile's value.
@@ -173,6 +192,14 @@ impl Geometry {
 
 /// Every implemented check that reads an open document, with its code. A test holds this list and the
 /// `implemented` entries of `rust/checks.toml` equal, apart from the checks judged from tiers 1 to 5's own findings.
+/// Every implemented check whose code may be unable to judge, with its code; a test counts these with [`RUNS`].
+const JUDGES: &[(&Check, Judge)] = &[
+    (f::X4_ICC_CMYK_NOT_INTENT_PROFILE, colour::not_intent_profile_at_level),
+    (f::X4P_FILESET_CHECKSUM_MATCHES, x4p::checksum_matches),
+    (f::X4P_FILESET_FIELDS_MATCH, x4p::fields_match),
+    (f::X4P_FILESET_PROFILE_VALID, x4p::profile_valid),
+];
+
 const RUNS: &[(&Check, Run)] = &[
     (X4_FILTER_NO_LZW, |d, _| x4::no_lzw(d)),
     (X4_FILTER_NO_CRYPT, |d, _| x4::no_crypt(d)),
@@ -273,6 +300,15 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_TRAPNET_FONT_FAUXING_EMPTY, annots::font_fauxing),
     (f::X4_TRAPNET_PCM_MATCHES_INTENT, annots::pcm_matches_intent),
     (f::PAGE_MEDIA_BOX, page::media_box_present),
+    (f::X4P_OUTPUT_INTENT_DEST_PROFILE_REF, x4p::dest_profile_ref),
+    (f::X4P_OUTPUT_INTENT_NO_DEST_PROFILE, x4p::no_dest_profile),
+    (f::X4P_REF_PROFILE_NAME, x4p::profile_name),
+    (f::X4P_REF_URLS, x4p::urls_present),
+    (f::X4P_REF_URLS_NO_EF_PLATFORM, x4p::urls_no_ef_platform),
+    (f::X4P_REF_CHECKSUM, x4p::checksum),
+    (f::X4P_REF_PROFILE_CS, x4p::profile_cs),
+    (f::X4P_REF_ICC_VERSION, x4p::icc_version),
+    (f::X4P_REF_NO_COLORANT_TABLE, x4p::no_colorant_table),
     (f::CONTENT_DAMAGED, contents::damaged),
     (f::CONTENT_OPERATOR, contents::operator),
     (f::CONTENT_COMPATIBILITY, contents::compatibility),
@@ -283,7 +319,6 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_SPOT_ALTERNATE_SPACE_RESTRICTED, colour::alternate_spaces),
     (f::X4_ICC_PROFILE_VERSION, colour::profile_version),
     (f::X4_ICC_OVERPRINT_MODE_ZERO, colour::overprint_mode),
-    (f::X4_ICC_CMYK_NOT_INTENT_PROFILE, colour::not_intent_profile),
     (f::X4_TRANSPARENCY_GROUP_CS_RESTRICTED, colour::group_spaces),
     (f::X4_PRE_SEPARATED_ABSENT, colour::pre_separated),
     (f::X4_SPOT_COLORANTS_ENTRY, spots::colorants_entry),
@@ -371,10 +406,19 @@ pub fn verify_settings(file: &str, bytes: &[u8], settings: &Settings) -> Report 
     verify_in(file, bytes, settings, &Limits::default())
 }
 
+/// A check's code, of either kind.
+#[derive(Clone, Copy)]
+enum Code {
+    Run(Run),
+    Judge(Judge),
+}
+
 fn verify_in(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits) -> Report {
     let level = settings.level;
     let applies = |check: &Check| check.applies.contains(&level) && check.status == Status::Implemented;
-    let enabled = RUNS.iter().filter(|(check, _)| applies(check));
+    let runs = RUNS.iter().map(|&(check, run)| (check, Code::Run(run)));
+    let judges = JUDGES.iter().map(|&(check, judge)| (check, Code::Judge(judge)));
+    let enabled = runs.chain(judges).filter(|(check, _)| applies(check));
     let unwritten = f::ALL
         .iter()
         .filter(|check| check.applies.contains(&level) && check.status == Status::Todo)
@@ -404,12 +448,23 @@ fn verify_in(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits) -> 
             };
             let mut findings = doc.findings();
             let mut checks = Vec::new();
-            for (id, run) in enabled {
+            for (id, code) in enabled {
                 let outcome = if structure == Structure::Damaged {
                     Outcome::NotEvaluated("objects it would read could not be read".into())
                 } else {
-                    let found = guarded(id, &|| run(&doc, settings));
-                    let outcome = if found.is_empty() { Outcome::Pass } else { Outcome::Fail };
+                    let unjudged = std::cell::RefCell::new(None);
+                    let found = guarded(id, &|| match code {
+                        Code::Run(run) => run(&doc, settings),
+                        Code::Judge(judge) => judge(&doc, settings).unwrap_or_else(|why| {
+                            unjudged.replace(Some(why));
+                            Vec::new()
+                        }),
+                    });
+                    let outcome = match unjudged.into_inner() {
+                        Some(why) => Outcome::NotEvaluated(why),
+                        None if found.is_empty() => Outcome::Pass,
+                        None => Outcome::Fail,
+                    };
                     findings.extend(found);
                     outcome
                 };
@@ -533,7 +588,7 @@ mod tests {
     fn every_implemented_check_has_code() {
         let judged = [X4_ENCRYPT_ABSENT, X4_PDF_REFERENCE_CONFORMS];
         for check in crate::findings::ALL.iter().filter(|c| c.status == Status::Implemented) {
-            let run = RUNS.iter().any(|(c, _)| c == check);
+            let run = RUNS.iter().any(|(c, _)| c == check) || JUDGES.iter().any(|(c, _)| c == check);
             let (judged, tiers) = (judged.contains(check), check.applies.contains(&Level::Print));
             assert!(
                 run | judged | tiers,
@@ -541,7 +596,7 @@ mod tests {
                 check.id
             );
         }
-        for (check, _) in RUNS {
+        for check in RUNS.iter().map(|(c, _)| c).chain(JUDGES.iter().map(|(c, _)| c)) {
             assert_eq!(
                 check.status,
                 Status::Implemented,
@@ -604,7 +659,9 @@ mod tests {
             .count();
         assert_eq!(
             x5g.checks.len(),
-            RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count() + todo
+            RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count()
+                + todo
+                + JUDGES.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count()
         );
         // Its checks still to be written are not evaluated, so the file cannot pass yet.
         let unwritten = x5g
@@ -612,7 +669,8 @@ mod tests {
             .iter()
             .filter(|c| matches!(c.outcome, Outcome::NotEvaluated(_)));
         assert_eq!((unwritten.count(), x5g.verdict), (todo, Verdict::Fail));
-        let x4 = RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X4)).count();
+        let x4 = RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X4)).count()
+            + JUDGES.iter().filter(|(c, _)| c.applies.contains(&Level::X4)).count();
         // And the two judged from tiers 1 to 5's findings: x4.encrypt.absent and x4.pdf-reference.conforms.
         assert_eq!(verify("x4-good.pdf", &bytes, Level::X4).checks.len(), x4 + 2);
     }

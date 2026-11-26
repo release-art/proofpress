@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- PDF/X-4p (`--pdfx x4p`, ISO 15930-7 Annex A) is checked in full: the PDF/X intent's `/DestOutputProfileRef` and
+  its entries, and, for the file set, the external profile it names. The profile is looked for at the reference's
+  `/URLs` that are files on this computer (relative ones beside the PDF); nothing is fetched over a network. The file
+  whose MD5 is the `/CheckSum` is the profile; it must match the reference's name, colour space and version and meet
+  6.4.2.1. `--file-alone` (config `file-alone = true`) verifies a file without the files it refers to: the rows that
+  need them are then not evaluated. 19 fixtures `x4p-*`.
+  - Under PDF/X-4p the X-4 rows that read the printing condition's colour space take it from the external profile, or
+    from `/ProfileCS`; 6.4.3.3 compares four-colour profiles with the external one, and without it still fails one
+    whose MD5 is the `/CheckSum`. URL file specifications in `/URLs` need no `/EF`.
+
 - `proof-pdf verify` is now the Rust core's command; the Python `verify` passes its arguments straight through. Every
   option and config key keeps its spelling; `--no-pdfa`, `--colour`, `--fonts` and `--missing-glyphs` are still
   accepted. What changes:

@@ -4,8 +4,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use cucumber::{World, given, then, when};
-use proof_pdf::checks::{Settings, verify, verify_settings};
-use proof_pdf::findings::{Level, Report, Verdict};
+use proof_pdf::checks::{Files, Settings, verify_settings};
+use proof_pdf::findings::{Level, Outcome, Report, Verdict};
 use proof_pdf::pipeline::{Listener, publish};
 
 /// Who heard what, in the order they heard it, shared by every listener in a scenario.
@@ -29,6 +29,7 @@ struct Pipeline {
     reader: String,
     log: Log,
     fixture: (String, Vec<u8>),
+    folder: std::path::PathBuf,
     report: Option<Report>,
 }
 
@@ -94,28 +95,46 @@ fn fixture(world: &mut Pipeline, name: String) {
         .into_iter()
         .find(|p| p.is_file())
         .unwrap_or_else(|| panic!("no fixture {file}"));
-    world.fixture = (file, std::fs::read(path).unwrap());
+    world.fixture = (file, std::fs::read(&path).unwrap());
+    world.folder = path.parent().unwrap().to_owned();
+}
+
+impl Pipeline {
+    /// Verify the fixture at `level`, with the files beside it unless `alone`.
+    fn verify(&mut self, level: Level, params: &str, alone: bool) {
+        let settings = Settings {
+            level,
+            params: serde_json::from_str(params).expect("parameters as JSON"),
+            files: if alone {
+                Files::Alone
+            } else {
+                Files::Set(self.folder.clone())
+            },
+        };
+        self.report = Some(verify_settings(&self.fixture.0, &self.fixture.1, &settings));
+    }
 }
 
 #[when(regex = r"^it is verified as PDF/X-(4|4p|5g|5pg|5n)$")]
 fn verified(world: &mut Pipeline, level: String) {
-    let level = Level::from_name(&format!("x{level}")).unwrap();
-    world.report = Some(verify(&world.fixture.0, &world.fixture.1, level));
+    world.verify(Level::from_name(&format!("x{level}")).unwrap(), "{}", false);
+}
+
+/// Without the files it refers to (ISO 15930-7 A.1).
+#[when(regex = r"^it is verified alone as PDF/X-(4|4p|5g|5pg|5n)$")]
+fn verified_alone(world: &mut Pipeline, level: String) {
+    world.verify(Level::from_name(&format!("x{level}")).unwrap(), "{}", true);
 }
 
 #[when("it is verified for print")]
 fn verified_for_print(world: &mut Pipeline) {
-    world.report = Some(verify(&world.fixture.0, &world.fixture.1, Level::Print));
+    world.verify(Level::Print, "{}", false);
 }
 
 /// For print with the profile's parameters, given as JSON.
 #[when(expr = "it is verified for print with {string}")]
 fn verified_for_print_with(world: &mut Pipeline, params: String) {
-    let settings = Settings {
-        level: Level::Print,
-        params: serde_json::from_str(&params).expect("parameters as JSON"),
-    };
-    world.report = Some(verify_settings(&world.fixture.0, &world.fixture.1, &settings));
+    world.verify(Level::Print, &params, false);
 }
 
 fn report(world: &Pipeline) -> &Report {
@@ -126,6 +145,19 @@ fn report(world: &Pipeline) -> &Report {
 fn passes(world: &mut Pipeline) {
     let report = report(world);
     assert_eq!(report.verdict, Verdict::Pass, "{:#?}", report.findings);
+}
+
+#[then(expr = "check {string} is not evaluated")]
+fn not_evaluated(world: &mut Pipeline, id: String) {
+    let report = report(world);
+    assert!(
+        report
+            .checks
+            .iter()
+            .any(|c| c.id.id == id && matches!(c.outcome, Outcome::NotEvaluated(_))),
+        "{id} was evaluated: {:#?}",
+        report.checks
+    );
 }
 
 #[then(expr = "check {string} fails on page {int}")]
@@ -156,6 +188,12 @@ fn only_two(world: &mut Pipeline, id: String, other: String) {
         .filter(|f| f.check.id != id && f.check.id != other)
         .collect();
     assert!(others.is_empty(), "other checks failed: {others:#?}");
+}
+
+#[then("no check fails")]
+fn none_fails(world: &mut Pipeline) {
+    let findings = &report(world).findings;
+    assert!(findings.is_empty(), "checks failed: {findings:#?}");
 }
 
 #[then(expr = "no check fails but {string}")]

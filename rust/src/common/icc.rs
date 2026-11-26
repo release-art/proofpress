@@ -75,26 +75,7 @@ pub(crate) fn computed_id(profile: &[u8]) -> [u8; 16] {
 /// description's ASCII part, a multi-localized Unicode record (en-US, else the first English one, else the first), or
 /// plain text, each up to its first NUL. `None` when the profile has no readable description.
 pub(crate) fn description(profile: &[u8]) -> Option<String> {
-    header(profile)?;
-    let word = |bytes: &[u8], at: usize| {
-        let four: [u8; 4] = bytes.get(at..).unwrap_or_default().first_chunk::<4>().copied()?;
-        Some(usize::try_from(u32::from_be_bytes(four)).unwrap_or(usize::MAX))
-    };
-    let count = word(profile, 128)?;
-    let tag = (0..count).find_map(|i| {
-        let entry = 132 + 12 * i;
-        (profile.get(entry..)?.first_chunk::<4>()? == b"desc").then_some(())?;
-        let (start, length) = (word(profile, entry + 4)?, word(profile, entry + 8)?);
-        profile.get(start..)?.get(..length)
-    })?;
-    let ascii = |bytes: &[u8]| {
-        bytes
-            .iter()
-            .take_while(|b| **b != 0)
-            .map(|b| char::from(*b))
-            .collect::<String>()
-    };
-    let length = |four: [u8; 4]| usize::try_from(u32::from_be_bytes(four)).unwrap_or(usize::MAX);
+    let tag = desc_tag(profile)?;
     match tag.first_chunk::<4>()? {
         b"desc" => {
             let [_, _, _, _, _, _, _, _, l0, l1, l2, l3, text @ ..] = tag else {
@@ -104,34 +85,122 @@ pub(crate) fn description(profile: &[u8]) -> Option<String> {
         }
         b"text" => Some(ascii(tag.get(8..)?)),
         b"mluc" => {
-            let records = word(tag, 8)?;
-            let record = |i: usize| tag.get(16 + 12 * i..)?.first_chunk::<12>();
+            let records = length(*tag.get(8..)?.first_chunk::<4>()?);
+            let language = |i: usize| tag.get(16 + 12 * i..).and_then(|r| r.get(..4));
             let chosen = (0..records)
-                .find(|&i| record(i).is_some_and(|r| r.get(..4) == Some(b"enUS")))
-                .or_else(|| (0..records).find(|&i| record(i).is_some_and(|r| r.get(..2) == Some(b"en"))))
+                .find(|&i| language(i) == Some(b"enUS"))
+                .or_else(|| (0..records).find(|&i| language(i).and_then(|l| l.get(..2)) == Some(b"en")))
                 .unwrap_or(0);
-            let [_, _, _, _, l0, l1, l2, l3, o0, o1, o2, o3] = *record(chosen)?;
-            let units = tag
-                .get(length([o0, o1, o2, o3])..)?
-                .get(..length([l0, l1, l2, l3]))?
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|u| u16::from_be_bytes(*u));
-            Some(
-                char::decode_utf16(units)
-                    .map_while(Result::ok)
-                    .take_while(|c| *c != '\0')
-                    .collect(),
-            )
+            mluc_record(tag, chosen)
         }
         _ => None,
     }
 }
 
+/// Every description the profile gives: each record of a multi-localized one, or the one [`description`] reads.
+pub(crate) fn descriptions(profile: &[u8]) -> Vec<String> {
+    match desc_tag(profile) {
+        Some(tag) if tag.starts_with(b"mluc") => {
+            let records = tag
+                .get(8..)
+                .and_then(|t| t.first_chunk::<4>())
+                .map_or(0, |r| length(*r));
+            (0..records).map_while(|i| mluc_record(tag, i)).collect()
+        }
+        _ => description(profile).into_iter().collect(),
+    }
+}
+
+/// The `desc` tag's data, when the profile has a header and the tag.
+fn desc_tag(profile: &[u8]) -> Option<&[u8]> {
+    header(profile)?;
+    let word = |at: usize| profile.get(at..).and_then(<[u8]>::first_chunk::<4>).map(|w| length(*w));
+    let count = word(128)?;
+    (0..count).find_map(|i| {
+        let entry = 132 + 12 * i;
+        (profile.get(entry..)?.first_chunk::<4>()? == b"desc").then_some(())?;
+        profile.get(word(entry + 4)?..)?.get(..word(entry + 8)?)
+    })
+}
+
+/// Record `i` of a multi-localized Unicode tag, UTF-16 up to its first NUL.
+fn mluc_record(tag: &[u8], i: usize) -> Option<String> {
+    let [_, _, _, _, l0, l1, l2, l3, o0, o1, o2, o3] = *tag.get(16 + 12 * i..)?.first_chunk::<12>()?;
+    let units = tag
+        .get(length([o0, o1, o2, o3])..)?
+        .get(..length([l0, l1, l2, l3]))?
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|u| u16::from_be_bytes(*u));
+    Some(
+        char::decode_utf16(units)
+            .map_while(Result::ok)
+            .take_while(|c| *c != '\0')
+            .collect(),
+    )
+}
+
+fn ascii(bytes: &[u8]) -> String {
+    bytes.iter().take_while(|b| **b != 0).map(|b| char::from(*b)).collect()
+}
+
+fn length(four: [u8; 4]) -> usize {
+    usize::try_from(u32::from_be_bytes(four)).unwrap_or(usize::MAX)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A profile header followed by `tags`, a tag table and its data, as written.
+    fn headed(tags: &[u8]) -> Vec<u8> {
+        let mut out = vec![0u8; 128];
+        out[36..40].copy_from_slice(b"acsp");
+        out.extend(tags);
+        out
+    }
+
+    #[test]
+    fn every_record_of_a_multi_localized_description() {
+        // One mluc tag at 144: two records, "ab" in de-DE and "cd" in en-US.
+        let mut tag = b"mluc\0\0\0\0".to_vec();
+        tag.extend(2u32.to_be_bytes());
+        tag.extend(12u32.to_be_bytes());
+        tag.extend(b"deDE");
+        tag.extend(4u32.to_be_bytes());
+        tag.extend(40u32.to_be_bytes());
+        tag.extend(b"enUS");
+        tag.extend(4u32.to_be_bytes());
+        tag.extend(44u32.to_be_bytes());
+        tag.extend(b"\0a\0b\0c\0d");
+        let mut table = 1u32.to_be_bytes().to_vec();
+        table.extend(b"desc");
+        table.extend(144u32.to_be_bytes());
+        table.extend(u32::try_from(tag.len()).unwrap().to_be_bytes());
+        table.extend(&tag);
+        let profile = headed(&table);
+        assert_eq!(descriptions(&profile), ["ab", "cd"]);
+        assert_eq!(description(&profile).as_deref(), Some("cd"));
+        // A record count beyond the records stops at the last one there is.
+        let mut short = profile.clone();
+        short[144 + 11] = 9;
+        assert_eq!(descriptions(&short), ["ab", "cd"]);
+        short.truncate(144 + 9);
+        assert_eq!(descriptions(&short), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_profile_without_a_whole_tag_table_has_no_description() {
+        assert_eq!(descriptions(&headed(b"")), Vec::<String>::new());
+        assert_eq!(descriptions(&headed(b"\0\0\0\x01desc\0\0")), Vec::<String>::new());
+        // The tag's offset is in the file, its size is not.
+        assert_eq!(descriptions(&headed(b"\0\0\0\x01desc\0\0\0\x80")), Vec::<String>::new());
+        assert_eq!(
+            descriptions(&headed(b"\0\0\0\x01desc\0\0\x10\0\0\0\0\x04")),
+            Vec::<String>::new()
+        );
+    }
 
     #[test]
     fn a_header_reads_its_fields() {

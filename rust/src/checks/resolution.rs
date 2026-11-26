@@ -215,6 +215,7 @@ mod tests {
         let settings = Settings {
             level: Level::Print,
             params,
+            files: crate::checks::Files::Alone,
         };
         [
             image_dpi(&doc, &settings),

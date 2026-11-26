@@ -258,6 +258,7 @@ mod tests {
         let settings = Settings {
             level: Level::Print,
             params,
+            files: crate::checks::Files::Alone,
         };
         [missing_glyph, font_embedded, font_type3, text_size, hairline, safe_area]
             .iter()

@@ -380,6 +380,7 @@ mod tests {
         let settings = Settings {
             level: Level::Print,
             params,
+            files: crate::checks::Files::Alone,
         };
         [artwork_bleed(&doc, &settings), outside_bleed(&doc, &settings)]
             .concat()

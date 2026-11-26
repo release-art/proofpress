@@ -372,7 +372,7 @@ id = "x4.filespec.embedded"
 title = "File specifications embed their file"
 clauses = ["iso-15930-7:6.7"]
 severity = "error"
-applies = ["x4"]
+applies = ["x4", "x4p"]
 status = "implemented"
 
 [[check]]
@@ -1050,7 +1050,7 @@ title = "The PDF/X intent references its external profile"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.output-intent.no-dest-profile"
@@ -1058,7 +1058,7 @@ title = "The PDF/X intent embeds no profile"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.ref.profile-name"
@@ -1066,7 +1066,7 @@ title = "The profile reference names the profile"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.ref.urls"
@@ -1074,7 +1074,7 @@ title = "The profile reference lists URL file specifications"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.ref.urls-no-ef-platform"
@@ -1082,7 +1082,7 @@ title = "Those URLs embed nothing and name no platform paths"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.ref.checksum"
@@ -1090,7 +1090,7 @@ title = "The profile reference has a 16-byte checksum"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.ref.profile-cs"
@@ -1098,7 +1098,7 @@ title = "The profile reference states GRAY, RGB or CMYK"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.ref.icc-version"
@@ -1106,7 +1106,7 @@ title = "The profile reference states the ICC version"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.ref.no-colorant-table"
@@ -1114,7 +1114,7 @@ title = "The profile reference has no colorant table"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.fileset.checksum-matches"
@@ -1122,7 +1122,7 @@ title = "The external profile matches the checksum"
 clauses = ["iso-15930-7:A.1", "iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.fileset.fields-match"
@@ -1130,7 +1130,7 @@ title = "The external profile matches the reference's fields"
 clauses = ["iso-15930-7:A.2"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4p.fileset.profile-valid"
@@ -1138,7 +1138,7 @@ title = "The external profile meets the output-intent rules"
 clauses = ["iso-15930-7:A.1"]
 severity = "error"
 applies = ["x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x5.identification-value"

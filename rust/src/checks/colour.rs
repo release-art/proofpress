@@ -8,11 +8,11 @@
 use super::Settings;
 use std::collections::BTreeSet;
 
-use super::intent;
+use super::{intent, x4p};
 use crate::common::icc;
 use crate::document::{Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
+    Check, Finding, Level, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
     X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_PRE_SEPARATED_ABSENT, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
     X4_TRANSPARENCY_GROUP_CS_RESTRICTED,
 };
@@ -119,12 +119,14 @@ fn device_allowed(device: &[u8], intent: [u8; 4]) -> bool {
 }
 
 /// The device-space rule on the leaves reached `which` way.
-fn device_rule(doc: &Document, check: &'static Check, which: &dyn Fn(Via) -> bool) -> Vec<Finding> {
+fn device_rule(
+    doc: &Document,
+    settings: &Settings,
+    check: &'static Check,
+    which: &dyn Fn(Via) -> bool,
+) -> Vec<Finding> {
     // Under an intent that is not gray, RGB or CMYK nothing can match; x4.output-intent.channels says why.
-    let Some(intent) = intent::profile(doc)
-        .map(|h| h.space)
-        .filter(|s| matches!(s, b"GRAY" | b"RGB " | b"CMYK"))
-    else {
+    let Some(intent) = intent::space(doc, settings).filter(|s| matches!(s, b"GRAY" | b"RGB " | b"CMYK")) else {
         return Vec::new();
     };
     let mut out = Vec::new();
@@ -152,20 +154,22 @@ fn device_rule(doc: &Document, check: &'static Check, which: &dyn Fn(Via) -> boo
 }
 
 /// 6.4.3.2: device spaces in print elements match the intent; `DeviceGray` is also allowed under a CMYK intent.
-pub(super) fn device_spaces(doc: &Document, _: &Settings) -> Vec<Finding> {
-    device_rule(doc, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, &|v| v != Via::Alternate)
+pub(super) fn device_spaces(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    device_rule(doc, settings, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, &|v| {
+        v != Via::Alternate
+    })
 }
 
 /// 6.4.3.4 (X4-Q4): the alternates of spot colours obey 6.4 too.
-pub(super) fn alternate_spaces(doc: &Document, _: &Settings) -> Vec<Finding> {
-    device_rule(doc, X4_SPOT_ALTERNATE_SPACE_RESTRICTED, &|v| v == Via::Alternate)
+pub(super) fn alternate_spaces(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    device_rule(doc, settings, X4_SPOT_ALTERNATE_SPACE_RESTRICTED, &|v| {
+        v == Via::Alternate
+    })
 }
 
 /// 6.20: a transparency group's `/CS` obeys 6.4.3: a device space matches the intent, a profile is version 2 or 4.
-pub(super) fn group_spaces(doc: &Document, _: &Settings) -> Vec<Finding> {
-    let intent = intent::profile(doc)
-        .map(|h| h.space)
-        .filter(|s| matches!(s, b"GRAY" | b"RGB " | b"CMYK"));
+pub(super) fn group_spaces(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let intent = intent::space(doc, settings).filter(|s| matches!(s, b"GRAY" | b"RGB " | b"CMYK"));
     let mut out = Vec::new();
     for event in graphics::walk(doc) {
         let Event::Group {
@@ -267,8 +271,8 @@ pub(super) fn profile_version(doc: &Document, _: &Settings) -> Vec<Finding> {
 
 /// 6.4.3.3: a four-colour `ICCBased` fill, stroke, text or image mask that overprints under a CMYK intent has overprint
 /// mode 0. A `DefaultCMYK` standing in for `DeviceCMYK` is left out: it always knocks out (6.4.3.1, note 2).
-pub(super) fn overprint_mode(doc: &Document, _: &Settings) -> Vec<Finding> {
-    if intent::profile(doc).map(|h| h.space) != Some(*b"CMYK") {
+pub(super) fn overprint_mode(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    if intent::space(doc, settings) != Some(*b"CMYK") {
         return Vec::new();
     }
     let mut out = Vec::new();
@@ -299,7 +303,41 @@ pub(super) fn not_intent_profile(doc: &Document, _: &Settings) -> Vec<Finding> {
         return Vec::new();
     };
     let intent_id = icc::identity(&intent_data);
+    let same = |num: Option<u32>, data: Option<&[u8]>| {
+        Some(num == Some(intent_num) || (intent_id.is_some() && data.and_then(icc::identity) == intent_id))
+    };
+    same_as_intent(doc, &same).0
+}
+
+/// 6.4.3.3 at the level being verified. Under PDF/X-4p the intent's profile is the external one, compared by identity;
+/// without it, a profile whose MD5 is the `/CheckSum` is the intent's, and none is when the intent is not CMYK
+/// (pdfx-oracle, 2026-11-26). Otherwise it is not evaluated.
+pub(super) fn not_intent_profile_at_level(doc: &Document, settings: &Settings) -> Result<Vec<Finding>, String> {
+    if settings.level != Level::X4p {
+        return Ok(not_intent_profile(doc, settings));
+    }
+    match x4p::profile(doc, settings) {
+        Ok((_, external)) => {
+            let id = icc::identity(&external);
+            Ok(same_as_intent(doc, &|_, data| Some(id.is_some() && data.and_then(icc::identity) == id)).0)
+        }
+        Err(why) => {
+            let same = |_, data: Option<&[u8]>| data.and_then(|d| x4p::is_intent_without_profile(doc, d));
+            match same_as_intent(doc, &same) {
+                (found, false) => Ok(found),
+                (_, true) => Err(why),
+            }
+        }
+    }
+}
+
+/// Whether a profile, by object number and data, is the intent's: `None` when that cannot be told.
+type Same<'a> = dyn Fn(Option<u32>, Option<&[u8]>) -> Option<bool> + 'a;
+
+/// The four-colour `ICCBased` spaces `same` says use the intent's profile, and whether `same` could not tell for one.
+fn same_as_intent(doc: &Document, same: &Same<'_>) -> (Vec<Finding>, bool) {
     let mut out = Vec::new();
+    let mut unknown = false;
     for IccLeaf {
         num,
         data,
@@ -309,23 +347,28 @@ pub(super) fn not_intent_profile(doc: &Document, _: &Settings) -> Vec<Finding> {
         ..
     } in icc_leaves(doc)
     {
-        let same =
-            num == Some(intent_num) || (intent_id.is_some() && data.as_deref().and_then(icc::identity) == intent_id);
-        if channels == 4 && same {
-            let how = if used.defaulted {
-                "a DefaultCMYK"
-            } else {
-                "a four-colour ICCBased space"
-            };
-            let message = format!("{how} uses the output intent's profile");
-            out.push(
-                Finding::new(X4_ICC_CMYK_NOT_INTENT_PROFILE, message)
-                    .citing("6.4.3.3")
-                    .at(frames),
-            );
+        if channels != 4 {
+            continue;
+        }
+        match same(num, data.as_deref()) {
+            Some(true) => {
+                let how = if used.defaulted {
+                    "a DefaultCMYK"
+                } else {
+                    "a four-colour ICCBased space"
+                };
+                let message = format!("{how} uses the output intent's profile");
+                out.push(
+                    Finding::new(X4_ICC_CMYK_NOT_INTENT_PROFILE, message)
+                        .citing("6.4.3.3")
+                        .at(frames),
+                );
+            }
+            Some(false) => {}
+            None => unknown = true,
         }
     }
-    distinct(out)
+    (distinct(out), unknown)
 }
 
 /// The one colorant a colour space paints, when it paints only one: gray for a one-channel space, the name of a
@@ -409,6 +452,33 @@ mod tests {
         out.extend(icc);
         out.extend(b"\nendstream");
         out
+    }
+
+    #[test]
+    fn under_pdf_x_4p_without_its_profile_an_unknown_cmyk_profile_is_not_evaluated() {
+        let catalog = format!(
+            "<< /Pages 2 0 R /OutputIntents [<< /S /GTS_PDFX /DestOutputProfileRef << /ProfileCS (CMYK) /CheckSum <{}> \
+             >> >>] >>",
+            "00".repeat(16)
+        );
+        let page = b"<< /Type /Page /Contents 4 0 R /Resources << /ColorSpace << /A [/ICCBased 7 0 R] \
+                     /B [/ICCBased 9 0 R] >> >> >>";
+        let data = "/A cs 0 0 0 sc 0 0 1 1 re f /B cs 0 0 0 1 sc 0 0 1 1 re f";
+        let content = format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len());
+        let rgb = String::from_utf8_lossy(&profile(b"RGB ", 2)).replace("/N 4", "/N 3");
+        let objects: [(u32, &[u8]); 6] = [
+            (1, catalog.as_bytes()),
+            (2, b"<< /Type /Pages /Kids [3 0 R] >>"),
+            (3, page),
+            (4, content.as_bytes()),
+            (7, rgb.as_bytes()),
+            (9, &profile(b"CMYK", 2)),
+        ];
+        let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
+        assert_eq!(
+            not_intent_profile_at_level(&doc, &Level::X4p.into()),
+            Err("the file is verified alone, without its external profile".to_owned())
+        );
     }
 
     fn ids(intent: &[u8], resources: &str, data: &str) -> Vec<&'static str> {

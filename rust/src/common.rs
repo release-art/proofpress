@@ -18,4 +18,5 @@ pub(crate) mod raster;
 pub(crate) mod rect;
 pub(crate) mod sfnt;
 pub(crate) mod text;
+pub(crate) mod url;
 pub(crate) mod xmp;

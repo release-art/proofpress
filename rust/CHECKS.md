@@ -49,7 +49,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.names.other-recommended` | Other names are UTF-8 and escaped too | iso-15930-7:6.6 | warning | x4, x4p | implemented |
 | `x4.xobject.no-opi` | XObjects carry no OPI | iso-15930-7:6.7 | error | x4, x4p | implemented |
 | `x4.xobject.no-ref` | Form XObjects are not reference XObjects | iso-15930-7:6.7 | error | x4, x4p | implemented |
-| `x4.filespec.embedded` | File specifications embed their file | iso-15930-7:6.7 | error | x4 | implemented |
+| `x4.filespec.embedded` | File specifications embed their file | iso-15930-7:6.7 | error | x4, x4p | implemented |
 | `x4.stream.no-external-f` | No stream points at external data | iso-15930-7:6.7 | error | x4, x4p | implemented |
 | `x4.filter.no-lzw` | LZW compression is not used | iso-15930-7:6.8 | error | x4, x4p | implemented |
 | `x4.filter.no-crypt` | The Crypt filter is not used | iso-15930-7:6.8 | error | x4, x4p | implemented |
@@ -133,18 +133,18 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.jpx.cmyk-as-device` | Profile-less CMYK JPEG 2000 is judged as DeviceCMYK | iso-15930-7:6.27 | error | x4, x4p | implemented |
 | `x4.jpx.bit-depth` | JPEG 2000 bit depth is 1, 8 or 16 | iso-15930-7:6.27 | error | x4, x4p | implemented |
 | `x4.jpx.uniform-depth` | JPEG 2000 channels share one bit depth | iso-15930-7:6.27 | error | x4, x4p | implemented |
-| `x4p.output-intent.dest-profile-ref` | The PDF/X intent references its external profile | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.output-intent.no-dest-profile` | The PDF/X intent embeds no profile | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.ref.profile-name` | The profile reference names the profile | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.ref.urls` | The profile reference lists URL file specifications | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.ref.urls-no-ef-platform` | Those URLs embed nothing and name no platform paths | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.ref.checksum` | The profile reference has a 16-byte checksum | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.ref.profile-cs` | The profile reference states GRAY, RGB or CMYK | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.ref.icc-version` | The profile reference states the ICC version | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.ref.no-colorant-table` | The profile reference has no colorant table | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.fileset.checksum-matches` | The external profile matches the checksum | iso-15930-7:A.1, iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.fileset.fields-match` | The external profile matches the reference's fields | iso-15930-7:A.2 | error | x4p | todo |
-| `x4p.fileset.profile-valid` | The external profile meets the output-intent rules | iso-15930-7:A.1 | error | x4p | todo |
+| `x4p.output-intent.dest-profile-ref` | The PDF/X intent references its external profile | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.output-intent.no-dest-profile` | The PDF/X intent embeds no profile | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.ref.profile-name` | The profile reference names the profile | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.ref.urls` | The profile reference lists URL file specifications | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.ref.urls-no-ef-platform` | Those URLs embed nothing and name no platform paths | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.ref.checksum` | The profile reference has a 16-byte checksum | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.ref.profile-cs` | The profile reference states GRAY, RGB or CMYK | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.ref.icc-version` | The profile reference states the ICC version | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.ref.no-colorant-table` | The profile reference has no colorant table | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.fileset.checksum-matches` | The external profile matches the checksum | iso-15930-7:A.1, iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.fileset.fields-match` | The external profile matches the reference's fields | iso-15930-7:A.2 | error | x4p | implemented |
+| `x4p.fileset.profile-valid` | The external profile meets the output-intent rules | iso-15930-7:A.1 | error | x4p | implemented |
 | `x5.identification-value` | XMP declares an X-5 level | iso-15930-8:6.2 | error | x5g, x5n, x5pg | todo |
 | `x5.self-contained-is-x4` | A self-contained file claims X-4, not X-5 | iso-15930-8:5 | error | x5g, x5pg | todo |
 | `x5.g-ref-present` | At least one reference XObject exists | iso-15930-8:8.2 | error | x5g, x5pg | todo |

@@ -336,6 +336,7 @@ mod tests {
         let settings = Settings {
             level: Level::Print,
             params,
+            files: crate::checks::Files::Alone,
         };
         runs.iter()
             .flat_map(|run| run(doc, &settings))

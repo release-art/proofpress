@@ -5,8 +5,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use proof_pdf::checks::{Params, Settings, verify_settings};
-use proof_pdf::findings::{ALL, Check, Level, Status};
+use proof_pdf::checks::{Files, Params, Settings, verify_settings};
+use proof_pdf::findings::{ALL, Check, Level, Outcome, Status, Structure};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -17,6 +17,12 @@ struct Fixture {
     /// The print checks' parameters it is verified with, when not the defaults.
     #[serde(default)]
     params: Params,
+    /// Verified alone, not with the files beside it (ISO 15930-7 A.1).
+    #[serde(default)]
+    alone: bool,
+    /// The checks it leaves not evaluated, each with why; none otherwise.
+    #[serde(default)]
+    unjudged: BTreeMap<String, String>,
 }
 
 fn repo() -> &'static Path {
@@ -67,7 +73,7 @@ fn an_implemented_check_has_a_failing_and_a_passing_fixture() {
         let fails = fixtures.values().any(|f| f.expect.contains_key(check.id));
         let passes = fixtures
             .values()
-            .any(|f| judges(f, check) && !f.expect.contains_key(check.id));
+            .any(|f| judges(f, check) && !f.expect.contains_key(check.id) && !f.unjudged.contains_key(check.id));
         if !fails || !passes {
             missing.push(format!("{} (fail fixture: {fails}, pass fixture: {passes})", check.id));
         }
@@ -120,11 +126,17 @@ fn every_fixture_raises_exactly_its_expected_checks() {
         .into_iter()
         .find(|p| p.is_file())
         .unwrap();
-        let bytes = std::fs::read(path).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
         for name_of_level in &fixture.levels {
+            let folder = path.parent().unwrap().to_owned();
             let settings = Settings {
                 level: level(name_of_level),
                 params: fixture.params.clone(),
+                files: if fixture.alone {
+                    Files::Alone
+                } else {
+                    Files::Set(folder)
+                },
             };
             let report = verify_settings(&file, &bytes, &settings);
             let found: BTreeSet<&str> = report.findings.iter().map(|f| f.check.id).collect();
@@ -132,6 +144,19 @@ fn every_fixture_raises_exactly_its_expected_checks() {
             if found != expected {
                 wrong.push(format!(
                     "{name} at {name_of_level}: expected {expected:?}, found {found:?}"
+                ));
+            }
+            let unjudged: BTreeSet<&str> = report
+                .checks
+                .iter()
+                .filter(|c| matches!(c.outcome, Outcome::NotEvaluated(_)) && c.id.status == Status::Implemented)
+                .map(|c| c.id.id)
+                .collect();
+            let expected: BTreeSet<&str> = fixture.unjudged.keys().map(String::as_str).collect();
+            // On a refused or damaged file every check is left unjudged, and the structure says why.
+            if report.structure == Structure::Sound && unjudged != expected {
+                wrong.push(format!(
+                    "{name} at {name_of_level}: expected not evaluated {expected:?}, found {unjudged:?}"
                 ));
             }
         }

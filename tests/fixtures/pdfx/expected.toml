@@ -866,3 +866,89 @@ expect = { "x4.names.other-recommended" = "a name that is not UTF-8 (6.6)" }
 [x4-resource-missing]
 levels = ["x4"]
 expect = { "x4.complete.resources-inside" = "/Nowhere Do with no /Nowhere XObject (6.3)" }
+
+# PDF/X-4p (ISO 15930-7 Annex A). The external profile is tests/fixtures/icc/little-cms-test1.icc, which the
+# fixtures name by the relative URL ../icc/little-cms-test1.icc; they are verified as a file set unless `alone`.
+[x4p-good]
+levels = ["x4p"]
+expect = {}
+
+[x4p-good-alone]
+levels = ["x4p"]
+alone = true
+expect = {}
+unjudged = { "x4p.fileset.checksum-matches" = "verified alone (A.1 NOTE)", "x4p.fileset.fields-match" = "verified alone", "x4p.fileset.profile-valid" = "verified alone" }
+
+[x4p-local-then-network]
+levels = ["x4p"]
+expect = {}
+
+[x4p-embedded-profile]
+levels = ["x4p"]
+expect = { "x4p.output-intent.no-dest-profile" = "the intent embeds a profile too (A.2)" }
+
+[x4p-no-ref]
+levels = ["x4p"]
+expect = { "x4p.output-intent.dest-profile-ref" = "the intent neither embeds nor refers to a profile (A.2)" }
+
+[x4p-no-profile-name]
+levels = ["x4p"]
+expect = { "x4p.ref.profile-name" = "no /ProfileName (A.2)" }
+
+[x4p-url-string]
+levels = ["x4p"]
+expect = { "x4p.ref.urls" = "a URL as a bare string, not a URL file specification (A.2)" }
+
+[x4p-url-embedded]
+levels = ["x4p"]
+expect = { "x4p.ref.urls-no-ef-platform" = "a URL file specification with /Mac (A.2)" }
+
+[x4p-checksum-short]
+levels = ["x4p"]
+expect = { "x4p.ref.checksum" = "a 10-byte /CheckSum (A.2)" }
+unjudged = { "x4p.fileset.checksum-matches" = "no candidate can be confirmed without a checksum", "x4p.fileset.fields-match" = "the same", "x4p.fileset.profile-valid" = "the same" }
+
+[x4p-profile-cs-lab]
+levels = ["x4p"]
+expect = { "x4p.ref.profile-cs" = "/ProfileCS (Lab ) (A.2)", "x4p.fileset.fields-match" = "nor is it the profile's own space" }
+
+[x4p-icc-version-short]
+levels = ["x4p"]
+expect = { "x4p.ref.icc-version" = "a 2-byte /ICCVersion (A.2)", "x4p.fileset.fields-match" = "nor is it the profile's version bytes" }
+
+[x4p-colorant-table]
+levels = ["x4p"]
+expect = { "x4p.ref.no-colorant-table" = "/ColorantTable, which is X-5n's (A.2)" }
+
+[x4p-wrong-checksum]
+levels = ["x4p"]
+expect = { "x4p.fileset.checksum-matches" = "the profile at the URL has another MD5 (A.2)" }
+unjudged = { "x4p.fileset.fields-match" = "no external profile", "x4p.fileset.profile-valid" = "no external profile" }
+
+[x4p-missing-profile]
+levels = ["x4p"]
+expect = { "x4p.fileset.checksum-matches" = "no file at the only URL: the file set is incomplete (A.1)" }
+unjudged = { "x4p.fileset.fields-match" = "no external profile", "x4p.fileset.profile-valid" = "no external profile" }
+
+[x4p-network-only]
+levels = ["x4p"]
+expect = {}
+unjudged = { "x4p.fileset.checksum-matches" = "only an https URL, which is not fetched", "x4p.fileset.fields-match" = "the same", "x4p.fileset.profile-valid" = "the same" }
+
+[x4p-wrong-name]
+levels = ["x4p"]
+expect = { "x4p.fileset.fields-match" = "/ProfileName is not the profile's description (A.2)" }
+
+[x4p-not-a-profile]
+levels = ["x4p"]
+expect = { "x4p.fileset.profile-valid" = "the referenced file is not an ICC profile (A.1, 6.4.2.1)", "x4p.fileset.fields-match" = "so it has no description to match" }
+
+[x4p-cmyk-is-intent]
+levels = ["x4p"]
+expect = { "x4.icc.cmyk-not-intent-profile" = "a DefaultCMYK that is the external profile, by identity (6.4.3.3 under A.1)" }
+
+[x4p-cmyk-is-intent-alone]
+levels = ["x4p"]
+alone = true
+expect = { "x4.icc.cmyk-not-intent-profile" = "the same, told by its MD5 equal to /CheckSum without the external profile" }
+unjudged = { "x4p.fileset.checksum-matches" = "verified alone", "x4p.fileset.fields-match" = "verified alone", "x4p.fileset.profile-valid" = "verified alone" }

@@ -14,6 +14,7 @@ dates, title and document IDs of ISO 15930-7, 6.10. Their ICC profile is generat
 """
 
 import argparse
+import hashlib
 import io
 import pathlib
 import sys
@@ -905,6 +906,93 @@ def _x4_truetype(
     return pdf
 
 
+# A PDF/X-4p file's external profile, from tests/fixtures/pdfs/ where the fixtures are written (ISO 15930-7 A.2).
+X4P_URL = "../icc/little-cms-test1.icc"
+
+
+def _x4p(profile: bytes | None = None, **ref: pikepdf.Object | None) -> pikepdf.Pdf:
+    """x4-good as PDF/X-4p: its intent refers to the Little-CMS profile at ``X4P_URL`` instead of embedding it, with the
+    reference's entries for ``profile`` (by default that one), each replaced by ``ref`` (``None`` leaves it out)."""
+    pdf = _x4_good()
+    data = X4_PROFILE.read_bytes() if profile is None else profile
+    entries = {
+        "ProfileName": pikepdf.String("Test profile, not suitable for real use"),
+        # /Type /Filespec makes it a file specification 6.7 would want embedded, but for A.2's exemption (X4-Q12).
+        "URLs": pikepdf.Array(
+            [pikepdf.Dictionary(Type=pikepdf.Name.Filespec, FS=pikepdf.Name.URL, F=pikepdf.String(X4P_URL))]
+        ),
+        "CheckSum": pikepdf.String(hashlib.md5(data).digest()),
+        "ProfileCS": pikepdf.String(data[16:20]),
+        "ICCVersion": pikepdf.String(data[8:12]),
+        **ref,
+    }
+    intent = pdf.Root.OutputIntents[0]
+    del intent["/DestOutputProfile"]
+    intent["/DestOutputProfileRef"] = pikepdf.Dictionary({f"/{k}": v for k, v in entries.items() if v is not None})
+    xmp = X4_XMP.replace(b">PDF/X-4<", b">PDF/X-4p<")
+    metadata = pdf.make_stream(xmp)
+    metadata["/Type"], metadata["/Subtype"] = pikepdf.Name.Metadata, pikepdf.Name.XML
+    pdf.Root["/Metadata"] = pdf.make_indirect(metadata)
+    pdf.docinfo["/GTS_PDFXVersion"] = pikepdf.String("PDF/X-4p")
+    return pdf
+
+
+def _x4p_with(change: Callable[[pikepdf.Pdf], None]) -> pikepdf.Pdf:
+    pdf = _x4p()
+    change(pdf)
+    return pdf
+
+
+def _x4p_default_cmyk(pdf: pikepdf.Pdf) -> None:
+    """A DefaultCMYK on the page that is the external profile itself, remapping the page's DeviceCMYK (6.4.3.3)."""
+    profile = pdf.make_stream(X4_PROFILE.read_bytes())
+    profile["/N"] = 4
+    space = pikepdf.Array([pikepdf.Name.ICCBased, pdf.make_indirect(profile)])
+    pdf.pages[0].obj.Resources["/ColorSpace"] = pikepdf.Dictionary(DefaultCMYK=space)
+
+
+def _x4p_fixtures() -> dict[str, pikepdf.Pdf]:
+    """PDF/X-4p (Annex A): a good file, alone and in its file set, and one defect in each (expected.toml)."""
+    name, text = pikepdf.Name, pikepdf.String
+    url = pikepdf.Dictionary(FS=name.URL, F=text(X4P_URL))
+    licence = (pathlib.Path(__file__).parent / "icc" / "LICENSE-little-cms").read_bytes()
+    return {
+        "x4p-good": _x4p(),
+        "x4p-good-alone": _x4p(),
+        "x4p-embedded-profile": _x4p_with(
+            lambda p: p.Root.OutputIntents[0].__setitem__("/DestOutputProfile", p.make_stream(X4_PROFILE.read_bytes()))
+        ),
+        "x4p-no-ref": _x4p_with(lambda p: p.Root.OutputIntents[0].__delitem__("/DestOutputProfileRef")),
+        "x4p-no-profile-name": _x4p(ProfileName=None),
+        "x4p-url-string": _x4p(URLs=pikepdf.Array([text(X4P_URL)])),
+        "x4p-url-embedded": _x4p(
+            URLs=pikepdf.Array([pikepdf.Dictionary(FS=name.URL, F=text(X4P_URL), Mac=text("p.icc"))])
+        ),
+        "x4p-checksum-short": _x4p(CheckSum=text(b"0123456789")),
+        "x4p-profile-cs-lab": _x4p(ProfileCS=text(b"Lab ")),
+        "x4p-icc-version-short": _x4p(ICCVersion=text(b"\x02\x10")),
+        "x4p-colorant-table": _x4p(ColorantTable=pikepdf.Array()),
+        "x4p-wrong-checksum": _x4p(CheckSum=text(bytes(16))),
+        "x4p-missing-profile": _x4p(URLs=pikepdf.Array([pikepdf.Dictionary(FS=name.URL, F=text("missing.icc"))])),
+        "x4p-network-only": _x4p(
+            URLs=pikepdf.Array([pikepdf.Dictionary(FS=name.URL, F=text("https://example.com/test1.icc"))])
+        ),
+        "x4p-wrong-name": _x4p(ProfileName=text("FOGRA39")),
+        "x4p-not-a-profile": _x4p(
+            licence,
+            URLs=pikepdf.Array([pikepdf.Dictionary(FS=name.URL, F=text("../icc/LICENSE-little-cms"))]),
+            ProfileCS=text(b"CMYK"),
+            ICCVersion=text(X4_PROFILE.read_bytes()[8:12]),
+        ),
+        "x4p-cmyk-is-intent": _x4p_with(_x4p_default_cmyk),
+        "x4p-cmyk-is-intent-alone": _x4p_with(_x4p_default_cmyk),
+        # A second, network-only URL after the local one: found locally, so nothing is left to the network.
+        "x4p-local-then-network": _x4p(
+            URLs=pikepdf.Array([url, pikepdf.Dictionary(FS=name.URL, F=text("https://example.com/p.icc"))])
+        ),
+    }
+
+
 def _x4_font_fixtures() -> dict[str, pikepdf.Pdf]:
     """The negatives of 6.5.4 (expected.toml says what each raises)."""
     differences = pikepdf.Dictionary(BaseEncoding=pikepdf.Name.WinAnsiEncoding, Differences=[65, pikepdf.Name.A])
@@ -1447,6 +1535,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_spot_fixtures(),
         **_x4_jpx_fixtures(),
         **_x4_font_fixtures(),
+        **_x4p_fixtures(),
         **_print_fixtures(),
         "x4-pre-separated": _x4_pre_separated(),
     }

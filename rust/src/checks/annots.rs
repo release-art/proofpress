@@ -144,11 +144,11 @@ fn pcm_for(space: [u8; 4]) -> &'static [u8] {
 
 /// 6.9: the `/PCM` of a `TrapNet` annotation's appearances names the intent's colour space. Without a readable intent
 /// profile there is nothing to match, and `x4.output-intent.*` reports why.
-pub(super) fn pcm_matches_intent(doc: &Document, _: &Settings) -> Vec<Finding> {
-    let Some(header) = intent::profile(doc) else {
+pub(super) fn pcm_matches_intent(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let Some(space) = intent::space(doc, settings) else {
         return Vec::new();
     };
-    let want = pcm_for(header.space);
+    let want = pcm_for(space);
     let pages = doc.pages();
     let mut out = Vec::new();
     for (i, annot) in trapnets(doc, &pages) {

@@ -119,8 +119,8 @@ pub(super) fn colorants_entry(doc: &Document, _: &Settings) -> Vec<Finding> {
 
 /// 6.4.3.4 (X4-Q5): a `DeviceN`'s `/Process` colour space is a device space of the intent's family, or an `ICCBased`
 /// space with as many components.
-pub(super) fn process_space(doc: &Document, _: &Settings) -> Vec<Finding> {
-    let Some(intent) = intent::profile(doc).map(|h| h.space) else {
+pub(super) fn process_space(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let Some(intent) = intent::space(doc, settings) else {
         return Vec::new();
     };
     let (device, channels): (&[u8], usize) = match &intent {

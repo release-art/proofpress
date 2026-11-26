@@ -113,7 +113,7 @@ fn pdfx_intents(doc: &Document) -> Vec<&Dict> {
 }
 
 /// The PDF/X output intent, when there is exactly one.
-fn the_intent(doc: &Document) -> Option<&Dict> {
+pub(super) fn the_intent(doc: &Document) -> Option<&Dict> {
     match pdfx_intents(doc).as_slice() {
         [one] => Some(one),
         _ => None,
@@ -126,6 +126,14 @@ pub(super) fn profile(doc: &Document) -> Option<icc::Header> {
         Value::Reference(num, _) => icc::header(&doc.stream_data(num)?),
         _ => None,
     }
+}
+
+/// The colour space of the printing condition: the embedded profile's, or under PDF/X-4p the external profile's, else
+/// the one its reference declares (`/ProfileCS`).
+pub(super) fn space(doc: &Document, settings: &Settings) -> Option<[u8; 4]> {
+    profile(doc)
+        .map(|h| h.space)
+        .or_else(|| super::x4p::space(doc, settings))
 }
 
 /// The PDF/X intent's `/DestOutputProfile`: its object number and its data.

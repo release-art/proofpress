@@ -350,6 +350,7 @@ mod tests {
             &Settings {
                 level: Level::Print,
                 params,
+                files: crate::checks::Files::Alone,
             },
         )
         .into_iter()

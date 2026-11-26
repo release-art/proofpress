@@ -79,6 +79,10 @@ pub(crate) struct Verify {
     /// Per-tool timeout, in seconds [default: 900].
     #[arg(long)]
     pub(crate) timeout: Option<f64>,
+    /// Verify each file alone: checks that need a file it refers to (a PDF/X-4p file's external profile) are not
+    /// evaluated. By default the files a PDF refers to are looked for beside it.
+    #[arg(long)]
+    pub(crate) file_alone: bool,
     #[command(flatten)]
     pub(crate) layers: Layers,
     #[command(flatten)]

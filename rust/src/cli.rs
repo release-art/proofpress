@@ -403,6 +403,18 @@ mod tests {
     }
 
     #[test]
+    fn a_pdfx_4p_file_is_verified_with_its_external_profile_unless_alone() {
+        let (code, _, _) = cli(&["verify", &fixture("x4p-good"), "--pdfx", "x4p"]);
+        assert_eq!(code, 0);
+        let (code, out, _) = cli(&["verify", &fixture("x4p-good"), "--pdfx", "x4p", "--file-alone"]);
+        assert_eq!(code, 1);
+        assert!(
+            out.contains("not evaluated, the file is verified alone, without its external profile"),
+            "{out}"
+        );
+    }
+
+    #[test]
     fn the_python_spellings_still_work() {
         let words = [
             "proof-pdf",

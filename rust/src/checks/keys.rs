@@ -6,7 +6,7 @@ use super::Settings;
 use super::walk::{Node, dicts};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Location, X4_ACROFORM_NO_XFA, X4_ACTIONS_ABSENT, X4_EXTGSTATE_NO_HTP, X4_EXTGSTATE_NO_TR,
+    Check, Finding, Level, Location, X4_ACROFORM_NO_XFA, X4_ACTIONS_ABSENT, X4_EXTGSTATE_NO_HTP, X4_EXTGSTATE_NO_TR,
     X4_EXTGSTATE_TR2_DEFAULT, X4_FILESPEC_EMBEDDED, X4_HALFTONE_NO_NAME, X4_HALFTONE_TRANSFER_FUNCTION,
     X4_HALFTONE_TYPE_1_OR_5, X4_IMAGE_NO_DEFAULT_FOR_PRINTING, X4_JAVASCRIPT_ABSENT,
     X4_NAMES_NO_ALTERNATE_PRESENTATIONS, X4_PAGE_NO_PRES_STEPS, X4_STREAM_NO_EXTERNAL_F, X4_VIEWER_PREFS_AREAS,
@@ -100,12 +100,14 @@ pub(super) fn no_external_f(doc: &Document, _: &Settings) -> Vec<Finding> {
 }
 
 /// 6.7: every file specification embeds its file. File specifications are found by `/Type /Filespec` and where they
-/// are written (`/FS`, `/AF`); a string there is a file specification without `/EF`.
-pub(super) fn filespec_embedded(doc: &Document, _: &Settings) -> Vec<Finding> {
+/// are written (`/FS`, `/AF`); a string there is a file specification without `/EF`. Under PDF/X-4p the URL
+/// specifications of the external profile's `/URLs` are exempt, since A.2 forbids them `/EF` (X4-Q12).
+pub(super) fn filespec_embedded(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let exempt = |n: &Node<'_>| settings.level == Level::X4p && n.under(b"URLs");
     let mut out = each(doc, X4_FILESPEC_EMBEDDED, "6.7", &|n| {
         let filespec = n.name(b"Type") == Some(b"Filespec") || n.under(b"FS") || n.under(b"AF");
         when(
-            filespec && n.dict.get(b"EF").is_none(),
+            filespec && !exempt(n) && n.dict.get(b"EF").is_none(),
             "a file specification without /EF",
         )
     });
