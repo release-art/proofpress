@@ -18,13 +18,16 @@ required-features = ["cli"]
 
 [features]
 # The Python module proof_pdf._core, built by maturin.
-python = ["dep:pyo3", "dep:serde_json", "cli"]
+python = ["dep:pyo3", "dep:serde_json", "cli", "preview"]
 # The proof-pdf command line (src/cli.rs, src/bin/proof-pdf.rs).
+# Page previews rendered by hayro (src/preview.rs).
+preview = ["dep:hayro"]
 cli = ["dep:clap", "dep:globset", "dep:process-wrap", "dep:serde_json", "dep:tiff", "dep:toml"]
 
 [dependencies]
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
 globset = { version = "0.4.22", optional = true }
+hayro = { version = "0.9.0", optional = true }
 hayro-ccitt = "0.5.0"
 hayro-cmap = "0.1.1"
 hayro-jpeg2000 = { version = "0.5.0", default-features = false, features = ["std"] }

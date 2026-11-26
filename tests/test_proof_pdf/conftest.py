@@ -10,14 +10,13 @@ new block of setup.
 import json
 import pathlib
 import tempfile
-import types
 import zlib
 from typing import Any, cast
 
 import pikepdf
 import pytest
 
-from proof_pdf._internal import _core, proc
+from proof_pdf._internal import _core
 from proof_pdf.models import Finding, PageGeometry, Severity
 
 # An A6 card (105x148 mm) centred inside a 3 mm bleed: the "correct" baseline.
@@ -217,26 +216,3 @@ def vera_json():
         return json.dumps({"report": {"jobs": [{"validationResult": [{"compliant": compliant, "details": details}]}]}})
 
     return _make
-
-
-@pytest.fixture
-def fake_run(mocker):
-    """Replace ``proc.run`` with a recorded stub, returning the argv of every call.
-
-    A ``SimpleNamespace`` stands in for the ``CompletedProcess``, so a test can also assert on the command that
-    would have been issued. *side_effect* runs synchronously, e.g. to write the files the tool would have written.
-    """
-
-    def _install(*, returncode: int = 0, stdout: str = "", stderr: str = "", side_effect=None):
-        calls: list[list[str]] = []
-
-        async def _run(argv, **kwargs):
-            calls.append(list(argv))
-            if side_effect is not None:
-                side_effect(argv, **kwargs)
-            return types.SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
-
-        mocker.patch.object(proc, "run", side_effect=_run)
-        return calls
-
-    return _install

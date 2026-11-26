@@ -109,7 +109,6 @@ class TestOptions:
         assert "PDF/X-4" not in result.stdout
 
     def test_preview_draws_no_safe_guide_unless_asked(self, runner, tmp_path, mocker):
-        mocker.patch.object(cli.preview, "gs_available", return_value=True)
         calls = mocker.patch.object(cli.preview, "preview_file", return_value=[])
         runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])
         assert calls.call_args.kwargs["safe_mm"] is None
@@ -215,7 +214,6 @@ class TestCollapsedOutput:
 
 class TestPreviewCommand:
     def test_writes_pages_and_reports_them(self, runner, tmp_path, mocker):
-        mocker.patch.object(cli.preview, "gs_available", return_value=True)
         written = tmp_path / "out" / "a-p1.png"
 
         async def _preview_file(target, dst, **kwargs):
@@ -230,7 +228,6 @@ class TestPreviewCommand:
         assert "1 page(s)" in result.output
 
     def test_default_output_sits_beside_the_pdf(self, runner, tmp_path, mocker):
-        mocker.patch.object(cli.preview, "gs_available", return_value=True)
         seen: list[pathlib.Path] = []
 
         async def _preview_file(target, dst, **kwargs):
@@ -241,17 +238,15 @@ class TestPreviewCommand:
         runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])
         assert seen == [tmp_path / "preview"]
 
-    def test_missing_ghostscript_fails_fast(self, runner, tmp_path, mocker):
-        mocker.patch.object(cli.preview, "gs_available", return_value=False)
-        result = runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])
-        assert result.exit_code == 1
-        assert "Ghostscript not found" in result.output
+    def test_the_old_ghostscript_options_are_still_accepted(self, runner, tmp_path, mocker):
+        mocker.patch.object(cli.preview, "preview_file", return_value=[])
+        result = runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf")), "--gs", "gs", "--timeout", "9"])
+        assert result.exit_code == 0, result.output
 
-    def test_render_failure_exits_one(self, runner, tmp_path, mocker):
-        mocker.patch.object(cli.preview, "gs_available", return_value=True)
-
+    @pytest.mark.parametrize("error", [preview.UnreadablePdfError("bad page"), ValueError("bad page")])
+    def test_render_failure_exits_one(self, runner, tmp_path, mocker, error):
         async def _boom(*a, **k):
-            raise preview.GhostscriptError("bad page")
+            raise error
 
         mocker.patch.object(cli.preview, "preview_file", side_effect=_boom)
         result = runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])

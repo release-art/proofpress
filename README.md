@@ -202,7 +202,7 @@ The box is `X0,Y0,X1,Y1` in points from the page's bottom-left, the numbers `doc
 The piece also holds the rest of the page's content outside the window, which a viewer does not show; rasterise it when
 that matters.
 
-`--previews` renders `previews/index.html` (needs Ghostscript): each page with every recovered asset boxed on it and
+`--previews` renders `previews/index.html`: each page with every recovered asset boxed on it and
 linked to its thumbnail below, so a whole archive job can be reviewed by eye. Text in fonts without a `/ToUnicode` map
 cannot be read from the PDF; `document.json` says so in `notes` and keeps the font codes. Mind who owns the artwork you
 recover.

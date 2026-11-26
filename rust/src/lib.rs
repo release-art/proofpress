@@ -15,6 +15,8 @@ pub mod document;
 mod file;
 mod filters;
 pub mod graphics;
+#[cfg(feature = "preview")]
+pub mod preview;
 #[cfg(feature = "python")]
 mod python;
 mod syntax;

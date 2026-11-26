@@ -15,7 +15,7 @@ import typing
 
 from PIL import Image
 
-from . import proc
+from . import _core
 
 logger = logging.getLogger(__name__)
 
@@ -63,27 +63,25 @@ for (const page of document.querySelectorAll('.page'))
 
 
 async def build(
-    document: dict[str, typing.Any], pdf_path: pathlib.Path, out_dir: pathlib.Path, *, dpi: int, gs_bin: str
+    document: dict[str, typing.Any], pdf_path: pathlib.Path, out_dir: pathlib.Path, *, dpi: int
 ) -> tuple[str, list[str]]:
     """Write ``previews/`` under *out_dir*; return ``(index path relative to out_dir, problems)``.
 
-    *document* is ``Extraction.to_dict()``. Raises :class:`proof_pdf.preview.GhostscriptError` when the pages cannot
+    *document* is ``Extraction.to_dict()``. Raises :class:`proof_pdf.preview.UnreadablePdfError` when the pages cannot
     be rendered; a thumbnail that cannot be made is a problem in the list, and the page still builds without it.
     """
     from .. import preview  # noqa: PLC0415 -- preview imports from _internal; a module-level import would be a cycle
 
     folder = out_dir / "previews"
-    pages = await preview.preview_file(
-        pdf_path, folder, dpi=dpi, guides=False, safe_mm=None, gs_bin=gs_bin, timeout=900.0
-    )
+    pages = await preview.preview_file(pdf_path, folder, dpi=dpi, guides=False, safe_mm=None)
     problems: list[str] = []
-    thumbs = await _thumbnails(document["assets"], out_dir, folder, gs_bin, problems)
+    thumbs = await _thumbnails(document["assets"], out_dir, folder, problems)
     (folder / "index.html").write_text(_page(document, [p.name for p in pages], thumbs), encoding="utf-8")
     return "previews/index.html", problems
 
 
 async def _thumbnails(
-    assets: list[dict], out_dir: pathlib.Path, folder: pathlib.Path, gs_bin: str, problems: list[str]
+    assets: list[dict], out_dir: pathlib.Path, folder: pathlib.Path, problems: list[str]
 ) -> dict[int, str]:
     """Thumbnail PNGs for the images and vector pieces, by asset index; path relative to the previews folder."""
     found: dict[int, str] = {}
@@ -98,8 +96,8 @@ async def _thumbnails(
                 await asyncio.to_thread(_image_thumbnail, source, target)
             else:
                 async with slots:
-                    await _vector_thumbnail(gs_bin, source, target, asset["placements"][0])
-        except (OSError, ValueError, proc.ProcTimeoutError, RuntimeError) as exc:
+                    await asyncio.to_thread(_vector_thumbnail, source, target, asset["placements"][0])
+        except (OSError, ValueError, _core.UnreadablePdfError) as exc:
             problems.append(f"preview of {asset['file']}: {exc}")
             return
         found[index] = f"{asset['kind']}/{target.name}"
@@ -115,25 +113,11 @@ def _image_thumbnail(source: pathlib.Path, target: pathlib.Path) -> None:
     picture.save(target)
 
 
-async def _vector_thumbnail(gs_bin: str, source: pathlib.Path, target: pathlib.Path, placement: dict) -> None:
+def _vector_thumbnail(source: pathlib.Path, target: pathlib.Path, placement: dict) -> None:
     longest = max(placement["width"], placement["height"], 1.0)
     dpi = max(_MIN_THUMB_DPI, min(_MAX_THUMB_DPI, round(THUMB_PX / longest * 72)))
-    result = await proc.run(
-        [
-            gs_bin,
-            "-q",
-            "-dNOPAUSE",
-            "-dBATCH",
-            "-dSAFER",
-            "-sDEVICE=png16m",
-            f"-r{dpi}",
-            f"-sOutputFile={target}",
-            str(source),
-        ],
-        timeout=120.0,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "ghostscript failed")
+    [png] = _core.render(source.read_bytes(), dpi)
+    target.write_bytes(png)
 
 
 def _page(document: dict, page_pngs: list[str], thumbs: dict[int, str]) -> str:

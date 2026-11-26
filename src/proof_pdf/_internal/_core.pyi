@@ -27,3 +27,9 @@ def inspect(data: bytes, proof_profile: bytes | None = None, with_contrast: bool
     measured through ``proof_profile`` (an ICC profile's bytes) or else the output intents' profiles. Raises
     ``UnreadablePdfError`` for a file that cannot be read.
     """
+
+def render(data: bytes, dpi: float, guides: bool = False, safe_mm: float | None = None) -> list[bytes]:
+    """Each page of the PDF ``data`` as PNG bytes at ``dpi``, with the trim and bleed guides (and a safe-area guide
+    ``safe_mm`` inside the trim, when given) drawn when ``guides`` is true. Raises ``UnreadablePdfError`` for a file
+    that cannot be read, and ``ValueError`` for a page too large to render at ``dpi``.
+    """

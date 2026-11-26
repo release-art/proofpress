@@ -2,7 +2,6 @@
 
 import json
 import pathlib
-import shutil
 
 import pikepdf
 import pytest
@@ -187,8 +186,6 @@ class TestUnreadableText:
         assert len(result.notes) == 1 and "Foo (1)" in result.notes[0]
 
 
-@pytest.mark.container
-@pytest.mark.skipif(shutil.which("gs") is None, reason="needs Ghostscript on PATH")
 class TestPreviews:
     def test_the_review_page_boxes_each_asset_on_its_page_and_lists_it_below(self, tmp_path):
         result = extract.extract_pdf(PDFS / "rgb-image.pdf", tmp_path, previews=True)
@@ -204,10 +201,11 @@ class TestPreviews:
 
 
 class TestPreviewsCli:
-    def test_previews_without_ghostscript_fails_before_extracting(self, runner, tmp_path):
+    def test_previews_need_no_ghostscript_and_the_old_option_is_still_accepted(self, runner, tmp_path):
         args = ["extract", str(PDFS / "good.pdf"), "--out", str(tmp_path), "--previews", "--gs", "no-such-gs"]
         result = runner.invoke(cli.pdf_app, args)
-        assert result.exit_code == 1 and not (tmp_path / "good").exists()
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "good" / "previews" / "index.html").is_file()
 
 
 PACKET = b"""<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>

@@ -90,9 +90,6 @@ def _main(
         raise typer.BadParameter(str(exc), param_hint="--config") from exc
 
 
-# A hung Ghostscript on a 400 MB file would otherwise block a CI run for ever.
-DEFAULT_TIMEOUT = 900.0
-
 _MARK = {
     Severity.ERROR: typer.style("x", fg=typer.colors.RED),
     Severity.WARN: typer.style("!", fg=typer.colors.YELLOW),
@@ -102,13 +99,19 @@ PathsArg = typing.Annotated[
     list[pathlib.Path] | None,
     typer.Argument(help="PDFs to process. A directory contributes every PDF beneath it."),
 ]
-GsOpt = typing.Annotated[str, typer.Option("--gs", help="Ghostscript executable.")]
-TimeoutOpt = typing.Annotated[float, typer.Option("--timeout", help="Per-tool timeout, in seconds.")]
 ExcludeOpt = typing.Annotated[
     list[str] | None,
     typer.Option("--exclude", help="Glob, relative to a directory argument, of PDFs to skip. Repeatable."),
 ]
 QuietOpt = typing.Annotated[bool, typer.Option("--quiet", help="Exit code only, for CI.")]
+# Previews no longer run Ghostscript; the options stay, hidden, so existing commands and config files keep working.
+UnusedGsOpt = typing.Annotated[
+    str | None, typer.Option("--gs", hidden=True, help="Not used: previews are rendered in-process.")
+]
+UnusedTimeoutOpt = typing.Annotated[
+    float | None,
+    typer.Option("--timeout", hidden=True, help="Not used: previews are rendered in-process."),
+]
 
 
 @pdf_app.command(
@@ -200,14 +203,12 @@ def extract_cmd(
     ] = True,
     previews: typing.Annotated[
         bool,
-        typer.Option(
-            "--previews", help="Also write previews/index.html: the pages with every asset boxed (Ghostscript)."
-        ),
+        typer.Option("--previews", help="Also write previews/index.html: the pages with every asset boxed."),
     ] = False,
     preview_dpi: typing.Annotated[
         int, typer.Option("--preview-dpi", help="Resolution of the page renders in the review page.")
     ] = extract.DEFAULT_PREVIEW_DPI,
-    gs_bin: GsOpt = "gs",
+    gs_bin: UnusedGsOpt = None,
     quiet: QuietOpt = False,
 ) -> None:
     """Recover images, fonts, ICC profiles and vector artwork from each PDF, with a document.json saying where."""
@@ -217,9 +218,6 @@ def extract_cmd(
     targets = core.expand_targets(files or [], exclude or [])
     if not targets:
         typer.echo("no PDFs to extract from", err=True)
-        raise typer.Exit(1)
-    if previews and not preview.gs_available(gs_bin):
-        typer.echo(f"Ghostscript not found ({gs_bin}) -- cannot render previews", err=True)
         raise typer.Exit(1)
     failed = False
     for target in targets:
@@ -234,13 +232,8 @@ def extract_cmd(
                 vector_text=vector_text,
                 previews=previews,
                 preview_dpi=preview_dpi,
-                gs_bin=gs_bin,
             )
-        except preview.GhostscriptError as exc:
-            typer.secho(f"FAIL -- Ghostscript could not render {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
-            failed = True
-            continue
-        except (pikepdf.PdfError, pikepdf.PasswordError) as exc:
+        except (pikepdf.PdfError, pikepdf.PasswordError, inventory.UnreadablePdfError) as exc:
             typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             failed = True
             continue
@@ -340,8 +333,8 @@ def preview_cmd(
         pathlib.Path | None,
         typer.Option("--out", help="Output directory (default: a preview/ folder beside each PDF)."),
     ] = None,
-    gs_bin: GsOpt = "gs",
-    timeout: TimeoutOpt = DEFAULT_TIMEOUT,
+    gs_bin: UnusedGsOpt = None,
+    timeout: UnusedTimeoutOpt = None,
     quiet: QuietOpt = False,
 ) -> None:
     """Rasterise each PDF to one PNG per page, overlaying the page-box guides."""
@@ -349,21 +342,14 @@ def preview_cmd(
     if not targets:
         typer.echo("no PDFs to preview", err=True)
         raise typer.Exit(1)
-    if not preview.gs_available(gs_bin):
-        typer.echo(f"Ghostscript not found ({gs_bin}) -- cannot render previews", err=True)
-        raise typer.Exit(1)
 
     written: list[pathlib.Path] = []
     for target in targets:
         dst = out if out is not None else target.parent / "preview"
         try:
-            pngs = asyncio.run(
-                preview.preview_file(
-                    target, dst, dpi=dpi, guides=guides, safe_mm=safe_mm, gs_bin=gs_bin, timeout=timeout
-                )
-            )
-        except preview.GhostscriptError as exc:
-            typer.secho(f"FAIL -- Ghostscript could not render {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
+            pngs = asyncio.run(preview.preview_file(target, dst, dpi=dpi, guides=guides, safe_mm=safe_mm))
+        except (preview.UnreadablePdfError, ValueError) as exc:
+            typer.secho(f"FAIL -- cannot render {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             raise typer.Exit(1) from exc
         written += pngs
         if not quiet:

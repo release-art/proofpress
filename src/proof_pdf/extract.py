@@ -176,7 +176,6 @@ def extract_pdf(
     vector_text: bool = True,
     previews: bool = False,
     preview_dpi: int = DEFAULT_PREVIEW_DPI,
-    gs_bin: str = "gs",
 ) -> Extraction:
     """Write *path*'s assets of the given *kinds* into *out_dir* with ``document.json``, and return what was found.
 
@@ -185,12 +184,12 @@ def extract_pdf(
     With *vector_text*, text lying on a piece of vector artwork is drawn into the piece (and listed in its ``text``)
     as well as being recovered as text; without it the pieces are the drawn shapes alone.
 
-    With *previews*, also render ``previews/index.html``, a review page of the pages with every asset boxed on them,
-    which needs Ghostscript and raises :class:`proof_pdf.preview.GhostscriptError` without it. It runs its own event
-    loop, so call it from a thread when already inside one.
+    With *previews*, also render ``previews/index.html``, a review page of the pages with every asset boxed on them.
+    It runs its own event loop, so call it from a thread when already inside one.
 
-    Raises :class:`pikepdf.PdfError` for a file that will not open. An asset that cannot be recovered is listed in
-    :attr:`Extraction.failures` and the rest carry on.
+    Raises :class:`pikepdf.PdfError` for a file that will not open, and
+    :class:`proof_pdf.inventory.UnreadablePdfError` for one the core refuses to read (damaged beyond its objects, or
+    encrypted). An asset that cannot be recovered is listed in :attr:`Extraction.failures` and the rest carry on.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     failures: list[str] = []
@@ -230,9 +229,7 @@ def extract_pdf(
         )
     if previews:
         shutil.rmtree(out_dir / "previews", ignore_errors=True)  # ours, and stale pages would be listed as current
-        result.previews, problems = asyncio.run(
-            build_previews(result.to_dict(), path, out_dir, dpi=preview_dpi, gs_bin=gs_bin)
-        )
+        result.previews, problems = asyncio.run(build_previews(result.to_dict(), path, out_dir, dpi=preview_dpi))
         failures += problems
     (out_dir / "document.json").write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return result

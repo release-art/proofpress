@@ -34,8 +34,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 9** (the writer and the other commands): the writer, `crop` and `inspect` are done; `preview` (hayro) and
-  `extract` are next. `layout` and `texlog` stay Python (decision log, 2026-11-26). Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
+- **Phase 9** (the writer and the other commands): the writer, `crop`, `inspect` and `preview` are done; `extract`
+  is next. `layout` and `texlog` stay Python (decision log, 2026-11-26). Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
   and X-5 row is implemented or skip. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
   owner said to carry on past the PDF/X-4 milestone (phase 6, finished 2026-11-26).
 
@@ -110,6 +110,7 @@ record it as not conforming to that one rule).
 | 8.4, 8.5 | the phase 8 (X-5n) commit | X-5n's 15 rows (`x4p.rs` reference and profile rows, `colour.rs`/`jpx.rs` device bans, `spots.rs` DeviceN attributes, `modes.rs` group `/CS`, `annots.rs` TrapNet), `icc::colorant_names`; `x5.n-subtractive` skipped; two generated n-colorant v4 profiles (`tests/fixtures/icc/xclr-5.icc`, `xclr-6.icc`) and 21 fixtures `x5n-*`, feature `x5n-clause-7` |
 | 9 (part) | the writer commit | `writer.rs` (graft map, raw streams, damaged objects reported, Identity `/Crypt` dropped) and `writer/crop.rs`; `_core.crop` and `UnreadablePdfError`; `proof_pdf.crop` no longer uses pikepdf. Parity: 588 crops of fixtures and test-db samples rendered by Ghostscript at 72 dpi; 586 pixel-identical, 2 damaged files now refused (pikepdf had repaired them); 14 skipped (pikepdf or Ghostscript could not open them) |
 | 9 (part) | the inspect commit | `checks/inventory.rs` on the print walk and the contrast measure; `_core.inspect`; `proof_pdf.inventory` no longer uses pikepdf. Parity with the Python on the fixtures (339 identical, 5 damaged fixtures read strictly) and 10,475 test-db files (see Deviations) |
+| 9 (part) | the preview commit | `preview.rs` (feature `preview`): pages rendered by `hayro` over the MediaBox, guides from a pixel-space overlay PDF, panics caught per page; `_core.render`; `preview` and extract's review page no longer run Ghostscript; `_internal/proc.py` deleted |
 
 ## Register coverage
 
@@ -393,6 +394,17 @@ Oracle consultations:
   pages pikepdf stops reading at an inline image, and 1 where the Python counts 33 glyphs against the wrong font (the
   core agrees with a count from the content). The unit test's expectations were corrected first: they had been written
   without running.
+
+- Phase 9, `preview`: `hayro` against Ghostscript (`png16m`, 72 dpi) on the fixtures, Ghent, Altona and GWG Processing
+  Steps (493 files): 488 compared page by page, the worst page's mean absolute difference (0 to 255) under 1 in 101
+  files, under 3 in 248, under 10 in 65, and 10 or more in 74. The large ones are Ghent and Altona patches built to test
+  colour (transparency, soft masks, 16-bit, DeviceN, ICC, white overprint): `hayro` converts CMYK to RGB differently
+  from Ghostscript's default profile, and its colours are softer; GWG192 differs by 32 whether Ghostscript simulates
+  overprint or not, so overprint is not the cause. Ghostscript fails to draw `x4-crypt-filter` (hayro draws it) and
+  cannot open three damaged fixtures; hayro cannot open `corrupt.pdf`; `x4-no-media-box` gets a different default page
+  size. Over every test-db sample set but `kura-bench` and `iust-pdfcorpus` plus the fixtures (10,829 files, 9 dpi,
+  guides on): 10,720 rendered, 101 refused (61 unreadable, 40 encrypted), 8 pages too small at 9 dpi or beyond 65,535
+  pixels; no panic and no file over 120 seconds.
 
 ## Owner requests
 

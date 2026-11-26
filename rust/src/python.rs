@@ -90,11 +90,25 @@ fn crop(py: Python<'_>, data: &[u8], page: usize, bounds: [f64; 4], pad: f64) ->
     })
 }
 
+/// Each page of the PDF `data` as PNG bytes at `dpi`, with the trim and bleed guides (and a safe-area guide `safe_mm`
+/// inside the trim, when given) drawn when `guides` is true. Raises `UnreadablePdfError` for a file that cannot be read
+/// and `ValueError` for a page too large to render at `dpi`.
+#[pyfunction]
+#[pyo3(signature = (data, dpi, guides = false, safe_mm = None))]
+fn render(py: Python<'_>, data: &[u8], dpi: f64, guides: bool, safe_mm: Option<f64>) -> PyResult<Vec<Vec<u8>>> {
+    use crate::preview::{Guides, RenderError, render};
+    py.detach(|| render(data, dpi, guides.then_some(Guides { safe_mm })))
+        .map_err(|e| match e {
+            RenderError::Unreadable(why) => UnreadablePdfError::new_err(why),
+            RenderError::Size(why) => value_error(why),
+        })
+}
+
 /// The module itself, `proof_pdf._internal._core` to Python.
 #[pymodule]
 mod _core {
     #[pymodule_export]
-    use super::{UnreadablePdfError, crop, inspect, run, verify};
+    use super::{UnreadablePdfError, crop, inspect, render, run, verify};
 }
 
 #[cfg(test)]
@@ -162,6 +176,25 @@ mod tests {
             assert_eq!(facts["pages"][0]["number"], 1);
             let error = inspect.call1((b"x".as_slice(),)).unwrap_err().to_string();
             assert!(error.starts_with("UnreadablePdfError"), "{error}");
+        });
+    }
+
+    #[test]
+    fn render_returns_a_png_a_page_or_says_why() {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = pyo3::wrap_pymodule!(_core)(py);
+            let render = module.bind(py).getattr("render").unwrap();
+            let file = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/pdfs/good.pdf")).unwrap();
+            let pngs: Vec<Vec<u8>> = render
+                .call1((file.as_slice(), 72.0, true, 3.0))
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert!(pngs.len() == 1 && pngs[0].starts_with(b"\x89PNG"));
+            let message = |args: (&[u8], f64)| render.call1(args).unwrap_err().to_string();
+            assert!(message((b"x".as_slice(), 72.0)).starts_with("UnreadablePdfError"));
+            assert!(message((file.as_slice(), 0.0)).starts_with("ValueError: page 1 at 0 dpi"));
         });
     }
 
