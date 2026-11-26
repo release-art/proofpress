@@ -5,10 +5,7 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
-**Open, 2026-11-26 (the PDF/X-4 milestone, end of phase 6):** every PDF/X-4 row that needs no external file is
-implemented (125 implemented, 4 skip; the 12 todo rows are X-4p, phase 7), and `proof-pdf verify` is the Rust core's
-command, with veraPDF and Ghostscript, the config file and a thin async Python API. Gates green, Docker included. Carry
-on to phases 7–10 (file sets and X-4p, PDF/X-5, then the rest)?
+Answered 2026-11-26 (the PDF/X-4 milestone, end of phase 6): the owner said to carry on to phases 7–10.
 
 Answered 2026-11-26 (oracle escalation, task 5.2, glyph presence 6.5.1 and `.notdef` 6.5.2):
 - (a) Render mode 3: a glyph (a font's code) is skipped only when every appearance of it is in mode 3; one visible
@@ -37,8 +34,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **The PDF/X-4 milestone is reached** (phase 6 finished 2026-11-26; see its stage report). Waiting for the owner's
-  answer to the stop question above before phase 7.
+- **Phase 7** (file sets and PDF/X-4p): started 2026-11-26, after the owner said to carry on past the PDF/X-4
+  milestone (phase 6 finished 2026-11-26; see its stage report).
 
 ## Done
 
