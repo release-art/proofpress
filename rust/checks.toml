@@ -1612,7 +1612,7 @@ title = "Colour spaces suit the job's colour mode"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "rgb-only"
@@ -1620,7 +1620,7 @@ title = "An RGB job paints only RGB"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "gray-only"
@@ -1652,7 +1652,7 @@ title = "Spot inks are on the allowed list"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "spot-definition"
@@ -1668,7 +1668,7 @@ title = "Embedded ICC profiles are sound and suit the job"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "blend-space"
@@ -1676,7 +1676,7 @@ title = "Transparency declares its blend space"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "image-dpi"

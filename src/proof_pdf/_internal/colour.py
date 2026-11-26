@@ -12,8 +12,9 @@ Checks a printer cares about but no standard enforces:
   are advisory by default, since a RIP will convert them against the output
   intent; ``--strict-cmyk`` promotes them when that is not wanted.
 
-Overprint, white overprint, rich-black small text and K-only text run in the Rust
-core now (``rust/src/checks/ink.rs``, through :mod:`.ported`).
+Overprint, white overprint, rich-black small text, K-only text, the blend space, spot
+inks on the allowed list, the CMYK and RGB job rules and the ICC profile rules run in
+the Rust core now (``rust/src/checks/ink.rs`` and ``modes.rs``, through :mod:`.ported`).
 
 The raster step shells out to Ghostscript (its absence or failure is surfaced as
 a failure by the caller, not silently skipped); the rest read the
@@ -21,9 +22,6 @@ a failure by the caller, not silently skipped); the rest read the
 """
 
 import asyncio
-import collections.abc
-import hashlib
-import io
 import logging
 import pathlib
 import shutil
@@ -31,12 +29,12 @@ import tempfile
 import typing
 
 import pikepdf
-from PIL import Image, ImageCms, ImageMath
+from PIL import Image, ImageMath
 
-from ..models import ColourMode, Finding, Severity
+from ..models import Finding, Severity
 from . import proc, spots
-from .paint import Fill, Paint, Walker, paint_events
-from .spaces import CMYK, GRAY, RGB, classify_colour_space, intent_family, output_intents, reachable, spot_names
+from .paint import Fill, Paint, paint_events
+from .spaces import CMYK, GRAY, RGB, intent_family, reachable, spot_names
 
 logger = logging.getLogger(__name__)
 
@@ -129,158 +127,6 @@ def _peak_tac(plates: list[pathlib.Path]) -> float:
             ink = ImageMath.lambda_eval(lambda a: 255 - a["v"], v=img.convert("I"))
         total = ink if total is None else ImageMath.lambda_eval(lambda a: a["t"] + a["i"], t=total, i=ink)
     return 0.0 if total is None else total.getextrema()[1] / 255.0 * 100.0
-
-
-# ------------------------------------------------------------- spot inks ----
-def check_spot_inks(pdf: pikepdf.Pdf, allowed: collections.abc.Collection[str]) -> list[Finding]:
-    """Flag any spot ink a page selects that is not on the caller's list (names match exactly).
-
-    A stray spot adds a plate and a charge. ``All`` is the registration colour: it prints on every plate, which is
-    right for printer's marks and wrong for artwork, so it must be allowed by name.
-    """
-    findings: list[Finding] = []
-    for i, page in enumerate(pdf.pages, start=1):
-        walker = Walker()
-        for _ in walker.walk(page):
-            pass
-        unexpected = sorted(name for name in walker.spots - set(allowed) if name != "None")
-        if unexpected:
-            note = "; All is the registration colour and prints on every plate" if "All" in unexpected else ""
-            findings.append(
-                Finding(
-                    "spot-ink",
-                    Severity.ERROR,
-                    f"spot ink(s) not on the allowed list: {', '.join(unexpected)}{note}",
-                    i,
-                )
-            )
-    return findings
-
-
-# ---------------------------------------------------------- transparency ----
-def check_transparency(pdf: pikepdf.Pdf) -> list[Finding]:
-    """Check that a page using transparency blends in the colour space the job prints in.
-
-    PDF/X-4 keeps live transparency, so the blend colour space decides how overlaps are computed. One that differs
-    from the output intent's (RGB blending in a CMYK job) shifts colours at overlaps; one that is not declared leaves
-    the choice to the RIP.
-    """
-    expected = intent_family(pdf)
-    findings: list[Finding] = []
-    for i, page in enumerate(pdf.pages, start=1):
-        walker = Walker()
-        for _ in walker.walk(page):
-            pass
-        if not walker.transparency:
-            continue
-        reasons = ", ".join(sorted(walker.transparency))
-        group = page.obj.get("/Group")
-        space = group.get("/CS") if group is not None else None
-        if space is None:
-            findings.append(
-                Finding(
-                    "blend-space",
-                    Severity.WARN,
-                    f"the page uses transparency ({reasons}) but declares no blend colour space: the RIP chooses one",
-                    i,
-                )
-            )
-            continue
-        family = classify_colour_space(space, page.obj.get("/Resources"))
-        if expected is not None and family != expected:
-            findings.append(
-                Finding(
-                    "blend-space",
-                    Severity.ERROR,
-                    f"transparency ({reasons}) blends in {family.upper()} but the output intent is "
-                    f"{expected.upper()}: overlapping colours will shift",
-                    i,
-                )
-            )
-    return findings
-
-
-# ---------------------------------------------------------- colour space ----
-def check_colour_spaces(pdf: pikepdf.Pdf, *, strict: bool) -> list[Finding]:
-    """Flag artwork still in an RGB colour space on a CMYK-destined page.
-
-    Images are an ``ERROR``: every raster is expected to have gone through CMYK
-    conversion, so one in RGB is an escape that will be converted by the
-    RIP with whatever profile it feels like. Vector ``rg``/``RG`` fills are a
-    ``WARN`` unless *strict*, since the document legitimately declares an RGB
-    profile too.
-    """
-    findings: list[Finding] = []
-    vector_severity = Severity.ERROR if strict else Severity.WARN
-    for i, page in enumerate(pdf.pages, start=1):
-        images, colours, _ = _paint_in(page, RGB)
-        for name in sorted(images):
-            findings.append(
-                Finding(
-                    "colour-space",
-                    Severity.ERROR,
-                    f"image {name} is in an RGB colour space -- it must be converted to CMYK for a FOGRA51 press",
-                    i,
-                )
-            )
-        if colours:
-            findings.append(
-                Finding(
-                    "colour-space",
-                    vector_severity,
-                    "vector artwork is painted in RGB -- confirm the RIP is meant to convert it",
-                    i,
-                )
-            )
-    return findings
-
-
-# ------------------------------------------------------------ RGB proofing ----
-def check_rgb_only(pdf: pikepdf.Pdf) -> list[Finding]:
-    """For a screen job: flag CMYK images and fills, a CMYK output intent, and (as advisory) spot colours.
-
-    Gray is colour-neutral and passes. Shadings and patterns are looked through to the colour space they paint in.
-    """
-    findings: list[Finding] = []
-    if intent_family(pdf) == CMYK:
-        findings.append(Finding("rgb-only", Severity.ERROR, "the output intent is a CMYK profile in an RGB job"))
-    for i, page in enumerate(pdf.pages, start=1):
-        images, fills, spots = _paint_in(page, CMYK)
-        for name in sorted(images):
-            findings.append(Finding("rgb-only", Severity.ERROR, f"image {name} is in a CMYK colour space", i))
-        if fills:
-            findings.append(
-                Finding(
-                    "rgb-only", Severity.ERROR, f"artwork is painted in CMYK ({', '.join(sorted(fills)[:3])}...)", i
-                )
-            )
-        if spots:
-            findings.append(
-                Finding("rgb-only", Severity.WARN, f"spot colour(s) {', '.join(sorted(spots))} have no RGB value", i)
-            )
-    return findings
-
-
-def _paint_in(page: pikepdf.Page, family: str) -> tuple[set[str], set[str], set[str]]:
-    """The image names and colour descriptions in *family*, and the spot ink names, a page paints by fill or stroke."""
-    images: set[str] = set()
-    colours: set[str] = set()
-    spots: set[str] = set()
-    for p in paint_events(page):
-        if p.kind in ("image", "inline-image") and not p.mask:
-            if p.colour_space == family:
-                images.add(p.name)
-            continue
-        if p.kind == "shading":
-            if p.colour_space == family:
-                colours.add(f"shading {p.name}")
-            continue
-        for colour in p.colours():
-            if colour.family == family or family in colour.pattern:
-                colours.add(_describe(colour))
-            elif colour.spot:
-                spots.update(colour.spot)
-    return images, colours, spots
 
 
 # ------------------------------------------------------------- gray proofing ----
@@ -457,130 +303,6 @@ def check_spot_definitions(pdf: pikepdf.Pdf) -> list[Finding]:
         for (names, space), looks in sorted(definitions.items(), key=str)
         if len(looks) > 1
     ]
-
-
-# ------------------------------------------------------------ ICC profiles ----
-# The data colour space in an ICC header (bytes 16-20) and how many components it has.
-_ICC_SPACES = {b"GRAY": (GRAY, 1), b"RGB ": (RGB, 3), b"CMYK": (CMYK, 4), b"Lab ": ("lab", 3)}
-_ICC_HEADER = 128
-
-
-def check_icc_profiles(pdf: pikepdf.Pdf, mode: ColourMode) -> list[Finding]:
-    """Check the ICC profiles the file embeds for colour spaces: sound, and consistent with the job.
-
-    Every profile must be readable and its header must agree with the space's ``/N``. Then, by mode: in a CMYK job a
-    CMYK profile that is the output intent's own is an error (ISO 15930-7, 6.4.3.3: such colour belongs in DeviceCMYK,
-    compared by MD5 as ICC.1 7.2.18 computes the profile ID); in an RGB job every RGB profile, the output intent's
-    included, must be the same one, since mixed working spaces shift colour between objects.
-    """
-    findings: list[Finding] = []
-    seen: dict[str, tuple[str, str]] = {}  # profile digest -> (family, description)
-    for obj in reachable(pdf):
-        if not (isinstance(obj, pikepdf.Array) and len(obj) > 1 and str(obj[0]) == "/ICCBased"):
-            continue
-        try:
-            data = bytes(obj[1].read_bytes())
-            components = int(obj[1].get("/N", 0))
-        except pikepdf.PdfError, AttributeError, TypeError, ValueError:
-            findings.append(
-                Finding("icc-profile", Severity.ERROR, "an ICCBased colour space has an unreadable profile")
-            )
-            continue
-        problem, family = _icc_problem(data, components)
-        label = _icc_label(data)
-        if problem:
-            findings.append(Finding("icc-profile", Severity.ERROR, f"ICC profile {label}: {problem}"))
-        elif family is not None:
-            seen.setdefault(_profile_key(data, label) if family != CMYK else _icc_md5(data), (family, label))
-    return findings + _profile_consistency(seen, _intent_profile(pdf), mode)
-
-
-def _profile_consistency(
-    seen: dict[str, tuple[str, str]], intent: tuple[str, str, str] | None, mode: ColourMode
-) -> list[Finding]:
-    """The mode's rule over the distinct profiles *seen* and the output *intent*'s."""
-    if mode is not ColourMode.CMYK:
-        family = RGB if mode is ColourMode.RGB else GRAY
-        same = {d: v[1] for d, v in seen.items() if v[0] == family}
-        if intent is not None and intent[1] == family:
-            same.setdefault(intent[0], intent[2])
-        if len(same) > 1:
-            label = family.upper() if family == RGB else family
-            return [
-                Finding(
-                    "icc-profile", Severity.ERROR, f"the {label} job mixes {len(same)} {label} profiles: {_names(same)}"
-                )
-            ]
-    elif intent is not None and intent[1] == CMYK:
-        # ponytail: judges every reachable ICCBased space, so an unused one (or a DefaultCMYK nothing paints through)
-        # also fails, where 6.4.3.3 with decision X4-Q3 means print elements only; the Rust colour evaluator (plan 4.3)
-        # judges spaces as painted.
-        same = [label for digest, (family, label) in seen.items() if family == CMYK and digest == intent[0]]
-        if same:
-            return [
-                Finding(
-                    "icc-profile",
-                    Severity.ERROR,
-                    f"a CMYK ICCBased colour space uses the output intent's own profile {same[0]!r} -- PDF/X-4 "
-                    "requires DeviceCMYK for colour already in the printing condition (ISO 15930-7, 6.4.3.3)",
-                )
-            ]
-    return []
-
-
-def _icc_problem(data: bytes, components: int) -> tuple[str | None, str | None]:
-    """``(problem, family)``: what is wrong with the profile bytes against ``/N``, and the family it is for."""
-    if len(data) < _ICC_HEADER or data[36:40] != b"acsp":
-        return "is not a valid ICC profile", None
-    space = _ICC_SPACES.get(data[16:20])
-    if space is None:
-        return None, None
-    if space[1] != components:
-        return f"is a {data[16:20].decode().strip()} profile but the colour space declares /N {components}", None
-    return None, space[0]
-
-
-def _profile_key(data: bytes, label: str) -> str:
-    """Which profile this is: its description and size. The same profile is often embedded byte-different (a rewritten
-    header or profile ID), so a content hash would call it two."""
-    return f"{label}:{len(data)}"
-
-
-def _icc_md5(data: bytes) -> str:
-    """The profile's identity as ICC.1:2022 7.2.18 computes its profile ID: the MD5 of the profile with the flags
-    (bytes 44-47), rendering intent (64-67) and profile ID (84-99) fields set to zero."""
-    zeroed = bytearray(data)
-    for start, end in ((44, 48), (64, 68), (84, 100)):
-        zeroed[start:end] = bytes(end - start)
-    return hashlib.md5(zeroed, usedforsecurity=False).hexdigest()
-
-
-def _icc_label(data: bytes) -> str:
-    try:
-        return ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(data))).strip() or "(unnamed)"
-    except ImageCms.PyCMSError, OSError, AttributeError:
-        return "(unreadable)"
-
-
-def _intent_profile(pdf: pikepdf.Pdf) -> tuple[str, str, str] | None:
-    """``(digest, family, description)`` of the first output intent's profile, or ``None``."""
-    for intent in output_intents(pdf):
-        profile = intent.get("/DestOutputProfile")
-        if profile is None:
-            continue
-        try:
-            data = bytes(profile.read_bytes())
-        except pikepdf.PdfError:
-            continue
-        space = _ICC_SPACES.get(data[16:20])
-        if space is not None:
-            label = _icc_label(data)
-            return (_icc_md5(data) if space[0] == CMYK else _profile_key(data, label)), space[0], label
-    return None
-
-
-def _names(profiles: dict[str, str]) -> str:
-    return ", ".join(sorted(profiles.values()))
 
 
 # ---------------------------------------------- K-only colours (gray proofing) ----

@@ -120,19 +120,12 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
         with pikepdf.open(path) as pdf:
             if profile.pdfx:
                 findings += pdfx.check(pdf)
-            findings += _structure_rules(pdf, profile)
             findings += ported.check(path, profile)
             findings += _text_checks(pdf, profile)
             if profile.colour:
-                findings += colour.check_transparency(pdf)
                 findings += colour.check_spot_definitions(pdf)
-                findings += colour.check_icc_profiles(pdf, profile.colour_mode)
-                if profile.colour_mode is ColourMode.RGB:
-                    findings += colour.check_rgb_only(pdf)
-                elif profile.colour_mode is ColourMode.GRAY:
+                if profile.colour_mode is ColourMode.GRAY:
                     findings += colour.check_gray_only(pdf, allow_k_only=profile.allow_k_only)
-                else:
-                    findings += colour.check_colour_spaces(pdf, strict=profile.strict_cmyk)
                 findings += resolution.check_image_dpi(
                     pdf,
                     profile.min_dpi,
@@ -143,13 +136,6 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
     except (pikepdf.PdfError, pikepdf.PasswordError) as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
         return [Finding("structure", Severity.ERROR, f"cannot open the PDF (corrupt or encrypted): {exc}")], False
     return findings, True
-
-
-def _structure_rules(pdf: pikepdf.Pdf, profile: Profile) -> list[Finding]:
-    findings: list[Finding] = []
-    if profile.allow_spots is not None:
-        findings += colour.check_spot_inks(pdf, profile.allow_spots)
-    return findings
 
 
 def _text_checks(pdf: pikepdf.Pdf, profile: Profile) -> list[Finding]:

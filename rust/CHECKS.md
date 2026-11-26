@@ -201,15 +201,15 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `tac` | Peak total ink stays under the limit |  | error | print | todo |
 | `overprint` | Overprint is used on purpose |  | warning | print | implemented |
 | `white-overprint` | White is never set to overprint |  | error | print | implemented |
-| `colour-space` | Colour spaces suit the job's colour mode |  | error | print | todo |
-| `rgb-only` | An RGB job paints only RGB |  | error | print | todo |
+| `colour-space` | Colour spaces suit the job's colour mode |  | error | print | implemented |
+| `rgb-only` | An RGB job paints only RGB |  | error | print | implemented |
 | `gray-only` | A gray job paints only gray |  | error | print | todo |
 | `k-only-text` | Text is 100% black only |  | error | print | implemented |
 | `rich-black` | Small text is not in rich black |  | warning | print | implemented |
-| `spot-ink` | Spot inks are on the allowed list |  | error | print | todo |
+| `spot-ink` | Spot inks are on the allowed list |  | error | print | implemented |
 | `spot-definition` | A spot ink has one definition |  | error | print | todo |
-| `icc-profile` | Embedded ICC profiles are sound and suit the job |  | error | print | todo |
-| `blend-space` | Transparency declares its blend space |  | error | print | todo |
+| `icc-profile` | Embedded ICC profiles are sound and suit the job |  | error | print | implemented |
+| `blend-space` | Transparency declares its blend space |  | error | print | implemented |
 | `image-dpi` | Images meet the resolution floor |  | error | print | todo |
 | `image-dpi-max` | Images do not exceed the resolution ceiling |  | error | print | todo |
 | `image-stretch` | Images are not stretched unevenly |  | error | print | todo |

@@ -16,7 +16,7 @@ use crate::findings::{ARTWORK_BLEED, Finding, Location, OUTSIDE_BLEED, OUTSIDE_M
 use crate::graphics::{self, Event, Kind};
 
 /// The page an event is on, from its first frame.
-fn page_of(frames: &[Location]) -> u32 {
+pub(super) fn page_of(frames: &[Location]) -> u32 {
     match frames.first() {
         Some(Location::Page(n)) => *n,
         _ => 0,

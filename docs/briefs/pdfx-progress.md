@@ -24,12 +24,13 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 4** (content, page model and colour): 4.1 to 4.5 done; 4.6 under way. The walk now places what it paints
-  (CTM, clip, path, text and image extents) and reads colours as the print checks do; 15 print checks run in Rust:
+  (CTM, clip, path, text and image extents) and reads colours as the print checks do; 20 print checks run in Rust:
   what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
   (`overprint`, `white-overprint`, `rich-black`, `k-only-text`) and the page geometry (`geometry`, `bleed`, `centring`,
-  `page-count`, `page-size`, `page-rotate`, `output-condition`). Profile parameters reach the core as JSON (`Settings`,
-  `Params`). Next in 4.6: the colour-mode checks (colour spaces, RGB-only, gray-only, spot inks and definitions, ICC,
-  blend space), then text and fonts, contrast, and resolution. The brief's pace checkpoint for
+  `page-count`, `page-size`, `page-rotate`, `output-condition`) and the colour mode (`blend-space`, `spot-ink`,
+  `colour-space`, `rgb-only`, `icc-profile`). Profile parameters reach the core as JSON (`Settings`, `Params`). Next in
+  4.6: function evaluation (for `spot-definition`), image decoding (for `gray-only`), then text and fonts, contrast,
+  and resolution. The brief's pace checkpoint for
   `paint.py` falls on 2026-12-02, one week into phase 4.
 
 ## Done
@@ -73,7 +74,8 @@ record it as not conforming to that one rule).
 | 4.5 | `cd26fbf` | Pre-separated files (6.1.2, X4-Q2): every painting page one colorant, differing between pages; 1 fixture; none in Ghent, Altona or GWG Processing Steps |
 | 4.6 (part) | `2d4b7c0` | Tier 7 geometry and font metrics; `outside-media` and `xobject-missing` ported, parity-proved and their Python deleted; `bin/parity/print.py`; 2 fixtures |
 | 4.6 (part) | `82d1893` | Colour families and fills in the walk; `Settings` and `Params` for print checks; `overprint`, `white-overprint`, `rich-black`, `k-only-text` ported, parity-proved and their Python deleted |
-| 4.6 (part) | the commit after `82d1893` | Page geometry and bleed: 9 checks ported with their parameters, parity-proved and their Python deleted; ICC description reader; Python's `:g` and `repr` for messages; fixtures may give parameters |
+| 4.6 (part) | `ae91f28` | Page geometry and bleed: 9 checks ported with their parameters, parity-proved and their Python deleted; ICC description reader; Python's `:g` and `repr` for messages; fixtures may give parameters |
+| 4.6 (part) | the commit after `ae91f28` | The colour-mode checks: spot inks and transparency reasons in the walk, `blend-space`, `spot-ink`, `colour-space`, `rgb-only`, `icc-profile` ported, parity-proved and their Python deleted; inline images' abbreviated colour spaces in arrays spelled out |
 
 ## Register coverage
 
@@ -83,7 +85,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 109 | 28 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 34 | 22 | 1 (`internal`) |
+| House and structure checks | 39 | 17 | 1 (`internal`) |
 
 ## Gates
 
@@ -263,6 +265,14 @@ Oracle consultations:
   objects lie beyond its trailer's `/Size`, which the core reads as null (task 2.1's decision) and qpdf reads anyway.
   In 38 of them the catalog itself is beyond `/Size`, so the core sees no pages and the file reads as sound with
   nothing to judge; see "Owner actions".
+- Task 4.6, the fourth port (`blend-space`, `spot-ink`, `colour-space`, `rgb-only`, `icc-profile`, with no spot
+  allowed, a CMYK job, and an RGB job for `rgb-only`): 9,226 files identical with 184,735 findings among them, 12
+  different. Four were ours: an inline image's abbreviated colour space inside an array (`[/I /RGB ...]`) was not
+  spelled out; fixed, and three of them now agree. The rest are reading differences already decided: content the core
+  stops reading at damage (three, one of them an inline image with the unknown filter `/Lzw`), objects beyond
+  `/Size` or listed free (four), qpdf misreading a `/Resources` object (one, Rust right), and forms nested past the
+  Python walk's 12 levels (one veraPDF limits file; the core goes to 100). `colour-space` and `rgb-only` now judge
+  only their own colour mode, so the core's report holds no RGB-job finding on a CMYK job.
 - Task 4.6: `boxes` and `bleedbox` come from the Python PDF/X layer (`pdfx/x4.py`), which the plan does not port; the
   `x4.boxes.*` rows replace them.
 - Task 4.6: the profile's on/off switches for print checks stay in Python (`ported.check`); the core runs every

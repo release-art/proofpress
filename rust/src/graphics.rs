@@ -110,6 +110,8 @@ pub(crate) struct Ink {
     pub(crate) space: Option<Family>,
     /// Whether it is inside a tiling pattern's cell, which the print checks see only through the pattern's families.
     pub(crate) cell: bool,
+    /// An image's or shading's resource name, `(inline)` for an inline image; empty for the rest.
+    pub(crate) name: Vec<u8>,
 }
 
 /// What kind of thing a paint is.
@@ -150,6 +152,14 @@ pub(crate) enum Event {
     },
     /// A `Do` whose name gives no `XObject` stream in the resources in effect: nothing is painted there.
     Missing { name: Vec<u8>, frames: Vec<Location> },
+    /// Spot inks a page selects, as the print checks read them: a `Separation` or `DeviceN` space set with `cs` or
+    /// `CS` (or underlying a pattern space), a shading's or image's own, or one a pattern set with `scn` paints in.
+    Spots { names: Vec<Vec<u8>>, frames: Vec<Location> },
+    /// Why a page needs a blend space, outside tiling pattern cells: `opacity`, `blend mode` or `soft mask`.
+    Transparency {
+        reason: &'static str,
+        frames: Vec<Location>,
+    },
     /// Something that kept part of a page from being walked, or that the walk had to stand in for.
     Problem { problem: Problem, frames: Vec<Location> },
 }
@@ -535,6 +545,7 @@ fn ink(state: &State, size: f64, space: Option<Family>) -> Ink {
         size,
         space,
         cell: state.ctm.is_none(),
+        name: Vec::new(),
     }
 }
 
@@ -812,7 +823,7 @@ impl Walker<'_> {
                 }
                 Item::Op(op) => op,
             };
-            if self.colour(op, resources, &mut state)
+            if self.colour(op, resources, frames, &mut state)
                 || text_state(op, &mut state, &mut cursor)
                 || path(op, &mut cursor)
             {
@@ -864,8 +875,13 @@ impl Walker<'_> {
                         .and_then(Object::dict);
                     let space = shading.and_then(|s| s.get(b"ColorSpace"));
                     let family = shading.map(|_| family::classify(self.doc, space, resources));
+                    let inks = shading.map_or_default(|_| family::spot_names(self.doc, space, resources));
+                    self.spots(inks, frames);
                     let uses = space.map(|s| self.use_of(resources, Role::Shading, s, &state));
-                    let painted = ink(&state, 0.0, family);
+                    let painted = Ink {
+                        name: last.and_then(Object::name).map_or_default(<[u8]>::to_vec),
+                        ..ink(&state, 0.0, family)
+                    };
                     self.push(Kind::Shading, uses.into_iter().collect(), None, &state, frames, painted);
                 }
                 b"Do" => self.xobject(resources, last, &state, frames, page),
@@ -890,7 +906,14 @@ impl Walker<'_> {
             .get(b"ColorSpace")
             .and_then(|cs| self.inline_space(resources, cs));
         let family = family::classify(self.doc, space.as_ref(), resources);
-        let painted = ink(state, 0.0, Some(family));
+        self.spots(
+            family::spot_names(self.doc, image.dict.get(b"ColorSpace"), resources),
+            frames,
+        );
+        let painted = Ink {
+            name: b"(inline)".to_vec(),
+            ..ink(state, 0.0, Some(family))
+        };
         if mask {
             let roles = &[Role::ImageMask];
             self.paint(resources, Kind::InlineImage, roles, state, frames, page, bbox, painted);
@@ -908,12 +931,22 @@ impl Walker<'_> {
     }
 
     /// Apply a colour or graphics state parameter operator; `false` when `op` is not one.
-    fn colour(&self, op: &Op, resources: Option<&Dict>, state: &mut State) -> bool {
+    fn colour(&mut self, op: &Op, resources: Option<&Dict>, frames: &[Location], state: &mut State) -> bool {
         let last = op.operands.last();
         let stroke = op.name.first().is_some_and(u8::is_ascii_uppercase);
         match op.name.as_slice() {
             b"CS" | b"cs" => {
-                let ink = self.ink_space(op.operands.first(), resources);
+                let operand = op.operands.first();
+                let ink = self.ink_space(operand, resources);
+                let doc = self.doc;
+                let mut names = Vec::new();
+                if family::classify(doc, operand, resources) == Family::Other {
+                    names.extend(family::spot_names(doc, operand, resources));
+                }
+                if let Some(base) = family::pattern_base(doc, operand, resources) {
+                    names.extend(family::spot_names(doc, Some(base), resources));
+                }
+                self.spots(names, frames);
                 if stroke {
                     state.stroke = self.space(resources, last).unwrap_or_else(|| state.stroke.clone());
                     state.ink_stroke = ink;
@@ -954,8 +987,10 @@ impl Walker<'_> {
                 let ink = match last.and_then(Object::name) {
                     Some(name) => {
                         let pattern = resource_ref(self.doc, resources, b"Pattern", name);
+                        let (families, names) = self.pattern_families(pattern, &current.pattern);
+                        self.spots(names, frames);
                         Fill {
-                            pattern: self.pattern_families(pattern, &current.pattern),
+                            pattern: families,
                             ..Fill::initial(Family::Other)
                         }
                     }
@@ -973,7 +1008,7 @@ impl Walker<'_> {
                     .and_then(|n| resource(self.doc, resources, b"ExtGState", n))
                     .and_then(Object::dict)
                 {
-                    self.ext_gstate(gs, state);
+                    self.ext_gstate(gs, state, frames);
                 }
             }
             _ => return false,
@@ -1008,24 +1043,31 @@ impl Walker<'_> {
 
     /// The families a pattern paints in: a shading pattern its shading's, an uncoloured tiling pattern `base` (the
     /// families of the colour set with it), a coloured one whatever its cell paints, worked out four patterns deep.
-    fn pattern_families(&self, pattern: Option<(Option<u32>, &Dict)>, base: &BTreeSet<Family>) -> BTreeSet<Family> {
+    fn pattern_families(
+        &self,
+        pattern: Option<(Option<u32>, &Dict)>,
+        base: &BTreeSet<Family>,
+    ) -> (BTreeSet<Family>, Vec<Vec<u8>>) {
         let doc = self.doc;
         let Some((num, dict)) = pattern else {
-            return BTreeSet::new();
+            return (BTreeSet::new(), Vec::new());
         };
         let integer = |key: &[u8]| dict.get(key).and_then(|v| doc.resolve(v)).and_then(Object::integer);
         match integer(b"PatternType") {
-            Some(2) => dict
-                .get(b"Shading")
-                .and_then(|s| doc.resolve(s))
-                .and_then(Object::dict)
-                .map(|s| family::classify(doc, s.get(b"ColorSpace"), None))
-                .into_iter()
-                .collect(),
-            Some(1) if integer(b"PaintType") == Some(2) => base.clone(),
+            Some(2) => {
+                let shading = dict.get(b"Shading").and_then(|s| doc.resolve(s)).and_then(Object::dict);
+                let space = shading.and_then(|s| s.get(b"ColorSpace"));
+                let families = shading
+                    .map(|_| family::classify(doc, space, None))
+                    .into_iter()
+                    .collect();
+                let names = shading.map_or_default(|_| family::spot_names(doc, space, None));
+                (families, names)
+            }
+            Some(1) if integer(b"PaintType") == Some(2) => (base.clone(), Vec::new()),
             Some(1) => {
                 let Some(num) = num.filter(|n| !self.patterns.contains(n) && self.patterns.len() < 4) else {
-                    return BTreeSet::new();
+                    return (BTreeSet::new(), Vec::new());
                 };
                 let mut inner = Walker {
                     doc,
@@ -1040,16 +1082,38 @@ impl Walker<'_> {
                     ..State::default()
                 };
                 inner.nested(num, dict, &[], None, cell);
-                inner
-                    .events
-                    .iter()
-                    .flat_map(|e| match e {
-                        Event::Paint { kind, uses, ink, .. } => families(*kind, uses, ink),
-                        _ => BTreeSet::new(),
-                    })
-                    .collect()
+                let mut families_seen = BTreeSet::new();
+                let mut names = Vec::new();
+                for event in inner.events {
+                    match event {
+                        Event::Paint { kind, uses, ink, .. } => families_seen.extend(families(kind, &uses, &ink)),
+                        Event::Spots { names: found, .. } => names.extend(found),
+                        _ => {}
+                    }
+                }
+                (families_seen, names)
             }
-            _ => BTreeSet::new(),
+            _ => (BTreeSet::new(), Vec::new()),
+        }
+    }
+
+    /// Report the spot inks `names`, if any.
+    fn spots(&mut self, names: Vec<Vec<u8>>, frames: &[Location]) {
+        if !names.is_empty() {
+            self.events.push(Event::Spots {
+                names,
+                frames: frames.to_vec(),
+            });
+        }
+    }
+
+    /// Report a reason the page needs a blend space, unless inside a tiling pattern's cell.
+    fn transparency(&mut self, reason: &'static str, state: &State, frames: &[Location]) {
+        if state.ctm.is_some() {
+            self.events.push(Event::Transparency {
+                reason,
+                frames: frames.to_vec(),
+            });
         }
     }
 
@@ -1067,25 +1131,44 @@ impl Walker<'_> {
         };
     }
 
-    /// An inline image's colour space: abbreviated names, a resource, or an array.
+    /// An inline image's colour space: abbreviated names (8.9.7, Table 93) spelled out, in an array too, or a
+    /// resource.
     fn inline_space(&self, resources: Option<&Dict>, space: &Object) -> Option<Object> {
-        let family: &[u8] = match space.name() {
-            Some(b"G") => b"DeviceGray",
-            Some(b"RGB") => b"DeviceRGB",
-            Some(b"CMYK") => b"DeviceCMYK",
-            Some(other @ (b"DeviceGray" | b"DeviceRGB" | b"DeviceCMYK")) => other,
-            Some(other) => return resource(self.doc, resources, b"ColorSpace", other).cloned(),
-            None => return Some(space.clone()),
+        let spelled = |name: &[u8]| -> Option<&'static [u8]> {
+            match name {
+                b"G" => Some(b"DeviceGray"),
+                b"RGB" => Some(b"DeviceRGB"),
+                b"CMYK" => Some(b"DeviceCMYK"),
+                b"I" => Some(b"Indexed"),
+                _ => None,
+            }
         };
-        Some(Object {
-            value: Value::Name(family.to_vec()),
+        let named = |name: &'static [u8]| Object {
+            value: Value::Name(name.to_vec()),
             start: 0,
             end: 0,
-        })
+        };
+        match &space.value {
+            Value::Name(name) => match spelled(name) {
+                Some(full) => Some(named(full)),
+                None if matches!(name.as_slice(), b"DeviceGray" | b"DeviceRGB" | b"DeviceCMYK") => Some(space.clone()),
+                None => resource(self.doc, resources, b"ColorSpace", name).cloned(),
+            },
+            Value::Array(items) => Some(Object {
+                value: Value::Array(
+                    items
+                        .iter()
+                        .map(|item| item.name().and_then(spelled).map_or_else(|| item.clone(), named))
+                        .collect(),
+                ),
+                ..space.clone()
+            }),
+            _ => Some(space.clone()),
+        }
     }
 
     /// Apply an `ExtGState`'s overprint settings (8.4.5): `OP` sets both unless `op` is given.
-    fn ext_gstate(&self, gs: &Dict, state: &mut State) {
+    fn ext_gstate(&mut self, gs: &Dict, state: &mut State, frames: &[Location]) {
         let flag = |key: &[u8]| match gs.get(key).and_then(|v| self.doc.resolve(v)).map(|v| &v.value) {
             Some(Value::Bool(b)) => Some(*b),
             _ => None,
@@ -1106,6 +1189,25 @@ impl Walker<'_> {
             .and_then(Object::integer)
         {
             state.opm = mode;
+        }
+        let doc = self.doc;
+        let get = |key: &[u8]| gs.get(key).and_then(|v| doc.resolve(v));
+        // A constant alpha that is not a number reads as 0, as the print checks always have.
+        if [b"ca".as_slice(), b"CA"]
+            .iter()
+            .any(|key| get(key).is_some_and(|a| real(a).unwrap_or(0.0) < 1.0))
+        {
+            self.transparency("opacity", state, frames);
+        }
+        let modes = get(b"BM").map(|m| {
+            m.array()
+                .map_or_else(|| vec![m], |a| a.iter().filter_map(|i| doc.resolve(i)).collect())
+        });
+        if modes.is_some_and(|m| m.iter().any(|m| !matches!(m.name(), Some(b"Normal" | b"Compatible")))) {
+            self.transparency("blend mode", state, frames);
+        }
+        if get(b"SMask").is_some_and(|m| m.name() != Some(b"None")) {
+            self.transparency("soft mask", state, frames);
         }
     }
 
@@ -1141,11 +1243,15 @@ impl Walker<'_> {
         match dict.get(b"Subtype").and_then(Object::name) {
             Some(b"Image") => {
                 let bbox = bounds(state.ctm.as_ref(), &UNIT_SQUARE);
-                let painted = ink(
-                    state,
-                    0.0,
-                    Some(family::classify(self.doc, dict.get(b"ColorSpace"), None)),
-                );
+                let space = dict.get(b"ColorSpace");
+                self.spots(family::spot_names(self.doc, space, None), frames);
+                if dict.get(b"SMask").is_some() {
+                    self.transparency("soft mask", state, frames);
+                }
+                let painted = Ink {
+                    name: name.to_vec(),
+                    ..ink(state, 0.0, Some(family::classify(self.doc, space, None)))
+                };
                 if matches!(
                     dict.get(b"ImageMask")
                         .and_then(|v| self.doc.resolve(v))
@@ -1694,8 +1800,8 @@ mod tests {
             (
                 22,
                 stream(
-                    "/PatternType 1 /PaintType 1 /Resources << >>",
-                    "0 1 0 rg 0 0 1 1 re f BI /W 1 /H 1 /BPC 8 /CS /G ID a EI BI /IM true /W 1 /H 1 ID a EI",
+                    "/PatternType 1 /PaintType 1 /Resources << /ExtGState << /A << /ca 0.5 >> >> /ColorSpace << /S [/Separation /Gold /DeviceCMYK << >>] >> >>",
+                    "0 1 0 rg 0 0 1 1 re f BI /W 1 /H 1 /BPC 8 /CS /G ID a EI BI /IM true /W 1 /H 1 ID a EI /A gs /Nope Do /S cs",
                 ),
             ),
             (
@@ -1734,6 +1840,61 @@ mod tests {
         assert_eq!(
             strokes.get(13),
             Some(&(Rgb, vec![0.1, 0.2, 0.3], vec![], vec![], false, false))
+        );
+    }
+
+    #[test]
+    fn inline_spaces_spots_and_soft_masks() {
+        let resources = "<< /XObject << /S 5 0 R >> /ColorSpace << /G [/Separation /Gold /DeviceCMYK << >>] >> >>";
+        let data = "BI /W 1 /H 1 /BPC 8 /CS [/I /RGB 0 <000000>] ID a EI BI /W 1 /H 1 /BPC 8 /CS [/Indexed /DeviceRGB 0 <000000>] ID a EI \
+            BI /W 1 /H 1 /BPC 8 /CS /G ID a EI /S Do";
+        let more = [(5, stream("/Subtype /Image /ColorSpace /DeviceGray /SMask 6 0 R", ""))];
+        let got = run(resources, data, &more);
+        let spaces: Vec<Option<Family>> = got
+            .iter()
+            .filter_map(|e| match e {
+                Event::Paint { ink, .. } => Some(ink.space),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            spaces,
+            [
+                Some(Family::Rgb),
+                Some(Family::Rgb),
+                Some(Family::Gray),
+                Some(Family::Gray)
+            ]
+        );
+        assert!(got.iter().any(|e| matches!(
+            e,
+            Event::Transparency {
+                reason: "soft mask",
+                ..
+            }
+        )));
+        let doc = Document::open(
+            &classic(&[(1, b"<< >>")], "<< /Size SIZE /Root 1 0 R >>"),
+            &Limits::default(),
+        )
+        .unwrap();
+        let walker = Walker {
+            doc: &doc,
+            limits: Limits::default(),
+            events: Vec::new(),
+            ancestors: BTreeSet::new(),
+            fonts: BTreeMap::new(),
+            patterns: BTreeSet::new(),
+        };
+        let five = Object {
+            value: Value::Integer(5),
+            start: 0,
+            end: 0,
+        };
+        assert_eq!(
+            walker.inline_space(None, &five),
+            Some(five),
+            "a space that is neither a name nor an array"
         );
     }
 }

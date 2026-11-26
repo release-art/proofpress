@@ -58,11 +58,17 @@ pub(crate) fn identity(profile: &[u8]) -> Option<[u8; 16]> {
     if id != [0; 16] {
         return Some(id);
     }
+    Some(computed_id(profile))
+}
+
+/// The MD5 of a profile with its flags, rendering intent and Profile ID fields set to zero (7.2.18), whatever its
+/// Profile ID says.
+pub(crate) fn computed_id(profile: &[u8]) -> [u8; 16] {
     let mut copy = profile.to_vec();
     for range in [44..48, 64..68, 84..100] {
         copy.iter_mut().skip(range.start).take(range.len()).for_each(|b| *b = 0);
     }
-    Some(md5::compute(&copy).0)
+    md5::compute(&copy).0
 }
 
 /// A profile's description (`desc` tag, ICC.1:2022 9.2.41) as `LittleCMS` gives it for English, US: a v2 text

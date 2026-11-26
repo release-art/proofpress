@@ -30,11 +30,13 @@ PORTED = frozenset(
         "output-condition",
         "artwork-bleed",
         "outside-bleed",
+        "blend-space",
+        "spot-ink",
+        "colour-space",
+        "rgb-only",
+        "icc-profile",
     }
 )
-# Those the CMYK ink rules run.
-_INK = frozenset({"overprint", "white-overprint", "rich-black"})
-
 _SEVERITY = {"error": Severity.ERROR, "warning": Severity.WARN}
 
 
@@ -57,21 +59,21 @@ def run(path: pathlib.Path, params: dict[str, object] | None = None) -> list[Fin
 
 def check(path: pathlib.Path, profile: Profile) -> list[Finding]:
     """The findings of the ported checks *profile* turns on."""
-    wanted = {"outside-media", "xobject-missing", "page-count"}
-    if profile.colour and profile.colour_mode is ColourMode.CMYK:
-        wanted |= _INK
-    if profile.k_only_text:
-        wanted.add("k-only-text")
-    if profile.geometry is not None:
-        wanted |= {"geometry", "bleed", "centring"}
-    if profile.uniform_pages:
-        wanted |= {"page-size", "page-rotate"}
-    if profile.output_condition is not None:
-        wanted.add("output-condition")
-    if profile.require_bleed:
-        wanted.add("artwork-bleed")
-    if profile.no_marks:
-        wanted.add("outside-bleed")
+    cmyk, rgb = profile.colour_mode is ColourMode.CMYK, profile.colour_mode is ColourMode.RGB
+    switches = (
+        (True, ("outside-media", "xobject-missing", "page-count")),
+        (profile.colour and cmyk, ("overprint", "white-overprint", "rich-black", "colour-space")),
+        (profile.colour and rgb, ("rgb-only",)),
+        (profile.colour, ("blend-space", "icc-profile")),
+        (profile.k_only_text, ("k-only-text",)),
+        (profile.geometry is not None, ("geometry", "bleed", "centring")),
+        (profile.uniform_pages, ("page-size", "page-rotate")),
+        (profile.output_condition is not None, ("output-condition",)),
+        (profile.require_bleed, ("artwork-bleed",)),
+        (profile.no_marks, ("outside-bleed",)),
+        (profile.allow_spots is not None, ("spot-ink",)),
+    )
+    wanted = {check for on, checks in switches if on for check in checks}
     return [f for f in run(path, params(profile)) if f.check in wanted]
 
 
@@ -83,4 +85,7 @@ def params(profile: Profile) -> dict[str, object]:
         "uniform_pages": profile.uniform_pages,
         "pages_multiple_of": profile.pages_multiple_of or None,
         "output_condition": profile.output_condition,
+        "allow_spots": list(profile.allow_spots) if profile.allow_spots is not None else None,
+        "strict_cmyk": profile.strict_cmyk,
+        "colour_mode": str(profile.colour_mode),
     }

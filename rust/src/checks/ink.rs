@@ -92,7 +92,7 @@ fn is_rich_black(fill: &Fill) -> bool {
 }
 
 /// A non-K text colour in words.
-fn describe(fill: &Fill) -> String {
+pub(super) fn describe(fill: &Fill) -> String {
     if !fill.pattern.is_empty() {
         let mut names: Vec<&str> = fill
             .pattern

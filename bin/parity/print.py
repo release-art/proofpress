@@ -26,7 +26,8 @@ from proof_pdf._internal import _core
 from proof_pdf.models import Finding, Severity
 
 # The parameters both sides run with, as the core takes them (ported.params gives them for a profile).
-PARAMS: dict[str, object] = {}
+PARAMS: dict[str, object] = {"allow_spots": [], "strict_cmyk": False, "colour_mode": "cmyk"}
+RGB_PARAMS: dict[str, object] = {**PARAMS, "colour_mode": "rgb"}
 
 # Each check being ported, by id, with the Python it replaces, run with PARAMS. A check leaves when its Python is
 # deleted, its numbers recorded in docs/briefs/pdfx-progress.md. Empty between ports.
@@ -46,13 +47,18 @@ def python(path: pathlib.Path) -> list[Key] | str:
 
 
 def rust(path: pathlib.Path) -> list[Key] | str:
-    report = json.loads(_core.verify(str(path), path.read_bytes(), "print", json.dumps(PARAMS)))
+    data = path.read_bytes()
+    report = json.loads(_core.verify(str(path), data, "print", json.dumps(PARAMS)))
     if report["structure"] != "sound":
         return f"rust: {report['structure']}"
+    findings = report["findings"]
+    if "rgb-only" in PORTED:  # it judges only an RGB job
+        rgb = json.loads(_core.verify(str(path), data, "print", json.dumps(RGB_PARAMS)))
+        findings += [f for f in rgb["findings"] if f["check"] == "rgb-only"]
     severity = {"error": str(Severity.ERROR), "warning": str(Severity.WARN)}
     return sorted(
         (f["check"], severity[f["severity"]], f["message"], f["page"])
-        for f in report["findings"]
+        for f in findings
         if f["check"] in PORTED or any(f["check"] in also for also in ALSO.values())
     )
 

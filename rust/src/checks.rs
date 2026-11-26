@@ -12,6 +12,7 @@ mod intent;
 mod jpx;
 mod keys;
 mod metadata;
+mod modes;
 mod optional;
 mod page;
 mod painted;
@@ -63,6 +64,25 @@ pub struct Params {
     pub pages_multiple_of: Option<i64>,
     /// `output-condition`: the printing condition an output intent must name, matched without regard to case.
     pub output_condition: Option<String>,
+    /// `spot-ink`: the spot inks a job may use, by exact name; none turns the check off.
+    pub allow_spots: Option<Vec<String>>,
+    /// `colour-space`: whether RGB vector artwork in a CMYK job fails, rather than being advisory.
+    pub strict_cmyk: bool,
+    /// `icc-profile`: the job's colour model, which decides what its embedded profiles must agree with.
+    pub colour_mode: ColourMode,
+}
+
+/// The colour model a job is held to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColourMode {
+    /// Printed in four process colours.
+    #[default]
+    Cmyk,
+    /// Shown or printed from RGB.
+    Rgb,
+    /// Printed in one black ink.
+    Gray,
 }
 
 impl Default for Params {
@@ -73,6 +93,9 @@ impl Default for Params {
             uniform_pages: false,
             pages_multiple_of: None,
             output_condition: None,
+            allow_spots: None,
+            strict_cmyk: false,
+            colour_mode: ColourMode::Cmyk,
         }
     }
 }
@@ -250,6 +273,11 @@ const RUNS: &[(&Check, Run)] = &[
     (f::OUTPUT_CONDITION, page::output_condition),
     (f::ARTWORK_BLEED, painted::artwork_bleed),
     (f::OUTSIDE_BLEED, painted::outside_bleed),
+    (f::BLEND_SPACE, modes::blend_space),
+    (f::SPOT_INK, modes::spot_ink),
+    (f::COLOUR_SPACE, modes::colour_space),
+    (f::RGB_ONLY, modes::rgb_only),
+    (f::ICC_PROFILE, modes::icc_profile),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5

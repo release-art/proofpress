@@ -636,3 +636,44 @@ params = { output_condition = "FOGRA39" }
 levels = ["print"]
 expect = { "page-rotate" = "x4-good turned with /Rotate 90 (warning)", "artwork-bleed" = "and so its bleed coverage is not checked (warning)", "outside-bleed" = "and nor is what lies beyond the bleed (warning)" }
 params = { uniform_pages = true }
+
+# Today's colour-mode fixtures, verified for print with the profile's colour parameters.
+
+[transparent-undeclared]
+levels = ["print"]
+expect = { "blend-space" = "transparency on a page with no /Group blend space (warning)" }
+
+[transparent-mismatch]
+levels = ["print"]
+expect = { "blend-space" = "a page group blending in RGB under a CMYK intent" }
+
+[transparent-matching]
+levels = ["print"]
+expect = {}
+
+[spot-ink]
+levels = ["print"]
+expect = { "spot-ink" = "a spot ink the profile does not allow" }
+params = { allow_spots = [] }
+
+[rgb-vector]
+levels = ["print"]
+expect = { "colour-space" = "RGB vector artwork in a CMYK job (warning)" }
+
+[rgb-image]
+levels = ["print"]
+expect = { "colour-space" = "an RGB image in a CMYK job" }
+
+[cmyk-vector]
+levels = ["print"]
+expect = { "rgb-only" = "CMYK artwork in an RGB job" }
+params = { colour_mode = "rgb" }
+
+[mixed-rgb-profiles]
+levels = ["print"]
+expect = { "icc-profile" = "two RGB profiles in an RGB job" }
+params = { colour_mode = "rgb" }
+
+[cmyk-image-profile]
+levels = ["print"]
+expect = { "icc-profile" = "an ICCBased CMYK space carrying the output intent's own profile" }
