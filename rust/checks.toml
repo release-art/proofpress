@@ -10,7 +10,7 @@ title = "Valid PDF as the PDF 1.6 Reference defines it"
 clauses = ["iso-15930-7:6.1.1", "iso-15930-7:B"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.pre-separated.absent"

@@ -44,7 +44,7 @@ expect = { "x4.limits.objects" = "an update lists 8,388,608 objects in use, one 
 # ---- Damage to the file's own structure: ISO 32000-2 rules every level checks (same-length edits of x4-good).
 [x4-no-header]
 levels = ["x4"]
-expect = { "file.header" = "%PDF- is spelt %PXF-, so the file is refused (7.5.2)" }
+expect = { "file.header" = "%PDF- is spelt %PXF-, so the file is refused (7.5.2)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-header-offset]
 levels = ["x4"]
@@ -52,15 +52,15 @@ expect = { "file.header-offset" = "five bytes before %PDF-: allowed, offsets cou
 
 [x4-truncated]
 levels = ["x4"]
-expect = { "file.startxref" = "cut in half, so no startxref (7.5.5)" }
+expect = { "file.startxref" = "cut in half, so no startxref (7.5.5)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-bad-xref]
 levels = ["x4"]
-expect = { "file.xref" = "startxref points at xreg, not a cross-reference section (7.5.4)" }
+expect = { "file.xref" = "startxref points at xreg, not a cross-reference section (7.5.4)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-no-root]
 levels = ["x4"]
-expect = { "file.trailer" = "the trailer's /Root is spelt /Rooo (7.5.5)" }
+expect = { "file.trailer" = "the trailer's /Root is spelt /Rooo (7.5.5)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-after-eof]
 levels = ["x4"]
@@ -68,7 +68,7 @@ expect = { "file.eof" = "bytes after %%EOF (7.5.5)" }
 
 [x4-many-updates]
 levels = ["x4"]
-expect = { "file.limit" = "1,001 empty incremental updates, more cross-reference sections than the reader's limit" }
+expect = { "file.limit" = "1,001 empty incremental updates, more cross-reference sections than the reader's limit", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-odd-hex]
 levels = ["x4"]
@@ -80,7 +80,7 @@ expect = { "syntax.octal-escape" = "the output condition's text starts with the 
 
 [x4-bad-name-escape]
 levels = ["x4"]
-expect = { "syntax.name-escape" = "the font name /Proof#GG has an escape that is not two hex digits (7.3.5)" }
+expect = { "syntax.name-escape" = "the font name /Proof#GG has an escape that is not two hex digits (7.3.5)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-duplicate-key]
 levels = ["x4"]
@@ -96,7 +96,7 @@ expect = { "stream.filter" = "a stream names the filter /FlateDecodX (7.4.1)", "
 
 [x4-damaged-object]
 levels = ["x4"]
-expect = { "object.damaged" = "the Info dictionary starts [<, which cannot be read; every other check is then not evaluated" }
+expect = { "object.damaged" = "the Info dictionary starts [<, which cannot be read; every other check is then not evaluated", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-dangling-reference]
 levels = ["x4"]
@@ -446,11 +446,11 @@ expect = { "content.compatibility" = "BX with no EX (ISO 32000-2 7.8.2)", "x4.co
 
 [x4-inline-image-unknown-end]
 levels = ["x4"]
-expect = { "content.damaged" = "an inline JPEG with no end-of-image marker and no /L (ISO 32000-2 8.9.7)" }
+expect = { "content.damaged" = "an inline JPEG with no end-of-image marker and no /L (ISO 32000-2 8.9.7)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-content-unreadable]
 levels = ["x4"]
-expect = { "content.damaged" = "an unterminated string in the page content (ISO 32000-2 7.8.2)" }
+expect = { "content.damaged" = "an unterminated string in the page content (ISO 32000-2 7.8.2)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
 [x4-ri-unknown]
 levels = ["x4"]

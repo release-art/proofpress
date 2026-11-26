@@ -11,10 +11,8 @@ Feature: ISO 32000-2 7.3 and 7.4, objects, streams and filters
       | fixture                    | check                     |
       | x4-odd-hex                 | syntax.hex-digits         |
       | x4-octal-overflow          | syntax.octal-escape       |
-      | x4-bad-name-escape         | syntax.name-escape        |
       | x4-duplicate-key           | syntax.duplicate-key      |
       | x4-no-eol-before-endstream | stream.eol                |
-      | x4-damaged-object          | object.damaged            |
       | x4-dangling-reference      | object.dangling-reference |
 
   Scenario: An unknown filter is a finding wherever it appears
@@ -22,3 +20,15 @@ Feature: ISO 32000-2 7.3 and 7.4, objects, streams and filters
     When it is verified as PDF/X-4
     Then check "stream.filter" fails
     And check "x4.filter.standard-only" fails
+
+  Scenario Outline: An error in reading the file raises its check and, at PDF/X-4, 6.1.1's
+    Given the fixture "<fixture>"
+    When it is verified as PDF/X-4
+    Then check "<check>" fails
+    And check "x4.pdf-reference.conforms" fails
+    And no check fails but "<check>" and "x4.pdf-reference.conforms"
+
+    Examples:
+      | fixture                    | check                     |
+      | x4-bad-name-escape         | syntax.name-escape        |
+      | x4-damaged-object          | object.damaged            |

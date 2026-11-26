@@ -148,6 +148,16 @@ fn fails(world: &mut Pipeline, id: String) {
     );
 }
 
+#[then(expr = "no check fails but {string} and {string}")]
+fn only_two(world: &mut Pipeline, id: String, other: String) {
+    let others: Vec<_> = report(world)
+        .findings
+        .iter()
+        .filter(|f| f.check.id != id && f.check.id != other)
+        .collect();
+    assert!(others.is_empty(), "other checks failed: {others:#?}");
+}
+
 #[then(expr = "no check fails but {string}")]
 fn only(world: &mut Pipeline, id: String) {
     let others: Vec<_> = report(world).findings.iter().filter(|f| f.check.id != id).collect();

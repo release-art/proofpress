@@ -11,8 +11,6 @@ Feature: PDF/X-4 6.19 and 6.23, content streams
     Examples:
       | fixture | check |
       | x4-bx-ex | x4.content.no-bx-ex |
-      | x4-inline-image-unknown-end | content.damaged |
-      | x4-content-unreadable | content.damaged |
       | x4-ri-unknown | x4.intent.known-values |
       | x4-gstate-ri-unknown | x4.intent.known-values |
 
@@ -27,3 +25,15 @@ Feature: PDF/X-4 6.19 and 6.23, content streams
     When it is verified as PDF/X-4
     Then check "x4.content.known-operators" fails
     And check "x4.content.no-bx-ex" fails
+
+  Scenario Outline: An error in reading the file raises its check and, at PDF/X-4, 6.1.1's
+    Given the fixture "<fixture>"
+    When it is verified as PDF/X-4
+    Then check "<check>" fails
+    And check "x4.pdf-reference.conforms" fails
+    And no check fails but "<check>" and "x4.pdf-reference.conforms"
+
+    Examples:
+      | fixture | check |
+      | x4-inline-image-unknown-end | content.damaged |
+      | x4-content-unreadable | content.damaged |
