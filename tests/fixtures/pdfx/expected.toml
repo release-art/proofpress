@@ -671,9 +671,30 @@ params = { colour_mode = "rgb" }
 
 [mixed-rgb-profiles]
 levels = ["print"]
-expect = { "icc-profile" = "two RGB profiles in an RGB job" }
+expect = { "icc-profile" = "two RGB profiles in an RGB job", "image-dpi" = "and its images are placed below 300 dpi" }
 params = { colour_mode = "rgb" }
 
 [cmyk-image-profile]
 levels = ["print"]
-expect = { "icc-profile" = "an ICCBased CMYK space carrying the output intent's own profile" }
+expect = { "icc-profile" = "an ICCBased CMYK space carrying the output intent's own profile", "image-dpi" = "and its image is placed below 300 dpi" }
+
+# Today's image resolution fixtures, verified for print with the profile's limits.
+
+[image-resolution-ok]
+levels = ["print"]
+expect = {}
+params = { max_dpi = 1200.0, max_stretch_pct = 5.0 }
+
+[low-dpi-image]
+levels = ["print"]
+expect = { "image-dpi" = "an image placed below 300 dpi" }
+
+[image-stretched]
+levels = ["print"]
+expect = { "image-stretch" = "an image scaled more on one axis than the other (warning)", "image-dpi" = "and placed below 300 dpi" }
+params = { max_stretch_pct = 5.0 }
+
+[image-too-sharp]
+levels = ["print"]
+expect = { "image-dpi-max" = "an image placed at 1016 dpi, above a 600 dpi ceiling (warning)" }
+params = { max_dpi = 600.0 }

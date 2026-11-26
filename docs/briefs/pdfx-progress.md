@@ -24,13 +24,14 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 4** (content, page model and colour): 4.1 to 4.5 done; 4.6 under way. The walk now places what it paints
-  (CTM, clip, path, text and image extents) and reads colours as the print checks do; 20 print checks run in Rust:
+  (CTM, clip, path, text and image extents) and reads colours as the print checks do; 23 print checks run in Rust:
   what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
   (`overprint`, `white-overprint`, `rich-black`, `k-only-text`) and the page geometry (`geometry`, `bleed`, `centring`,
   `page-count`, `page-size`, `page-rotate`, `output-condition`) and the colour mode (`blend-space`, `spot-ink`,
-  `colour-space`, `rgb-only`, `icc-profile`). Profile parameters reach the core as JSON (`Settings`, `Params`). Next in
-  4.6: function evaluation (for `spot-definition`), image decoding (for `gray-only`), then text and fonts, contrast,
-  and resolution. The brief's pace checkpoint for
+  `colour-space`, `rgb-only`, `icc-profile`) and image resolution (`image-dpi`, `image-dpi-max`, `image-stretch`).
+  Profile parameters reach the core as JSON (`Settings`, `Params`). Next in 4.6: text and fonts (`text-size`,
+  `hairline`, `safe-area`, `missing-glyph`, `font-embedded`, `font-type3`), then function evaluation (for
+  `spot-definition`), image decoding (for `gray-only`), and contrast. The brief's pace checkpoint for
   `paint.py` falls on 2026-12-02, one week into phase 4.
 
 ## Done
@@ -75,7 +76,8 @@ record it as not conforming to that one rule).
 | 4.6 (part) | `2d4b7c0` | Tier 7 geometry and font metrics; `outside-media` and `xobject-missing` ported, parity-proved and their Python deleted; `bin/parity/print.py`; 2 fixtures |
 | 4.6 (part) | `82d1893` | Colour families and fills in the walk; `Settings` and `Params` for print checks; `overprint`, `white-overprint`, `rich-black`, `k-only-text` ported, parity-proved and their Python deleted |
 | 4.6 (part) | `ae91f28` | Page geometry and bleed: 9 checks ported with their parameters, parity-proved and their Python deleted; ICC description reader; Python's `:g` and `repr` for messages; fixtures may give parameters |
-| 4.6 (part) | the commit after `ae91f28` | The colour-mode checks: spot inks and transparency reasons in the walk, `blend-space`, `spot-ink`, `colour-space`, `rgb-only`, `icc-profile` ported, parity-proved and their Python deleted; inline images' abbreviated colour spaces in arrays spelled out |
+| 4.6 (part) | `396aa0d` | The colour-mode checks: spot inks and transparency reasons in the walk, `blend-space`, `spot-ink`, `colour-space`, `rgb-only`, `icc-profile` ported, parity-proved and their Python deleted; inline images' abbreviated colour spaces in arrays spelled out |
+| 4.6 (part) | the commit after `396aa0d` | Image resolution: placement and sample size in the walk; `image-dpi`, `image-dpi-max`, `image-stretch` ported, parity-proved, `resolution.py` deleted |
 
 ## Register coverage
 
@@ -85,7 +87,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 109 | 28 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 39 | 17 | 1 (`internal`) |
+| House and structure checks | 42 | 14 | 1 (`internal`) |
 
 ## Gates
 
@@ -273,6 +275,10 @@ Oracle consultations:
   `/Size` or listed free (four), qpdf misreading a `/Resources` object (one, Rust right), and forms nested past the
   Python walk's 12 levels (one veraPDF limits file; the core goes to 100). `colour-space` and `rgb-only` now judge
   only their own colour mode, so the core's report holds no RGB-job finding on a CMYK job.
+- Task 4.6, the fifth port (`image-dpi`, `image-dpi-max`, `image-stretch`, with a 300 dpi minimum, 450 advisory,
+  1200 ceiling and 5% stretch): 9,252 files identical with 123,860 findings among them; the 4 differences are the
+  reading differences already explained (damaged content, objects beyond `/Size`, the qpdf misread, the `/Lzw`
+  inline image).
 - Task 4.6: `boxes` and `bleedbox` come from the Python PDF/X layer (`pdfx/x4.py`), which the plan does not port; the
   `x4.boxes.*` rows replace them.
 - Task 4.6: the profile's on/off switches for print checks stay in Python (`ported.check`); the core runs every

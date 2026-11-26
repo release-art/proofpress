@@ -1684,23 +1684,23 @@ title = "Images meet the resolution floor"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "image-dpi-max"
 title = "Images do not exceed the resolution ceiling"
 clauses = []
-severity = "error"
+severity = "warning"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "image-stretch"
 title = "Images are not stretched unevenly"
 clauses = []
-severity = "error"
+severity = "warning"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "text-size"

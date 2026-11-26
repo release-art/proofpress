@@ -16,6 +16,7 @@ mod modes;
 mod optional;
 mod page;
 mod painted;
+mod resolution;
 mod spots;
 mod walk;
 mod x4;
@@ -70,6 +71,14 @@ pub struct Params {
     pub strict_cmyk: bool,
     /// `icc-profile`: the job's colour model, which decides what its embedded profiles must agree with.
     pub colour_mode: ColourMode,
+    /// `image-dpi`: the resolution images must reach.
+    pub min_dpi: f64,
+    /// `image-dpi`: the resolution below which an image is worth a warning, above the minimum.
+    pub warn_dpi: Option<f64>,
+    /// `image-dpi-max`: the resolution above which an image only grows the file.
+    pub max_dpi: Option<f64>,
+    /// `image-stretch`: how much more one axis may be scaled than the other, in percent.
+    pub max_stretch_pct: Option<f64>,
 }
 
 /// The colour model a job is held to.
@@ -96,6 +105,10 @@ impl Default for Params {
             allow_spots: None,
             strict_cmyk: false,
             colour_mode: ColourMode::Cmyk,
+            min_dpi: 300.0,
+            warn_dpi: None,
+            max_dpi: None,
+            max_stretch_pct: None,
         }
     }
 }
@@ -278,6 +291,9 @@ const RUNS: &[(&Check, Run)] = &[
     (f::COLOUR_SPACE, modes::colour_space),
     (f::RGB_ONLY, modes::rgb_only),
     (f::ICC_PROFILE, modes::icc_profile),
+    (f::IMAGE_DPI, resolution::image_dpi),
+    (f::IMAGE_DPI_MAX, resolution::image_dpi_max),
+    (f::IMAGE_STRETCH, resolution::image_stretch),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5

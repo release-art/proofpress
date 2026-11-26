@@ -210,9 +210,9 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `spot-definition` | A spot ink has one definition |  | error | print | todo |
 | `icc-profile` | Embedded ICC profiles are sound and suit the job |  | error | print | implemented |
 | `blend-space` | Transparency declares its blend space |  | error | print | implemented |
-| `image-dpi` | Images meet the resolution floor |  | error | print | todo |
-| `image-dpi-max` | Images do not exceed the resolution ceiling |  | error | print | todo |
-| `image-stretch` | Images are not stretched unevenly |  | error | print | todo |
+| `image-dpi` | Images meet the resolution floor |  | error | print | implemented |
+| `image-dpi-max` | Images do not exceed the resolution ceiling |  | warning | print | implemented |
+| `image-stretch` | Images are not stretched unevenly |  | warning | print | implemented |
 | `text-size` | Text meets the size floor |  | error | print | todo |
 | `hairline` | Strokes meet the width floor |  | error | print | todo |
 | `contrast` | Text contrasts with its background |  | error | print | todo |

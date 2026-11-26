@@ -35,6 +35,9 @@ PORTED = frozenset(
         "colour-space",
         "rgb-only",
         "icc-profile",
+        "image-dpi",
+        "image-dpi-max",
+        "image-stretch",
     }
 )
 _SEVERITY = {"error": Severity.ERROR, "warning": Severity.WARN}
@@ -64,7 +67,7 @@ def check(path: pathlib.Path, profile: Profile) -> list[Finding]:
         (True, ("outside-media", "xobject-missing", "page-count")),
         (profile.colour and cmyk, ("overprint", "white-overprint", "rich-black", "colour-space")),
         (profile.colour and rgb, ("rgb-only",)),
-        (profile.colour, ("blend-space", "icc-profile")),
+        (profile.colour, ("blend-space", "icc-profile", "image-dpi", "image-dpi-max", "image-stretch")),
         (profile.k_only_text, ("k-only-text",)),
         (profile.geometry is not None, ("geometry", "bleed", "centring")),
         (profile.uniform_pages, ("page-size", "page-rotate")),
@@ -88,4 +91,8 @@ def params(profile: Profile) -> dict[str, object]:
         "allow_spots": list(profile.allow_spots) if profile.allow_spots is not None else None,
         "strict_cmyk": profile.strict_cmyk,
         "colour_mode": str(profile.colour_mode),
+        "min_dpi": profile.min_dpi,
+        "warn_dpi": profile.warn_dpi,
+        "max_dpi": profile.max_dpi,
+        "max_stretch_pct": profile.max_stretch_pct,
     }

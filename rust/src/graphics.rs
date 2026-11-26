@@ -112,6 +112,10 @@ pub(crate) struct Ink {
     pub(crate) cell: bool,
     /// An image's or shading's resource name, `(inline)` for an inline image; empty for the rest.
     pub(crate) name: Vec<u8>,
+    /// The CTM an image is placed with, which maps its unit square onto the page.
+    pub(crate) matrix: Option<Matrix>,
+    /// An image's `/Width` and `/Height` in samples, when both are positive numbers.
+    pub(crate) pixels: Option<(i64, i64)>,
 }
 
 /// What kind of thing a paint is.
@@ -546,7 +550,23 @@ fn ink(state: &State, size: f64, space: Option<Family>) -> Ink {
         space,
         cell: state.ctm.is_none(),
         name: Vec::new(),
+        matrix: None,
+        pixels: None,
     }
+}
+
+/// An image's `/Width` and `/Height`, each truncated to a whole number and positive.
+fn pixels(doc: &Document, image: &Dict) -> Option<(i64, i64)> {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a sample count is truncated to a whole number"
+    )]
+    let side = |key: &[u8]| match doc.resolve(image.get(key)?)?.value {
+        Value::Integer(n) => Some(n),
+        Value::Real(r) => Some(r as i64),
+        _ => None,
+    };
+    Some((side(b"Width")?, side(b"Height")?)).filter(|(w, h)| *w > 0 && *h > 0)
 }
 
 /// The colours a paint puts down, as the print checks read them: a stencil mask's fill, a text run's fill (and its
@@ -912,6 +932,8 @@ impl Walker<'_> {
         );
         let painted = Ink {
             name: b"(inline)".to_vec(),
+            matrix: state.ctm,
+            pixels: pixels(self.doc, &image.dict),
             ..ink(state, 0.0, Some(family))
         };
         if mask {
@@ -1250,6 +1272,8 @@ impl Walker<'_> {
                 }
                 let painted = Ink {
                     name: name.to_vec(),
+                    matrix: state.ctm,
+                    pixels: pixels(self.doc, dict),
                     ..ink(state, 0.0, Some(family::classify(self.doc, space, None)))
                 };
                 if matches!(

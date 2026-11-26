@@ -17,7 +17,7 @@ import pathlib
 
 import pikepdf
 
-from ._internal import colour, contrast, pdfx, ported, resolution, text, verapdf
+from ._internal import colour, contrast, pdfx, ported, text, verapdf
 from .models import ColourMode, FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)
@@ -126,13 +126,6 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                 findings += colour.check_spot_definitions(pdf)
                 if profile.colour_mode is ColourMode.GRAY:
                     findings += colour.check_gray_only(pdf, allow_k_only=profile.allow_k_only)
-                findings += resolution.check_image_dpi(
-                    pdf,
-                    profile.min_dpi,
-                    warn_dpi=profile.warn_dpi,
-                    max_dpi=profile.max_dpi,
-                    max_stretch_pct=profile.max_stretch_pct,
-                )
     except (pikepdf.PdfError, pikepdf.PasswordError) as exc:  # corrupt, truncated or encrypted -- a FAIL, not a crash
         return [Finding("structure", Severity.ERROR, f"cannot open the PDF (corrupt or encrypted): {exc}")], False
     return findings, True
