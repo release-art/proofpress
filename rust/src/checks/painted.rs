@@ -2,11 +2,12 @@
 //! gate): a `Do` that names no `XObject` leaves a hole where the artwork should be (ISO 32000-2 7.8.3), and an object
 //! painted wholly off the media box never prints but ships in the file.
 
+use super::Settings;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::common::rect::rect;
 use crate::document::Document;
-use crate::findings::{Finding, Level, Location, OUTSIDE_MEDIA, XOBJECT_MISSING};
+use crate::findings::{Finding, Location, OUTSIDE_MEDIA, XOBJECT_MISSING};
 use crate::graphics::{self, Event, Kind};
 
 /// The page an event is on, from its first frame.
@@ -18,7 +19,7 @@ fn page_of(frames: &[Location]) -> u32 {
 }
 
 /// Each name a page paints with `Do` that gives no `XObject`, once per page.
-pub(super) fn xobject_missing(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn xobject_missing(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut missing: BTreeSet<(u32, String)> = BTreeSet::new();
     for event in graphics::walk(doc) {
         if let Event::Missing { name, frames } = event {
@@ -39,7 +40,7 @@ pub(super) fn xobject_missing(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// A warning per page that paints something entirely beyond its media box; invisible text (render modes 3 and 7) is
 /// not counted, and a page without a media box is not judged.
-pub(super) fn outside_media(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn outside_media(doc: &Document, _: &Settings) -> Vec<Finding> {
     let media: Vec<_> = doc
         .pages()
         .iter()
@@ -80,6 +81,7 @@ pub(super) fn outside_media(doc: &Document, _: Level) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
     /// The ids and messages the two checks raise on a one-page file painting `data`, with `page` as the page's
@@ -94,11 +96,14 @@ mod tests {
             (4, content.as_bytes()),
         ];
         let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
-        [xobject_missing(&doc, Level::Print), outside_media(&doc, Level::Print)]
-            .concat()
-            .into_iter()
-            .map(|f| (f.page.unwrap(), f.message))
-            .collect()
+        [
+            xobject_missing(&doc, &Level::Print.into()),
+            outside_media(&doc, &Level::Print.into()),
+        ]
+        .concat()
+        .into_iter()
+        .map(|f| (f.page.unwrap(), f.message))
+        .collect()
     }
 
     #[test]

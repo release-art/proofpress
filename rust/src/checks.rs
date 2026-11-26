@@ -7,6 +7,7 @@ mod annots;
 mod boxes;
 mod colour;
 mod contents;
+mod ink;
 mod intent;
 mod jpx;
 mod keys;
@@ -25,8 +26,41 @@ use crate::findings::{
 };
 use crate::pipeline::Limits;
 
-/// A check's code: what it finds in an open document verified at a level.
-type Run = fn(&Document, Level) -> Vec<Finding>;
+/// A check's code: what it finds in an open document with the settings it runs with.
+type Run = fn(&Document, &Settings) -> Vec<Finding>;
+
+/// What the checks run with: the level a file is verified at, and the parameters the print checks take from the
+/// profile.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Settings {
+    /// The level the file is verified at.
+    pub level: Level,
+    /// The print checks' parameters.
+    pub params: Params,
+}
+
+impl From<Level> for Settings {
+    fn from(level: Level) -> Self {
+        Self {
+            level,
+            params: Params::default(),
+        }
+    }
+}
+
+/// The print checks' parameters, each defaulting to today's profile's value.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Params {
+    /// `rich-black`: the largest text, in points, that may not be set in a built black.
+    pub small_text_pt: f64,
+}
+
+impl Default for Params {
+    fn default() -> Self {
+        Self { small_text_pt: 12.0 }
+    }
+}
 
 /// Every implemented check that reads an open document, with its code. A test holds this list and the
 /// `implemented` entries of `rust/checks.toml` equal, apart from the checks judged from tiers 1 to 5's own findings.
@@ -156,6 +190,10 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_JPX_CMYK_AS_DEVICE, jpx::cmyk_as_device),
     (f::XOBJECT_MISSING, painted::xobject_missing),
     (f::OUTSIDE_MEDIA, painted::outside_media),
+    (f::OVERPRINT, ink::overprint),
+    (f::WHITE_OVERPRINT, ink::white_overprint),
+    (f::RICH_BLACK, ink::rich_black),
+    (f::K_ONLY_TEXT, ink::k_only_text),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5
@@ -169,6 +207,17 @@ pub fn verify(file: &str, bytes: &[u8], level: Level) -> Report {
 /// [`verify`] within other limits than the defaults.
 #[must_use]
 pub fn verify_with(file: &str, bytes: &[u8], level: Level, limits: &Limits) -> Report {
+    verify_in(file, bytes, &level.into(), limits)
+}
+
+/// [`verify`] with the print checks' parameters too.
+#[must_use]
+pub fn verify_settings(file: &str, bytes: &[u8], settings: &Settings) -> Report {
+    verify_in(file, bytes, settings, &Limits::default())
+}
+
+fn verify_in(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits) -> Report {
+    let level = settings.level;
     let applies = |check: &Check| check.applies.contains(&level) && check.status == Status::Implemented;
     let enabled = RUNS.iter().filter(|(check, _)| applies(check));
     match Document::open(bytes, limits) {
@@ -191,7 +240,7 @@ pub fn verify_with(file: &str, bytes: &[u8], level: Level, limits: &Limits) -> R
                 let outcome = if structure == Structure::Damaged {
                     Outcome::NotEvaluated("objects it would read could not be read".into())
                 } else {
-                    let found = guarded(id, &|| run(&doc, level));
+                    let found = guarded(id, &|| run(&doc, settings));
                     let outcome = if found.is_empty() { Outcome::Pass } else { Outcome::Fail };
                     findings.extend(found);
                     outcome

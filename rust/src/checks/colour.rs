@@ -5,13 +5,14 @@
 //! Each colour space a paint uses is flattened into its leaves: an `Indexed` or `Pattern` space into its base, a
 //! `Separation` or `DeviceN` into itself, its alternate and the separations of its `/Colorants`.
 
+use super::Settings;
 use std::collections::BTreeSet;
 
 use super::intent;
 use crate::common::icc;
 use crate::document::{Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Level, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
+    Check, Finding, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
     X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_PRE_SEPARATED_ABSENT, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
     X4_TRANSPARENCY_GROUP_CS_RESTRICTED,
 };
@@ -151,17 +152,17 @@ fn device_rule(doc: &Document, check: &'static Check, which: &dyn Fn(Via) -> boo
 }
 
 /// 6.4.3.2: device spaces in print elements match the intent; `DeviceGray` is also allowed under a CMYK intent.
-pub(super) fn device_spaces(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn device_spaces(doc: &Document, _: &Settings) -> Vec<Finding> {
     device_rule(doc, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, &|v| v != Via::Alternate)
 }
 
 /// 6.4.3.4 (X4-Q4): the alternates of spot colours obey 6.4 too.
-pub(super) fn alternate_spaces(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn alternate_spaces(doc: &Document, _: &Settings) -> Vec<Finding> {
     device_rule(doc, X4_SPOT_ALTERNATE_SPACE_RESTRICTED, &|v| v == Via::Alternate)
 }
 
 /// 6.20: a transparency group's `/CS` obeys 6.4.3: a device space matches the intent, a profile is version 2 or 4.
-pub(super) fn group_spaces(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn group_spaces(doc: &Document, _: &Settings) -> Vec<Finding> {
     let intent = intent::profile(doc)
         .map(|h| h.space)
         .filter(|s| matches!(s, b"GRAY" | b"RGB " | b"CMYK"));
@@ -244,7 +245,7 @@ fn icc_leaves(doc: &Document) -> Vec<IccLeaf> {
 }
 
 /// 6.4.3.3: every ICC profile used is version 2 or 4 (decision log, 2026-11-25).
-pub(super) fn profile_version(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn profile_version(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for IccLeaf { num, data, frames, .. } in icc_leaves(doc) {
         let Some(header) = data.as_deref().and_then(icc::header) else {
@@ -266,7 +267,7 @@ pub(super) fn profile_version(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.4.3.3: a four-colour `ICCBased` fill, stroke, text or image mask that overprints under a CMYK intent has overprint
 /// mode 0. A `DefaultCMYK` standing in for `DeviceCMYK` is left out: it always knocks out (6.4.3.1, note 2).
-pub(super) fn overprint_mode(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn overprint_mode(doc: &Document, _: &Settings) -> Vec<Finding> {
     if intent::profile(doc).map(|h| h.space) != Some(*b"CMYK") {
         return Vec::new();
     }
@@ -293,7 +294,7 @@ pub(super) fn overprint_mode(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.3.3: no four-colour `ICCBased` space uses the output intent's profile: the same stream, or the same identity.
-pub(super) fn not_intent_profile(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn not_intent_profile(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some((intent_num, intent_data)) = intent::profile_stream(doc) else {
         return Vec::new();
     };
@@ -348,7 +349,7 @@ type Inks = BTreeSet<Option<Vec<u8>>>;
 
 /// 6.1.2 (X4-Q2): the file is not pre-separated: it fails only when every page that paints uses a single colorant and
 /// those colorants differ between pages.
-pub(super) fn pre_separated(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn pre_separated(doc: &Document, _: &Settings) -> Vec<Finding> {
     // Paints grouped by the page they are on, the first of their frames.
     let mut pages: Vec<(Option<Location>, Inks)> = Vec::new();
     for event in graphics::walk(doc) {
@@ -388,9 +389,10 @@ pub(super) fn pre_separated(doc: &Document, _: Level) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 5] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 5] = [
         device_spaces,
         alternate_spaces,
         profile_version,
@@ -424,7 +426,7 @@ mod tests {
         ];
         let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| f.check.id)
             .collect()
     }
@@ -504,7 +506,10 @@ mod tests {
                 (8, &profile(b"CMYK", 2)),
             ];
             let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
-            group_spaces(&doc, Level::X4).into_iter().map(|f| f.message).collect()
+            group_spaces(&doc, &Level::X4.into())
+                .into_iter()
+                .map(|f| f.message)
+                .collect()
         };
         assert_eq!(groups("/DeviceCMYK"), Vec::<String>::new());
         assert_eq!(groups("/DeviceGray"), Vec::<String>::new());
@@ -557,7 +562,10 @@ mod tests {
             }
             let refs: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
             let doc = Document::open(&classic(&refs, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
-            pre_separated(&doc, Level::X4).into_iter().map(|f| f.message).collect()
+            pre_separated(&doc, &Level::X4.into())
+                .into_iter()
+                .map(|f| f.message)
+                .collect()
         };
         assert_eq!(
             separated(&["/C cs f", "/N cs f", "0 g f /G cs f"]),

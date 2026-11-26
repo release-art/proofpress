@@ -240,7 +240,7 @@ class TestOutsideBleed:
 
 class TestOutsideMedia:
     def _media(self, path):
-        return ported.check(path)
+        return [f for f in ported.run(path) if f.check == "outside-media"]
 
     def test_an_object_wholly_beyond_the_page_is_a_warning(self, tmp_path):
         [finding] = self._media(_pdf(tmp_path, b"BT /F1 6 Tf 400 380 Td (hidden) Tj ET", boxes=SHEET))
@@ -277,7 +277,7 @@ class TestMissingXObjects:
             pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=xobject(pdf)))
         path = tmp_path / "xobject.pdf"
         pdf.save(path)
-        return ported.check(path)
+        return [f for f in ported.run(path) if f.check == "xobject-missing"]
 
     @pytest.mark.parametrize(
         "xobject",
@@ -305,7 +305,7 @@ class TestMissingXObjects:
         data, count = re.subn(rb"/Im0 (\d+) 0 R", lambda m: b"/Im0 " + b"9" * len(m[1]) + b" 0 R", path.read_bytes())
         assert count == 1
         path.write_bytes(data)
-        [finding] = ported.check(path)
+        [finding] = [f for f in ported.run(path) if f.check == "xobject-missing"]
         assert finding.check == "xobject-missing"
 
     def test_a_real_image_passes(self, tmp_path):
@@ -315,6 +315,6 @@ class TestMissingXObjects:
     def test_a_file_the_core_cannot_read_fails_rather_than_passes(self, tmp_path):
         path = tmp_path / "junk.pdf"
         path.write_bytes(b"%PDF-1.4 not a PDF")
-        assert {(f.check, f.severity, f.message) for f in ported.check(path)} == {
+        assert {(f.check, f.severity, f.message) for f in ported.run(path)} == {
             (check, Severity.ERROR, "could not be checked: the file was refused") for check in ported.PORTED
         }

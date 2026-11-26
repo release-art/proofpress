@@ -25,8 +25,8 @@ import pikepdf
 from proof_pdf._internal import _core
 from proof_pdf.models import Finding, Severity
 
-# Each check being ported, by id, with the Python function it replaces. Empty between ports: `outside-media` and
-# `xobject-missing` left on 2026-11-25 (their numbers are in docs/briefs/pdfx-progress.md).
+# Each check being ported, by id, with the Python it replaces, run with the profile's defaults. Empty between ports;
+# a check leaves when its Python is deleted, its numbers recorded in docs/briefs/pdfx-progress.md.
 PORTED: dict[str, Callable[[pikepdf.Pdf], list[Finding]]] = {}
 
 Key = tuple[str, str, str, int | None]

@@ -9,12 +9,16 @@ use pyo3::prelude::*;
 use crate::checks;
 use crate::findings::Level;
 
-/// Verify `data`, the bytes of the file named `file`, at `level` (`x4`, `x4p`, `x5g`, `x5pg` or `x5n`), and return the
-/// report as JSON (schema 1). The GIL is released while the file is read.
+/// Verify `data`, the bytes of the file named `file`, at `level` (`x4`, `x4p`, `x5g`, `x5pg`, `x5n` or `print`), with
+/// the print checks' parameters given as a JSON object (`params`, by name; any left out keep their defaults), and return
+/// the report as JSON (schema 1). The GIL is released while the file is read.
 #[pyfunction]
-fn verify(py: Python<'_>, file: &str, data: &[u8], level: &str) -> PyResult<String> {
+#[pyo3(signature = (file, data, level, params = "{}"))]
+fn verify(py: Python<'_>, file: &str, data: &[u8], level: &str, params: &str) -> PyResult<String> {
     let level = Level::from_name(level).ok_or_else(|| value_error(format_args!("unknown level {level:?}")))?;
-    let report = py.detach(|| checks::verify(file, data, level));
+    let params = serde_json::from_str(params).map_err(|e| value_error(format_args!("bad params: {e}")))?;
+    let settings = checks::Settings { level, params };
+    let report = py.detach(|| checks::verify_settings(file, data, &settings));
     serde_json::to_string(&report).map_err(value_error)
 }
 
@@ -51,6 +55,16 @@ mod tests {
             );
             let error = verify.call1(("x.pdf", b"".as_slice(), "x3")).unwrap_err();
             assert!(error.to_string().contains("unknown level"), "{error}");
+            let json: String = verify
+                .call1(("x.pdf", b"%PDF-1.7".as_slice(), "print", r#"{"small_text_pt": 9}"#))
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert!(json.contains(r#""verdict":"refused""#), "{json}");
+            let error = verify
+                .call1(("x.pdf", b"".as_slice(), "print", r#"{"nope": 1}"#))
+                .unwrap_err();
+            assert!(error.to_string().contains("bad params"), "{error}");
         });
     }
 }

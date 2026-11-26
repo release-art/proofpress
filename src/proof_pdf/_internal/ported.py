@@ -8,18 +8,21 @@ here rather than passing silently: the point of the tool is to confirm a file, s
 import json
 import pathlib
 
-from ..models import Finding, Severity
+from ..models import ColourMode, Finding, Profile, Severity
 from . import _core
 
-# The ported checks that always run; the rest of the print profile still runs in Python.
-PORTED = frozenset({"outside-media", "xobject-missing"})
+# The checks that run in the Rust core.
+PORTED = frozenset({"outside-media", "xobject-missing", "overprint", "white-overprint", "rich-black", "k-only-text"})
+# Those the CMYK ink rules run.
+_INK = frozenset({"overprint", "white-overprint", "rich-black"})
 
 _SEVERITY = {"error": Severity.ERROR, "warning": Severity.WARN}
 
 
-def check(path: pathlib.Path) -> list[Finding]:
-    """The ported checks' findings on the PDF at *path*."""
-    report = json.loads(_core.verify(str(path), path.read_bytes(), "print"))
+def run(path: pathlib.Path, params: dict[str, object] | None = None) -> list[Finding]:
+    """Every ported check's findings on the PDF at *path*, with the print checks' *params* (the core's defaults for
+    any left out)."""
+    report = json.loads(_core.verify(str(path), path.read_bytes(), "print", json.dumps(params or {})))
     findings = [
         Finding(f["check"], _SEVERITY[f["severity"]], f["message"], f["page"])
         for f in report["findings"]
@@ -31,3 +34,13 @@ def check(path: pathlib.Path) -> list[Finding]:
         if c["id"] in PORTED and c["status"] == "not_evaluated"
     ]
     return findings
+
+
+def check(path: pathlib.Path, profile: Profile) -> list[Finding]:
+    """The findings of the ported checks *profile* turns on."""
+    wanted = {"outside-media", "xobject-missing"}
+    if profile.colour and profile.colour_mode is ColourMode.CMYK:
+        wanted |= _INK
+    if profile.k_only_text:
+        wanted.add("k-only-text")
+    return [f for f in run(path, {"small_text_pt": profile.small_text_pt}) if f.check in wanted]

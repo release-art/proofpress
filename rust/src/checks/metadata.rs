@@ -4,6 +4,7 @@
 //! The rows on the document's XMP read the catalog's metadata stream. When there is none, or it cannot be parsed, every
 //! property they require is missing and each says so; `x4.xmp.present` and `x4.xmp.well-formed` give the cause.
 
+use super::Settings;
 use std::collections::BTreeSet;
 
 use crate::common::xmp::{self, Kind, Packet, Value as Xmp};
@@ -143,7 +144,7 @@ fn string<'a>(doc: &'a Document, object: &'a Object) -> Option<&'a [u8]> {
 }
 
 /// 6.10.1: the catalog has a metadata stream.
-pub(super) fn present(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn present(doc: &Document, _: &Settings) -> Vec<Finding> {
     match document_metadata(doc) {
         Some(_) => Vec::new(),
         None => vec![Finding::new(X4_XMP_PRESENT, "the catalog has no metadata stream").citing("6.10.1")],
@@ -151,7 +152,7 @@ pub(super) fn present(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.10.1 (X4-Q8: every metadata stream, not only the document's): no metadata stream has a `/Filter`.
-pub(super) fn unfiltered(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn unfiltered(doc: &Document, _: &Settings) -> Vec<Finding> {
     let streams = metadata_streams(doc);
     doc.objects()
         .filter(|(num, ..)| streams.contains(num))
@@ -165,7 +166,7 @@ pub(super) fn unfiltered(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.10.6: every metadata stream is well-formed XML and XMP's form of RDF.
-pub(super) fn well_formed(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn well_formed(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for num in metadata_streams(doc) {
         let Some(data) = doc.stream_data(num) else { continue };
@@ -185,7 +186,7 @@ pub(super) fn well_formed(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.10.3: no packet header has a `bytes` or `encoding` attribute.
-pub(super) fn header_attributes(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn header_attributes(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for num in metadata_streams(doc) {
         let Some(data) = doc.stream_data(num) else { continue };
@@ -206,7 +207,7 @@ pub(super) fn header_attributes(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.10.1 and 6.11: the namespaces of Table 2 are written with its prefixes.
-pub(super) fn prefixes(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn prefixes(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(packet) = document_xmp(doc) else {
         return Vec::new();
     };
@@ -257,20 +258,20 @@ fn valid_date(text: &str) -> bool {
     date::parse_xmp(text).is_some()
 }
 
-pub(super) fn document_id(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn document_id(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(doc, X4_XMP_DOCUMENT_ID, MM, "DocumentID", "6.10.4", &any)
 }
 
-pub(super) fn version_id(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn version_id(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(doc, X4_XMP_VERSION_ID, MM, "VersionID", "6.10.4", &any)
 }
 
-pub(super) fn rendition_class(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn rendition_class(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(doc, X4_XMP_RENDITION_CLASS, MM, "RenditionClass", "6.10.4", &any)
 }
 
 /// 6.10.4 recommends a `uuid:` URI of 128 bits for the document ID; a missing one is `x4.xmp.document-id`'s.
-pub(super) fn document_id_uuid(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn document_id_uuid(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(id) = document_xmp(doc).and_then(|p| p.get(MM, "DocumentID").and_then(Xmp::text).map(str::to_owned))
     else {
         return Vec::new();
@@ -293,30 +294,30 @@ pub(super) fn document_id_uuid(doc: &Document, _: Level) -> Vec<Finding> {
     ]
 }
 
-pub(super) fn create_date(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn create_date(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(doc, X4_XMP_CREATE_DATE, XMP, "CreateDate", "6.10.4", &valid_date)
 }
 
-pub(super) fn modify_date(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn modify_date(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(doc, X4_XMP_MODIFY_DATE, XMP, "ModifyDate", "6.10.4", &valid_date)
 }
 
-pub(super) fn metadata_date(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn metadata_date(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(doc, X4_XMP_METADATA_DATE, XMP, "MetadataDate", "6.10.4", &valid_date)
 }
 
-pub(super) fn title(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn title(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(doc, X4_XMP_TITLE, DC, "title", "6.10.4", &non_empty)
 }
 
 /// 6.10.4 recommends both `xmp:CreatorTool` and `pdf:Producer`.
-pub(super) fn agent_names(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn agent_names(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = require(doc, X4_XMP_AGENT_NAMES, XMP, "CreatorTool", "6.10.4", &any);
     out.extend(require(doc, X4_XMP_AGENT_NAMES, PDF, "Producer", "6.10.4", &any));
     out
 }
 
-pub(super) fn version_present(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn version_present(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(
         doc,
         X4_IDENTITY_VERSION_PRESENT,
@@ -329,8 +330,12 @@ pub(super) fn version_present(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.11 and A.3 (X4-Q10): the version is exactly `PDF/X-4`, or `PDF/X-4p` for X-4p; a missing one is
 /// `x4.identity.version-present`'s.
-pub(super) fn version_value(doc: &Document, level: Level) -> Vec<Finding> {
-    let want = if level == Level::X4p { "PDF/X-4p" } else { "PDF/X-4" };
+pub(super) fn version_value(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let want = if settings.level == Level::X4p {
+        "PDF/X-4p"
+    } else {
+        "PDF/X-4"
+    };
     let packet = document_xmp(doc);
     let Some(value) = packet.as_ref().and_then(|p| p.get(PDFXID, "GTS_PDFXVersion")) else {
         return Vec::new();
@@ -351,7 +356,7 @@ pub(super) fn version_value(doc: &Document, level: Level) -> Vec<Finding> {
 }
 
 /// 6.11: nothing but the version is in the `pdfxid` namespace.
-pub(super) fn pdfxid_only_version(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn pdfxid_only_version(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(packet) = document_xmp(doc) else {
         return Vec::new();
     };
@@ -370,7 +375,7 @@ pub(super) fn pdfxid_only_version(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.11: Info has no `/GTS_PDFXConformance`.
-pub(super) fn no_info_conformance(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_info_conformance(doc: &Document, _: &Settings) -> Vec<Finding> {
     match info(doc).and_then(|i| i.get(b"GTS_PDFXConformance")) {
         Some(_) => vec![
             Finding::new(
@@ -384,12 +389,12 @@ pub(super) fn no_info_conformance(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.9 (X4-Q1): the trapped state is in XMP.
-pub(super) fn trapped_present(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn trapped_present(doc: &Document, _: &Settings) -> Vec<Finding> {
     require(doc, X4_TRAPPED_PRESENT, PDF, "Trapped", "6.9", &any)
 }
 
 /// 6.9: the trapped state is `True` or `False`; a missing one is `x4.trapped.present`'s.
-pub(super) fn trapped_true_or_false(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn trapped_true_or_false(doc: &Document, _: &Settings) -> Vec<Finding> {
     let packet = document_xmp(doc);
     let Some(value) = packet.as_ref().and_then(|p| p.get(PDF, "Trapped")) else {
         return Vec::new();
@@ -407,7 +412,7 @@ pub(super) fn trapped_true_or_false(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.10.4: the trailer has an `/ID` of two strings.
-pub(super) fn trailer_id(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn trailer_id(doc: &Document, _: &Settings) -> Vec<Finding> {
     let id = doc
         .trailer()
         .get(b"ID")
@@ -420,7 +425,7 @@ pub(super) fn trailer_id(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.10.2: Info `/GTS_PDFXVersion` is not UTF-16.
-pub(super) fn info_version_pdfdoc(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn info_version_pdfdoc(doc: &Document, _: &Settings) -> Vec<Finding> {
     match info(doc)
         .and_then(|i| i.get(b"GTS_PDFXVersion"))
         .and_then(|v| string(doc, v))
@@ -468,7 +473,7 @@ fn crosswalk(doc: &Document) -> Vec<(&'static str, String, Compare, &Object, Opt
 }
 
 /// 6.10.2: every Info entry of Table 3 has its analogue in XMP.
-pub(super) fn analogue_present(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn analogue_present(doc: &Document, _: &Settings) -> Vec<Finding> {
     crosswalk(doc)
         .into_iter()
         .filter(|(.., xmp)| xmp.is_none())
@@ -483,7 +488,7 @@ pub(super) fn analogue_present(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.10.2: Info entries equal their analogues, text by code point, dates as instants in UTC, the trapped name by name.
-pub(super) fn analogue_equal(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn analogue_equal(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for (key, property, compare, entry, xmp) in crosswalk(doc) {
         let Some(xmp) = xmp else { continue };
@@ -516,7 +521,7 @@ pub(super) fn analogue_equal(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.10.2 (X4-Q6): with Info `/Author`, `dc:creator` is an ordered array of one item.
-pub(super) fn author_single_creator(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn author_single_creator(doc: &Document, _: &Settings) -> Vec<Finding> {
     let packet = document_xmp(doc);
     let creator = packet.as_ref().and_then(|p| p.get(DC, "creator"));
     match (info(doc).and_then(|i| i.get(b"Author")), creator) {
@@ -629,7 +634,7 @@ fn has_form(value: &Xmp, form: Form) -> bool {
 
 /// 6.10.1: the document's XMP conforms to the XMP Specification: every predefined property it uses has its defined
 /// value type. Properties the tables do not list are not judged.
-pub(super) fn conforms(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn conforms(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(packet) = document_xmp(doc) else {
         return Vec::new();
     };
@@ -675,7 +680,7 @@ const PREDEFINED: [&str; 13] = [
 /// 6.10.2: an Info entry outside Table 3 is not written into a predefined schema. Found by name: a property of a
 /// predefined namespace named as the Info key is. A mapping under another name (`/Copyright` as `dc:rights`) cannot
 /// be told from the property's own use.
-pub(super) fn unlisted_not_predefined(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn unlisted_not_predefined(doc: &Document, _: &Settings) -> Vec<Finding> {
     let (Some(info), Some(packet)) = (info(doc), document_xmp(doc)) else {
         return Vec::new();
     };
@@ -705,7 +710,7 @@ mod tests {
     use crate::document::test_pdf::classic;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 25] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 25] = [
         present,
         unfiltered,
         well_formed,
@@ -755,7 +760,7 @@ mod tests {
     /// Every check's findings, by id, at PDF/X-4.
     fn ids(doc: &Document) -> Vec<&'static str> {
         RUNS.iter()
-            .flat_map(|run| run(doc, Level::X4))
+            .flat_map(|run| run(doc, &Level::X4.into()))
             .map(|f| f.check.id)
             .collect()
     }
@@ -779,14 +784,17 @@ mod tests {
              <dc:subject><rdf:Bag/></dc:subject><xmpRights:Marked {r}>True</xmpRights:Marked><pdf:Other>x</pdf:Other>"
         );
         let doc = open("2 0 R", &packet(&format!("{FULL}{good}")), INFO, "[(a) (b)]");
-        assert_eq!(conforms(&doc, Level::X4), []);
+        assert_eq!(conforms(&doc, &Level::X4.into()), []);
         let bad = format!(
             "<xmp:Rating>high</xmp:Rating><xmpMM:SaveID>3.5</xmpMM:SaveID><xmp:Thumbnails><rdf:Bag/></xmp:Thumbnails>\
              <dc:rights><rdf:Alt><rdf:li>R</rdf:li></rdf:Alt></dc:rights><xmpRights:Marked {r}>yes</xmpRights:Marked>\
              <xmp:Label><rdf:Bag/></xmp:Label><xmp:Nickname rdf:parseType=\"Resource\"/>"
         );
         let doc = open("2 0 R", &packet(&format!("{FULL}{bad}")), INFO, "[(a) (b)]");
-        let messages: Vec<String> = conforms(&doc, Level::X4).into_iter().map(|f| f.message).collect();
+        let messages: Vec<String> = conforms(&doc, &Level::X4.into())
+            .into_iter()
+            .map(|f| f.message)
+            .collect();
         assert_eq!(
             messages,
             [
@@ -800,7 +808,7 @@ mod tests {
             ]
             .map(|p| format!("{p} does not have the value type XMP defines"))
         );
-        assert_eq!(conforms(&open("5", b"", INFO, "[]"), Level::X4), []);
+        assert_eq!(conforms(&open("5", b"", INFO, "[]"), &Level::X4.into()), []);
     }
 
     #[test]
@@ -808,7 +816,7 @@ mod tests {
         let info = "<< /Company (A) /Department (B) /Title (T) >>";
         let body = format!("{FULL}<pdf:Company>A</pdf:Company><pdfxid:Department>B</pdfxid:Department>");
         let doc = open("2 0 R", &packet(&body), info, "[]");
-        let found: Vec<String> = unlisted_not_predefined(&doc, Level::X4)
+        let found: Vec<String> = unlisted_not_predefined(&doc, &Level::X4.into())
             .into_iter()
             .map(|f| f.message)
             .collect();
@@ -816,7 +824,10 @@ mod tests {
             found,
             ["Info /Company, which Table 3 does not list, is written into a predefined XMP schema"]
         );
-        assert_eq!(unlisted_not_predefined(&open("5", b"", info, "[]"), Level::X4), []);
+        assert_eq!(
+            unlisted_not_predefined(&open("5", b"", info, "[]"), &Level::X4.into()),
+            []
+        );
     }
 
     #[test]
@@ -833,7 +844,7 @@ mod tests {
     fn a_complete_packet_passes_and_x4p_is_its_own_version() {
         let doc = open("2 0 R", &packet(FULL), INFO, "[(a) (b)]");
         assert_eq!(ids(&doc), ["x4.identity.version-value"]);
-        assert_eq!(version_value(&doc, Level::X4p), []);
+        assert_eq!(version_value(&doc, &Level::X4p.into()), []);
     }
 
     #[test]
@@ -849,7 +860,7 @@ mod tests {
             assert!(!found.contains(&"x4.xmp.namespace-prefixes") && !found.contains(&"x4.identity.version-value"));
         }
         let messages = |xmp: &[u8]| -> Vec<String> {
-            well_formed(&open("2 0 R", xmp, "<< >>", "[(a) (b)]"), Level::X4)
+            well_formed(&open("2 0 R", xmp, "<< >>", "[(a) (b)]"), &Level::X4.into())
                 .into_iter()
                 .map(|f| f.message)
                 .collect()
@@ -868,8 +879,8 @@ mod tests {
             .unwrap()
             .replace("id=", "encoding=\"UTF-8\" id=");
         let doc = open("2 0 R", header.as_bytes(), "<< >>", "[(a) (b)]");
-        assert_eq!(header_attributes(&doc, Level::X4).len(), 1);
-        assert_eq!(present(&open("5", b"", "<< >>", "[]"), Level::X4).len(), 1);
+        assert_eq!(header_attributes(&doc, &Level::X4.into()).len(), 1);
+        assert_eq!(present(&open("5", b"", "<< >>", "[]"), &Level::X4.into()).len(), 1);
     }
 
     #[test]
@@ -887,23 +898,37 @@ mod tests {
             "<< /Size SIZE /Root 1 0 R /Info 3 0 R >>",
         );
         let doc = Document::open(&pdf, &Limits::default()).unwrap();
-        assert!(well_formed(&doc, Level::X4).is_empty() && header_attributes(&doc, Level::X4).is_empty());
+        assert!(
+            well_formed(&doc, &Level::X4.into()).is_empty() && header_attributes(&doc, &Level::X4.into()).is_empty()
+        );
         assert_eq!(
-            analogue_present(&doc, Level::X4).len(),
+            analogue_present(&doc, &Level::X4.into()).len(),
             1,
             "the dangling /Title is still an entry"
         );
-        assert_eq!(present(&doc, Level::X4), []);
+        assert_eq!(present(&doc, &Level::X4.into()), []);
         assert!(ids(&doc).contains(&"x4.xmp.document-id"));
         let odd = classic(&[(1, b"5")], "<< /Size SIZE /Root 1 0 R /Info 9 0 R >>");
         let doc = Document::open(&odd, &Limits::default()).unwrap();
-        assert_eq!(present(&doc, Level::X4).len(), 1, "a catalog that is not a dictionary");
-        assert_eq!(analogue_present(&doc, Level::X4), [], "Info that cannot be read");
+        assert_eq!(
+            present(&doc, &Level::X4.into()).len(),
+            1,
+            "a catalog that is not a dictionary"
+        );
+        assert_eq!(
+            analogue_present(&doc, &Level::X4.into()),
+            [],
+            "Info that cannot be read"
+        );
         let bare = classic(&[(1, b"<< >>")], "<< /Size SIZE /Root 1 0 R /ID [9 0 R 8 0 R] >>");
         let doc = Document::open(&bare, &Limits::default()).unwrap();
-        assert_eq!(analogue_present(&doc, Level::X4), [], "no Info");
-        assert_eq!(present(&doc, Level::X4).len(), 1, "a catalog without /Metadata");
-        assert_eq!(trailer_id(&doc, Level::X4).len(), 1, "an /ID of references to nothing");
+        assert_eq!(analogue_present(&doc, &Level::X4.into()), [], "no Info");
+        assert_eq!(present(&doc, &Level::X4.into()).len(), 1, "a catalog without /Metadata");
+        assert_eq!(
+            trailer_id(&doc, &Level::X4.into()).len(),
+            1,
+            "an /ID of references to nothing"
+        );
     }
 
     #[test]
@@ -927,7 +952,7 @@ mod tests {
         ] {
             assert!(found.contains(&id), "{id}: {found:?}");
         }
-        let present: Vec<String> = analogue_present(&doc, Level::X4)
+        let present: Vec<String> = analogue_present(&doc, &Level::X4.into())
             .into_iter()
             .map(|f| f.message)
             .collect();
@@ -940,7 +965,10 @@ mod tests {
                 "Info /GTS_PDFXVersion has no pdfxid:GTS_PDFXVersion in XMP",
             ]
         );
-        let equal: Vec<String> = analogue_equal(&doc, Level::X4).into_iter().map(|f| f.message).collect();
+        let equal: Vec<String> = analogue_equal(&doc, &Level::X4.into())
+            .into_iter()
+            .map(|f| f.message)
+            .collect();
         assert_eq!(
             equal,
             [

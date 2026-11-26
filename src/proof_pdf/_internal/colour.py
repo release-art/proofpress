@@ -11,13 +11,9 @@ Checks a printer cares about but no standard enforces:
   RGB image here means one escaped the workflow: an ``ERROR``. Vector RGB fills
   are advisory by default, since a RIP will convert them against the output
   intent; ``--strict-cmyk`` promotes them when that is not wanted.
-* **Overprint** -- content painted while an ``ExtGState`` has overprint on.
-  Overprinting 100% K text is the normal, safe case and passes; anything else
-  is usually a knockout that was meant, so it is advisory: flagged, not failed.
-* **Rich-black small text** -- small text painted in a built black (K plus other
-  plates) mis-registers. Advisory.
-* **K-only text** (opt-in) -- text painted with any ink but K. One plate cannot
-  mis-register with itself, so a house rule may require it: an error.
+
+Overprint, white overprint, rich-black small text and K-only text run in the Rust
+core now (``rust/src/checks/ink.rs``, through :mod:`.ported`).
 
 The raster step shells out to Ghostscript (its absence or failure is surfaced as
 a failure by the caller, not silently skipped); the rest read the
@@ -53,10 +49,6 @@ class GhostscriptError(RuntimeError):
 # per-pixel cost of press resolution. TAC is an ink property, so more dpi buys
 # nothing here.
 _TAC_DPI = 150
-# A built black: the K plate is heavy and at least this much other ink rides on
-# top. Pure process black (0/0/0/K) never trips it.
-_RICH_K_MIN = 0.5
-_RICH_OTHER_MIN = 0.3
 # An ink amount this close to zero is no ink, and this close to one is solid.
 _INK_EPSILON = 0.01
 
@@ -137,57 +129,6 @@ def _peak_tac(plates: list[pathlib.Path]) -> float:
             ink = ImageMath.lambda_eval(lambda a: 255 - a["v"], v=img.convert("I"))
         total = ink if total is None else ImageMath.lambda_eval(lambda a: a["t"] + a["i"], t=total, i=ink)
     return 0.0 if total is None else total.getextrema()[1] / 255.0 * 100.0
-
-
-# ------------------------------------------------------------- overprint ----
-def check_overprint(pdf: pikepdf.Pdf) -> list[Finding]:
-    """Note pages that paint anything but 100% K text with overprint on (advisory).
-
-    Fires on what is painted, not on the ``gs`` that turns overprint on, so a
-    graphics state that is applied but never painted under, or that only ever
-    overprints black text, is silent.
-    """
-    findings: list[Finding] = []
-    for i, page in enumerate(pdf.pages, start=1):
-        if any(p.overprint and not (p.kind == "text" and _is_full_k(p.fill)) for p in paint_events(page)):
-            findings.append(
-                Finding(
-                    "overprint", Severity.WARN, "overprint is enabled -- confirm it is intentional, not knockout", i
-                )
-            )
-    return findings
-
-
-def check_white_overprint(pdf: pikepdf.Pdf) -> list[Finding]:
-    """Flag white text or shapes set to overprint: overprinting white adds no ink, so it vanishes on press."""
-    findings: list[Finding] = []
-    for i, page in enumerate(pdf.pages, start=1):
-        whites = [
-            p
-            for p in paint_events(page)
-            if p.overprint and _is_white(p.fill) and (p.kind == "text" or (p.kind == "path" and p.filled))
-        ]
-        if whites:
-            findings.append(
-                Finding(
-                    "white-overprint",
-                    Severity.ERROR,
-                    f"{len(whites)} white object(s) are set to overprint and will disappear on press: "
-                    "white must knock out",
-                    i,
-                )
-            )
-    return findings
-
-
-def _is_white(fill: Fill) -> bool:
-    if fill.family == GRAY:
-        return bool(fill.value) and fill.value[0] >= 1.0 - _INK_EPSILON
-    if fill.family == RGB:
-        return len(fill.value) >= 3 and min(fill.value[:3]) >= 1.0 - _INK_EPSILON
-    if fill.family == CMYK:
-        return len(fill.value) >= 4 and max(fill.value[:4]) <= _INK_EPSILON
-    return False
 
 
 # ------------------------------------------------------------- spot inks ----
@@ -642,67 +583,12 @@ def _names(profiles: dict[str, str]) -> str:
     return ", ".join(sorted(profiles.values()))
 
 
-# ------------------------------------------------ rich-black small text ----
-def check_rich_black(pdf: pikepdf.Pdf, small_text_pt: float) -> list[Finding]:
-    """Flag small text painted in a built (rich) black on any page (advisory)."""
-    findings: list[Finding] = []
-    for i, page in enumerate(pdf.pages, start=1):
-        sizes = [
-            p.size
-            for p in paint_events(page)
-            if p.kind == "text" and any(_is_rich_black(c) for c in p.colours()) and p.size <= small_text_pt
-        ]
-        if sizes:
-            findings.append(
-                Finding(
-                    "rich-black",
-                    Severity.WARN,
-                    f"text as small as {min(sizes):.1f}pt is set in rich black -- "
-                    "use process black to avoid mis-registration",
-                    i,
-                )
-            )
-    return findings
-
-
-def _is_rich_black(fill: Fill) -> bool:
-    if fill.family != CMYK or len(fill.value) < 4:
-        return False
-    c, m, y, k = fill.value[:4]
-    return k >= _RICH_K_MIN and (c + m + y) >= _RICH_OTHER_MIN
-
-
-# ------------------------------------------------------------ K-only text ----
-def check_k_only_text(pdf: pikepdf.Pdf) -> list[Finding]:
-    """Flag text painted with any ink but K: a four-colour build, RGB, or a spot or pattern."""
-    findings: list[Finding] = []
-    for i, page in enumerate(pdf.pages, start=1):
-        bad = [c for p in paint_events(page) if p.kind == "text" for c in p.colours() if not _is_k_only(c)]
-        if bad:
-            more = f" (and {len(bad) - 1} more runs)" if len(bad) > 1 else ""
-            findings.append(
-                Finding(
-                    "k-only-text",
-                    Severity.ERROR,
-                    f"text is painted in {_describe(bad[0])}{more} -- text ink must be K only",
-                    i,
-                )
-            )
-    return findings
-
-
+# ---------------------------------------------- K-only colours (gray proofing) ----
 def _is_k_only(fill: Fill) -> bool:
     """Gray, or CMYK with no C, M or Y: only the K plate (or no ink at all) is used."""
     if fill.family == GRAY:
         return True
     return fill.family == CMYK and max(fill.value[:3], default=0.0) <= _INK_EPSILON
-
-
-def _is_full_k(fill: Fill) -> bool:
-    """Solid black on the K plate alone: DeviceGray 0, or CMYK 0/0/0/100."""
-    if fill.family == GRAY:
-        return bool(fill.value) and fill.value[0] <= _INK_EPSILON
-    return _is_k_only(fill) and len(fill.value) >= 4 and fill.value[3] >= 1.0 - _INK_EPSILON
 
 
 def _describe(fill: Fill) -> str:

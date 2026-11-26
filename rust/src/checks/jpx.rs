@@ -8,12 +8,13 @@
 //! The image `XObjects` judged are those whose filters include `JPXDecode`, wherever they are in the file; JPEG 2000 data
 //! whose header cannot be read is left to `x4.image.jpx-valid`.
 
+use super::Settings;
 use super::intent;
 use super::walk::dicts;
 use crate::common::jpx::{self, Jpx};
 use crate::document::{Document, Value};
 use crate::findings::{
-    Check, Finding, Level, Location, X4_IMAGE_JPX_VALID, X4_JPX_BASELINE, X4_JPX_BIT_DEPTH, X4_JPX_CHANNELS,
+    Check, Finding, Location, X4_IMAGE_JPX_VALID, X4_JPX_BASELINE, X4_JPX_BIT_DEPTH, X4_JPX_CHANNELS,
     X4_JPX_CMYK_AS_DEVICE, X4_JPX_NO_CIEJAB, X4_JPX_ONE_COLOUR_SPACE, X4_JPX_UNIFORM_DEPTH,
 };
 
@@ -70,20 +71,20 @@ fn each_read(
         .collect()
 }
 
-pub(super) fn channels(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn channels(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_JPX_CHANNELS, &|h, _| {
         let n = h.channels.unwrap_or(0);
         (!matches!(n, 1 | 3 | 4)).then(|| format!("{n} channels, not 1, 3 or 4"))
     })
 }
 
-pub(super) fn one_colour_space(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn one_colour_space(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_JPX_ONE_COLOUR_SPACE, &|h, _| {
         (h.colours.len() > 1).then(|| format!("{} colour specifications, not at most one", h.colours.len()))
     })
 }
 
-pub(super) fn no_ciejab(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_ciejab(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_JPX_NO_CIEJAB, &|h, _| {
         h.colours
             .iter()
@@ -92,14 +93,14 @@ pub(super) fn no_ciejab(doc: &Document, _: Level) -> Vec<Finding> {
     })
 }
 
-pub(super) fn bit_depth(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn bit_depth(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_JPX_BIT_DEPTH, &|h, _| {
         let bad: Vec<u8> = h.depths.iter().copied().filter(|d| !matches!(d, 1 | 8 | 16)).collect();
         bad.first().map(|d| format!("a bit depth of {d}, not 1, 8 or 16"))
     })
 }
 
-pub(super) fn uniform_depth(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn uniform_depth(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_JPX_UNIFORM_DEPTH, &|h, _| {
         let first = h.depths.first()?;
         h.depths
@@ -111,7 +112,7 @@ pub(super) fn uniform_depth(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.8: JPEG 2000 data is valid, as far as its header shows (the codestream is not decoded). A bare codestream is valid
 /// here; `x4.jpx.baseline` fails it.
-pub(super) fn valid(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn valid(doc: &Document, _: &Settings) -> Vec<Finding> {
     each_read(doc, X4_IMAGE_JPX_VALID, "6.8", &|header, _| match header {
         None => Some("not JPEG 2000 data (neither the file format nor a codestream)".to_owned()),
         Some(h) if !h.structure.is_empty() => Some(format!(
@@ -182,7 +183,7 @@ fn baseline_problems(h: &Jpx) -> Vec<String> {
     out
 }
 
-pub(super) fn baseline(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn baseline(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_JPX_BASELINE, &|h, _| {
         let problems = baseline_problems(h);
         (!problems.is_empty()).then(|| format!("not baseline JPX: {}", problems.join("; ")))
@@ -191,7 +192,7 @@ pub(super) fn baseline(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.27: CMYK data (enumerated colour space 12) with no ICC profile and no `/ColorSpace` is `DeviceCMYK`, so 6.4.3.2
 /// allows it only under a CMYK intent.
-pub(super) fn cmyk_as_device(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn cmyk_as_device(doc: &Document, _: &Settings) -> Vec<Finding> {
     let intent = intent::profile(doc).map(|h| h.space);
     if intent.is_none_or(|i| i == *b"CMYK") {
         return Vec::new();
@@ -209,9 +210,10 @@ mod tests {
     use super::*;
     use crate::common::jpx::tests::{boxed, codestream, colr, file, ihdr};
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 8] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 8] = [
         valid,
         baseline,
         channels,
@@ -251,7 +253,7 @@ mod tests {
         }
         let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| f.check.id)
             .collect()
     }

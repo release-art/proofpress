@@ -4,13 +4,14 @@
 //! 6.17: an annotation's `/Rect` is completely outside a box when the two rectangles share no area, so touching
 //! edges are outside and a rectangle that encloses the box is not.
 
+use super::Settings;
 use super::intent;
 use super::metadata;
 use crate::common::rect::{Rect, rect};
 use crate::document::{Dict, Document, Object, Page};
 use crate::findings::{
-    Check, Finding, Level, Location, X4_ANNOT_OUTSIDE_BLEED, X4_ANNOT_PRINTERMARK_OUTSIDE_TRIM,
-    X4_TRAPNET_FONT_FAUXING_EMPTY, X4_TRAPNET_PCM_MATCHES_INTENT, X4_TRAPPED_TRAPNET_IMPLIES_TRUE,
+    Check, Finding, Location, X4_ANNOT_OUTSIDE_BLEED, X4_ANNOT_PRINTERMARK_OUTSIDE_TRIM, X4_TRAPNET_FONT_FAUXING_EMPTY,
+    X4_TRAPNET_PCM_MATCHES_INTENT, X4_TRAPPED_TRAPNET_IMPLIES_TRUE,
 };
 
 /// Every annotation dictionary with its page's index and the page.
@@ -71,12 +72,12 @@ fn overlapping(doc: &Document, check: &'static Check, which: &dyn Fn(&[u8]) -> b
         .collect()
 }
 
-pub(super) fn outside_bleed(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn outside_bleed(doc: &Document, _: &Settings) -> Vec<Finding> {
     let other = |s: &[u8]| s != b"TrapNet" && s != b"PrinterMark";
     overlapping(doc, X4_ANNOT_OUTSIDE_BLEED, &other, &["BleedBox", "TrimBox", "ArtBox"])
 }
 
-pub(super) fn printermark_outside_trim(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn printermark_outside_trim(doc: &Document, _: &Settings) -> Vec<Finding> {
     overlapping(
         doc,
         X4_ANNOT_PRINTERMARK_OUTSIDE_TRIM,
@@ -95,7 +96,7 @@ fn trapnets<'a>(doc: &'a Document, pages: &'a [Page<'a>]) -> Vec<(usize, &'a Dic
 }
 
 /// 6.9: with a `TrapNet` annotation, `pdf:Trapped` is `True`.
-pub(super) fn trapnet_implies_true(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn trapnet_implies_true(doc: &Document, _: &Settings) -> Vec<Finding> {
     let pages = doc.pages();
     let Some((i, _)) = trapnets(doc, &pages).into_iter().next() else {
         return Vec::new();
@@ -112,7 +113,7 @@ pub(super) fn trapnet_implies_true(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.9: a `TrapNet` annotation's `/FontFauxing` is absent or an empty array.
-pub(super) fn font_fauxing(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn font_fauxing(doc: &Document, _: &Settings) -> Vec<Finding> {
     let pages = doc.pages();
     trapnets(doc, &pages)
         .into_iter()
@@ -143,7 +144,7 @@ fn pcm_for(space: [u8; 4]) -> &'static [u8] {
 
 /// 6.9: the `/PCM` of a `TrapNet` annotation's appearances names the intent's colour space. Without a readable intent
 /// profile there is nothing to match, and `x4.output-intent.*` reports why.
-pub(super) fn pcm_matches_intent(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn pcm_matches_intent(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(header) = intent::profile(doc) else {
         return Vec::new();
     };
@@ -189,9 +190,10 @@ pub(super) fn pcm_matches_intent(doc: &Document, _: Level) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 5] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 5] = [
         outside_bleed,
         printermark_outside_trim,
         trapnet_implies_true,
@@ -202,7 +204,7 @@ mod tests {
     fn ids(objects: &[(u32, &[u8])]) -> Vec<(&'static str, Option<u32>)> {
         let doc = Document::open(&classic(objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| (f.check.id, f.page))
             .collect()
     }

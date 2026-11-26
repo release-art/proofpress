@@ -5,12 +5,13 @@
 //! Content streams are each page's `/Contents`, read as one, and every form `XObject` (annotation appearances among
 //! them), tiling pattern and Type 3 glyph, each read alone.
 
+use super::Settings;
 use super::walk::dicts;
 use crate::content::{self, At, Content, Item, OPERATORS, Problem};
 use crate::document::{Document, Object};
 use crate::findings::{
-    CONTENT_COMPATIBILITY, CONTENT_DAMAGED, CONTENT_OPERATOR, Check, Finding, Level, Location,
-    X4_CONTENT_KNOWN_OPERATORS, X4_CONTENT_NO_BX_EX, X4_INTENT_KNOWN_VALUES,
+    CONTENT_COMPATIBILITY, CONTENT_DAMAGED, CONTENT_OPERATOR, Check, Finding, Location, X4_CONTENT_KNOWN_OPERATORS,
+    X4_CONTENT_NO_BX_EX, X4_INTENT_KNOWN_VALUES,
 };
 use crate::graphics;
 use crate::pipeline::Limits;
@@ -106,7 +107,7 @@ fn name(bytes: &[u8]) -> String {
 }
 
 /// Every content stream can be read to its end: its filters decode, and tier 6 meets no damage.
-pub(super) fn damaged(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn damaged(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for read in contents(doc) {
         for &num in &read.undecoded {
@@ -136,7 +137,7 @@ pub(super) fn damaged(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// An operator ISO 32000 does not define is used outside `BX`/`EX`.
-pub(super) fn operator(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn operator(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for read in contents(doc) {
         for (at, problem) in &read.content.problems {
@@ -150,7 +151,7 @@ pub(super) fn operator(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// `BX` and `EX` pair up.
-pub(super) fn compatibility(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn compatibility(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for read in contents(doc) {
         for (at, problem) in &read.content.problems {
@@ -168,7 +169,7 @@ pub(super) fn compatibility(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.19: no operator outside the PDF 1.6 Reference, inside `BX`/`EX` or not.
-pub(super) fn known_operators(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn known_operators(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for read in contents(doc) {
         for item in &read.content.items {
@@ -184,7 +185,7 @@ pub(super) fn known_operators(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.19 recommends against `BX`/`EX`.
-pub(super) fn no_bx_ex(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_bx_ex(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for read in contents(doc) {
         for item in &read.content.items {
@@ -215,7 +216,7 @@ fn intent(value: Option<&Object>, place: &str, located: Vec<Location>) -> Option
 
 /// 6.23 and 6.13: every rendering intent is one of the four: the `ri` operator, an inline image's `/Intent`, an
 /// `ExtGState`'s `/RI` and an image `XObject`'s `/Intent`.
-pub(super) fn known_intents(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn known_intents(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for read in contents(doc) {
         for item in &read.content.items {
@@ -251,8 +252,9 @@ pub(super) fn known_intents(doc: &Document, _: Level) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 6] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 6] = [
         damaged,
         operator,
         compatibility,
@@ -268,7 +270,7 @@ mod tests {
     fn found(objects: &[(u32, &[u8])]) -> Vec<(&'static str, String)> {
         let doc = Document::open(&classic(objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| (f.check.id, f.message))
             .collect()
     }

@@ -577,3 +577,21 @@ expect = { "outside-media" = "a 10 pt square at (2000, 2000), wholly beyond the 
 [print-xobject-missing]
 levels = ["print"]
 expect = { "xobject-missing" = "the page paints /Nothing, which its resources do not name (ISO 32000-2 7.8.3)" }
+
+# Today's ink fixtures (tests/fixtures/build_pdfs.py), verified for print.
+
+[black-text]
+levels = ["print"]
+expect = {}
+
+[cyan-text]
+levels = ["print"]
+expect = { "overprint" = "cyan text under overprint (advisory)", "k-only-text" = "the text is C100 (k-only-text is opt-in; the core reports it and the profile decides)" }
+
+[white-overprint]
+levels = ["print"]
+expect = { "white-overprint" = "white text set to overprint", "overprint" = "and so overprint on something other than solid black text (advisory)" }
+
+[rich-black-text]
+levels = ["print"]
+expect = { "rich-black" = "12 pt text in C60 M50 Y40 K90, at the default 12 pt limit (advisory)", "k-only-text" = "and so not K only" }

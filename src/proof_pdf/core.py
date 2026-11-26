@@ -123,13 +123,11 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
             if profile.geometry is not None:
                 findings += structure.check_geometry(pdf, profile.geometry)
             findings += _structure_rules(pdf, profile)
-            findings += ported.check(path)
+            findings += ported.check(path, profile)
             if profile.require_bleed:
                 findings += structure.check_artwork_bleed(pdf)
             if profile.no_marks:
                 findings += structure.check_outside_bleed(pdf, profile.geometry)
-            if profile.k_only_text:
-                findings += colour.check_k_only_text(pdf)
             findings += _text_checks(pdf, profile)
             if profile.colour:
                 findings += colour.check_transparency(pdf)
@@ -140,9 +138,6 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
                 elif profile.colour_mode is ColourMode.GRAY:
                     findings += colour.check_gray_only(pdf, allow_k_only=profile.allow_k_only)
                 else:
-                    findings += colour.check_white_overprint(pdf)
-                    findings += colour.check_overprint(pdf)
-                    findings += colour.check_rich_black(pdf, profile.small_text_pt)
                     findings += colour.check_colour_spaces(pdf, strict=profile.strict_cmyk)
                 findings += resolution.check_image_dpi(
                     pdf,

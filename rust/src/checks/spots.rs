@@ -3,13 +3,14 @@
 //! The `PrintingOrder` and `Solidities` rows read every object, as the clause states them for the whole file. The rest
 //! read the spaces that print elements use (X4-Q3), the same-name rule for Separations included (owner, 2026-11-25).
 
+use super::Settings;
 use std::collections::BTreeMap;
 
 use super::intent;
 use super::walk::dicts;
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Finding, Level, Location, X4_SPOT_COLORANTS_ENTRY, X4_SPOT_CONFUSING_NAMES, X4_SPOT_CONSISTENT_DEFINITION,
+    Finding, Location, X4_SPOT_COLORANTS_ENTRY, X4_SPOT_CONFUSING_NAMES, X4_SPOT_CONSISTENT_DEFINITION,
     X4_SPOT_NO_DOTGAIN, X4_SPOT_PRINTING_ORDER_CONSISTENT, X4_SPOT_PROCESS_COLORSPACE, X4_SPOT_SOLIDITIES_CONSISTENT,
     X4_TRANSPARENCY_BLEND_MODES,
 };
@@ -94,7 +95,7 @@ fn entry<'a>(doc: &'a Document, dict: Option<&'a Dict>, key: &[u8]) -> Option<&'
 }
 
 /// 6.4.3.4: every spot in a `DeviceN` has an entry in its attributes' `/Colorants`.
-pub(super) fn colorants_entry(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn colorants_entry(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for (items, frames) in used_device_n(doc) {
         let (names, attributes) = names_and_attributes(doc, &items);
@@ -115,7 +116,7 @@ pub(super) fn colorants_entry(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.4.3.4 (X4-Q5): a `DeviceN`'s `/Process` colour space is a device space of the intent's family, or an `ICCBased`
 /// space with as many components.
-pub(super) fn process_space(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn process_space(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(intent) = intent::profile(doc).map(|h| h.space) else {
         return Vec::new();
     };
@@ -159,7 +160,7 @@ pub(super) fn process_space(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.3.4: an `NChannel` space's `/MixingHints` has no `/DotGain`.
-pub(super) fn no_dot_gain(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_dot_gain(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for (items, frames) in used_device_n(doc) {
         let (_, attributes) = names_and_attributes(doc, &items);
@@ -173,7 +174,7 @@ pub(super) fn no_dot_gain(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.3.4 discourages spot names that read as process or primary colours.
-pub(super) fn confusing_names(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn confusing_names(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for (items, frames) in used_device_n(doc) {
         let (names, _) = names_and_attributes(doc, &items);
@@ -315,7 +316,7 @@ fn same(doc: &Document, left: &Object, right: &Object, depth: usize) -> bool {
 
 /// 6.4.3.4: every `Separation` array of one name that print elements use has the same alternate and tint transform,
 /// whatever the name, process inks included (oracle, 2026-11-25).
-pub(super) fn consistent_definitions(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn consistent_definitions(doc: &Document, _: &Settings) -> Vec<Finding> {
     let used = separations(doc);
     let mut first: BTreeMap<&[u8], (&Object, &Object)> = BTreeMap::new();
     let mut out = Vec::new();
@@ -352,7 +353,7 @@ fn mixing_hints(doc: &Document) -> Vec<(u32, &Dict)> {
 
 /// 6.4.3.4 (decision log, 2026-11-25): all `/PrintingOrder` arrays agree: names that two arrays share come in the same
 /// order in both.
-pub(super) fn printing_order(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn printing_order(doc: &Document, _: &Settings) -> Vec<Finding> {
     let orders: Vec<(u32, Vec<&[u8]>)> = mixing_hints(doc)
         .into_iter()
         .filter_map(|(num, hints)| {
@@ -380,7 +381,7 @@ pub(super) fn printing_order(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.3.4: every `/Solidities` value for one ink is the same across the file.
-pub(super) fn solidities(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn solidities(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut seen: BTreeMap<Vec<u8>, f64> = BTreeMap::new();
     let mut out = Vec::new();
     for (num, hints) in mixing_hints(doc) {
@@ -410,7 +411,7 @@ pub(super) fn solidities(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.20 (X4-Q19): an `ExtGState`'s `/BM`, a name or an array of names, uses only the PDF Reference's blend modes.
-pub(super) fn blend_modes(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn blend_modes(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for node in dicts(doc)
         .iter()
@@ -451,9 +452,10 @@ fn dedup(findings: Vec<Finding>) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 8] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 8] = [
         colorants_entry,
         process_space,
         no_dot_gain,
@@ -488,7 +490,7 @@ mod tests {
         objects.extend_from_slice(more);
         let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| f.check.id)
             .collect()
     }

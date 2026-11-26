@@ -2,15 +2,24 @@
 
 import pathlib
 import shutil
+import tempfile
 
 import pikepdf
 import pytest
 from PIL import Image, ImageCms
 
-from proof_pdf._internal import colour, proc
-from proof_pdf.models import ColourMode, Severity
+from proof_pdf._internal import colour, ported, proc
+from proof_pdf.models import ColourMode, Finding, Severity
 
 from .test_contrast import CMYK_PROFILE, needs_cmyk_profile
+
+
+def _ported(pdf: pikepdf.Pdf, check: str) -> list[Finding]:
+    """The Rust core's findings of one ported check on *pdf*, with the profile's default parameters."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = pathlib.Path(tmp) / "ported.pdf"
+        pdf.save(path)
+        return [f for f in ported.run(path) if f.check == check]
 
 
 def _checks(findings) -> set[str]:
@@ -118,7 +127,7 @@ class TestOverprint:
 
     def _findings(self, make_content_pdf, stream, **kwargs):
         with pikepdf.open(make_content_pdf(stream, extgstates=self.GS, **kwargs)) as pdf:
-            return colour.check_overprint(pdf)
+            return _ported(pdf, "overprint")
 
     def test_painting_under_overprint_is_flagged(self, make_content_pdf):
         findings = self._findings(make_content_pdf, b"/GS1 gs " + self.FILL, font=False)
@@ -135,7 +144,7 @@ class TestOverprint:
     def test_overprint_off_is_clean(self, make_content_pdf):
         off = {"/GS1": pikepdf.Dictionary(OP=False)}
         with pikepdf.open(make_content_pdf(b"/GS1 gs " + self.FILL, font=False, extgstates=off)) as pdf:
-            assert colour.check_overprint(pdf) == []
+            assert _ported(pdf, "overprint") == []
 
     @pytest.mark.parametrize(
         "text",
@@ -176,7 +185,7 @@ class TestOverprint:
         _page_with(pdf, b"/Fm1 Do", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert _checks(colour.check_overprint(opened)) == {"overprint"}
+            assert _checks(_ported(opened, "overprint")) == {"overprint"}
 
     def test_overprint_set_in_a_form_does_not_leak_out_of_it(self, tmp_path, make_form):
         path = tmp_path / "leak.pdf"
@@ -191,7 +200,7 @@ class TestOverprint:
         _page_with(pdf, b"/Fm1 Do " + self.FILL, pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert colour.check_overprint(opened) == []
+            assert _ported(opened, "overprint") == []
 
 
 class TestColourSpaces:
@@ -495,7 +504,7 @@ class TestRichBlack:
     def test_small_rich_black_text_is_flagged(self, make_content_pdf):
         path = make_content_pdf(b"BT /F1 8 Tf 0.6 0.5 0.4 0.9 k (hello) Tj ET")
         with pikepdf.open(path) as pdf:
-            findings = colour.check_rich_black(pdf, 12.0)
+            findings = _ported(pdf, "rich-black")
         assert [f.severity for f in findings] == [Severity.WARN]
         assert "8.0pt" in findings[0].message
 
@@ -511,30 +520,30 @@ class TestRichBlack:
     )
     def test_clean_cases(self, make_content_pdf, stream):
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            assert colour.check_rich_black(pdf, 12.0) == []
+            assert _ported(pdf, "rich-black") == []
 
     def test_a_q_restores_the_fill_before_the_text(self, make_content_pdf):
         """The fill set inside q...Q is gone by the time the text is shown."""
         stream = b"q 0.6 0.5 0.4 0.9 k Q BT /F1 8 Tf (x) Tj ET"
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            assert colour.check_rich_black(pdf, 12.0) == []
+            assert _ported(pdf, "rich-black") == []
 
     def test_text_matrix_scaling_counts_towards_the_size(self, make_content_pdf):
         """4pt text scaled 4x is 16pt on the page, and must not be flagged."""
         path = make_content_pdf(b"BT 4 0 0 4 0 0 Tm /F1 4 Tf 0.6 0.5 0.4 0.9 k (x) Tj ET")
         with pikepdf.open(path) as pdf:
-            assert colour.check_rich_black(pdf, 12.0) == []
+            assert _ported(pdf, "rich-black") == []
 
     def test_ctm_scaling_counts_too(self, make_content_pdf):
         path = make_content_pdf(b"0.25 0 0 0.25 0 0 cm BT /F1 16 Tf 0.6 0.5 0.4 0.9 k (x) Tj ET")
         with pikepdf.open(path) as pdf:
-            findings = colour.check_rich_black(pdf, 12.0)
+            findings = _ported(pdf, "rich-black")
         assert findings and "4.0pt" in findings[0].message
 
     def test_smallest_run_on_the_page_is_reported(self, make_content_pdf):
         stream = b"BT 0.6 0.5 0.4 0.9 k /F1 10 Tf (a) Tj /F1 5 Tf (b) Tj ET"
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            findings = colour.check_rich_black(pdf, 12.0)
+            findings = _ported(pdf, "rich-black")
         assert "5.0pt" in findings[0].message
 
     def test_rich_black_inside_a_form_is_found(self, tmp_path, make_form):
@@ -553,14 +562,14 @@ class TestRichBlack:
         _page_with(pdf, b"/Fm1 Do", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            findings = colour.check_rich_black(opened, 12.0)
+            findings = _ported(opened, "rich-black")
         assert findings and "6.0pt" in findings[0].message
 
 
 class TestKOnlyText:
     def _findings(self, make_content_pdf, stream, **kwargs):
         with pikepdf.open(make_content_pdf(stream, **kwargs)) as pdf:
-            return colour.check_k_only_text(pdf)
+            return _ported(pdf, "k-only-text")
 
     @pytest.mark.parametrize(
         "stream",
@@ -627,7 +636,7 @@ class TestKOnlyText:
         _page_with(pdf, b"/Fm1 Do BT /F1 8 Tf (x) Tj ET", page_resources)
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert colour.check_k_only_text(opened) == []
+            assert _ported(opened, "k-only-text") == []
 
     def test_cyan_text_inside_a_form_is_found(self, tmp_path, make_form):
         path = tmp_path / "form.pdf"
@@ -645,7 +654,7 @@ class TestKOnlyText:
         _page_with(pdf, b"/Fm1 Do", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert _checks(colour.check_k_only_text(opened)) == {"k-only-text"}
+            assert _checks(_ported(opened, "k-only-text")) == {"k-only-text"}
 
 
 @pytest.mark.skipif(shutil.which("gs") is None, reason="Ghostscript not installed")
@@ -672,29 +681,29 @@ class TestWhiteOverprint:
     def test_white_text_set_to_overprint_is_an_error(self, make_content_pdf, white):
         path = make_content_pdf(b"/GS1 gs BT /F1 12 Tf " + white + b" (x) Tj ET", extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            [finding] = colour.check_white_overprint(pdf)
+            [finding] = _ported(pdf, "white-overprint")
         assert finding.severity is Severity.ERROR and finding.check == "white-overprint" and finding.page == 1
         assert "knock out" in finding.message
 
     def test_a_white_shape_under_overprint_is_flagged_too(self, make_content_pdf):
         path = make_content_pdf(b"/GS1 gs 1 g 0 0 10 10 re f", font=False, extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            assert _checks(colour.check_white_overprint(pdf)) == {"white-overprint"}
+            assert _checks(_ported(pdf, "white-overprint")) == {"white-overprint"}
 
     def test_white_that_knocks_out_is_fine(self, make_content_pdf):
         path = make_content_pdf(b"BT /F1 12 Tf 1 g (x) Tj ET", extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            assert colour.check_white_overprint(pdf) == []
+            assert _ported(pdf, "white-overprint") == []
 
     def test_overprinting_black_is_not_white(self, make_content_pdf):
         path = make_content_pdf(b"/GS1 gs BT /F1 12 Tf 0 g (x) Tj ET", extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            assert colour.check_white_overprint(pdf) == []
+            assert _ported(pdf, "white-overprint") == []
 
     def test_a_q_restores_a_white_fill(self, make_content_pdf):
         path = make_content_pdf(b"/GS1 gs q 1 g Q BT /F1 12 Tf (x) Tj ET", extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            assert colour.check_white_overprint(pdf) == []
+            assert _ported(pdf, "white-overprint") == []
 
 
 class TestSpotInks:
@@ -852,7 +861,7 @@ class TestStrokedText:
     def test_k_only_text_looks_at_the_stroke_where_the_glyph_is_stroked(self, make_content_pdf, mode, flagged):
         stream = b"BT /F1 12 Tr 1 0 0 RG 0 g (a) Tj ET".replace(b"12 Tr", b"12 Tf %d Tr" % mode)
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            assert bool(colour.check_k_only_text(pdf)) is flagged
+            assert bool(_ported(pdf, "k-only-text")) is flagged
 
 
 class TestSpotDefinitions:

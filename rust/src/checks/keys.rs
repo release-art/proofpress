@@ -2,10 +2,11 @@
 //! graphics state and halftones (6.13), PostScript (6.14), image alternates (6.16), actions and JavaScript (6.18),
 //! viewer preferences (6.21), alternate presentations (6.22) and XFA (6.26).
 
+use super::Settings;
 use super::walk::{Node, dicts};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Level, Location, X4_ACROFORM_NO_XFA, X4_ACTIONS_ABSENT, X4_EXTGSTATE_NO_HTP, X4_EXTGSTATE_NO_TR,
+    Check, Finding, Location, X4_ACROFORM_NO_XFA, X4_ACTIONS_ABSENT, X4_EXTGSTATE_NO_HTP, X4_EXTGSTATE_NO_TR,
     X4_EXTGSTATE_TR2_DEFAULT, X4_FILESPEC_EMBEDDED, X4_HALFTONE_NO_NAME, X4_HALFTONE_TRANSFER_FUNCTION,
     X4_HALFTONE_TYPE_1_OR_5, X4_IMAGE_NO_DEFAULT_FOR_PRINTING, X4_JAVASCRIPT_ABSENT,
     X4_NAMES_NO_ALTERNATE_PRESENTATIONS, X4_PAGE_NO_PRES_STEPS, X4_STREAM_NO_EXTERNAL_F, X4_VIEWER_PREFS_AREAS,
@@ -74,7 +75,7 @@ fn when(holds: bool, message: &str) -> Option<String> {
     holds.then(|| message.to_owned())
 }
 
-pub(super) fn no_opi(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_opi(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_XOBJECT_NO_OPI, "6.7", &|n| {
         when(
             (xobject(n, b"Image") || xobject(n, b"Form")) && n.dict.get(b"OPI").is_some(),
@@ -83,7 +84,7 @@ pub(super) fn no_opi(doc: &Document, _: Level) -> Vec<Finding> {
     })
 }
 
-pub(super) fn no_ref(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_ref(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_XOBJECT_NO_REF, "6.7", &|n| {
         when(
             xobject(n, b"Form") && n.dict.get(b"Ref").is_some(),
@@ -92,7 +93,7 @@ pub(super) fn no_ref(doc: &Document, _: Level) -> Vec<Finding> {
     })
 }
 
-pub(super) fn no_external_f(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_external_f(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_STREAM_NO_EXTERNAL_F, "6.7", &|n| {
         when(n.stream && n.dict.get(b"F").is_some(), "a stream with /F")
     })
@@ -100,7 +101,7 @@ pub(super) fn no_external_f(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.7: every file specification embeds its file. File specifications are found by `/Type /Filespec` and where they
 /// are written (`/FS`, `/AF`); a string there is a file specification without `/EF`.
-pub(super) fn filespec_embedded(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn filespec_embedded(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = each(doc, X4_FILESPEC_EMBEDDED, "6.7", &|n| {
         let filespec = n.name(b"Type") == Some(b"Filespec") || n.under(b"FS") || n.under(b"AF");
         when(
@@ -132,19 +133,19 @@ pub(super) fn filespec_embedded(doc: &Document, _: Level) -> Vec<Finding> {
     out
 }
 
-pub(super) fn no_tr(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_tr(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_EXTGSTATE_NO_TR, "6.13", &|n| {
         when(ext_gstate(n) && n.dict.get(b"TR").is_some(), "an ExtGState with /TR")
     })
 }
 
-pub(super) fn no_htp(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_htp(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_EXTGSTATE_NO_HTP, "6.13", &|n| {
         when(ext_gstate(n) && n.dict.get(b"HTP").is_some(), "an ExtGState with /HTP")
     })
 }
 
-pub(super) fn tr2_default(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn tr2_default(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_EXTGSTATE_TR2_DEFAULT, "6.13", &|n| {
         let tr2 = n.dict.get(b"TR2").filter(|_| ext_gstate(n));
         when(
@@ -174,7 +175,7 @@ fn halftones<'a>(doc: &'a Document, nodes: &[Node<'a>]) -> Vec<(u32, &'a Dict, O
     out
 }
 
-pub(super) fn halftone_type(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn halftone_type(doc: &Document, _: &Settings) -> Vec<Finding> {
     let nodes = dicts(doc);
     halftones(doc, &nodes)
         .into_iter()
@@ -190,7 +191,7 @@ pub(super) fn halftone_type(doc: &Document, _: Level) -> Vec<Finding> {
         .collect()
 }
 
-pub(super) fn halftone_name(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn halftone_name(doc: &Document, _: &Settings) -> Vec<Finding> {
     let nodes = dicts(doc);
     halftones(doc, &nodes)
         .into_iter()
@@ -201,7 +202,7 @@ pub(super) fn halftone_name(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.13 (X4-Q9): a halftone carries `/TransferFunction` only as a component of a type 5 halftone for a colorant that
 /// is not primary.
-pub(super) fn halftone_transfer(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn halftone_transfer(doc: &Document, _: &Settings) -> Vec<Finding> {
     let nodes = dicts(doc);
     halftones(doc, &nodes)
         .into_iter()
@@ -219,13 +220,13 @@ pub(super) fn halftone_transfer(doc: &Document, _: Level) -> Vec<Finding> {
         .collect()
 }
 
-pub(super) fn no_postscript(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_postscript(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_XOBJECT_NO_POSTSCRIPT, "6.14", &|n| {
         when(xobject(n, b"PS"), "a PostScript XObject")
     })
 }
 
-pub(super) fn no_subtype2_ps(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_subtype2_ps(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_XOBJECT_NO_SUBTYPE2_PS, "6.14", &|n| {
         when(
             xobject(n, b"Form") && n.name(b"Subtype2") == Some(b"PS"),
@@ -235,7 +236,7 @@ pub(super) fn no_subtype2_ps(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.16: no image alternate has `/DefaultForPrinting true`.
-pub(super) fn no_default_for_printing(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_default_for_printing(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_IMAGE_NO_DEFAULT_FOR_PRINTING, "6.16", &|n| {
         let default = n
             .dict
@@ -252,7 +253,7 @@ pub(super) fn no_default_for_printing(doc: &Document, _: Level) -> Vec<Finding> 
 /// 6.18 (X4-Q11): no action of any kind. An action is a dictionary whose `/S` names an action type, found by
 /// `/Type /Action` or where actions are written: `/A`, `/OpenAction` (a destination array there is not an action),
 /// `/Next`, and inside `/AA`. `/S` keeps a Type 3 glyph named `A` from counting.
-pub(super) fn no_actions(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_actions(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_ACTIONS_ABSENT, "6.18", &|n| {
         let typed = n.name(b"S").is_some_and(|s| ACTIONS.contains(&s));
         let placed = n.name(b"Type") == Some(b"Action")
@@ -267,7 +268,7 @@ pub(super) fn no_actions(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.18: no JavaScript: no `/JavaScript` name tree, and no dictionary with `/JS` or `/S /JavaScript`.
-pub(super) fn no_javascript(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_javascript(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_JAVASCRIPT_ABSENT, "6.18", &|n| {
         let script = n.dict.get(b"JS").is_some()
             || n.name(b"S") == Some(b"JavaScript")
@@ -286,7 +287,7 @@ fn catalog_finding(check: &'static Check, message: &str, clause: &str) -> Vec<Fi
 }
 
 /// 6.21: viewer areas and clips are `MediaBox`, or `BleedBox` when every page has one.
-pub(super) fn viewer_areas(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn viewer_areas(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(prefs) = catalog_dict(doc, b"ViewerPreferences") else {
         return Vec::new();
     };
@@ -309,7 +310,7 @@ pub(super) fn viewer_areas(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.22: no `/AlternatePresentations` in the name dictionary.
-pub(super) fn no_alternate_presentations(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_alternate_presentations(doc: &Document, _: &Settings) -> Vec<Finding> {
     match catalog_dict(doc, b"Names").and_then(|n| n.get(b"AlternatePresentations")) {
         Some(_) => catalog_finding(
             X4_NAMES_NO_ALTERNATE_PRESENTATIONS,
@@ -321,7 +322,7 @@ pub(super) fn no_alternate_presentations(doc: &Document, _: Level) -> Vec<Findin
 }
 
 /// 6.22: no page has `/PresSteps`.
-pub(super) fn no_pres_steps(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_pres_steps(doc: &Document, _: &Settings) -> Vec<Finding> {
     let pages = doc.pages();
     pages
         .iter()
@@ -337,7 +338,7 @@ pub(super) fn no_pres_steps(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.26: the interactive form has no `/XFA`.
-pub(super) fn no_xfa(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_xfa(doc: &Document, _: &Settings) -> Vec<Finding> {
     match catalog_dict(doc, b"AcroForm").and_then(|a| a.get(b"XFA")) {
         Some(_) => catalog_finding(X4_ACROFORM_NO_XFA, "the interactive form has /XFA", "6.26"),
         None => Vec::new(),
@@ -348,9 +349,10 @@ pub(super) fn no_xfa(doc: &Document, _: Level) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 19] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 19] = [
         no_opi,
         no_ref,
         no_external_f,
@@ -375,7 +377,7 @@ mod tests {
     fn ids(objects: &[(u32, &[u8])]) -> Vec<&'static str> {
         let doc = Document::open(&classic(objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| f.check.id)
             .collect()
     }
@@ -454,7 +456,7 @@ mod tests {
         let odd = classic(&[(1, b"5")], "<< /Size SIZE /Root 1 0 R >>");
         let doc = Document::open(&odd, &Limits::default()).unwrap();
         assert_eq!(
-            RUNS.iter().flat_map(|run| run(&doc, Level::X4)).count(),
+            RUNS.iter().flat_map(|run| run(&doc, &Level::X4.into())).count(),
             0,
             "a catalog that is not a dictionary"
         );

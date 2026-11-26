@@ -2,12 +2,13 @@
 //! names are unique, an `/Order` is empty or lists every optional content group (X4-Q13: every group in
 //! `/OCProperties /OCGs`), and no configuration has `/AS`.
 
+use super::Settings;
 use std::collections::BTreeSet;
 
 use crate::common::text;
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Level, X4_OC_CONFIG_NAME_PRESENT, X4_OC_CONFIG_NAME_UNIQUE, X4_OC_NO_AS, X4_OC_ORDER_COMPLETE,
+    Check, Finding, X4_OC_CONFIG_NAME_PRESENT, X4_OC_CONFIG_NAME_UNIQUE, X4_OC_NO_AS, X4_OC_ORDER_COMPLETE,
 };
 
 /// The catalog's `/OCProperties`.
@@ -44,7 +45,7 @@ fn name(doc: &Document, config: &Dict) -> Option<String> {
     }
 }
 
-pub(super) fn name_present(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn name_present(doc: &Document, _: &Settings) -> Vec<Finding> {
     configs(doc)
         .iter()
         .enumerate()
@@ -58,7 +59,7 @@ pub(super) fn name_present(doc: &Document, _: Level) -> Vec<Finding> {
         .collect()
 }
 
-pub(super) fn name_unique(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn name_unique(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut seen = BTreeSet::new();
     configs(doc)
         .iter()
@@ -90,7 +91,7 @@ fn ordered(doc: &Document, order: &[Object], out: &mut BTreeSet<u32>) {
 }
 
 /// 6.24 (X4-Q13): an `/Order` that is not empty names every group in `/OCGs`.
-pub(super) fn order_complete(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn order_complete(doc: &Document, _: &Settings) -> Vec<Finding> {
     let groups: BTreeSet<u32> = properties(doc)
         .and_then(|p| p.get(b"OCGs"))
         .and_then(|g| doc.resolve(g))
@@ -131,7 +132,7 @@ pub(super) fn order_complete(doc: &Document, _: Level) -> Vec<Finding> {
     out
 }
 
-pub(super) fn no_as(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_as(doc: &Document, _: &Settings) -> Vec<Finding> {
     configs(doc)
         .iter()
         .enumerate()
@@ -144,14 +145,15 @@ pub(super) fn no_as(doc: &Document, _: Level) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 4] = [name_present, name_unique, order_complete, no_as];
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 4] = [name_present, name_unique, order_complete, no_as];
 
     fn ids(objects: &[(u32, &[u8])]) -> Vec<&'static str> {
         let doc = Document::open(&classic(objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| f.check.id)
             .collect()
     }

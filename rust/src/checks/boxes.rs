@@ -2,11 +2,12 @@
 //! bleed box, everything inside the crop box, and everything inside the media box. Boxes are compared exactly, as the
 //! clause states no tolerance. A box that is not four numbers is left to the PDF syntax rows.
 
+use super::Settings;
 use crate::common::rect::{Rect, rect};
 use crate::document::{Document, Page};
 use crate::findings::{
-    Check, Finding, Level, Location, X4_BOXES_NOT_BOTH, X4_BOXES_PREFER_TRIM, X4_BOXES_TRIM_OR_ART,
-    X4_BOXES_WITHIN_BLEED, X4_BOXES_WITHIN_CROP, X4_BOXES_WITHIN_MEDIA,
+    Check, Finding, Location, X4_BOXES_NOT_BOTH, X4_BOXES_PREFER_TRIM, X4_BOXES_TRIM_OR_ART, X4_BOXES_WITHIN_BLEED,
+    X4_BOXES_WITHIN_CROP, X4_BOXES_WITHIN_MEDIA,
 };
 
 /// A finding on page `index` (counted from 0), located at the page and its object.
@@ -49,7 +50,7 @@ fn nested(doc: &Document, check: &'static Check, outer: &str, inner: &[&str]) ->
     })
 }
 
-pub(super) fn trim_or_art(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn trim_or_art(doc: &Document, _: &Settings) -> Vec<Finding> {
     per_page(doc, &|i, page| {
         if page.get(b"TrimBox").is_none() && page.get(b"ArtBox").is_none() {
             vec![on_page(
@@ -64,7 +65,7 @@ pub(super) fn trim_or_art(doc: &Document, _: Level) -> Vec<Finding> {
     })
 }
 
-pub(super) fn not_both(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn not_both(doc: &Document, _: &Settings) -> Vec<Finding> {
     per_page(doc, &|i, page| {
         if page.get(b"TrimBox").is_some() && page.get(b"ArtBox").is_some() {
             vec![on_page(X4_BOXES_NOT_BOTH, i, page, "both a TrimBox and an ArtBox")]
@@ -75,7 +76,7 @@ pub(super) fn not_both(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.12 recommends the trim box over the art box.
-pub(super) fn prefer_trim(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn prefer_trim(doc: &Document, _: &Settings) -> Vec<Finding> {
     per_page(doc, &|i, page| {
         if page.get(b"ArtBox").is_some() && page.get(b"TrimBox").is_none() {
             vec![on_page(
@@ -90,15 +91,15 @@ pub(super) fn prefer_trim(doc: &Document, _: Level) -> Vec<Finding> {
     })
 }
 
-pub(super) fn within_bleed(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn within_bleed(doc: &Document, _: &Settings) -> Vec<Finding> {
     nested(doc, X4_BOXES_WITHIN_BLEED, "BleedBox", &["TrimBox", "ArtBox"])
 }
 
-pub(super) fn within_crop(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn within_crop(doc: &Document, _: &Settings) -> Vec<Finding> {
     nested(doc, X4_BOXES_WITHIN_CROP, "CropBox", &["ArtBox", "TrimBox", "BleedBox"])
 }
 
-pub(super) fn within_media(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn within_media(doc: &Document, _: &Settings) -> Vec<Finding> {
     nested(
         doc,
         X4_BOXES_WITHIN_MEDIA,
@@ -111,9 +112,10 @@ pub(super) fn within_media(doc: &Document, _: Level) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 6] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 6] = [
         trim_or_art,
         not_both,
         prefer_trim,
@@ -125,7 +127,7 @@ mod tests {
     fn found(objects: &[(u32, &[u8])]) -> Vec<(&'static str, Option<u32>)> {
         let doc = Document::open(&classic(objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| (f.check.id, f.page))
             .collect()
     }

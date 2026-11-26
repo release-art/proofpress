@@ -4,15 +4,15 @@
 //! Rows about the intent's contents judge the one `GTS_PDFX` intent; when there is none, or more than one, they find
 //! nothing and `x4.output-intent.present` or `.unique` says why.
 
+use super::Settings;
 use crate::common::{icc, text};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Finding, Level, X4_OUTPUT_INTENT_CHANNELS, X4_OUTPUT_INTENT_DEST_PROFILE_PRESENT,
-    X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY, X4_OUTPUT_INTENT_IDENTIFIER_PRESENT,
-    X4_OUTPUT_INTENT_IDENTIFIER_REGISTERED, X4_OUTPUT_INTENT_IDENTIFIER_TEXT_STRING,
-    X4_OUTPUT_INTENT_NO_DEST_PROFILE_REF, X4_OUTPUT_INTENT_OUTPUT_CONDITION, X4_OUTPUT_INTENT_PRESENT,
-    X4_OUTPUT_INTENT_PROFILE_CLASS_PRTR, X4_OUTPUT_INTENT_PROFILE_VERSION, X4_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG,
-    X4_OUTPUT_INTENT_REGISTRY_NAME_URL, X4_OUTPUT_INTENT_UNIQUE,
+    Finding, X4_OUTPUT_INTENT_CHANNELS, X4_OUTPUT_INTENT_DEST_PROFILE_PRESENT, X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY,
+    X4_OUTPUT_INTENT_IDENTIFIER_PRESENT, X4_OUTPUT_INTENT_IDENTIFIER_REGISTERED,
+    X4_OUTPUT_INTENT_IDENTIFIER_TEXT_STRING, X4_OUTPUT_INTENT_NO_DEST_PROFILE_REF, X4_OUTPUT_INTENT_OUTPUT_CONDITION,
+    X4_OUTPUT_INTENT_PRESENT, X4_OUTPUT_INTENT_PROFILE_CLASS_PRTR, X4_OUTPUT_INTENT_PROFILE_VERSION,
+    X4_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG, X4_OUTPUT_INTENT_REGISTRY_NAME_URL, X4_OUTPUT_INTENT_UNIQUE,
 };
 
 /// The ICC characterization registry's `RegistryName` (6.4.2.1).
@@ -146,7 +146,7 @@ fn when(failed: bool, check: &'static crate::findings::Check, message: &str, cla
 }
 
 /// 6.4.2.1: the catalog has a `GTS_PDFX` output intent.
-pub(super) fn present(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn present(doc: &Document, _: &Settings) -> Vec<Finding> {
     let none = pdfx_intents(doc).is_empty();
     when(
         none,
@@ -157,7 +157,7 @@ pub(super) fn present(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.2.1: exactly one output intent is `GTS_PDFX`.
-pub(super) fn unique(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn unique(doc: &Document, _: &Settings) -> Vec<Finding> {
     let count = pdfx_intents(doc).len();
     when(
         count > 1,
@@ -167,7 +167,7 @@ pub(super) fn unique(doc: &Document, _: Level) -> Vec<Finding> {
     )
 }
 
-pub(super) fn identifier_present(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn identifier_present(doc: &Document, _: &Settings) -> Vec<Finding> {
     let missing = the_intent(doc).is_some_and(|i| i.get(b"OutputConditionIdentifier").is_none());
     when(
         missing,
@@ -178,7 +178,7 @@ pub(super) fn identifier_present(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.2.1: the identifier is a string that decodes as a text string.
-pub(super) fn identifier_text_string(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn identifier_text_string(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(id) = the_intent(doc).and_then(|i| i.get(b"OutputConditionIdentifier")) else {
         return Vec::new();
     };
@@ -196,7 +196,7 @@ pub(super) fn identifier_text_string(doc: &Document, _: Level) -> Vec<Finding> {
 
 /// 6.4.2.1 recommends that a `/RegistryName` other than the ICC's be a URL about the registry; an empty one names no
 /// registry and is taken as absent.
-pub(super) fn registry_name_url(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn registry_name_url(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(name) = the_intent(doc).and_then(|i| i.get(b"RegistryName")) else {
         return Vec::new();
     };
@@ -219,7 +219,7 @@ pub(super) fn registry_name_url(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.2.1: the PDF/X intent embeds its profile.
-pub(super) fn dest_profile_present(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn dest_profile_present(doc: &Document, _: &Settings) -> Vec<Finding> {
     let missing = the_intent(doc).is_some_and(|i| i.get(b"DestOutputProfile").is_none());
     when(
         missing,
@@ -230,7 +230,7 @@ pub(super) fn dest_profile_present(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.2.1: the PDF/X intent does not refer to an external profile (that is X-4p's, Annex A).
-pub(super) fn no_dest_profile_ref(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn no_dest_profile_ref(doc: &Document, _: &Settings) -> Vec<Finding> {
     let found = the_intent(doc).is_some_and(|i| i.get(b"DestOutputProfileRef").is_some());
     when(
         found,
@@ -241,7 +241,7 @@ pub(super) fn no_dest_profile_ref(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.2.1 recommends `/OutputCondition`.
-pub(super) fn output_condition(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn output_condition(doc: &Document, _: &Settings) -> Vec<Finding> {
     let missing = the_intent(doc).is_some_and(|i| i.get(b"OutputCondition").is_none());
     when(
         missing,
@@ -256,7 +256,7 @@ fn signature(bytes: [u8; 4]) -> String {
 }
 
 /// 6.4.1: the printing condition is gray, RGB or CMYK.
-pub(super) fn channels(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn channels(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(header) = profile(doc) else { return Vec::new() };
     let other = !matches!(&header.space, b"GRAY" | b"RGB " | b"CMYK");
     let message = format!(
@@ -267,7 +267,7 @@ pub(super) fn channels(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.2.1: the profile is an output device profile.
-pub(super) fn profile_class(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn profile_class(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(header) = profile(doc) else { return Vec::new() };
     let message = format!(
         "the output intent's profile has class {}, not prtr",
@@ -282,7 +282,7 @@ pub(super) fn profile_class(doc: &Document, _: Level) -> Vec<Finding> {
 }
 
 /// 6.4.2.1: the profile is ICC version 2 or 4 (decision log, 2026-11-25: any minor version).
-pub(super) fn profile_version(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn profile_version(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(header) = profile(doc) else { return Vec::new() };
     let (major, minor) = header.version;
     let message = format!("the output intent's profile is ICC version {major}.{minor}, not 2 or 4");
@@ -328,7 +328,7 @@ fn registry(name: &str) -> Registry {
 
 /// 6.4.2.1 recommends a registered identifier and no vague one such as "Custom": a warning for "Custom" (any case)
 /// or an empty identifier.
-pub(super) fn identifier_registered(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn identifier_registered(doc: &Document, _: &Settings) -> Vec<Finding> {
     let vague = text_entry(doc, b"OutputConditionIdentifier").is_some_and(|id| {
         let id = id.trim();
         id.is_empty() || id.eq_ignore_ascii_case("custom")
@@ -344,7 +344,7 @@ pub(super) fn identifier_registered(doc: &Document, _: Level) -> Vec<Finding> {
 /// 6.4.2.1: an ICC-registered condition names the ICC registry exactly. Checkable only where the file plainly meant
 /// that registry: a misspelt color.org URL with an ICC reference name fails. Another registry's URL may name the
 /// same condition (Fogra's for FOGRA39), and without `/RegistryName` a match is coincidental, so both pass (oracle).
-pub(super) fn registry_name_color_org(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn registry_name_color_org(doc: &Document, _: &Settings) -> Vec<Finding> {
     let (Some(name), Some(id)) = (
         text_entry(doc, b"RegistryName"),
         text_entry(doc, b"OutputConditionIdentifier"),
@@ -359,7 +359,7 @@ pub(super) fn registry_name_color_org(doc: &Document, _: Level) -> Vec<Finding> 
 /// 6.4.2.1: with the ICC registry named, the identifier is one of its reference names, exactly. A warning, not the
 /// clause's error, by the owner's decision (2026-11-25): Adobe writes ECI profile names under color.org, and 14 Ghent
 /// positives that pdfToolbox passes do. Other registries' lists are not held, so they are not judged.
-pub(super) fn identifier_in_registry(doc: &Document, _: Level) -> Vec<Finding> {
+pub(super) fn identifier_in_registry(doc: &Document, _: &Settings) -> Vec<Finding> {
     let (Some(name), Some(id)) = (
         text_entry(doc, b"RegistryName"),
         text_entry(doc, b"OutputConditionIdentifier"),
@@ -375,9 +375,10 @@ pub(super) fn identifier_in_registry(doc: &Document, _: Level) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::document::test_pdf::classic;
+    use crate::findings::Level;
     use crate::pipeline::Limits;
 
-    const RUNS: [fn(&Document, Level) -> Vec<Finding>; 14] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 14] = [
         identifier_registered,
         registry_name_color_org,
         identifier_in_registry,
@@ -397,7 +398,7 @@ mod tests {
     fn ids(objects: &[(u32, &[u8])]) -> Vec<&'static str> {
         let doc = Document::open(&classic(objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
         RUNS.iter()
-            .flat_map(|run| run(&doc, Level::X4))
+            .flat_map(|run| run(&doc, &Level::X4.into()))
             .map(|f| f.check.id)
             .collect()
     }
@@ -418,7 +419,7 @@ mod tests {
             .unwrap();
             [identifier_registered, registry_name_color_org, identifier_in_registry]
                 .iter()
-                .flat_map(|run| run(&doc, Level::X4))
+                .flat_map(|run| run(&doc, &Level::X4.into()))
                 .map(|f| f.check.id)
                 .collect()
         };

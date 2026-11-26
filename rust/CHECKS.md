@@ -199,13 +199,13 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x5.reader.profile-conversion` | Assembly converts between differing profiles | iso-15930-8:8.5 | error | x5g, x5pg, x5n | skip: A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4) |
 | `x5.reader.trapped-scope` | pdf:Trapped says nothing about targets | iso-15930-8:8.6 | error | x5g, x5pg, x5n | skip: A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4) |
 | `tac` | Peak total ink stays under the limit |  | error | print | todo |
-| `overprint` | Overprint is used on purpose |  | error | print | todo |
-| `white-overprint` | White is never set to overprint |  | error | print | todo |
+| `overprint` | Overprint is used on purpose |  | warning | print | implemented |
+| `white-overprint` | White is never set to overprint |  | error | print | implemented |
 | `colour-space` | Colour spaces suit the job's colour mode |  | error | print | todo |
 | `rgb-only` | An RGB job paints only RGB |  | error | print | todo |
 | `gray-only` | A gray job paints only gray |  | error | print | todo |
-| `k-only-text` | Text is 100% black only |  | error | print | todo |
-| `rich-black` | Small text is not in rich black |  | error | print | todo |
+| `k-only-text` | Text is 100% black only |  | error | print | implemented |
+| `rich-black` | Small text is not in rich black |  | warning | print | implemented |
 | `spot-ink` | Spot inks are on the allowed list |  | error | print | todo |
 | `spot-definition` | A spot ink has one definition |  | error | print | todo |
 | `icc-profile` | Embedded ICC profiles are sound and suit the job |  | error | print | todo |

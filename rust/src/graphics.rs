@@ -24,9 +24,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use crate::common::family::{self, Family};
 use crate::common::font::{self, Font};
 use crate::common::rect::Rect;
-use crate::content::{self, Item, Op};
+use crate::content::{self, InlineImage, Item, Op};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::Location;
 use crate::pipeline::Limits;
@@ -64,11 +65,58 @@ pub(crate) struct Use {
     pub(crate) opm: i64,
 }
 
+/// A colour as today's print checks read it: its family and components, the spot inks a `Separation` or `DeviceN`
+/// colour selects, the families a pattern paints in, and whether it was set through a profile or other non-device
+/// space.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Fill {
+    pub(crate) family: Family,
+    pub(crate) value: Vec<f64>,
+    pub(crate) spot: Vec<Vec<u8>>,
+    pub(crate) pattern: BTreeSet<Family>,
+    pub(crate) profiled: bool,
+}
+
+impl Fill {
+    /// The colour a space of `family` starts with (8.6.8): black, for the device families.
+    fn initial(family: Family) -> Self {
+        let value = match family {
+            Family::Gray => vec![0.0],
+            Family::Rgb => vec![0.0; 3],
+            Family::Cmyk => vec![0.0, 0.0, 0.0, 1.0],
+            Family::Other => Vec::new(),
+        };
+        Self {
+            family,
+            value,
+            spot: Vec::new(),
+            pattern: BTreeSet::new(),
+            profiled: false,
+        }
+    }
+}
+
+/// What today's print checks read from a paint.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Ink {
+    pub(crate) fill: Fill,
+    pub(crate) stroke: Fill,
+    /// Whether overprint is on: `OP` or `op`, whichever an `ExtGState` last set (the print checks do not tell fills
+    /// from strokes here).
+    pub(crate) overprint: bool,
+    /// A text run's size on the page: its font size by the text rendering matrix's vertical scale; 0 for the rest.
+    pub(crate) size: f64,
+    /// An image's or shading's own colour family; `None` for the rest, or a shading that is not there.
+    pub(crate) space: Option<Family>,
+    /// Whether it is inside a tiling pattern's cell, which the print checks see only through the pattern's families.
+    pub(crate) cell: bool,
+}
+
 /// What kind of thing a paint is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
-    /// A filled or stroked path.
-    Path,
+    /// A path, filled, stroked or both.
+    Path { filled: bool, stroked: bool },
     /// A text run in its render mode (9.3.6); modes 3 and 7 paint nothing.
     Text(i64),
     /// An image `XObject`, sampled or a mask.
@@ -92,6 +140,7 @@ pub(crate) enum Event {
         bbox: Option<Rect>,
         /// `bbox` cut to the clip, `None` when the clip leaves nothing of it; for a shading, the clip itself.
         visible: Option<Rect>,
+        ink: Box<Ink>,
         frames: Vec<Location>,
     },
     /// A transparency group, with its `/CS` when it has one.
@@ -122,6 +171,11 @@ struct State {
     fill: Object,
     stroke: Object,
     fill_pattern: Option<Vec<u8>>,
+    /// The fill and stroke colours as the print checks read them.
+    ink: Fill,
+    ink_stroke: Fill,
+    /// Overprint as the print checks read it: `OP` or `op`.
+    overprint: bool,
     op_fill: bool,
     op_stroke: bool,
     opm: i64,
@@ -151,6 +205,9 @@ impl Default for State {
             fill: gray.clone(),
             stroke: gray,
             fill_pattern: None,
+            ink: Fill::initial(Family::Gray),
+            ink_stroke: Fill::initial(Family::Gray),
+            overprint: false,
             op_fill: false,
             op_stroke: false,
             opm: 0,
@@ -186,6 +243,8 @@ struct Walker<'a> {
     ancestors: BTreeSet<u32>,
     /// Fonts read so far, by object number.
     fonts: BTreeMap<u32, Rc<Font>>,
+    /// The tiling patterns whose families are being worked out, by object number.
+    patterns: BTreeSet<u32>,
 }
 
 /// Every page's events, in page order.
@@ -196,6 +255,7 @@ pub(crate) fn walk(doc: &Document) -> Vec<Event> {
         events: Vec::new(),
         ancestors: BTreeSet::new(),
         fonts: BTreeMap::new(),
+        patterns: BTreeSet::new(),
     };
     for (i, page) in doc.pages().iter().enumerate() {
         let frames = vec![Location::Page(u32::try_from(i + 1).unwrap_or(u32::MAX))];
@@ -426,7 +486,7 @@ fn text_state(op: &Op, state: &mut State, cursor: &mut Cursor) -> bool {
 }
 
 /// Show a text run (9.4.3): where it lands on the page, with the text matrix moved past it.
-fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Option<Rect> {
+fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> (Option<Rect>, f64) {
     let name = op.name.as_slice();
     if name == b"\"" {
         state.word_spacing = number(op.operands.first());
@@ -461,8 +521,69 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Option<Rect> {
         trm.as_ref(),
         &[(0.0, low), (advance, low), (0.0, high), (advance, high)],
     );
+    let vertical = trm.map_or(1.0, |m| m[2].hypot(m[3]));
     cursor.text = mul(&translation(advance, 0.0), &cursor.text);
-    bbox
+    (bbox, size * vertical)
+}
+
+/// What the print checks read from a paint made in `state`.
+fn ink(state: &State, size: f64, space: Option<Family>) -> Ink {
+    Ink {
+        fill: state.ink.clone(),
+        stroke: state.ink_stroke.clone(),
+        overprint: state.overprint,
+        size,
+        space,
+        cell: state.ctm.is_none(),
+    }
+}
+
+/// The colours a paint puts down, as the print checks read them: a stencil mask's fill, a text run's fill (and its
+/// stroke in render modes 1, 2, 5 and 6), a path's fill and stroke as it is painted; none for an image or shading.
+pub(crate) fn colours<'a>(kind: Kind, uses: &[Use], ink: &'a Ink) -> Vec<&'a Fill> {
+    if uses.iter().any(|u| u.role == Role::ImageMask) {
+        return vec![&ink.fill];
+    }
+    match kind {
+        Kind::Text(1 | 2 | 5 | 6) => vec![&ink.fill, &ink.stroke],
+        Kind::Text(_) => vec![&ink.fill],
+        Kind::Path { filled, stroked } => [(filled, &ink.fill), (stroked, &ink.stroke)]
+            .into_iter()
+            .filter_map(|(on, fill)| on.then_some(fill))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Every colour family a paint uses, looking through patterns: an image's or shading's own, else its colours'.
+pub(crate) fn families(kind: Kind, uses: &[Use], ink: &Ink) -> BTreeSet<Family> {
+    let mask = uses.iter().any(|u| u.role == Role::ImageMask);
+    let own = ink.space.filter(|_| !mask);
+    let colours = colours(kind, uses, ink).into_iter();
+    own.into_iter()
+        .chain(colours.flat_map(|c| std::iter::once(c.family).chain(c.pattern.iter().copied())))
+        .collect()
+}
+
+/// A colour after `sc`, `scn`, `SC` or `SCN` with these operands: new components in a device family, new tints for a
+/// spot, else unchanged.
+fn with_components(current: &Fill, operands: &[Object]) -> Fill {
+    let value = operands.iter().map(|o| number(Some(o))).collect();
+    if matches!(current.family, Family::Gray | Family::Rgb | Family::Cmyk) {
+        return Fill {
+            value,
+            profiled: current.profiled,
+            ..Fill::initial(current.family)
+        };
+    }
+    if current.spot.is_empty() {
+        return current.clone();
+    }
+    Fill {
+        value,
+        spot: current.spot.clone(),
+        ..Fill::initial(Family::Other)
+    }
 }
 
 impl Walker<'_> {
@@ -525,7 +646,7 @@ impl Walker<'_> {
     }
 
     /// Report a paint of `kind` at `bbox`.
-    fn push(&mut self, kind: Kind, uses: Vec<Use>, bbox: Option<Rect>, state: &State, frames: &[Location]) {
+    fn push(&mut self, kind: Kind, uses: Vec<Use>, bbox: Option<Rect>, state: &State, frames: &[Location], ink: Ink) {
         let visible = if kind == Kind::Shading {
             non_empty(state.clip)
         } else {
@@ -536,6 +657,7 @@ impl Walker<'_> {
             uses,
             bbox,
             visible,
+            ink: Box::new(ink),
             frames: frames.to_vec(),
         });
     }
@@ -555,6 +677,7 @@ impl Walker<'_> {
         frames: &[Location],
         page: Option<&Dict>,
         bbox: Option<Rect>,
+        ink: Ink,
     ) {
         let mut uses = Vec::new();
         for &role in roles {
@@ -572,7 +695,7 @@ impl Walker<'_> {
                 self.pattern(num, dict, resources, state, frames, page, &mut uses);
             }
         }
-        self.push(kind, uses, bbox, state, frames);
+        self.push(kind, uses, bbox, state, frames, ink);
     }
 
     /// Whether `space` is the Pattern family, alone or with an underlying space.
@@ -684,26 +807,7 @@ impl Walker<'_> {
         for item in &content.items {
             let op = match item {
                 Item::Image(image) => {
-                    let bbox = bounds(state.ctm.as_ref(), &UNIT_SQUARE);
-                    let mask = matches!(image.dict.get(b"ImageMask").map(|v| &v.value), Some(Value::Bool(true)));
-                    if mask {
-                        self.paint(
-                            resources,
-                            Kind::InlineImage,
-                            &[Role::ImageMask],
-                            &state,
-                            frames,
-                            page,
-                            bbox,
-                        );
-                    } else {
-                        let space = image
-                            .dict
-                            .get(b"ColorSpace")
-                            .and_then(|cs| self.inline_space(resources, cs));
-                        let uses = space.map(|s| self.use_of(resources, Role::Image, &s, &state));
-                        self.push(Kind::InlineImage, uses.into_iter().collect(), bbox, &state, frames);
-                    }
+                    self.inline_image(image, resources, &state, frames, page);
                     continue;
                 }
                 Item::Op(op) => op,
@@ -731,28 +835,27 @@ impl Walker<'_> {
                         _ => &[Role::Fill, Role::Stroke],
                     };
                     let bbox = bounds(state.ctm.as_ref(), &cursor.path);
-                    self.paint(resources, Kind::Path, roles, &state, frames, page, bbox);
+                    let kind = Kind::Path {
+                        filled: roles.contains(&Role::Fill),
+                        stroked: roles.contains(&Role::Stroke),
+                    };
+                    let painted = ink(&state, 0.0, None);
+                    self.paint(resources, kind, roles, &state, frames, page, bbox, painted);
                     cursor.end(&mut state, bbox);
                 }
                 b"n" => cursor.end(&mut state, None),
                 b"W" | b"W*" => cursor.clip = true,
                 b"Tj" | b"TJ" | b"'" | b"\"" => {
-                    let bbox = show(op, &mut state, &mut cursor);
+                    let (bbox, size) = show(op, &mut state, &mut cursor);
                     let roles: &[Role] = match state.text_mode {
                         0 | 4 => &[Role::Fill],
                         1 | 5 => &[Role::Stroke],
                         2 | 6 => &[Role::Fill, Role::Stroke],
                         _ => &[],
                     };
-                    self.paint(
-                        resources,
-                        Kind::Text(state.text_mode),
-                        roles,
-                        &state,
-                        frames,
-                        page,
-                        bbox,
-                    );
+                    let painted = ink(&state, size, None);
+                    let kind = Kind::Text(state.text_mode);
+                    self.paint(resources, kind, roles, &state, frames, page, bbox, painted);
                 }
                 b"sh" => {
                     let shading = last
@@ -760,8 +863,10 @@ impl Walker<'_> {
                         .and_then(|n| resource(self.doc, resources, b"Shading", n))
                         .and_then(Object::dict);
                     let space = shading.and_then(|s| s.get(b"ColorSpace"));
+                    let family = shading.map(|_| family::classify(self.doc, space, resources));
                     let uses = space.map(|s| self.use_of(resources, Role::Shading, s, &state));
-                    self.push(Kind::Shading, uses.into_iter().collect(), None, &state, frames);
+                    let painted = ink(&state, 0.0, family);
+                    self.push(Kind::Shading, uses.into_iter().collect(), None, &state, frames, painted);
                 }
                 b"Do" => self.xobject(resources, last, &state, frames, page),
                 _ => {}
@@ -769,33 +874,99 @@ impl Walker<'_> {
         }
     }
 
+    /// An inline image: its unit square, in its colour space or, for a mask, the fill colour.
+    fn inline_image(
+        &mut self,
+        image: &InlineImage,
+        resources: Option<&Dict>,
+        state: &State,
+        frames: &[Location],
+        page: Option<&Dict>,
+    ) {
+        let bbox = bounds(state.ctm.as_ref(), &UNIT_SQUARE);
+        let mask = matches!(image.dict.get(b"ImageMask").map(|v| &v.value), Some(Value::Bool(true)));
+        let space = image
+            .dict
+            .get(b"ColorSpace")
+            .and_then(|cs| self.inline_space(resources, cs));
+        let family = family::classify(self.doc, space.as_ref(), resources);
+        let painted = ink(state, 0.0, Some(family));
+        if mask {
+            let roles = &[Role::ImageMask];
+            self.paint(resources, Kind::InlineImage, roles, state, frames, page, bbox, painted);
+        } else {
+            let uses = space.map(|s| self.use_of(resources, Role::Image, &s, state));
+            self.push(
+                Kind::InlineImage,
+                uses.into_iter().collect(),
+                bbox,
+                state,
+                frames,
+                painted,
+            );
+        }
+    }
+
     /// Apply a colour or graphics state parameter operator; `false` when `op` is not one.
     fn colour(&self, op: &Op, resources: Option<&Dict>, state: &mut State) -> bool {
         let last = op.operands.last();
+        let stroke = op.name.first().is_some_and(u8::is_ascii_uppercase);
         match op.name.as_slice() {
-            b"CS" => state.stroke = self.space(resources, last).unwrap_or_else(|| state.stroke.clone()),
-            b"cs" => {
-                state.fill = self.space(resources, last).unwrap_or_else(|| state.fill.clone());
-                state.fill_pattern = None;
+            b"CS" | b"cs" => {
+                let ink = self.ink_space(op.operands.first(), resources);
+                if stroke {
+                    state.stroke = self.space(resources, last).unwrap_or_else(|| state.stroke.clone());
+                    state.ink_stroke = ink;
+                } else {
+                    state.fill = self.space(resources, last).unwrap_or_else(|| state.fill.clone());
+                    state.fill_pattern = None;
+                    state.ink = ink;
+                }
             }
             b"G" | b"g" | b"RG" | b"rg" | b"K" | b"k" => {
-                let family: &[u8] = match op.name.as_slice() {
-                    b"G" | b"g" => b"DeviceGray",
-                    b"RG" | b"rg" => b"DeviceRGB",
-                    _ => b"DeviceCMYK",
+                let (name, family, count): (&[u8], Family, usize) = match op.name.as_slice() {
+                    b"G" | b"g" => (b"DeviceGray", Family::Gray, 1),
+                    b"RG" | b"rg" => (b"DeviceRGB", Family::Rgb, 3),
+                    _ => (b"DeviceCMYK", Family::Cmyk, 4),
                 };
                 let space = Object {
-                    value: Value::Name(family.to_vec()),
+                    value: Value::Name(name.to_vec()),
                     start: 0,
                     end: 0,
                 };
-                if op.name.first().is_some_and(u8::is_ascii_uppercase) {
+                let ink = Fill {
+                    value: (0..count).map(|i| number(op.operands.get(i))).collect(),
+                    ..Fill::initial(family)
+                };
+                if stroke {
                     state.stroke = space;
+                    state.ink_stroke = ink;
                 } else {
                     state.fill = space;
+                    state.ink = ink;
                 }
             }
-            b"scn" => state.fill_pattern = last.and_then(Object::name).map(<[u8]>::to_vec),
+            b"sc" | b"scn" | b"SC" | b"SCN" => {
+                if op.name == b"scn" {
+                    state.fill_pattern = last.and_then(Object::name).map(<[u8]>::to_vec);
+                }
+                let current = if stroke { &state.ink_stroke } else { &state.ink };
+                let ink = match last.and_then(Object::name) {
+                    Some(name) => {
+                        let pattern = resource_ref(self.doc, resources, b"Pattern", name);
+                        Fill {
+                            pattern: self.pattern_families(pattern, &current.pattern),
+                            ..Fill::initial(Family::Other)
+                        }
+                    }
+                    None => with_components(current, &op.operands),
+                };
+                if stroke {
+                    state.ink_stroke = ink;
+                } else {
+                    state.ink = ink;
+                }
+            }
             b"gs" => {
                 if let Some(gs) = last
                     .and_then(Object::name)
@@ -808,6 +979,78 @@ impl Walker<'_> {
             _ => return false,
         }
         true
+    }
+
+    /// The colour `cs` or `CS` sets, as the print checks read it: a pattern space's base family, a spot's inks at full
+    /// tint, else the family's initial colour, marked when the space is not a device space.
+    fn ink_space(&self, space: Option<&Object>, resources: Option<&Dict>) -> Fill {
+        let doc = self.doc;
+        if let Some(base) = family::pattern_base(doc, space, resources) {
+            return Fill {
+                pattern: BTreeSet::from([family::classify(doc, Some(base), resources)]),
+                ..Fill::initial(Family::Other)
+            };
+        }
+        let found = family::classify(doc, space, resources);
+        if found == Family::Other {
+            let spot = family::spot_names(doc, space, resources);
+            return Fill {
+                value: vec![1.0; spot.len()],
+                spot,
+                ..Fill::initial(Family::Other)
+            };
+        }
+        Fill {
+            profiled: !family::is_device(doc, space, resources),
+            ..Fill::initial(found)
+        }
+    }
+
+    /// The families a pattern paints in: a shading pattern its shading's, an uncoloured tiling pattern `base` (the
+    /// families of the colour set with it), a coloured one whatever its cell paints, worked out four patterns deep.
+    fn pattern_families(&self, pattern: Option<(Option<u32>, &Dict)>, base: &BTreeSet<Family>) -> BTreeSet<Family> {
+        let doc = self.doc;
+        let Some((num, dict)) = pattern else {
+            return BTreeSet::new();
+        };
+        let integer = |key: &[u8]| dict.get(key).and_then(|v| doc.resolve(v)).and_then(Object::integer);
+        match integer(b"PatternType") {
+            Some(2) => dict
+                .get(b"Shading")
+                .and_then(|s| doc.resolve(s))
+                .and_then(Object::dict)
+                .map(|s| family::classify(doc, s.get(b"ColorSpace"), None))
+                .into_iter()
+                .collect(),
+            Some(1) if integer(b"PaintType") == Some(2) => base.clone(),
+            Some(1) => {
+                let Some(num) = num.filter(|n| !self.patterns.contains(n) && self.patterns.len() < 4) else {
+                    return BTreeSet::new();
+                };
+                let mut inner = Walker {
+                    doc,
+                    limits: Limits::default(),
+                    events: Vec::new(),
+                    ancestors: BTreeSet::new(),
+                    fonts: BTreeMap::new(),
+                    patterns: self.patterns.iter().copied().chain([num]).collect(),
+                };
+                let cell = State {
+                    ctm: None,
+                    ..State::default()
+                };
+                inner.nested(num, dict, &[], None, cell);
+                inner
+                    .events
+                    .iter()
+                    .flat_map(|e| match e {
+                        Event::Paint { kind, uses, ink, .. } => families(*kind, uses, ink),
+                        _ => BTreeSet::new(),
+                    })
+                    .collect()
+            }
+            _ => BTreeSet::new(),
+        }
     }
 
     /// `Tf`: the font, read once per font object, and the size.
@@ -854,6 +1097,9 @@ impl Walker<'_> {
         if let Some(op) = flag(b"op") {
             state.op_fill = op;
         }
+        if gs.get(b"OP").is_some() || gs.get(b"op").is_some() {
+            state.overprint = flag(b"OP") == Some(true) || flag(b"op") == Some(true);
+        }
         if let Some(mode) = gs
             .get(b"OPM")
             .and_then(|v| self.doc.resolve(v))
@@ -895,20 +1141,26 @@ impl Walker<'_> {
         match dict.get(b"Subtype").and_then(Object::name) {
             Some(b"Image") => {
                 let bbox = bounds(state.ctm.as_ref(), &UNIT_SQUARE);
+                let painted = ink(
+                    state,
+                    0.0,
+                    Some(family::classify(self.doc, dict.get(b"ColorSpace"), None)),
+                );
                 if matches!(
                     dict.get(b"ImageMask")
                         .and_then(|v| self.doc.resolve(v))
                         .map(|v| &v.value),
                     Some(Value::Bool(true))
                 ) {
-                    self.paint(resources, Kind::Image, &[Role::ImageMask], state, frames, page, bbox);
+                    let roles = &[Role::ImageMask];
+                    self.paint(resources, Kind::Image, roles, state, frames, page, bbox, painted);
                 } else {
                     let uses = dict
                         .get(b"ColorSpace")
                         .map(|space| self.use_of(resources, Role::Image, space, state));
                     let mut inner = frames.to_vec();
                     inner.push(Location::Object(num, 0));
-                    self.push(Kind::Image, uses.into_iter().collect(), bbox, state, &inner);
+                    self.push(Kind::Image, uses.into_iter().collect(), bbox, state, &inner, painted);
                 }
             }
             Some(b"Form") => {
@@ -1283,6 +1535,15 @@ mod tests {
             .collect()
     }
 
+    const FILL: Kind = Kind::Path {
+        filled: true,
+        stroked: false,
+    };
+    const STROKE: Kind = Kind::Path {
+        filled: false,
+        stroked: true,
+    };
+
     #[test]
     fn where_paths_images_and_shadings_land() {
         let resources = "<< /XObject << /Fm 6 0 R /Im 7 0 R /Bare 9 0 R /Odd 10 0 R >> \
@@ -1322,36 +1583,26 @@ mod tests {
         assert_eq!(
             places(&got),
             [
+                (STROKE, 1, Some([1.0, 0.0, 70.0, 40.0]), Some([1.0, 0.0, 70.0, 40.0])),
+                (FILL, 1, Some([0.0, 0.0, 10.0, 10.0]), Some([0.0, 0.0, 10.0, 10.0])),
+                (FILL, 1, Some([0.0, 0.0, 10.0, 10.0]), Some([0.0, 0.0, 4.0, 4.0])),
+                (FILL, 1, unit, None),
+                (FILL, 1, None, None),
                 (
-                    Kind::Path,
-                    1,
-                    Some([1.0, 0.0, 70.0, 40.0]),
-                    Some([1.0, 0.0, 70.0, 40.0])
-                ),
-                (
-                    Kind::Path,
-                    1,
-                    Some([0.0, 0.0, 10.0, 10.0]),
-                    Some([0.0, 0.0, 10.0, 10.0])
-                ),
-                (Kind::Path, 1, Some([0.0, 0.0, 10.0, 10.0]), Some([0.0, 0.0, 4.0, 4.0])),
-                (Kind::Path, 1, unit, None),
-                (Kind::Path, 1, None, None),
-                (
-                    Kind::Path,
+                    FILL,
                     1,
                     Some([2000.0, 0.0, 2002.0, 2.0]),
                     Some([2000.0, 0.0, 2002.0, 2.0])
                 ),
-                (Kind::Path, 1, Some([0.0, 0.0, 1.0, 1.0]), unit),
+                (FILL, 1, Some([0.0, 0.0, 1.0, 1.0]), unit),
                 (Kind::Image, 1, unit, unit),
                 (Kind::Image, 0, unit, unit),
                 (Kind::InlineImage, 1, unit, unit),
                 (Kind::InlineImage, 1, unit, unit),
                 (Kind::Shading, 1, None, Some([0.0, 0.0, 3.0, 3.0])),
                 (Kind::Shading, 1, None, None),
-                (Kind::Path, 1, None, None),
-                (Kind::Path, 1, unit, unit),
+                (FILL, 1, None, None),
+                (FILL, 1, unit, unit),
             ]
         );
         let missing: Vec<&[u8]> = got
@@ -1396,6 +1647,93 @@ mod tests {
                 text(199.0, 188.0, 204.0, 198.0),
                 text(204.0, 188.0, 209.0, 198.0),
             ]
+        );
+    }
+
+    /// Each paint outside pattern cells as the fill or stroke it puts down: family, components, spot names, pattern
+    /// families, profiled, overprint.
+    type Inked = (Family, Vec<f64>, Vec<String>, Vec<Family>, bool, bool);
+
+    fn inked(events: &[Event], stroke: bool) -> Vec<Inked> {
+        events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Paint { ink, .. } if !ink.cell => {
+                    let f = if stroke { &ink.stroke } else { &ink.fill };
+                    let spot = f.spot.iter().map(|s| String::from_utf8_lossy(s).into_owned()).collect();
+                    Some((
+                        f.family,
+                        f.value.clone(),
+                        spot,
+                        f.pattern.iter().copied().collect(),
+                        f.profiled,
+                        ink.overprint,
+                    ))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_colours_print_checks_read() {
+        use Family::{Cmyk, Gray, Other, Rgb};
+        let resources = "<< /ColorSpace << /I [/ICCBased 20 0 R] /S [/Separation /Gold /DeviceCMYK 21 0 R] /P [/Pattern /DeviceRGB] >> \
+            /Pattern << /Sh << /PatternType 2 /Shading << /ColorSpace /DeviceCMYK >> >> /U << /PatternType 1 /PaintType 2 >> \
+            /T 22 0 R /X << /PatternType 9 >> /Self 23 0 R /D << /PatternType 1 >> >> \
+            /ExtGState << /O << /OP true >> /F << /op false >> /M << /OPM 1 >> >> >>";
+        let f = "0 0 1 1 re f";
+        let data = format!(
+            "/I cs 0.5 0.5 0.5 sc {f} /S cs 0.3 scn {f} /P cs /U scn {f} /Pattern cs /Sh scn {f} /T scn {f} /X scn {f} \
+             /Nope scn {f} /Self scn {f} /D scn {f} /DeviceGray cs 0.4 sc {f} /Pattern cs 0.5 sc {f} \
+             0.1 0.2 0.3 0.4 K 1 0 0 RG 0.5 G /O gs 0 0 1 1 re S /F gs /M gs {f} /DeviceRGB CS 0.1 0.2 0.3 SC 0 0 1 1 re S"
+        );
+        let more = [
+            (20, stream("/N 3", "abc")),
+            (21, b"<< >>".to_vec()),
+            (
+                22,
+                stream(
+                    "/PatternType 1 /PaintType 1 /Resources << >>",
+                    "0 1 0 rg 0 0 1 1 re f BI /W 1 /H 1 /BPC 8 /CS /G ID a EI BI /IM true /W 1 /H 1 ID a EI",
+                ),
+            ),
+            (
+                23,
+                stream(
+                    "/PatternType 1 /PaintType 1 /Resources << /Pattern << /Self 23 0 R >> >>",
+                    "/Pattern cs /Self scn 0 0 1 1 re f",
+                ),
+            ),
+        ];
+        let events = run(resources, &data, &more);
+        let plain = |family, value: &[f64]| (family, value.to_vec(), vec![], vec![], false, false);
+        let pattern = |families: &[Family]| (Other, vec![], vec![], families.to_vec(), false, false);
+        let fills = inked(&events, false);
+        assert_eq!(
+            fills,
+            [
+                (Rgb, vec![0.5; 3], vec![], vec![], true, false),
+                (Other, vec![0.3], vec!["Gold".to_owned()], vec![], false, false),
+                pattern(&[Rgb]),
+                pattern(&[Cmyk]),
+                pattern(&[Gray, Rgb]),
+                pattern(&[]),
+                pattern(&[]),
+                pattern(&[Other]),
+                pattern(&[]),
+                plain(Gray, &[0.4]),
+                plain(Other, &[]),
+                (Other, vec![], vec![], vec![], false, true),
+                plain(Other, &[]),
+                plain(Other, &[]),
+            ]
+        );
+        let strokes = inked(&events, true);
+        assert_eq!(strokes.get(11), Some(&(Gray, vec![0.5], vec![], vec![], false, true)));
+        assert_eq!(
+            strokes.get(13),
+            Some(&(Rgb, vec![0.1, 0.2, 0.3], vec![], vec![], false, false))
         );
     }
 }

@@ -1594,9 +1594,9 @@ status = "todo"
 id = "overprint"
 title = "Overprint is used on purpose"
 clauses = []
-severity = "error"
+severity = "warning"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "white-overprint"
@@ -1604,7 +1604,7 @@ title = "White is never set to overprint"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "colour-space"
@@ -1636,15 +1636,15 @@ title = "Text is 100% black only"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "rich-black"
 title = "Small text is not in rich black"
 clauses = []
-severity = "error"
+severity = "warning"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "spot-ink"

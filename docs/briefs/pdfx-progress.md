@@ -24,9 +24,10 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 4** (content, page model and colour): 4.1 to 4.5 done; 4.6 under way. The walk now places what it paints
-  (CTM, clip, path, text and image extents), and the first two print checks run in Rust: `outside-media` and
-  `xobject-missing`. Next in 4.6: the paint-state checks (overprint, white overprint, rich black, K-only text, colour
-  modes), then text size and hairlines, resolution, and the page geometry checks. The brief's pace checkpoint for
+  (CTM, clip, path, text and image extents) and reads colours as the print checks do; six print checks run in Rust:
+  `outside-media`, `xobject-missing`, `overprint`, `white-overprint`, `rich-black`, `k-only-text`. Profile parameters
+  reach the core as JSON (`Settings`, `Params`). Next in 4.6: the colour-mode checks (colour spaces, RGB-only,
+  gray-only, spots, ICC, blend space), then text, resolution and the page geometry checks. The brief's pace checkpoint for
   `paint.py` falls on 2026-12-02, one week into phase 4.
 
 ## Done
@@ -68,7 +69,8 @@ record it as not conforming to that one rule).
 | 4.4 (part) | `81362d4` | JPEG 2000 header reader (JPX boxes, codestream SIZ); 6 of 6.27's rows with 6 fixtures, agreeing with veraPDF's 6.2.8.3 files |
 | 4.4 | `a7499b9`; test-db `a2661129` | `x4.jpx.baseline` (T.801 M.9.2) and `x4.image.jpx-valid` (header only); fixtures now baseline JPX; 3 more fixtures |
 | 4.5 | `cd26fbf` | Pre-separated files (6.1.2, X4-Q2): every painting page one colorant, differing between pages; 1 fixture; none in Ghent, Altona or GWG Processing Steps |
-| 4.6 (part) | the commit after `a7499b9` | Tier 7 geometry and font metrics; `outside-media` and `xobject-missing` ported, parity-proved and their Python deleted; `bin/parity/print.py`; 2 fixtures |
+| 4.6 (part) | `2d4b7c0` | Tier 7 geometry and font metrics; `outside-media` and `xobject-missing` ported, parity-proved and their Python deleted; `bin/parity/print.py`; 2 fixtures |
+| 4.6 (part) | the commit after `2d4b7c0` | Colour families and fills in the walk; `Settings` and `Params` for print checks; `overprint`, `white-overprint`, `rich-black`, `k-only-text` ported, parity-proved and their Python deleted |
 
 ## Register coverage
 
@@ -78,7 +80,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 109 | 28 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 21 | 35 | 1 (`internal`) |
+| House and structure checks | 25 | 31 | 1 (`internal`) |
 
 ## Gates
 
@@ -244,6 +246,14 @@ Oracle consultations:
   damaged), 61 read with gaps, 220 pikepdf cannot open,
   and 20 on which the Python walk crashes (a colour space name that is not UTF-8, a `TypeError` or `IndexError` in
   `paint.py`), an exception `core._check_pdf` does not catch, so `verify` fails on those files today.
+- Task 4.6, the second port (`overprint`, `white-overprint`, `rich-black`, `k-only-text`, at the profile's
+  defaults): parity on the same 10,013 files, 9,246 identical with 39,851 findings among them, 4 different, all
+  `k-only-text` on damaged files: one where pikepdf stops a 2 MB content stream after 31 operators without an error and
+  the core reads the whole page; one whose content is damaged partway, where the core stops at the damage by design;
+  two whose trailer `/Size` stops short of the objects the pages use, which the core reads as null (task 2.1's
+  decision) and qpdf reads anyway. Python's overprint is one flag, `OP` or `op`; its text colours include the fill
+  in every render mode and count invisible text; the K-only message counts colours, not runs. All kept for parity,
+  to revisit once the port is done.
 - Task 4.6: the walk now starts a form from the graphics state of its `Do`, colour and overprint included (8.10.1),
   where it used to start from the default; an unbalanced `Q` keeps the state and restores only the CTM, as the Python
   does; an `XObject` entry that is not a stream is missing (7.8.3), not an image. Ghent and Altona are unchanged.
