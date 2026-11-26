@@ -10,16 +10,18 @@
 // carry the dictionary on `Font` if one turns up. The walk's own limits apply (Type 3 glyph procedures, soft-mask
 // content and annotation appearances are not walked).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::Settings;
+use super::painted::page_of;
 use crate::common::sfnt;
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Location, X4_FONT_TRUETYPE_NONSYMBOLIC_ENCODING, X4_FONT_TRUETYPE_NONSYMBOLIC_NO_DIFFERENCES,
-    X4_FONT_TRUETYPE_SYMBOLIC_NO_ENCODING, X4_FONT_TRUETYPE_SYMBOLIC_ONE_CMAP,
+    Check, Finding, Location, X4_FONT_EMBEDDED, X4_FONT_TRUETYPE_NONSYMBOLIC_ENCODING,
+    X4_FONT_TRUETYPE_NONSYMBOLIC_NO_DIFFERENCES, X4_FONT_TRUETYPE_SYMBOLIC_NO_ENCODING,
+    X4_FONT_TRUETYPE_SYMBOLIC_ONE_CMAP,
 };
-use crate::graphics::{self, Event};
+use crate::graphics::{self, Event, Kind};
 
 /// The Symbolic flag of a font descriptor's `/Flags` (ISO 32000-1 Table 123).
 const SYMBOLIC: i64 = 4;
@@ -176,6 +178,34 @@ fn program(doc: &Document, descriptor: &Dict) -> Option<Vec<u8>> {
     doc.stream_data(num)
 }
 
+/// 6.5.1: a font that text uses is embedded, unless every run in it is in render mode 3 (invisible). A Type 3 font's
+/// glyphs are in the file. Text in a font the resources do not give is 6.3's matter, not this row's.
+pub(super) fn embedded(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let mut runs: BTreeMap<(u32, String), usize> = BTreeMap::new();
+    for event in graphics::walk(doc) {
+        if let Event::Paint {
+            kind: Kind::Text(mode),
+            ink,
+            frames,
+            ..
+        } = event
+            && mode != 3
+            && ink.glyphs > 0
+            && let Some(font) = ink.font.filter(|f| f.known && !f.embedded)
+        {
+            *runs.entry((page_of(&frames), font.name.clone())).or_default() += 1;
+        }
+    }
+    runs.into_iter()
+        .map(|((page, name), count)| {
+            let message = format!("font {name} is not embedded, and {count} run(s) show text in it visibly");
+            Finding::new(X4_FONT_EMBEDDED, message)
+                .citing("6.5.1")
+                .at(vec![Location::Page(page)])
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,6 +218,28 @@ mod tests {
         out.extend(data);
         out.extend(b"\nendstream");
         out
+    }
+
+    #[test]
+    fn fonts_text_shows_visibly_are_embedded() {
+        let fonts = "/Resources << /Font << /H << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> \
+            /U << /Type /Font /Subtype /Type1 /BaseFont /Unseen >> /T << /Type /Font /Subtype /Type3 >> \
+            /E << /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+Embedded /FontDescriptor << /FontFile2 9 0 R >> >> >> >>";
+        let text = "BT /H 9 Tf (a) Tj (b) Tj () Tj 7 Tr (c) Tj 3 Tr /U 9 Tf (d) Tj /H 9 Tf (e) Tj 0 Tr /T 9 Tf (f) Tj \
+            /E 9 Tf (g) Tj /Q 9 Tf (h) Tj ET";
+        let program = (9, b"<< /Length 0 >>\nstream\n\nendstream".to_vec());
+        let doc = paged(&[(fonts, text), (fonts, "BT /H 9 Tf (a) Tj ET")], "", &[program]);
+        let found: Vec<(Option<u32>, String)> = embedded(&doc, &Level::X4.into())
+            .into_iter()
+            .map(|f| (f.page, f.message))
+            .collect();
+        let msg = |page, runs| {
+            (
+                Some(page),
+                format!("font Helvetica is not embedded, and {runs} run(s) show text in it visibly"),
+            )
+        };
+        assert_eq!(found, [msg(1, 3), msg(2, 1)]);
     }
 
     #[test]

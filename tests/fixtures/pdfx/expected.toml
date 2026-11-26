@@ -802,3 +802,13 @@ expect = { "x4.font.truetype-symbolic-no-encoding" = "a symbolic TrueType font w
 [x4-tt-symbolic-two-cmaps]
 levels = ["x4"]
 expect = { "x4.font.truetype-symbolic-one-cmap" = "a symbolic TrueType program with two cmap subtables (6.5.4)" }
+
+# PDF/X-4 6.5.1: embedding.
+[x4-font-not-embedded]
+levels = ["x4"]
+expect = { "x4.font.embedded" = "the TrueType font's program removed (6.5.1)" }
+
+# 6.5.1's positive: an unembedded Helvetica shows text only in render mode 3.
+[x4-font-invisible-unembedded]
+levels = ["x4"]
+expect = {}

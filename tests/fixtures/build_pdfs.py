@@ -794,7 +794,24 @@ def _x4_font_fixtures() -> dict[str, pikepdf.Pdf]:
         "x4-tt-differences": _x4_truetype(encoding=differences),
         "x4-tt-symbolic-encoding": _x4_truetype(flags=4, one_cmap=True),
         "x4-tt-symbolic-two-cmaps": _x4_truetype(flags=4, encoding=None),
+        "x4-font-not-embedded": _x4_unembedded(b""),
+        # A positive: an unembedded font used only in render mode 3 (6.5.1).
+        "x4-font-invisible-unembedded": _x4_unembedded(b"BT 3 Tr /F2 12 Tf 100 100 Td (hidden) Tj ET"),
     }
+
+
+def _x4_unembedded(extra: bytes) -> pikepdf.Pdf:
+    """x4-good with ``extra`` appended to its page content and, for it, an unembedded Helvetica as /F2; with no
+    ``extra``, its own TrueType font loses its program instead."""
+    pdf = _x4_page(extra)
+    fonts = pdf.pages[0].Resources.Font
+    if extra:
+        fonts.F2 = pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica)
+        )
+    else:
+        del fonts.F1.FontDescriptor["/FontFile2"]
+    return pdf
 
 
 def _print_fixtures() -> dict[str, pikepdf.Pdf]:

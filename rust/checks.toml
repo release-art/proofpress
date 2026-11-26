@@ -269,7 +269,7 @@ title = "Fonts used for text are embedded"
 clauses = ["iso-15930-7:6.5.1", "iso-15930-7:6.24"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.font.glyphs-present"
