@@ -585,7 +585,8 @@ mod tests {
             RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X5g)).count()
         );
         let x4 = RUNS.iter().filter(|(c, _)| c.applies.contains(&Level::X4)).count();
-        assert_eq!(verify("x4-good.pdf", &bytes, Level::X4).checks.len(), x4 + 1);
+        // And the two judged from tiers 1 to 5's findings: x4.encrypt.absent and x4.pdf-reference.conforms.
+        assert_eq!(verify("x4-good.pdf", &bytes, Level::X4).checks.len(), x4 + 2);
     }
 
     #[test]
