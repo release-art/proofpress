@@ -24,8 +24,18 @@ fn d50() -> CIExyY {
 }
 
 impl Model {
-    /// A model with `cmyk` for CMYK and `rgb` (else sRGB) for RGB; `None` when a profile does not load or convert.
+    /// A model with `cmyk` for CMYK and `rgb` (else sRGB) for RGB, relative colorimetric (paper white is L* 100); `None`
+    /// when a profile does not load or convert.
     pub(crate) fn new(cmyk: Option<&[u8]>, rgb: Option<&[u8]>) -> Option<Self> {
+        Self::with_intent(cmyk, rgb, Intent::RelativeColorimetric)
+    }
+
+    /// As [`Self::new`], but absolute colorimetric: the colour as measured, paper included, as Lab values in a file are.
+    pub(crate) fn absolute(cmyk: Option<&[u8]>, rgb: Option<&[u8]>) -> Option<Self> {
+        Self::with_intent(cmyk, rgb, Intent::AbsoluteColorimetric)
+    }
+
+    fn with_intent(cmyk: Option<&[u8]>, rgb: Option<&[u8]>, intent: Intent) -> Option<Self> {
         let srgb = match rgb {
             Some(data) => Profile::new_icc(data),
             None => Ok(Profile::new_srgb()),
@@ -33,7 +43,6 @@ impl Model {
         let (lab, srgb) = Profile::new_lab2_context(lcms2::GlobalContext::new(), &d50())
             .ok()
             .zip(srgb.ok())?;
-        let intent = Intent::RelativeColorimetric;
         let rgb = Transform::new(&srgb, PixelFormat::RGB_8, &lab, PixelFormat::Lab_8, intent).ok()?;
         let cmyk = match cmyk {
             Some(data) => {
@@ -96,6 +105,57 @@ fn decoded([l, a, b]: [u8; 3]) -> Lab {
     [f64::from(l) * 100.0 / 255.0, f64::from(a) - 128.0, f64::from(b) - 128.0]
 }
 
+/// The CIEDE2000 colour difference (Sharma, Wu and Dalal, 2005) between two L*a*b* colours, with unit weights.
+pub(crate) fn ciede2000([l1, a1, b1]: Lab, [l2, a2, b2]: Lab) -> f64 {
+    let seventh = |c: f64| c.powi(7) / (c.powi(7) + 25f64.powi(7));
+    let c_bar = f64::midpoint(a1.hypot(b1), a2.hypot(b2));
+    let g = if c_bar > 0.0 {
+        0.5 * (1.0 - seventh(c_bar).sqrt())
+    } else {
+        0.5
+    };
+    let (a1p, a2p) = ((1.0 + g) * a1, (1.0 + g) * a2);
+    let (c1p, c2p) = (a1p.hypot(b1), a2p.hypot(b2));
+    let hue = |a: f64, b: f64| {
+        if a == 0.0 && b == 0.0 {
+            0.0
+        } else {
+            b.atan2(a).to_degrees().rem_euclid(360.0)
+        }
+    };
+    let (h1p, h2p) = (hue(a1p, b1), hue(a2p, b2));
+    let chromatic = c1p * c2p != 0.0;
+    let dhp = match h2p - h1p {
+        _ if !chromatic => 0.0,
+        d if d.abs() <= 180.0 => d,
+        d if d > 180.0 => d - 360.0,
+        d => d + 360.0,
+    };
+    let dh_big = 2.0 * (c1p * c2p).sqrt() * (dhp.to_radians() / 2.0).sin();
+    let (l_bar, c_bar_p) = (f64::midpoint(l1, l2), f64::midpoint(c1p, c2p));
+    let h_bar = match (h1p + h2p, (h1p - h2p).abs()) {
+        (sum, _) if !chromatic => sum,
+        (sum, gap) if gap <= 180.0 => sum / 2.0,
+        (sum, _) if sum < 360.0 => f64::midpoint(sum, 360.0),
+        (sum, _) => f64::midpoint(sum, -360.0),
+    };
+    let cos = |deg: f64| deg.to_radians().cos();
+    let t = 1.0 - 0.17 * cos(h_bar - 30.0) + 0.24 * cos(2.0 * h_bar) + 0.32 * cos(3.0 * h_bar + 6.0)
+        - 0.20 * cos(4.0 * h_bar - 63.0);
+    let d_theta = 30.0 * (-((h_bar - 275.0) / 25.0).powi(2)).exp();
+    let r_c = if c_bar_p > 0.0 {
+        2.0 * seventh(c_bar_p).sqrt()
+    } else {
+        0.0
+    };
+    let s_l = 1.0 + (0.015 * (l_bar - 50.0).powi(2)) / (20.0 + (l_bar - 50.0).powi(2)).sqrt();
+    let s_c = 1.0 + 0.045 * c_bar_p;
+    let s_h = 1.0 + 0.015 * c_bar_p * t;
+    let r_t = -(2.0 * d_theta).to_radians().sin() * r_c;
+    let (dl, dc, dh) = ((l2 - l1) / s_l, (c2p - c1p) / s_c, dh_big / s_h);
+    (dl * dl + dc * dc + dh * dh + r_t * dc * dh).sqrt()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,5 +201,31 @@ mod tests {
         let chosen = Model::from_profiles(&[b"junk".to_vec(), CMYK_PROFILE.to_vec(), b"more".to_vec()]).unwrap();
         assert_eq!(chosen.cmyk([0.0; 4]).map(steps), Some([255.0, 0.0, 0.0]));
         assert!(!Model::from_profiles(&[]).unwrap().has_cmyk());
+    }
+
+    #[test]
+    fn ciede2000_matches_the_published_pairs() {
+        // Sharma, Wu and Dalal (2005), Color Research and Application 30(1): their test pairs.
+        let pairs = [
+            ([50.0, 2.6772, -79.7751], [50.0, 0.0, -82.7485], 2.0425),
+            ([50.0, -1.3802, -84.2814], [50.0, 0.0, -82.7485], 1.0),
+            ([50.0, 0.0, 0.0], [50.0, -1.0, 2.0], 2.3669),
+            ([50.0, 2.49, -0.001], [50.0, -2.49, 0.0009], 7.1792),
+            ([50.0, 2.49, -0.001], [50.0, -2.49, 0.001], 7.1792),
+            ([50.0, 2.5, 0.0], [50.0, 0.0, -2.5], 4.3065),
+            ([50.0, 2.5, 0.0], [73.0, 25.0, -18.0], 27.1492),
+            ([60.2574, -34.0099, 36.2677], [60.4626, -34.1751, 39.4387], 1.2644),
+            ([22.7233, 20.0904, -46.694], [23.0331, 14.973, -42.5619], 2.0373),
+            ([90.9257, -0.5406, -0.9208], [88.6381, -0.8985, -0.7239], 1.5381),
+            ([2.0776, 0.0795, -1.135], [0.9033, -0.0636, -0.5514], 0.9082),
+            // Hues more than 180 degrees apart, summing below and above 360: the Python's values.
+            ([50.0, 10.0, 2.0], [50.0, -10.0, -4.0], 27.4573),
+            ([50.0, 10.0, -1.0], [50.0, 1.0, 10.0], 14.9525),
+        ];
+        for (one, two, want) in pairs {
+            assert!((ciede2000(one, two) - want).abs() < 1e-4, "{one:?} {two:?}");
+            assert!((ciede2000(two, one) - want).abs() < 1e-4, "{two:?} {one:?}");
+        }
+        assert!(ciede2000([50.0, 0.0, 0.0], [50.0, 0.0, 0.0]).abs() < 1e-12);
     }
 }

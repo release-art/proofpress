@@ -204,7 +204,7 @@ title = "Colorants entries agree with their DeviceN space"
 clauses = ["iso-15930-7:6.4.3.4"]
 severity = "warning"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.spot.confusing-names"

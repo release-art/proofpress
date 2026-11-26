@@ -592,10 +592,14 @@ def _x4_colour_fixtures() -> dict[str, pikepdf.Pdf]:
 
 
 def _black_tint(pdf: pikepdf.Pdf, inks: int = 1, black: float = 1) -> pikepdf.Object:
-    """A tint transform from ``inks`` inputs to CMYK with only black varying: enough to define a space."""
-    return pdf.make_indirect(
-        pikepdf.Dictionary(FunctionType=2, Domain=[0, 1] * inks, C0=[0, 0, 0, 0], C1=[0, 0, 0, black], N=1)
-    )
+    """A tint transform from ``inks`` inputs to CMYK with only black varying: enough to define a space. One ink is a
+    Type 2 function; more (a Type 2 function takes one input) a Type 4 one that lays their sum on black."""
+    if inks == 1:
+        return pdf.make_indirect(
+            pikepdf.Dictionary(FunctionType=2, Domain=[0, 1], C0=[0, 0, 0, 0], C1=[0, 0, 0, black], N=1)
+        )
+    program = b"{ " + b"add " * (inks - 1) + b"%g mul 0 0 0 4 -1 roll }" % black
+    return pdf.make_indirect(pdf.make_stream(program, FunctionType=4, Domain=[0, 1] * inks, Range=[0, 1] * 4))
 
 
 def _separation(pdf: pikepdf.Pdf, ink: str, black: float = 1) -> pikepdf.Array:
@@ -623,6 +627,12 @@ def _device_n(inks: list[str], **attributes: object) -> Callable[[pikepdf.Pdf], 
         return pikepdf.Array(space)
 
     return make
+
+
+def _colorants_mismatch(pdf: pikepdf.Pdf) -> pikepdf.Object:
+    """A DeviceN space over Spot1 at full black whose /Colorants Separation for Spot1 is half black."""
+    space = _device_n(["Spot1"], Colorants=pikepdf.Dictionary(Spot1=_separation(pdf, "Spot1", black=0.5)))
+    return space(pdf)
 
 
 def _nchannel(order: list[str] | None = None, solidity: float | None = None) -> Callable[[pikepdf.Pdf], pikepdf.Object]:
@@ -653,6 +663,7 @@ def _x4_spot_fixtures() -> dict[str, pikepdf.Pdf]:
                 )
             },
         ),
+        "x4-colorants-mismatch": _x4_painted(fill, {"S": _colorants_mismatch}),
         "x4-nchannel-dotgain": _x4_painted(
             fill, {"S": _device_n(["Spot1"], Subtype=name.NChannel, MixingHints=_hints(DotGain=_hints()))}
         ),

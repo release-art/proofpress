@@ -8,11 +8,14 @@ use std::collections::BTreeMap;
 
 use super::intent;
 use super::walk::dicts;
+use crate::common::family::{self, Family};
+use crate::common::function;
+use crate::common::lab::{self, Lab, Model};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Finding, Location, X4_SPOT_COLORANTS_ENTRY, X4_SPOT_CONFUSING_NAMES, X4_SPOT_CONSISTENT_DEFINITION,
-    X4_SPOT_NO_DOTGAIN, X4_SPOT_PRINTING_ORDER_CONSISTENT, X4_SPOT_PROCESS_COLORSPACE, X4_SPOT_SOLIDITIES_CONSISTENT,
-    X4_TRANSPARENCY_BLEND_MODES,
+    Finding, Location, X4_SPOT_COLORANTS_ENTRY, X4_SPOT_COLORANTS_MATCH_DEVICEN, X4_SPOT_CONFUSING_NAMES,
+    X4_SPOT_CONSISTENT_DEFINITION, X4_SPOT_NO_DOTGAIN, X4_SPOT_PRINTING_ORDER_CONSISTENT, X4_SPOT_PROCESS_COLORSPACE,
+    X4_SPOT_SOLIDITIES_CONSISTENT, X4_TRANSPARENCY_BLEND_MODES,
 };
 use crate::graphics::{self, Event};
 
@@ -380,6 +383,153 @@ pub(super) fn printing_order(doc: &Document, _: &Settings) -> Vec<Finding> {
     out
 }
 
+/// The colours a `/Colorants` Separation and its `DeviceN` must stay within, as CIEDE2000 (6.4.3.4 says "consistent",
+/// not equal; oracle, 2026-11-26). Both sides go through the same 8-bit Lab conversion, which alone can part two
+/// identical colours by about one unit.
+const COLORANTS_DELTA_E: f64 = 2.0;
+/// The tints the two are compared at: full tint alone misses a different curve.
+const TINTS: [f64; 4] = [0.25, 0.5, 0.75, 1.0];
+/// How far apart two alternate components may be, when neither side converts to Lab and the alternates are the same.
+const COMPONENT_TOLERANCE: f64 = 0.01;
+
+/// An alternate space colours can be measured in: Lab itself, or device or ICC values through a profile.
+enum Measure {
+    Lab,
+    Gray(Model),
+    Rgb(Model),
+    Cmyk(Model),
+}
+
+impl Measure {
+    /// How `alternate` is measured: `DeviceCMYK` through the PDF/X output intent's profile, gray as the K plate through
+    /// it too (else through sRGB, as RGB is), `ICCBased` RGB and CMYK through their own profile; `None` for anything
+    /// else.
+    fn of(doc: &Document, alternate: &Object, intent: Option<&[u8]>) -> Option<Self> {
+        let space = doc.resolve(alternate)?;
+        let head = match &space.value {
+            Value::Array(items) => items.first().and_then(|h| doc.resolve(h)).and_then(Object::name),
+            _ => space.name(),
+        };
+        match head? {
+            b"Lab" => Some(Self::Lab),
+            b"DeviceGray" => Model::absolute(intent, None).map(Self::Gray),
+            b"DeviceRGB" => Model::absolute(None, None).map(Self::Rgb),
+            b"DeviceCMYK" => intent.and_then(|i| Model::absolute(Some(i), None)).map(Self::Cmyk),
+            b"ICCBased" => {
+                let profile = match space.array().and_then(|s| s.get(1)).map(|p| &p.value) {
+                    Some(Value::Reference(num, _)) => doc.stream_data(*num).zip(doc.stream_dict(*num)),
+                    _ => None,
+                };
+                let (data, dict) = profile?;
+                match dict.get(b"N").and_then(|n| doc.resolve(n)).map(|n| &n.value) {
+                    Some(Value::Integer(3)) => Model::absolute(None, Some(&data)).map(Self::Rgb),
+                    Some(Value::Integer(4)) => Model::absolute(Some(&data), None).map(Self::Cmyk),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn lab(&self, values: &[f64]) -> Option<Lab> {
+        match (self, values) {
+            (Self::Lab, [l, a, b, ..]) => Some([*l, *a, *b]),
+            (Self::Gray(model), [g, ..]) => Some(
+                model
+                    .cmyk([0.0, 0.0, 0.0, 1.0 - g])
+                    .unwrap_or_else(|| model.rgb([*g; 3])),
+            ),
+            (Self::Rgb(model), [r, g, b, ..]) => Some(model.rgb([*r, *g, *b])),
+            (Self::Cmyk(model), [c, m, y, k, ..]) => model.cmyk([*c, *m, *y, *k]),
+            _ => None,
+        }
+    }
+}
+
+/// How one colorant of a `DeviceN` differs from its `/Colorants` Separation at `tint`, in words; `None` when they agree.
+fn colorant_differs(
+    doc: &Document,
+    device_n: (&[Object], usize, usize),
+    separation: &[Object],
+    tint: f64,
+    intent: Option<&[u8]>,
+) -> Option<String> {
+    let (items, at, count) = device_n;
+    let unevaluated = "could not be evaluated, so their consistency was not checked".to_owned();
+    let ([_, _, alternate, own, ..], [_, _, other, theirs, ..]) = (items, separation) else {
+        return Some(unevaluated);
+    };
+    let inputs: Vec<f64> = (0..count).map(|i| if i == at { tint } else { 0.0 }).collect();
+    let (Some(one), Some(two)) = (
+        function::evaluate(doc, own, &inputs),
+        function::evaluate(doc, theirs, &[tint]),
+    ) else {
+        return Some(unevaluated);
+    };
+    let percent = tint * 100.0;
+    let measured = |space: &Object, values: &[f64]| Measure::of(doc, space, intent)?.lab(values);
+    match (measured(alternate, &one), measured(other, &two)) {
+        (Some(a), Some(b)) => {
+            let delta = lab::ciede2000(a, b);
+            (delta > COLORANTS_DELTA_E).then(|| format!("are {delta:.1} ΔE00 apart at {percent:.0}% tint"))
+        }
+        _ if same(doc, alternate, other, 0) => {
+            let apart =
+                one.len() != two.len() || one.iter().zip(&two).any(|(x, y)| (x - y).abs() > COMPONENT_TOLERANCE);
+            apart.then(|| format!("differ at {percent:.0}% tint"))
+        }
+        _ => Some("are in alternate spaces that cannot be compared".to_owned()),
+    }
+}
+
+/// 6.4.3.4 (a should): each `/Colorants` Separation of a `DeviceN` that print elements use looks like that colorant
+/// of the `DeviceN` alone (the others at no ink), across the tint range. The process colorants of an `NChannel` space
+/// are skipped. A space is not judged when it has a `None` colorant, or is an `NChannel` space whose process space is
+/// not CMYK, where "no ink" is not zero.
+pub(super) fn colorants_match(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let intent = intent::profile_stream(doc).map(|(_, data)| data);
+    let mut out = Vec::new();
+    for (items, frames) in used_device_n(doc) {
+        let (names, attributes) = names_and_attributes(doc, &items);
+        let process = entry(doc, attributes, b"Process").and_then(Object::dict);
+        let process_names: Vec<&[u8]> = entry(doc, process, b"Components")
+            .and_then(Object::array)
+            .map_or_default(|c| c.iter().filter_map(|n| doc.resolve(n)?.name()).collect());
+        let additive = entry(doc, process, b"ColorSpace")
+            .is_some_and(|space| family::classify(doc, Some(space), None) != Family::Cmyk);
+        let colorants = entry(doc, attributes, b"Colorants").and_then(Object::dict);
+        // With a `None` colorant the transform may draw the look from the `None` components alone, as a duotone's
+        // lookup table does, so no colorant has a look of its own to compare (oracle, 2026-11-26).
+        if additive || names.contains(&b"None".as_slice()) {
+            continue;
+        }
+        for (at, name) in names.iter().enumerate() {
+            let Some(separation) = colorants
+                .and_then(|c| entry(doc, Some(c), name))
+                .and_then(Object::array)
+                .filter(|_| !process_names.contains(name))
+            else {
+                continue;
+            };
+            let differs = TINTS.iter().find_map(|tint| {
+                colorant_differs(doc, (&items, at, names.len()), separation, *tint, intent.as_deref())
+            });
+            if let Some(how) = differs {
+                let message = format!(
+                    "the DeviceN colorant {} and its /Colorants Separation {how}",
+                    text(name)
+                );
+                out.push(
+                    Finding::new(X4_SPOT_COLORANTS_MATCH_DEVICEN, message)
+                        .citing("6.4.3.4")
+                        .at(frames.clone()),
+                );
+            }
+        }
+    }
+    dedup(out)
+}
+
 /// 6.4.3.4: every `/Solidities` value for one ink is the same across the file.
 pub(super) fn solidities(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut seen: BTreeMap<Vec<u8>, f64> = BTreeMap::new();
@@ -607,6 +757,188 @@ mod tests {
                 "x4.spot.consistent-definition"
             ],
             "a definition that refers to nothing is not the same as another"
+        );
+    }
+
+    /// The test CMYK profile as a stream object: the output intent's, and an `ICCBased` space's.
+    fn intent_stream() -> Vec<u8> {
+        let icc = include_bytes!("../../../tests/fixtures/icc/little-cms-test1.icc");
+        let mut intent = format!("<< /N 4 /Length {} >>\nstream\n", icc.len()).into_bytes();
+        intent.extend(icc);
+        intent.extend(b"\nendstream");
+        intent
+    }
+
+    /// `DeviceN` spaces with `/Colorants`, consistent or not in the ways the row tells apart.
+    fn colorant_spaces() -> Vec<String> {
+        let two = |c1: &str| format!("<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [{c1}] /N 1 >>");
+        let sep = |name: &str, alt: &str, f: &str| format!("[/Separation /{name} {alt} {f}]");
+        let gold_silver = format!(
+            "[/DeviceN [/Gold /Silver] /DeviceCMYK 9 0 R << /Colorants << /Gold {} /Silver {} >> >>]",
+            sep("Gold", "/DeviceCMYK", &two("0 1 0 0")),
+            sep("Silver", "/DeviceCMYK", &two("1 0 0 0")),
+        );
+        let duotone = format!(
+            "[/DeviceN [/Black /None] /DeviceCMYK 99 0 R << /Colorants << /Black {} >> >>]",
+            sep("Black", "/DeviceCMYK", &two("0 0 0 1")),
+        );
+        let gray_k = format!(
+            "[/DeviceN [/Ink] /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >> << /Colorants << /Ink {} >> >>]",
+            sep("Ink", "/DeviceCMYK", &two("0 0 0 1"))
+        );
+        let lab = "[/Lab << /WhitePoint [0.9642 1 0.8249] >>]";
+        let lab_pair = format!(
+            "[/DeviceN [/L] {lab} << /FunctionType 2 /Domain [0 1] /C0 [100 0 0] /C1 [50 10 0] /N 1 >> << /Colorants << /L {} >> >>]",
+            sep(
+                "L",
+                lab,
+                "<< /FunctionType 2 /Domain [0 1] /C0 [100 0 0] /C1 [50 10 0] /N 1 >>"
+            )
+        );
+        let cal = "[/CalRGB << /WhitePoint [1 1 1] >>]";
+        let cal_same = format!(
+            "[/DeviceN [/P /Q] {cal} 10 0 R << /Colorants << /P {} /Q {} >> >>]",
+            sep(
+                "P",
+                cal,
+                "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 0 0] /N 1 >>"
+            ),
+            sep(
+                "Q",
+                cal,
+                "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 1 0] /N 1 >>"
+            ),
+        );
+        let odd = format!(
+            "[/DeviceN [/R /S /T /U /V /W] /DeviceRGB 11 0 R << /Colorants << /R {} /S {} /T {} /U [/Separation /U] /V {} /W {} >> >>]",
+            sep(
+                "R",
+                "[/CalGray << /WhitePoint [1 1 1] >>]",
+                "<< /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>"
+            ),
+            sep("S", "/DeviceRGB", "<< /FunctionType 9 >>"),
+            sep(
+                "T",
+                "/DeviceRGB",
+                "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 1 1] /N 1 >>"
+            ),
+            sep("V", "[/ICCBased 12 0 R]", &two("0 0 0 1")),
+            sep("W", "[/ICCBased << /N 4 >>]", &two("0 0 0 1")),
+        );
+        let icc_kinds = format!(
+            "[/DeviceN [/X /Y /Z] /DeviceCMYK 13 0 R << /Colorants << /X {} /Y {} /Z {} >> >>]",
+            sep("X", "[/ICCBased 14 0 R]", &two("0 0 0 1")),
+            sep(
+                "Y",
+                "[/ICCBased 15 0 R]",
+                "<< /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>"
+            ),
+            sep("Z", lab, "<< /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>"),
+        );
+        let nchannel = format!(
+            "[/DeviceN [/Cyan /Spot] /DeviceCMYK 16 0 R << /Subtype /NChannel /Process << /ColorSpace /DeviceCMYK /Components [/Cyan 99 0 R] >> /Colorants << /Cyan {} /Spot {} >> >>]",
+            sep("Cyan", "/DeviceCMYK", &two("0 0 1 0")),
+            sep("Spot", "/DeviceCMYK", &two("1 0 0 0")),
+        );
+        let additive = format!(
+            "[/DeviceN [/A] /DeviceRGB 9 0 R << /Subtype /NChannel /Process << /ColorSpace /DeviceRGB >> /Colorants << /A {} >> >>]",
+            sep("A", "/DeviceCMYK", &two("0 0 1 0")),
+        );
+        vec![
+            gold_silver,
+            duotone,
+            gray_k,
+            lab_pair,
+            cal_same,
+            odd,
+            icc_kinds,
+            nchannel,
+            additive,
+            format!(
+                "[/DeviceN [/A1 /A2 /A3 /A4 /A5] /DeviceRGB 17 0 R << /Colorants << /A1 {} /A2 {} /A3 {} /A4 {} /A5 {} >> >>]",
+                sep("A1", "99 0 R", &two("0 0 0 1")),
+                sep("A2", "5", &two("0 0 0 1")),
+                sep("A3", "[/ICCBased]", &two("0 0 0 1")),
+                sep("A4", "[/ICCBased 99 0 R]", &two("0 0 0 1")),
+                sep("A5", "[/ICCBased 18 0 R]", &two("0 0 0 1")),
+            ),
+        ]
+    }
+
+    /// A page painting with each of [`colorant_spaces`], its functions and profiles beside it.
+    fn colorant_doc() -> Document {
+        let intent = intent_stream();
+        let spaces = colorant_spaces();
+        let resources: Vec<String> = spaces.iter().enumerate().map(|(i, s)| format!("/C{i} {s}")).collect();
+        let resources = format!("<< /ColorSpace << {} >> >>", resources.join(" "));
+        let data: Vec<String> = (0..spaces.len()).map(|i| format!("/C{i} cs 0 0 1 1 re f")).collect();
+        let calculator = |outputs: usize, program: &str| {
+            let range = "0 1 ".repeat(outputs);
+            format!("<< /FunctionType 4 /Domain [0 1 0 1 0 1 0 1 0 1 0 1] /Range [{range}] /Length {} >>\nstream\n{program}\nendstream", program.len())
+                .into_bytes()
+        };
+        let objects = [
+            (9, calculator(4, "{ pop 0 exch 0 0 }")),
+            (10, calculator(3, "{ pop 0 0 }")),
+            (11, calculator(3, "{ pop pop pop pop pop pop 0 0 0 }")),
+            (12, intent.clone()),
+            (13, calculator(4, "{ pop pop 0 0 0 4 -1 roll }")),
+            (14, intent.clone()),
+            (15, b"<< /N 1 /Length 0 >>\nstream\n\nendstream".to_vec()),
+            (16, calculator(4, "{ exch pop 0 0 0 }")),
+            (17, calculator(3, "{ pop pop pop pop pop 0 0 0 }")),
+            (18, [b"<< /N 3".as_slice(), intent.get(7..).unwrap()].concat()),
+        ];
+        let more: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
+        let catalog = b"<< /Pages 2 0 R /OutputIntents [<< /S /GTS_PDFX /DestOutputProfile 8 0 R >>] >>";
+        let page = format!("<< /Type /Page /Contents 4 0 R /Resources {resources} >>");
+        let content = data.join(" ");
+        let content = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+        let mut all: Vec<(u32, &[u8])> = vec![
+            (1, catalog),
+            (2, b"<< /Type /Pages /Kids [3 0 R] >>"),
+            (3, page.as_bytes()),
+            (4, content.as_bytes()),
+            (8, &intent),
+        ];
+        all.extend(more);
+        Document::open(&classic(&all, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap()
+    }
+
+    #[test]
+    fn colorants_against_their_device_n() {
+        let got: Vec<String> = colorants_match(&colorant_doc(), &Level::X4.into())
+            .into_iter()
+            .map(|f| f.message)
+            .collect();
+        let say = |name: &str, how: &str| format!("the DeviceN colorant {name} and its /Colorants Separation {how}");
+        let unevaluated = "could not be evaluated, so their consistency was not checked";
+        let apart = "are in alternate spaces that cannot be compared";
+        assert_eq!(
+            got,
+            [
+                say("Silver", "are 16.8 ΔE00 apart at 25% tint"),
+                say("Q", "differ at 25% tint"),
+                say("R", apart),
+                say("S", unevaluated),
+                say("T", "are 17.5 ΔE00 apart at 25% tint"),
+                say("U", unevaluated),
+                say("V", "are 59.8 ΔE00 apart at 25% tint"),
+                say("W", apart),
+                say("Y", apart),
+                say("Z", apart),
+                say("A1", apart),
+                say("A2", apart),
+                say("A3", apart),
+                say("A4", apart),
+                say("A5", apart),
+            ]
+        );
+        let srgb = || Model::absolute(None, None).unwrap();
+        assert_eq!(
+            Measure::Gray(srgb()).lab(&[0.5]),
+            Some(srgb().rgb([0.5; 3])),
+            "gray with no intent is sRGB"
         );
     }
 }

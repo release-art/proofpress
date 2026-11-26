@@ -7,6 +7,8 @@ use crate::document::{Dict, Document, Object, Value};
 
 /// A calculator function is a few dozen operators; one that runs longer is malformed.
 const MAX_STEPS: usize = 20_000;
+/// A sampled function interpolates between at most 2^this many samples.
+const MAX_CORNER_INPUTS: usize = 12;
 /// How deep stitching functions may nest.
 const MAX_DEPTH: usize = 8;
 
@@ -132,19 +134,21 @@ fn sampled(doc: &Document, function: &Object, dict: &Dict, x: &[(f64, [f64; 2])]
     let encode = dict.get(b"Encode").map_or(Some(default_encode), |e| numbers(doc, e))?;
     let decode = dict.get(b"Decode").map_or(Some(bounds.clone()), |d| numbers(doc, d))?;
     let data = data(doc, function)?;
-    // A table too large to index lands past the data and reads as missing, as it did in the Python.
-    let (mut index, mut stride) = (0i64, 1i64);
+    // Each input's place in the table, clipped to it (7.10.2), as the sample below it, the fraction of the way to the
+    // next, and the stride between them. A table too large to index lands past the data and reads as missing.
+    let mut places: Vec<(i64, f64, i64)> = Vec::with_capacity(x.len());
+    let mut stride = 1i64;
     for (i, (value, [d0, d1])) in x.iter().enumerate() {
         let (e0, e1) = (*encode.get(2 * i)?, *encode.get(2 * i + 1)?);
         let span = d1 - d0;
-        let e = e0 + (if span == 0.0 { 0.0 } else { (value - d0) / span }) * (e1 - e0);
         let count = *size.get(i)?;
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a sample index, rounded and then clamped"
-        )]
-        let at = (e.round_ties_even() as i64).max(0).min(count - 1);
-        index = index.saturating_add(at.saturating_mul(stride));
+        #[expect(clippy::cast_precision_loss, reason = "sample counts far below 2^53")]
+        let e = (e0 + (if span == 0.0 { 0.0 } else { (value - d0) / span }) * (e1 - e0)).clamp(0.0, (count - 1) as f64);
+        #[expect(clippy::cast_possible_truncation, reason = "a sample index, inside the table")]
+        let below = e.floor() as i64;
+        #[expect(clippy::cast_precision_loss, reason = "a sample index, inside the table")]
+        let fraction = if below < count - 1 { e - below as f64 } else { 0.0 };
+        places.push((below, fraction, stride));
         stride = stride.saturating_mul(count);
     }
     if !(1..=32).contains(&bits) {
@@ -152,23 +156,52 @@ fn sampled(doc: &Document, function: &Object, dict: &Dict, x: &[(f64, [f64; 2])]
     }
     let top = (1u64 << bits) - 1;
     let whole_usize = |n: i64| usize::try_from(n).unwrap_or(usize::MAX);
+    let sample = |index: i64, j: usize| {
+        let start = index
+            .saturating_mul(i64::try_from(outputs).unwrap_or(i64::MAX))
+            .saturating_add(i64::try_from(j).unwrap_or(i64::MAX))
+            .saturating_mul(bits);
+        let last = whole_usize(start.saturating_add(bits + 7) / 8).min(data.len());
+        let piece = data.get(whole_usize(start / 8)..last).filter(|p| !p.is_empty())?;
+        let joined = piece.iter().fold(0u128, |acc, b| acc << 8 | u128::from(*b));
+        let width = i64::try_from(piece.len() * 8).unwrap_or(i64::MAX);
+        let shift = u32::try_from(width - start % 8 - bits).ok()?;
+        #[expect(clippy::cast_possible_truncation, reason = "masked to at most 32 bits")]
+        let raw = (joined >> shift) as u64 & top;
+        #[expect(clippy::cast_precision_loss, reason = "a sample of at most 32 bits")]
+        Some(raw as f64 / top as f64)
+    };
+    // Multilinear interpolation between the samples around the point (7.10.2; a cubic `/Order` is read as linear):
+    // each input that falls between two samples doubles the corners.
+    let base = places.iter().fold(0i64, |at, (below, _, stride)| {
+        at.saturating_add(below.saturating_mul(*stride))
+    });
+    let between: Vec<(f64, i64)> = places.iter().filter(|p| p.1 > 0.0).map(|p| (p.1, p.2)).collect();
+    if between.len() > MAX_CORNER_INPUTS {
+        return None;
+    }
+    let corners: Vec<(i64, f64)> = (0..1usize << between.len())
+        .map(|mask| {
+            between
+                .iter()
+                .enumerate()
+                .fold((base, 1.0), |(at, weight), (bit, (fraction, stride))| {
+                    if mask >> bit & 1 == 1 {
+                        (at.saturating_add(*stride), weight * fraction)
+                    } else {
+                        (at, weight * (1.0 - fraction))
+                    }
+                })
+        })
+        .collect();
     (0..outputs)
         .map(|j| {
-            let start = index
-                .saturating_mul(i64::try_from(outputs).unwrap_or(i64::MAX))
-                .saturating_add(i64::try_from(j).unwrap_or(i64::MAX))
-                .saturating_mul(bits);
-            let last = whole_usize(start.saturating_add(bits + 7) / 8).min(data.len());
-            let piece = data.get(whole_usize(start / 8)..last).filter(|p| !p.is_empty())?;
-            let joined = piece.iter().fold(0u128, |acc, b| acc << 8 | u128::from(*b));
-            let width = i64::try_from(piece.len() * 8).unwrap_or(i64::MAX);
-            let shift = u32::try_from(width - start % 8 - bits).ok()?;
-            #[expect(clippy::cast_possible_truncation, reason = "masked to at most 32 bits")]
-            let sample = (joined >> shift) as u64 & top;
+            let value = corners
+                .iter()
+                .map(|(at, weight)| Some(weight * sample(*at, j)?))
+                .sum::<Option<f64>>()?;
             let (d0, d1) = (*decode.get(2 * j)?, *decode.get(2 * j + 1)?);
-            #[expect(clippy::cast_precision_loss, reason = "a sample of at most 32 bits")]
-            let fraction = sample as f64 / top as f64;
-            Some(d0 + fraction * (d1 - d0))
+            Some(d0 + value * (d1 - d0))
         })
         .collect()
 }
@@ -579,6 +612,34 @@ mod tests {
             eval("<< /FunctionType 2 /Domain [0 1] /N 1 /Range [/X] >>", &[], &[1.0]),
             None
         );
+    }
+
+    #[test]
+    fn sampled_functions_interpolate() {
+        let one = |at: f64| {
+            let f = stream(
+                "/FunctionType 0 /Domain [0 1] /Range [0 1] /Size [2] /BitsPerSample 8",
+                &[0, 255],
+            );
+            eval("5 0 R", &[(5, f)], &[at]).map(|v| v[0])
+        };
+        assert_eq!(one(0.25), Some(0.25));
+        assert_eq!(one(1.0), Some(1.0), "the last sample, exactly");
+        assert_eq!(one(7.0), Some(1.0), "clipped to the domain");
+        let square = stream(
+            "/FunctionType 0 /Domain [0 1 0 1] /Range [0 1] /Size [2 2] /BitsPerSample 8",
+            &[0, 255, 255, 255],
+        );
+        let corner = eval("5 0 R", &[(5, square.clone())], &[0.5, 0.5]).map(|v| v[0]);
+        assert_eq!(corner, Some(0.75), "the mean of the four samples around the middle");
+        assert_eq!(eval("5 0 R", &[(5, square)], &[0.0, 1.0]), Some(vec![1.0]));
+        let wide = format!(
+            "/FunctionType 0 /Domain [{}] /Range [0 1] /Size [{}] /BitsPerSample 1",
+            "0 1 ".repeat(13),
+            "2 ".repeat(13)
+        );
+        let many = eval("5 0 R", &[(5, stream(&wide, &[0; 1024]))], &[0.5; 13]);
+        assert_eq!(many, None, "too many inputs between samples");
     }
 
     #[test]

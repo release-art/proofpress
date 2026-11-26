@@ -1,6 +1,7 @@
 Feature: PDF/X-4 6.4.3.4 and 6.20, spot colours and transparency
-  Spots have /Colorants entries, one definition per name, a /Process space of the intent's family, no /DotGain, and
-  consistent printing orders and solidities; group spaces obey 6.4.3 and blend modes are the PDF Reference's.
+  Spots have /Colorants entries that look like their DeviceN, one definition per name, a /Process space of the intent's
+  family, no /DotGain, and consistent printing orders and solidities; group spaces obey 6.4.3 and blend modes are the
+  PDF Reference's.
 
   Scenario Outline: One defect raises its check and nothing else
     Given the fixture "<fixture>"
@@ -11,6 +12,7 @@ Feature: PDF/X-4 6.4.3.4 and 6.20, spot colours and transparency
     Examples:
       | fixture | check |
       | x4-devicen-no-colorants | x4.spot.colorants-entry |
+      | x4-colorants-mismatch | x4.spot.colorants-match-devicen |
       | x4-devicen-process-rgb | x4.spot.process-colorspace |
       | x4-nchannel-dotgain | x4.spot.no-dotgain |
       | x4-spot-confusing-name | x4.spot.confusing-names |

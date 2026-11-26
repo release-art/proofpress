@@ -81,7 +81,8 @@ record it as not conforming to that one rule).
 | 4.6 (part) | `4295048` | Text: font names, subtypes, embedding and `.notdef` codes; glyph counts and stroke widths in the walk; the six text checks ported, parity-proved, `text.py` deleted; a null `/FontFile` entry counts as absent |
 | 4.6 (part) | `9bfdb2f` | PDF functions (types 0, 2, 3 and 4) evaluated in the core; `spot-definition` ported, parity-proved and its Python deleted |
 | 4.6 (part) | `0beb109` | CMYK image samples decoded in the core (`zune-jpeg` for JPEG, `hayro-jpeg2000` for JPEG 2000, both MIT or Apache-2.0 and accepted by `cargo deny`); `gray-only` ported, parity-proved and its Python deleted |
-| 4.6 (part) | the commit after `0beb109` | Colour to L*a*b* in the core through `lcms2` (static, LittleCMS 2.20); `contrast` ported, parity-proved and its Python check deleted (the measuring stays for the inventory and extract reports) |
+| 4.6 (part) | `522af3a` | Colour to L*a*b* in the core through `lcms2` (static, LittleCMS 2.20); `contrast` ported, parity-proved and its Python check deleted (the measuring stays for the inventory and extract reports) |
+| 4.3 (rest) | the commit after `522af3a` | `x4.spot.colorants-match-devicen` (6.4.3.4, a should): each `/Colorants` Separation compared with its DeviceN colorant alone at four tints, in Lab; sampled functions interpolate (ISO 32000 7.10.2); 1 fixture |
 
 ## Register coverage
 
@@ -89,7 +90,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 109 | 28 | 4 |
+| PDF/X-4 and X-4p | 110 | 27 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 51 | 5 | 1 (`internal`) |
 
@@ -316,6 +317,21 @@ Oracle consultations:
   end-of-data marker, so text centred on them is unmeasured in the core. Converted colours match Pillow's exactly. The
   Python's CIEDE2000 is not ported: the check does not report it, and the inventory, which does, stays in Python for the
   CLI stage.
+- Task 4.3, `x4.spot.colorants-match-devicen` (pdfx-oracle, 2026-11-26): 6.4.3.4 asks that `/Colorants` Separations
+  be "consistent" with their DeviceN without saying how. Each colorant of a DeviceN that print elements use is compared
+  alone (the others at no ink) with its Separation at 25, 50, 75 and 100% tint, both converted to Lab absolute
+  colorimetric (DeviceCMYK through the PDF/X intent, DeviceGray as the K plate through it, `ICCBased` through its own
+  profile, Lab as itself), and warned past 2 ΔE00. Unconvertible alternates are compared component by component when
+  they are the same space, else reported as not comparable; a transform that cannot be evaluated is reported. Process
+  colorants of an NChannel space are skipped, and a space with a `None` colorant is not judged: Ghent's SPOT and ALL
+  test pages use one as a duotone, whose `None` components carry the look through an Indexed lookup (the oracle's
+  reading; the first version warned on both, a false positive). Ghent and Altona raise nothing.
+- Task 4.3: sampled (Type 0) functions now interpolate between samples, as ISO 32000 7.10.2 requires, where the port
+  (like the Python) took the nearest sample; a cubic `/Order` is read as linear. Values on a sample, all the
+  `spot-definition` check reads at full tint, are unchanged. Our fixture builder gave multi-ink DeviceN spaces a Type 2
+  function, which takes one input; they now have a Type 4 one (`x4-printing-order-clash`, `x4-solidities-clash`).
+- Noted by the oracle, not changed: the ported `spot-definition` house check evaluates a DeviceN at every ink's full
+  tint at once, as the Python did, so for a multi-ink space it compares the combined colour rather than each ink's own.
 - Task 4.6: `boxes` and `bleedbox` come from the Python PDF/X layer (`pdfx/x4.py`), which the plan does not port; the
   `x4.boxes.*` rows replace them.
 - Task 4.6: the profile's on/off switches for print checks stay in Python (`ported.check`); the core runs every

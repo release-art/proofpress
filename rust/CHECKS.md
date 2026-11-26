@@ -28,7 +28,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.icc.cmyk-not-intent-profile` | Four-channel ICC colour does not reuse the intent profile | iso-15930-7:6.4.3.3 | error | x4, x4p | implemented |
 | `x4.spot.colorants-entry` | Every DeviceN spot has a Colorants entry | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
 | `x4.spot.consistent-definition` | A spot name has one definition throughout | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
-| `x4.spot.colorants-match-devicen` | Colorants entries agree with their DeviceN space | iso-15930-7:6.4.3.4 | warning | x4, x4p | todo |
+| `x4.spot.colorants-match-devicen` | Colorants entries agree with their DeviceN space | iso-15930-7:6.4.3.4 | warning | x4, x4p | implemented |
 | `x4.spot.confusing-names` | Spot names do not imitate process or RGB inks | iso-15930-7:6.4.3.4 | warning | x4, x4p | implemented |
 | `x4.spot.process-colorspace` | A DeviceN process space matches the output intent | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |
 | `x4.spot.no-dotgain` | NChannel mixing hints carry no dot gain | iso-15930-7:6.4.3.4 | error | x4, x4p | implemented |

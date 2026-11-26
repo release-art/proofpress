@@ -488,6 +488,10 @@ expect = { "x4.icc.cmyk-not-intent-profile" = "an ICCBased fill on a copy of the
 
 # PDF/X-4 6.4.3.4 and 6.20: spot colours and transparency.
 
+[x4-colorants-mismatch]
+levels = ["x4"]
+expect = { "x4.spot.colorants-match-devicen" = "a DeviceN spot whose /Colorants Separation is half as dark (6.4.3.4, a should)" }
+
 [x4-devicen-no-colorants]
 levels = ["x4"]
 expect = { "x4.spot.colorants-entry" = "a DeviceN spot with no /Colorants entry (6.4.3.4)" }

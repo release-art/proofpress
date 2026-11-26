@@ -277,6 +277,7 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_TRANSPARENCY_GROUP_CS_RESTRICTED, colour::group_spaces),
     (f::X4_PRE_SEPARATED_ABSENT, colour::pre_separated),
     (f::X4_SPOT_COLORANTS_ENTRY, spots::colorants_entry),
+    (f::X4_SPOT_COLORANTS_MATCH_DEVICEN, spots::colorants_match),
     (f::X4_SPOT_PROCESS_COLORSPACE, spots::process_space),
     (f::X4_SPOT_NO_DOTGAIN, spots::no_dot_gain),
     (f::X4_SPOT_CONFUSING_NAMES, spots::confusing_names),
