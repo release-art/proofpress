@@ -6,3 +6,9 @@ Feature: The genuine PDF/X-4 base fixture
     Given the fixture "x4-good"
     When it is verified as PDF/X-4
     Then it passes
+
+  Scenario: A resource the content uses is not in the file (6.3)
+    Given the fixture "x4-resource-missing"
+    When it is verified as PDF/X-4
+    Then check "x4.complete.resources-inside" fails
+    And no check fails but "x4.complete.resources-inside"

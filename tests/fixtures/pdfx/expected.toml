@@ -856,3 +856,8 @@ expect = { "x4.limits.graphics" = "a DeviceN space of 33 inks (6.25)" }
 [x4-name-other-not-utf8]
 levels = ["x4"]
 expect = { "x4.names.other-recommended" = "a name that is not UTF-8 (6.6)" }
+
+# PDF/X-4 6.3: a resource the content uses is not in the file.
+[x4-resource-missing]
+levels = ["x4"]
+expect = { "x4.complete.resources-inside" = "/Nowhere Do with no /Nowhere XObject (6.3)" }

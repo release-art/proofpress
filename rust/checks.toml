@@ -26,7 +26,7 @@ title = "Every resource a print element needs is in the file"
 clauses = ["iso-15930-7:6.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.complete.single-condition"

@@ -7,6 +7,7 @@ mod annots;
 mod boxes;
 mod codecs;
 mod colour;
+mod complete;
 mod contents;
 mod contrast;
 mod fonts;
@@ -178,6 +179,7 @@ const RUNS: &[(&Check, Run)] = &[
     (X4_FILTER_STANDARD_ONLY, |d, _| x4::standard_only(d)),
     (X4_PERMS_UR_ONLY, |d, _| x4::ur_only(d)),
     (X4_LIMITS_OBJECTS, |d, _| x4::object_count(d)),
+    (f::X4_COMPLETE_RESOURCES_INSIDE, complete::resources_inside),
     (f::X4_LIMITS_LEXICAL, limits::lexical),
     (f::X4_LIMITS_GRAPHICS, limits::graphics),
     (X4_NAMES_UTF8, |d, _| x4::names_utf8(d)),

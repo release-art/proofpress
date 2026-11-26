@@ -99,7 +99,8 @@ record it as not conforming to that one rule).
 | 5.2 (part) | `3f971fd` | `x4.font.embedded` (6.5.1): a font any visible text run uses is embedded, render mode 3 exempt; 2 fixtures |
 | 5.2, 5.3 | `c72d1aa` | Font programs read with `read-fonts` (TrueType and OpenType tables, bare CFF, Type 1) and CMaps with `hayro-cmap` (Adobe's predefined CMaps bundled); `x4.font.glyphs-present`, `x4.font.no-notdef` and `x4.font.widths-consistent` (6.5.1 to 6.5.3); test font programs of our own in `tests/fixtures/fonts/`; 5 fixtures |
 | 6 (rows) | `38c2d71` | The X-4 rows the milestone needs that phases 2 and 4 left: 6.25's lexical and graphics limits (the walk now reports each page's deepest graphics-state nesting) and 6.6's recommendation for other names; 7 fixtures |
-| 6 (rows) | `7aacf55` and the commit after it | `x4.pdf-reference.conforms` (6.1.1) implemented: it was coded in phase 2 to fail on every error the reading tiers find, and waited for the content tier, which now reports; 9 fixtures' expectations gain it |
+| 6 (rows) | `7aacf55`, `53843a0` | `x4.pdf-reference.conforms` (6.1.1) implemented: it was coded in phase 2 to fail on every error the reading tiers find, and waited for the content tier, which now reports; 9 fixtures' expectations gain it |
+| 6 (rows) | the commit after `53843a0` | `x4.complete.resources-inside` (6.3): resource names content uses that its resources do not define, and composite fonts whose CMap is neither embedded nor in ISO 32000-1 Table 118; 1 fixture. Every X-4 row that needs no external file is now implemented |
 
 ## Register coverage
 
@@ -107,7 +108,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 124 | 13 | 4 |
+| PDF/X-4 and X-4p | 125 | 12 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 51 | 5 | 1 (`internal`) |
 
@@ -366,6 +367,7 @@ Oracle consultations:
 - Phase 6, the milestone's rows: 6.25's lexical row, moved to phase 4 in task 2.2, had not been done (phase 4's done list does not name it); it and the graphics row are done now, with the oracle's readings (decision log). On veraPDF 6-1-13 and BFO 6-1-13: integers, names, content strings, nesting and CIDs agree; t03-fail-d (a long string outside any content stream), BFO t05 and t09 (reals nearer 0 than 1.175e-38) and the page-size files pass, which PDF/X-4 allows. 6.6's recommendation judges dictionary keys and content-stream names on UTF-8 only, as their raw spelling is not kept (marked `ponytail:`).
 - Phase 6, 6.1.1: with `x4.pdf-reference.conforms` implemented, each damage fixture at PDF/X-4 fails its tier's check and 6.1.1, as plan task 2.2 designed (classified: decided reading, not a regression); the scenarios for them say so. Ghent and Altona pass it.
 - Process slip, 2026-11-26: `7aacf55` was committed with a red gate. The gate line piped `bin/rust/check.sh` into `grep`, which hid its exit status; a unit test counting the checks judged from the tiers, and 4 fixtures' expectations, still needed 6.1.1. The next commit fixes both; the gates now run through a script that stops at the first failing step.
+- Phase 6, 6.3 (oracle, 2026-11-26): a missing resource is reported once, under 6.3, narrowed to what renders (`/OC` property names only, pattern names only under a Pattern space, device names never). The predefined CMaps are Table 118's 61 names, not every CMap `hayro-cmap` bundles. veraPDF 6-2-11-3-3-t01-fail-a fails it; t02 (WMode) and t03 (a `/UseCMap` naming an embedded CMap, which is in the file) are PDF/A-only rules and pass. Not judged: forms without `/Resources`, appearance streams and Type 3 glyph procedures (marked `ponytail:`). Missing `/Widths` is 6.1.1's, not 6.3's (6.5.3 lets the program supply widths).
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 
