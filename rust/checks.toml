@@ -277,7 +277,7 @@ title = "Embedded fonts have every glyph they show"
 clauses = ["iso-15930-7:6.5.1"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.font.no-notdef"
@@ -285,7 +285,7 @@ title = "Text never shows the .notdef glyph"
 clauses = ["iso-15930-7:6.5.2"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.font.widths-consistent"
@@ -293,7 +293,7 @@ title = "Declared widths match the font program"
 clauses = ["iso-15930-7:6.5.3"]
 severity = "error"
 applies = ["x4", "x4p"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x4.font.truetype-nonsymbolic-encoding"

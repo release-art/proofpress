@@ -122,6 +122,8 @@ pub(crate) struct Ink {
     pub(crate) font: Option<Rc<Font>>,
     pub(crate) glyphs: usize,
     pub(crate) notdef: usize,
+    /// A text run's character codes, in the order shown.
+    pub(crate) codes: Vec<u32>,
     /// A stroked path's line width on the page: the line width by the CTM's scale (the square root of its
     /// determinant).
     pub(crate) stroke_width: Option<f64>,
@@ -517,6 +519,7 @@ struct Run {
     size: f64,
     glyphs: usize,
     notdef: usize,
+    codes: Vec<u32>,
 }
 
 fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
@@ -535,10 +538,11 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
     };
     let (font, size, scale) = (&state.font, state.size, state.scale);
     let mut advance = 0.0;
-    let (mut glyphs, mut notdef) = (0, 0);
+    let (mut glyphs, mut notdef, mut codes) = (0, 0, Vec::new());
     for item in items {
         if let Value::String(bytes, _) = &item.value {
             for code in font.codes(bytes) {
+                codes.push(code);
                 glyphs += 1;
                 notdef += usize::from(font.is_notdef(code));
                 advance += (font.width(code) / 1000.0 * size + state.char_spacing) * scale;
@@ -564,6 +568,7 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
         size: size * vertical,
         glyphs,
         notdef,
+        codes,
     }
 }
 
@@ -583,6 +588,7 @@ fn ink(state: &State, size: f64, space: Option<Family>) -> Ink {
         font: None,
         glyphs: 0,
         notdef: 0,
+        codes: Vec::new(),
         stroke_width: None,
     }
 }
@@ -927,6 +933,7 @@ impl Walker<'_> {
                         font: Some(Rc::clone(&state.font)),
                         glyphs: run.glyphs,
                         notdef: run.notdef,
+                        codes: run.codes,
                         ..ink(&state, run.size, None)
                     };
                     let kind = Kind::Text(state.text_mode);

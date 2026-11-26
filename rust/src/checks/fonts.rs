@@ -11,15 +11,19 @@
 // content and annotation appearances are not walked).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 
 use super::Settings;
 use super::painted::page_of;
+use crate::common::font::Font;
+use crate::common::glyphs::{self, Look};
+use crate::common::pyfmt::g;
 use crate::common::sfnt;
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Location, X4_FONT_EMBEDDED, X4_FONT_TRUETYPE_NONSYMBOLIC_ENCODING,
-    X4_FONT_TRUETYPE_NONSYMBOLIC_NO_DIFFERENCES, X4_FONT_TRUETYPE_SYMBOLIC_NO_ENCODING,
-    X4_FONT_TRUETYPE_SYMBOLIC_ONE_CMAP,
+    Check, Finding, Location, X4_FONT_EMBEDDED, X4_FONT_GLYPHS_PRESENT, X4_FONT_NO_NOTDEF,
+    X4_FONT_TRUETYPE_NONSYMBOLIC_ENCODING, X4_FONT_TRUETYPE_NONSYMBOLIC_NO_DIFFERENCES,
+    X4_FONT_TRUETYPE_SYMBOLIC_NO_ENCODING, X4_FONT_TRUETYPE_SYMBOLIC_ONE_CMAP, X4_FONT_WIDTHS_CONSISTENT,
 };
 use crate::graphics::{self, Event, Kind};
 
@@ -206,6 +210,145 @@ pub(super) fn embedded(doc: &Document, _: &Settings) -> Vec<Finding> {
         .collect()
 }
 
+/// A `/Widths` or `/W` entry within this of the program's advance agrees with it (X4-Q16): each is rounded to a
+/// thousandth of an em at most, so honest values differ by up to half a unit each.
+const WIDTH_TOLERANCE: f64 = 1.0;
+
+/// The codes shown in each font object, with the walk's metrics for the font and, per code, whether any appearance of
+/// it is outside render mode 3 (owner, 2026-11-26).
+type Shown = BTreeMap<u32, (Rc<Font>, BTreeMap<u32, bool>)>;
+
+fn shown(doc: &Document) -> Shown {
+    let mut out: Shown = BTreeMap::new();
+    for event in graphics::walk(doc) {
+        if let Event::Paint {
+            kind: Kind::Text(mode),
+            ink,
+            ..
+        } = event
+            && let Some(font) = ink.font.filter(|f| f.known)
+            && let Some(num) = font.object
+        {
+            let codes = &mut out.entry(num).or_insert_with(|| (Rc::clone(&font), BTreeMap::new())).1;
+            for code in ink.codes {
+                *codes.entry(code).or_default() |= mode != 3;
+            }
+        }
+    }
+    out
+}
+
+/// Each shown font with its codes judged against its program.
+/// A shown font: its object number, the walk's metrics, its codes as `Shown` has them, and each code judged.
+type Judged = (u32, Rc<Font>, BTreeMap<u32, bool>, BTreeMap<u32, (Look, Option<u32>)>);
+
+fn judged(doc: &Document) -> Vec<Judged> {
+    let mut shown = shown(doc);
+    doc.objects()
+        .filter_map(|(num, object, ..)| {
+            let (font, codes) = shown.remove(&num)?;
+            object.dict().map(|dict| {
+                let looks = glyphs::judge(doc, dict, &codes.keys().copied().collect());
+                (num, font, codes, looks)
+            })
+        })
+        .collect()
+}
+
+fn font_finding(check: &'static Check, clause: &str, num: u32, font: &Font, problem: &str) -> Finding {
+    Finding::new(check, format!("font {} (object {num}) {problem}", font.name))
+        .citing(clause)
+        .at(vec![Location::Object(num, 0)])
+}
+
+/// At most ten codes, in words.
+fn listed(codes: &[u32]) -> String {
+    let shown: Vec<String> = codes.iter().take(10).map(u32::to_string).collect();
+    let more = if codes.len() > 10 { ", ..." } else { "" };
+    format!("{}{more}", shown.join(", "))
+}
+
+/// 6.5.1: every code a font shows visibly has a glyph in its embedded program.
+pub(super) fn glyphs_present(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for (num, font, codes, looks) in judged(doc) {
+        let judged = |want: &Look| -> Vec<u32> {
+            looks
+                .iter()
+                .filter(|(c, (l, _))| l == want && codes.get(c) == Some(&true))
+                .map(|(c, _)| *c)
+                .collect()
+        };
+        if !judged(&Look::Unreadable).is_empty() {
+            out.push(font_finding(
+                X4_FONT_GLYPHS_PRESENT,
+                "6.5.1",
+                num,
+                &font,
+                "has a program that cannot be read",
+            ));
+        }
+        let missing = judged(&Look::Missing);
+        if !missing.is_empty() {
+            let problem = format!(
+                "has no glyph in its program for {} code(s) shown: {}",
+                missing.len(),
+                listed(&missing)
+            );
+            out.push(font_finding(X4_FONT_GLYPHS_PRESENT, "6.5.1", num, &font, &problem));
+        }
+    }
+    out
+}
+
+/// 6.5.2: no code shown, in any render mode, selects `.notdef`.
+pub(super) fn no_notdef(doc: &Document, _: &Settings) -> Vec<Finding> {
+    judged(doc)
+        .into_iter()
+        .filter_map(|(num, font, _, looks)| {
+            let notdef: Vec<u32> = looks
+                .iter()
+                .filter(|(_, (l, _))| *l == Look::Notdef)
+                .map(|(c, _)| *c)
+                .collect();
+            (!notdef.is_empty()).then(|| {
+                let problem = format!("shows .notdef for {} code(s): {}", notdef.len(), listed(&notdef));
+                font_finding(X4_FONT_NO_NOTDEF, "6.5.2", num, &font, &problem)
+            })
+        })
+        .collect()
+}
+
+/// 6.5.3: the width the font dictionary gives each glyph shown agrees with the program's advance (X4-Q16). A simple font
+/// without `/Widths` is not judged; a composite font's `/DW` stands for the CIDs `/W` does not list.
+pub(super) fn widths_consistent(doc: &Document, _: &Settings) -> Vec<Finding> {
+    judged(doc)
+        .into_iter()
+        .filter(|(_, font, ..)| font.code_bytes == 2 || font.measured())
+        .filter_map(|(num, font, _, looks)| {
+            let differ: Vec<(u32, f64, f64)> = looks
+                .iter()
+                .filter_map(|(code, (look, key))| {
+                    let (Look::Glyph(Some(advance)), Some(key)) = (look, key) else {
+                        return None;
+                    };
+                    let declared = font.width(*key);
+                    ((declared - advance).abs() > WIDTH_TOLERANCE).then_some((*code, declared, *advance))
+                })
+                .collect();
+            let (code, declared, advance) = *differ.first()?;
+            let problem = format!(
+                "declares widths that differ from its program's for {} code(s) shown, code {code} among them: {} in \
+                 the PDF, {} in the program",
+                differ.len(),
+                g(declared),
+                g(advance)
+            );
+            Some(font_finding(X4_FONT_WIDTHS_CONSISTENT, "6.5.3", num, &font, &problem))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,6 +383,53 @@ mod tests {
             )
         };
         assert_eq!(found, [msg(1, 3), msg(2, 1)]);
+    }
+
+    #[test]
+    fn glyphs_notdef_and_widths_from_the_program() {
+        const TTF: &[u8] = include_bytes!("../../../tests/fixtures/fonts/proof.ttf");
+        let mut widths = vec!["600"; 95];
+        widths[usize::from(b'B' - 32)] = "650";
+        let tt = |file: &str, widths: &str| {
+            format!(
+                "<< /Type /Font /Subtype /TrueType /BaseFont /ProofBox /FirstChar 32 {widths} /Encoding /WinAnsiEncoding \
+                 /FontDescriptor << /Flags 32 /FontFile2 {file} >> >>"
+            )
+            .into_bytes()
+        };
+        let objects = vec![
+            (10, tt("20 0 R", &format!("/Widths [{}]", widths.join(" ")))),
+            (11, tt("21 0 R", "/Widths [600]")),
+            (12, tt("20 0 R", "")),
+            (20, stream("", TTF)),
+            (21, stream("", b"junk")),
+        ];
+        let fonts =
+            "/Resources << /Font << /F 10 0 R /U 11 0 R /N 12 0 R /D << /Subtype /Type1 /BaseFont /Direct >> >> >>";
+        // 0xE9 and 0xEA have no glyph: the first only ever in render mode 3, the second also once visibly. 0x10 has no
+        // name in WinAnsiEncoding.
+        let text = "BT /F 9 Tf (AB) Tj 3 Tr (\\351\\352\\020) Tj 0 Tr (\\352) Tj /U 9 Tf (A) Tj /N 9 Tf (B) Tj /D 9 Tf (A) Tj ET";
+        let doc = paged(&[(fonts, text)], "", &objects);
+        let settings = Level::X4.into();
+        let found: Vec<String> = [glyphs_present, no_notdef, widths_consistent]
+            .iter()
+            .flat_map(|run| run(&doc, &settings))
+            .map(|f| f.message)
+            .collect();
+        assert_eq!(
+            found,
+            [
+                "font ProofBox (object 10) has no glyph in its program for 1 code(s) shown: 234",
+                "font ProofBox (object 11) has a program that cannot be read",
+                "font ProofBox (object 10) shows .notdef for 1 code(s): 16",
+                "font ProofBox (object 10) declares widths that differ from its program's for 1 code(s) shown, code 66 \
+                 among them: 650 in the PDF, 600 in the program",
+            ]
+        );
+        assert_eq!(
+            listed(&(0..12).collect::<Vec<u32>>()),
+            "0, 1, 2, 3, 4, 5, 6, 7, 8, 9, ..."
+        );
     }
 
     #[test]

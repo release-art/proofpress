@@ -288,6 +288,9 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4_SPOT_SOLIDITIES_CONSISTENT, spots::solidities),
     (f::X4_TRANSPARENCY_BLEND_MODES, spots::blend_modes),
     (f::X4_FONT_EMBEDDED, fonts::embedded),
+    (f::X4_FONT_GLYPHS_PRESENT, fonts::glyphs_present),
+    (f::X4_FONT_NO_NOTDEF, fonts::no_notdef),
+    (f::X4_FONT_WIDTHS_CONSISTENT, fonts::widths_consistent),
     (f::X4_FONT_TRUETYPE_NONSYMBOLIC_ENCODING, fonts::nonsymbolic_encoding),
     (
         f::X4_FONT_TRUETYPE_NONSYMBOLIC_NO_DIFFERENCES,

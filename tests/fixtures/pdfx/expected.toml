@@ -812,3 +812,25 @@ expect = { "x4.font.embedded" = "the TrueType font's program removed (6.5.1)" }
 [x4-font-invisible-unembedded]
 levels = ["x4"]
 expect = {}
+
+# PDF/X-4 6.5.1 to 6.5.3, judged against x4-good's TrueType program.
+[x4-font-glyph-missing]
+levels = ["x4"]
+expect = { "x4.font.glyphs-present" = "eacute, which the program has no glyph for (6.5.1)" }
+
+[x4-font-notdef]
+levels = ["x4"]
+expect = { "x4.font.no-notdef" = "code 16, which WinAnsiEncoding names nothing for (6.5.2)" }
+
+[x4-font-widths]
+levels = ["x4"]
+expect = { "x4.font.widths-consistent" = "/Widths 650 for P, 600 in the program (6.5.3)" }
+
+[x4-font-hidden-oc]
+levels = ["x4"]
+expect = { "x4.font.embedded" = "an unembedded font in optional content that is off (6.5.1, 6.24)" }
+
+# 6.5.1's glyph presence skips a code shown only in render mode 3 (owner, 2026-11-26).
+[x4-font-invisible-missing]
+levels = ["x4"]
+expect = {}

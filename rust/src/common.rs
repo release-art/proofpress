@@ -2,14 +2,17 @@
 //! XMP and text-string readers the metadata checks share.
 
 pub(crate) mod date;
+pub(crate) mod encoding;
 pub(crate) mod family;
 pub(crate) mod font;
 pub(crate) mod function;
+pub(crate) mod glyphs;
 pub(crate) mod icc;
 pub(crate) mod jbig2;
 pub(crate) mod jpeg;
 pub(crate) mod jpx;
 pub(crate) mod lab;
+pub(crate) mod program;
 pub(crate) mod pyfmt;
 pub(crate) mod raster;
 pub(crate) mod rect;

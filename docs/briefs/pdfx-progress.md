@@ -5,6 +5,15 @@ The running log of the unattended run that carries out [`pdfx-plan.md`](pdfx-pla
 
 ## Stop questions
 
+Answered 2026-11-26 (oracle escalation, task 5.2, glyph presence 6.5.1 and `.notdef` 6.5.2):
+- (a) Render mode 3: a glyph (a font's code) is skipped only when every appearance of it is in mode 3; one visible
+  appearance among any number of invisible ones and it is judged (owner).
+- (b) Predefined CMaps: bundle Adobe's predefined CMaps and judge their codes like any other (owner); `hayro-cmap`
+  bundles them and parses embedded CMaps.
+- Settled by the oracle without escalation: a code with no glyph name or the name `.notdef`, GID 0 through a
+  `CIDToGIDMap`, CID 0 and a code a CMap does not map are 6.5.2; a name, `cmap` entry (after the `post` table) or CID
+  the program lacks is 6.5.1. Unembedded fonts are judged only for what the PDF alone settles (6.5.2).
+
 Answered 2026-11-26:
 - 6.27's JPX baseline (oracle escalation, ITU-T T.801 M.9.2, M.11.1): the owner chose to fail plain JP2 files (no `jpx `
   or `jpxb` brand, no Reader Requirements box), as the text reads. Every Altona and Ghent JPEG 2000 stream passes;
@@ -23,7 +32,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 5** (fonts, 6.5): 5.1 done, 5.2 (reading font programs) next. Phase 4 finished 2026-11-26; see its stage report. The walk places what it paints
+- **Phase 6** (the CLI and the Python API, the PDF/X-4 milestone) next. Phase 5 finished 2026-11-26; see its
+  stage report. Phase 4 finished 2026-11-26; see its stage report. The walk places what it paints
   (CTM, clip, path, text and image extents) and reads colours as the print checks do; 32 print checks run in Rust:
   what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
   (`overprint`, `white-overprint`, `rich-black`, `k-only-text`), the page geometry (`geometry`, `bleed`, `centring`,
@@ -86,7 +96,8 @@ record it as not conforming to that one rule).
 | 4.7 | `f88d01b` | Phase 4 test material: Ghent's 39 X-4 claims (transparency, DeviceN, ICC v4, JPEG 2000, 16-bit, overprint) and Altona clean under every colour check; the veraPDF "same rule" colour files agree (see Deviations); §3 items 4, 5, 16 and 19 built, the last being 16's positive `x4-transparency-no-group` |
 | 4.4 (rest) | `ec48911`, `90e82c4` | `x4.image.dct-valid` and `x4.image.jbig2-valid` (6.8) at the marker and segment level, `/JBIG2Globals` included; 2 fixtures |
 | 5.1 | `8ee8994` | 6.5.4's four TrueType encoding rows, the `cmap` count from the program's table directory (`common::sfnt`); the walk's fonts carry their object number; 4 fixtures |
-| 5.2 (part) | the commit after `8ee8994` | `x4.font.embedded` (6.5.1): a font any visible text run uses is embedded, render mode 3 exempt; 2 fixtures |
+| 5.2 (part) | `3f971fd` | `x4.font.embedded` (6.5.1): a font any visible text run uses is embedded, render mode 3 exempt; 2 fixtures |
+| 5.2, 5.3 | the commit after `3f971fd` | Font programs read with `read-fonts` (TrueType and OpenType tables, bare CFF, Type 1) and CMaps with `hayro-cmap` (Adobe's predefined CMaps bundled); `x4.font.glyphs-present`, `x4.font.no-notdef` and `x4.font.widths-consistent` (6.5.1 to 6.5.3); test font programs of our own in `tests/fixtures/fonts/`; 5 fixtures |
 
 ## Register coverage
 
@@ -94,7 +105,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Group | Implemented | Todo | Skip |
 |---|---|---|---|
-| PDF/X-4 and X-4p | 117 | 20 | 4 |
+| PDF/X-4 and X-4p | 120 | 17 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
 | House and structure checks | 51 | 5 | 1 (`internal`) |
 
@@ -104,7 +115,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|
 | `bin/rust/check.sh` | green, 2026-11-26 (100% lines, regions, functions) |
 | Python (ruff, pyright, pytest) | green, 2026-11-26: 1157 passed |
-| `bin/docker/test.sh` | green at the end of phase 4, 2026-11-26: 1157 passed |
+| `bin/docker/test.sh` | green at the end of phase 5, 2026-11-26: 1157 passed |
 | `bin/suites/pdfx.sh` | 2026-11-26: 39 files, 39 accepted, 0 problems |
 
 ## Corpus and oracle
@@ -349,6 +360,7 @@ Oracle consultations:
 - Task 4.4 (rest), 6.8's JPEG and JBIG2 validity, read at the marker and segment level (T.81 Annex B, T.88 7.2; neither is held in test-db, so no page numbers). Against `djpeg` and `jbig2dec` on every corpus image under the one filter (31,698 JPEG, 3,252 JBIG2): no image we fail decodes. We pass 5 JPEGs whose entropy-coded data is corrupt (the header-level ceiling, marked `ponytail:`) and 21 JBIG2 images `jbig2dec` cannot decode: pdf.js and pdfium refinement test files, which both render, and pdf.js's file-header case. A JBIG2 file header, which PDF 1.6 3.3.6 says should be removed, is read past when its segments are sequential; the random-access organisation fails.
 - Task 5.1, 6.5.4 (oracle, 2026-11-26): only fonts that text runs use are judged (6.1.3's print elements, X4-Q3), whatever their render mode, hidden optional content included; Symbolic is the `/Flags` bit 3 alone, no descriptor counting as non-symbolic; the `cmap` row needs an embedded program, `/FontFile2` or an OpenType `/FontFile3`, and a program without a `cmap` fails it. A font written directly in a resource dictionary is not judged (marked `ponytail:`). veraPDF 6-2-11-6 and Isartor 6-3-7 agree file for file but for 6-2-11-6-t02-pass-d and BFO 6-2-11-6-t01-pass, whose non-symbolic `/Differences` PDF/A-2 allows and X-4 does not, as the register says. Ghent and Altona raise nothing.
 - Task 5.2, `x4.font.embedded`: Isartor 6-3-4 and veraPDF 6-2-11-4-1 t01 fail it as they should. Isartor 6-3-4-t01-fail-f uses its fonts only in an annotation appearance, a non-print element, and passes. Isartor 6-3-4-t01-fail-g shows unembedded Helvetica inside a Type 3 glyph procedure, which the walk does not enter (phase 4's recorded limit), so it passes for now; glyph presence needs `CharProcs` and takes it up. veraPDF 6-2-11-4-1 t02 (glyphs missing from an embedded program) is `x4.font.glyphs-present`'s.
+- Tasks 5.2 and 5.3, glyphs, `.notdef` and widths (oracle and owner, 2026-11-26): every veraPDF 6-2-11-4-1, 6-2-11-5 and 6-2-11-8 file and Isartor 6-3-5 t01 and 6-3-6 fail the row they test; 6-2-11-4-1-t02-fail-c fails `.notdef` and widths, where veraPDF 1.30 also puts it; Isartor 6-3-5 t02 and t03 (PDF/A's CharSet and CIDSet) pass, X-4 having no such rule. Ghent and Altona raise nothing but Ghent's two GWG051 font-report pages, which show all 256 codes of a 58-glyph subset (not X-4 claims). Readings: `WinAnsiEncoding`'s unused codes above octal 40 are its bullet (ISO 32000-1 Annex D); a symbolic TrueType font with neither a (3,0) nor a (1,0) `cmap` leaves its glyphs to the reader (9.6.6.4), so they are not judged; an unembedded font is judged only for `.notdef` its encoding settles; a Type 3 font's widths are its glyph procedures' `d0`/`d1`. Widths agree within 1/1000 em (X4-Q16). Not covered: Type 3 glyph procedures are not walked, so a font used only inside one (Isartor 6-3-4-t01-fail-g) is not judged, and composite codes are split two bytes at a time, so a predefined CMap with one-byte codes (the RKSJ and EUC ones) is read only for its two-byte codes.
 - The Python 6.4.3.3 rule judges every reachable ICCBased space, not only painted ones (X4-Q3); marked `ponytail:` in
   `colour.py`, for the Rust colour evaluator to do properly.
 
@@ -480,3 +492,22 @@ Oracle consultations:
 - **Departures.** Inline JPEG images are not read for 6.8 (PDF allows no inline JPEG 2000 or JBIG2); JPEG entropy
   data is not decoded. See "Deviations from
   the plan".
+
+### Phase 5 (fonts), finished 2026-11-26
+
+- **What changed.** Every 6.5 row is implemented: embedding (6.5.1, render mode 3 exempt), glyph presence and
+  `.notdef` (6.5.1, 6.5.2), widths (6.5.3) and TrueType encodings (6.5.4), on the fonts text runs use, hidden optional
+  content included. Font programs are read with `read-fonts`; CMaps with `hayro-cmap`, which bundles Adobe's
+  predefined CMaps. PDF/X-4 stands at 120 implemented, 17 todo, 4 skip.
+- **Decisions.** Two oracle escalations went to the owner: a glyph is skipped only when every appearance of it is in
+  render mode 3, and predefined CMaps are bundled and judged. The oracle settled the line between 6.5.1 and 6.5.2 and
+  6.5.4's scope (print elements only, X4-Q3).
+- **Test material.** veraPDF's and Isartor's font folders agree row for row, with the PDF/A-only rules (CharSet,
+  CIDSet, `/Differences` that PDF/A-2 allows) as the register predicts; Ghent's OpenType patch and every Ghent and
+  Altona positive pass; §3 item 6 built (an unembedded font in render mode 3 passes, one in hidden optional content
+  fails).
+- **Unexpected.** Font programs needed two crates, not one: hayro's font crate reads PDFs through its own parser, so
+  `read-fonts` reads the programs and `hayro-cmap` the CMaps. Test fonts are generated in the fixture builder
+  (TrueType, CFF, CID-keyed CFF and a hand-made Type 1), so none carries a third-party licence.
+- **Departures.** Type 3 glyph procedures are still not walked; composite codes are split two bytes at a time; a
+  font dictionary written directly in a resource dictionary is not judged. See "Deviations from the plan".

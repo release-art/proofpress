@@ -24,6 +24,8 @@ import pikepdf
 from PIL import Image, ImageCms
 
 OUT = pathlib.Path(__file__).parent / "pdfs"
+# Font programs of our own for the Rust core's font tests (`rust/src/common/glyphs.rs`).
+FONTS = pathlib.Path(__file__).parent / "fonts"
 # The LaTeX samples (samples/NAME.tex, built by samples/build.py) put their PDFs in this same directory.
 SAMPLES = {p.stem for p in (pathlib.Path(__file__).parent / "samples").glob("*.tex")}
 
@@ -380,9 +382,10 @@ X4_XMP = f"""<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <?xpacket end="w"?>""".encode()
 
 
-def _truetype(*, one_cmap: bool = False) -> bytes:
+def _truetype(*, one_cmap: bool = False, cmap: tuple[int, int, int] | None = None) -> bytes:
     """A TrueType font of our own: every printable ASCII character is a 600-unit box (space is empty), 1000 units/em.
-    Its ``cmap`` has fontTools' two subtables, (0, 3) and (3, 1), or with ``one_cmap`` only the (3, 1) one."""
+    Its ``cmap`` has fontTools' two subtables, (0, 3) and (3, 1), or with ``one_cmap`` only the (3, 1) one, or with
+    ``cmap`` (platform, encoding, offset) one subtable mapping each character's code plus the offset."""
     from fontTools.fontBuilder import FontBuilder
     from fontTools.pens.ttGlyphPen import TTGlyphPen
 
@@ -401,6 +404,14 @@ def _truetype(*, one_cmap: bool = False) -> bytes:
     fb.setupCharacterMap({ord(c): n for c, n in zip(chars, names[1:], strict=True)})
     if one_cmap:
         fb.font["cmap"].tables = [t for t in fb.font["cmap"].tables if (t.platformID, t.platEncID) == (3, 1)]
+    if cmap is not None:
+        from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
+
+        platform, encoding, offset = cmap
+        table = CmapSubtable.newSubtable(0 if platform == 1 else 4)
+        table.platformID, table.platEncID, table.language = platform, encoding, 0
+        table.cmap = {ord(c) + offset: n for c, n in zip(chars, names[1:], strict=True)}
+        fb.font["cmap"].tables = [table]
     fb.setupGlyf(glyphs)
     fb.setupHorizontalMetrics({n: (600, 0 if n == "uni0020" else 50) for n in names})
     fb.setupHorizontalHeader(ascent=800, descent=-200)
@@ -419,6 +430,114 @@ def _truetype(*, one_cmap: bool = False) -> bytes:
     out = io.BytesIO()
     fb.save(out)
     return out.getvalue()
+
+
+def _cff(*, cid: bool = False) -> tuple[bytes, bytes]:
+    """An OpenType font with CFF outlines of our own, glyphs .notdef, A and B 500, 600 and 700 units wide, and its bare
+    ``CFF `` table; with ``cid``, CID-keyed (Adobe-Identity-0), its glyphs CIDs 0, 2 and 5."""
+    from fontTools.cffLib import FDArrayIndex, FDSelect, FontDict
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.t2CharStringPen import T2CharStringPen
+    from fontTools.ttLib import TTFont
+
+    names, widths = [".notdef", "A", "B"], (500, 600, 700)
+    fb = FontBuilder(1000, isTTF=False)
+    fb.setupGlyphOrder(names)
+    fb.setupCharacterMap({0x41: "A", 0x42: "B"})
+    strings = {}
+    for name, width in zip(names, widths, strict=True):
+        pen = T2CharStringPen(width, None)
+        pen.moveTo((50, 0))
+        pen.lineTo((50, 700))
+        pen.lineTo((width - 50, 700))
+        pen.closePath()
+        strings[name] = pen.getCharString()
+    fb.setupCFF("ProofCFF", {"FullName": "ProofCFF"}, strings, {})
+    fb.setupHorizontalMetrics({n: (w, 50) for n, w in zip(names, widths, strict=True)})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "ProofCFF", "styleName": "Regular"})
+    fb.setupOS2()
+    fb.setupPost()
+    fb.updateHead(created=0, modified=0)
+    font = fb.font
+    if cid:
+        top = font["CFF "].cff.topDictIndex[0]
+        top.ROS, top.CIDCount = ("Adobe", "Identity", 0), 6
+        sub = FontDict()
+        vars(sub).update(Private=top.Private, FontMatrix=[0.001, 0, 0, 0.001, 0, 0], FontName="ProofCFF-0")
+        top.FDArray = FDArrayIndex()
+        top.FDArray.append(sub)
+        top.FDSelect = FDSelect()
+        top.FDSelect.format, top.FDSelect.gidArray = 3, [0, 0, 0]
+        del top.Private
+        order = [".notdef", "cid00002", "cid00005"]
+        font.setGlyphOrder(order)
+        top.charset = order
+        top.CharStrings.charStrings = {o: top.CharStrings.charStrings[n] for o, n in zip(order, names, strict=True)}
+        font["hmtx"].metrics = {o: font["hmtx"].metrics[n] for o, n in zip(order, names, strict=True)}
+        for table in font["cmap"].tables:
+            table.cmap = {0x41: "cid00002"}
+        vars(font["post"])["formatType"] = 3.0
+    out = io.BytesIO()
+    font.save(out)
+    return out.getvalue(), TTFont(io.BytesIO(out.getvalue())).getTableData("CFF ")
+
+
+def _type1() -> tuple[bytes, int, int]:
+    """A Type 1 font of our own, as PDF embeds one: the cleartext part, the ``eexec`` part in binary and the trailer,
+    with the lengths of the first two. Glyphs .notdef, A and B, 500, 600 and 700 units wide; codes 65 and 66."""
+
+    def number(v: int) -> bytes:
+        if -107 <= v <= 107:
+            return bytes([v + 139])
+        if 108 <= v <= 1131:
+            return bytes([(v - 108) // 256 + 247, (v - 108) % 256])
+        return b"\xff" + v.to_bytes(4, "big", signed=True)
+
+    def encrypt(data: bytes, key: int) -> bytes:
+        out = bytearray()
+        for byte in data:
+            cipher = byte ^ (key >> 8)
+            key = ((cipher + key) * 52845 + 22719) & 0xFFFF
+            out.append(cipher)
+        return bytes(out)
+
+    glyphs = b""
+    for name, width in ((b".notdef", 500), (b"A", 600), (b"B", 700)):
+        charstring = encrypt(bytes(4) + number(0) + number(width) + b"\x0d\x0e", 4330)  # hsbw, endchar
+        glyphs += b"/%s %d RD " % (name, len(charstring)) + charstring + b" ND\n"
+    clear = (
+        b"%!PS-AdobeFont-1.0: ProofT1 001.000\n11 dict begin\n/FontName /ProofT1 def\n/PaintType 0 def\n"
+        b"/FontType 1 def\n/FontMatrix [0.001 0 0 0.001 0 0] readonly def\n/FontBBox {0 0 700 700} readonly def\n"
+        b"/Encoding 256 array\n0 1 255 {1 index exch /.notdef put} for\ndup 65 /A put\ndup 66 /B put\nreadonly def\n"
+        b"currentdict end\ncurrentfile eexec\n"
+    )
+    private = (
+        b"dup /Private 8 dict dup begin\n/RD {string currentfile exch readstring pop} executeonly def\n"
+        b"/ND {noaccess def} executeonly def\n/NP {noaccess put} executeonly def\n/lenIV 4 def\n"
+        b"/BlueValues [] def\n/MinFeature {16 16} def\n/password 5839 def\n/Subrs 0 array\nND\n"
+        b"2 index /CharStrings 3 dict dup begin\n" + glyphs + b"end\nend\nreadonly put\nnoaccess put\n"
+        b"dup /FontName get exch definefont pop\nmark currentfile closefile\n"
+    )
+    binary = encrypt(bytes(4) + private, 55665)
+    trailer = b"\n" + (b"0" * 64 + b"\n") * 8 + b"cleartomark\n"
+    return clear + binary + trailer, len(clear), len(binary)
+
+
+def _font_programs() -> dict[str, bytes]:
+    """The font programs the Rust core's font tests read, by file name."""
+    otf, cff = _cff()
+    cid_otf, cid_cff = _cff(cid=True)
+    return {
+        "proof.ttf": _truetype(),
+        "proof-symbol.ttf": _truetype(cmap=(3, 0, 0xF000)),
+        "proof-mac.ttf": _truetype(cmap=(1, 0, 0)),
+        "proof-cff.otf": otf,
+        "proof.cff": cff,
+        "proof-cid.otf": cid_otf,
+        "proof-cid.cff": cid_cff,
+        "proof.t1": _type1()[0],
+    }
 
 
 def _x4_good() -> pikepdf.Pdf:
@@ -797,7 +916,36 @@ def _x4_font_fixtures() -> dict[str, pikepdf.Pdf]:
         "x4-font-not-embedded": _x4_unembedded(b""),
         # A positive: an unembedded font used only in render mode 3 (6.5.1).
         "x4-font-invisible-unembedded": _x4_unembedded(b"BT 3 Tr /F2 12 Tf 100 100 Td (hidden) Tj ET"),
+        # 6.5.1 to 6.5.3 on x4-good's TrueType font, which has glyphs for printable ASCII only.
+        "x4-font-glyph-missing": _x4_page(b"BT /F1 12 Tf 100 100 Td (\\351) Tj ET"),
+        "x4-font-notdef": _x4_page(b"BT /F1 12 Tf 100 100 Td (\\020) Tj ET"),
+        "x4-font-widths": _x4_widths(),
+        # Text in an unembedded font inside optional content that is off still fails 6.5.1 (6.24).
+        "x4-font-hidden-oc": _x4_hidden_text(),
+        # A positive: a code with no glyph, shown only in render mode 3 (owner, 2026-11-26).
+        "x4-font-invisible-missing": _x4_page(b"BT 3 Tr /F1 12 Tf 100 100 Td (\\351) Tj ET"),
     }
+
+
+def _x4_hidden_text() -> pikepdf.Pdf:
+    """x4-good with text in an unembedded Helvetica inside the optional content group "one", which is off."""
+    pdf = _x4_unembedded(b"/OC /L1 BDC BT /F2 12 Tf 100 100 Td (hidden) Tj ET EMC")
+    text = pikepdf.String
+    default = pikepdf.Dictionary(Name=text("Print"), Order=pikepdf.Array([text("one"), text("two")]))
+    _with_oc(pdf, default)
+    one = pdf.Root.OCProperties.OCGs[0]
+    default.OFF = pikepdf.Array([one])
+    pdf.Root.OCProperties.D = default
+    pdf.pages[0].Resources.Properties = pikepdf.Dictionary(L1=one)
+    return pdf
+
+
+def _x4_widths() -> pikepdf.Pdf:
+    """x4-good with the /Widths entry of "P", which its text shows, at 650 where the program says 600."""
+    pdf = _x4_good()
+    widths = pdf.pages[0].Resources.Font.F1.Widths
+    widths[ord("P") - 32] = 650
+    return pdf
 
 
 def _x4_unembedded(extra: bytes) -> pikepdf.Pdf:
@@ -1430,12 +1578,14 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="exit 1 if the committed fixtures differ from a rebuild")
     args = parser.parse_args()
     built = render()
+    fonts = _font_programs()
     if args.check:
         stale = [
             n
             for n, data in built.items()
             if not (OUT / f"{n}.pdf").is_file() or (OUT / f"{n}.pdf").read_bytes() != data
         ]
+        stale += [n for n, data in fonts.items() if not (FONTS / n).is_file() or (FONTS / n).read_bytes() != data]
         stale += [p.stem for p in OUT.glob("*.pdf") if p.stem not in built and p.stem not in SAMPLES]
         if stale:
             print(f"stale fixtures: {', '.join(sorted(stale))}; run build_pdfs.py", file=sys.stderr)
@@ -1444,6 +1594,9 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, data in built.items():
         (OUT / f"{name}.pdf").write_bytes(data)
+    FONTS.mkdir(exist_ok=True)
+    for name, data in fonts.items():
+        (FONTS / name).write_bytes(data)
     print(f"wrote {len(built)} PDFs to {OUT}")
     return 0
 

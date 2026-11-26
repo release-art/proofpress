@@ -111,7 +111,7 @@ pub(crate) fn load(doc: &Document, dict: &Dict) -> Font {
     read(doc, dict).unwrap_or_default()
 }
 
-fn number(doc: &Document, object: &Object) -> Option<f64> {
+pub(crate) fn number(doc: &Document, object: &Object) -> Option<f64> {
     match doc.resolve(object)?.value {
         #[expect(clippy::cast_precision_loss, reason = "font metrics are far below 2^53")]
         Value::Integer(n) => Some(n as f64),
