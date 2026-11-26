@@ -198,7 +198,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x5.reader.target-placement` | Target pages are placed by their rotated MediaBox | iso-15930-8:8.5 | error | x5g, x5pg, x5n | skip: A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4) |
 | `x5.reader.profile-conversion` | Assembly converts between differing profiles | iso-15930-8:8.5 | error | x5g, x5pg, x5n | skip: A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4) |
 | `x5.reader.trapped-scope` | pdf:Trapped says nothing about targets | iso-15930-8:8.6 | error | x5g, x5pg, x5n | skip: A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4) |
-| `tac` | Peak total ink stays under the limit |  | error | print | todo |
+| `tac` | Peak total ink stays under the limit |  | error | print | implemented (Ghostscript) |
 | `overprint` | Overprint is used on purpose |  | warning | print | implemented |
 | `white-overprint` | White is never set to overprint |  | error | print | implemented |
 | `colour-space` | Colour spaces suit the job's colour mode |  | error | print | implemented |
@@ -233,7 +233,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `page-count` | The page count fits the rule |  | error | print | implemented |
 | `page-rotate` | Pages are not rotated |  | warning | print | implemented |
 | `output-condition` | The output intent names the expected condition |  | error | print | implemented |
-| `pdfa` | veraPDF passes the PDF/A flavour |  | error | print | todo |
+| `pdfa` | veraPDF passes the PDF/A flavour |  | error | print | implemented (veraPDF) |
 | `structure` | The file can be read |  | error | print | todo |
 | `internal` | The engine itself failed on this file |  | error | x4, x4p, x5g, x5pg, x5n, print | skip: Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it |
 | `file.header` | The file starts with a %PDF- header in its first 1024 bytes | iso-32000-2:7.5.2 | error | x4, x4p, x5g, x5pg, x5n, print | implemented |

@@ -91,6 +91,9 @@ pub struct Check {
     pub applies: &'static [Level],
     /// Whether it is checked yet.
     pub status: Status,
+    /// The external program whose verdict it reports (`veraPDF`, `Ghostscript`), run by the command line; `None` for
+    /// the core's own checks.
+    pub tool: Option<&'static str>,
 }
 
 /// The Markdown listing of every check, as `rust/CHECKS.md` must hold it.

@@ -2,12 +2,14 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use globset::{Glob, GlobMatcher};
 
 use super::args::{Binding, ColourMode, Pdfx, Verify};
+use super::tools;
 use crate::checks::{self, Geometry, Params, Settings};
-use crate::findings::{Finding, Level, Report, Verdict};
+use crate::findings::{Check, CheckResult, Finding, Level, PDFA, Report, TAC, Verdict};
 
 /// A usage error: the options do not make sense together.
 #[derive(Debug, PartialEq, Eq)]
@@ -23,6 +25,8 @@ pub(crate) struct FileReport {
     pub(crate) report: Option<Report>,
     /// Why the file could not be read at all, so nothing was checked.
     pub(crate) unreadable: Option<String>,
+    /// Whether an external tool ran out of time on it.
+    pub(crate) timed_out: bool,
 }
 
 impl FileReport {
@@ -36,11 +40,45 @@ impl FileReport {
     }
 }
 
-/// The print checks' parameters and which of them the options turn on.
+/// The print checks' parameters and which of them the options turn on, and the external tools to run.
 pub(crate) struct Plan {
     pub(crate) pdfx: Option<Level>,
     pub(crate) settings: Settings,
     pub(crate) wanted: BTreeSet<&'static str>,
+    pub(crate) tools: Vec<Tool>,
+}
+
+/// An external tool `verify` runs on each file.
+pub(crate) enum Tool {
+    Verapdf {
+        program: String,
+        flavour: String,
+        timeout: Duration,
+    },
+    Ghostscript {
+        program: String,
+        max: f64,
+        warn: Option<f64>,
+        timeout: Duration,
+    },
+}
+
+impl Tool {
+    fn run(&self, path: &Path) -> (&'static Check, tools::Verdict) {
+        match self {
+            Self::Verapdf {
+                program,
+                flavour,
+                timeout,
+            } => (PDFA, tools::verapdf(program, flavour, path, *timeout)),
+            Self::Ghostscript {
+                program,
+                max,
+                warn,
+                timeout,
+            } => (TAC, tools::peak_ink(program, path, *max, *warn, *timeout)),
+        }
+    }
 }
 
 /// The plan `verify`'s options describe.
@@ -90,7 +128,28 @@ pub(crate) fn plan(o: &Verify) -> Result<Plan, Usage> {
         Pdfx::X5pg => Level::X5pg,
         Pdfx::X5n => Level::X5n,
     });
+    let timeout = Duration::from_secs_f64(o.timeout.unwrap_or(900.0).max(0.0));
+    let mut tools = Vec::new();
+    if o.layers.pdfa {
+        let program = o.verapdf.clone().unwrap_or_else(|| "verapdf".to_owned());
+        let flavour = o.layers.flavour.clone().unwrap_or_else(|| "2b".to_owned());
+        tools.push(Tool::Verapdf {
+            program,
+            flavour,
+            timeout,
+        });
+    }
+    if o.layers.tac {
+        let program = o.gs.clone().unwrap_or_else(|| "gs".to_owned());
+        tools.push(Tool::Ghostscript {
+            program,
+            max: max_tac,
+            warn: o.layers.warn_tac,
+            timeout,
+        });
+    }
     Ok(Plan {
+        tools,
         pdfx,
         wanted: wanted(o, &params),
         settings: Settings {
@@ -250,17 +309,52 @@ pub(crate) fn verify(path: &Path, plan: &Plan, exemptions: &[(GlobMatcher, Strin
             exempt: Some(reason.clone()),
             report: None,
             unreadable: None,
+            timed_out: false,
         };
     }
-    let (report, unreadable) = match std::fs::read(path) {
-        Ok(bytes) => (Some(combined(&path.display().to_string(), &bytes, plan)), None),
-        Err(e) => (None, Some(format!("cannot read the file: {e}"))),
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            let unreadable = Some(format!("cannot read the file: {e}"));
+            return FileReport {
+                path: path.to_owned(),
+                exempt: None,
+                report: None,
+                unreadable,
+                timed_out: false,
+            };
+        }
     };
+    // The tools run while the core checks the file.
+    let (tools, report) = std::thread::scope(|scope| {
+        let tools: Vec<_> = plan
+            .tools
+            .iter()
+            .map(|tool| scope.spawn(move || tool.run(path)))
+            .collect();
+        let report = combined(&path.display().to_string(), &bytes, plan);
+        (
+            tools.into_iter().filter_map(|t| t.join().ok()).collect::<Vec<_>>(),
+            report,
+        )
+    });
+    let timed_out = tools.iter().any(|(_, v)| v.timed_out);
+    let mut checks = report.checks;
+    let mut findings = report.findings;
+    for (check, verdict) in tools {
+        checks.push(CheckResult {
+            id: check,
+            outcome: verdict.outcome,
+        });
+        findings.extend(verdict.findings);
+    }
+    let report = Report::new(report.file, report.structure, checks, findings);
     FileReport {
         path: path.to_owned(),
         exempt: None,
-        report,
-        unreadable,
+        report: Some(report),
+        unreadable: None,
+        timed_out,
     }
 }
 

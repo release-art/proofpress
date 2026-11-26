@@ -33,7 +33,8 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 6** (the CLI and the Python API, the PDF/X-4 milestone): every X-4 row that needs no external file is
-  implemented; the Rust `verify` command and its config file exist, veraPDF and Ghostscript come next. Phase 5 finished 2026-11-26; see its
+  implemented; the Rust `verify` runs the core's checks, veraPDF and Ghostscript, with its config file. Next:
+  `test_cli.py` against the binary, level selection (6.2) and the Python API (6.3). Phase 5 finished 2026-11-26; see its
   stage report. Phase 4 finished 2026-11-26; see its stage report. The walk places what it paints
   (CTM, clip, path, text and image extents) and reads colours as the print checks do; 32 print checks run in Rust:
   what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
@@ -103,7 +104,8 @@ record it as not conforming to that one rule).
 | 6 (rows) | `7aacf55`, `53843a0` | `x4.pdf-reference.conforms` (6.1.1) implemented: it was coded in phase 2 to fail on every error the reading tiers find, and waited for the content tier, which now reports; 9 fixtures' expectations gain it |
 | 6 (rows) | `111c62d` | `x4.complete.resources-inside` (6.3): resource names content uses that its resources do not define, and composite fonts whose CMap is neither embedded nor in ISO 32000-1 Table 118; 1 fixture. Every X-4 row that needs no external file is now implemented |
 | 6.1 (part) | `2cff6ac` | The Rust `proof-pdf verify` (feature `cli`, `src/cli/`, binary `src/bin/proof-pdf.rs`): the Python command's options, the print checks they switch on and the PDF/X level (`--pdfx x4` by default, `--no-pdfx`), files and directories with `--exclude` and `--exempt`, `--jobs` threads, the text report and `--json`, and the brief's exit codes. Config files, veraPDF and Ghostscript are next |
-| 6.1 (part) | the commit after `2cff6ac` | The config file for the Rust `verify`: `proof-pdf.toml` or `[tool.proof-pdf]` in `pyproject.toml`, found walking up or named with `--config`; `schema = 1`, profiles with `--profile` and `extends`, the Python key spellings, `--show-profile` |
+| 6.1 (part) | `68fbc6c` | The config file for the Rust `verify`: `proof-pdf.toml` or `[tool.proof-pdf]` in `pyproject.toml`, found walking up or named with `--config`; `schema = 1`, profiles with `--profile` and `extends`, the Python key spellings, `--show-profile` |
+| 6.1 (part) | the commit after `68fbc6c` | veraPDF (`--pdfa`) and Ghostscript (`--tac`) for the Rust `verify`, through `process-wrap` (a process group, or a job object on Windows, killed on timeout or drop), beside the core's checks; peak ink read from `tiffsep`'s uncompressed plates with `tiff`; a timeout exits 3. `checks.toml` gains a `tool` field: `pdfa` and `tac` are implemented, tested with stand-in tools rather than fixtures |
 
 ## Register coverage
 

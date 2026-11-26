@@ -35,10 +35,13 @@ struct Entry {
     applies: Vec<String>,
     status: String,
     reason: Option<String>,
+    /// The external program whose verdict an implemented check reports, run by the command line, not the core.
+    tool: Option<String>,
 }
 
 const SEVERITIES: &[&str] = &["error", "warning"];
 const LEVELS: &[&str] = &["x4", "x4p", "x5g", "x5pg", "x5n", "print"];
+const TOOLS: &[&str] = &["veraPDF", "Ghostscript"];
 
 fn main() {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));
@@ -113,6 +116,15 @@ fn validate(checks: &[Entry], known: &BTreeSet<String>) -> Vec<String> {
             ("implemented" | "todo", Some(_)) => problems.push(format!("{id}: only a skip has a reason")),
             (other, _) => problems.push(format!("{id}: status {other:?} is not implemented, todo or skip")),
         }
+        match &c.tool {
+            Some(tool) if !TOOLS.contains(&tool.as_str()) => {
+                problems.push(format!("{id}: tool {tool:?} is not one of {TOOLS:?}"));
+            }
+            Some(_) if c.status != "implemented" => {
+                problems.push(format!("{id}: only an implemented check names a tool"));
+            }
+            _ => {}
+        }
     }
     problems
 }
@@ -156,7 +168,7 @@ fn code(checks: &[Entry]) -> String {
         let _ = writeln!(
             out,
             "/// The `{id}` check.\npub const {name}: &Check = &Check {{\n    id: {id:?},\n    aliases: &{aliases:?},\n    title: {title:?},\n    \
-             clauses: &[{clauses}],\n    severity: Severity::{severity},\n    applies: &[{applies}],\n    status: {status},\n}};\n",
+             clauses: &[{clauses}],\n    severity: Severity::{severity},\n    applies: &[{applies}],\n    status: {status},\n    tool: {tool:?},\n}};\n",
             title = c.title,
             name = constant(&c.id),
             id = c.id,
@@ -164,6 +176,7 @@ fn code(checks: &[Entry]) -> String {
             clauses = clauses.join(", "),
             severity = variant(&c.severity),
             applies = applies.join(", "),
+            tool = c.tool,
         );
     }
     let all: Vec<String> = checks.iter().map(|c| constant(&c.id)).collect();
@@ -181,9 +194,10 @@ fn markdown(checks: &[Entry]) -> String {
          (refresh it with `bin/rust/check.sh --fix`).\n\n| Id | Title | Clauses | Severity | Applies | Status |\n|---|---|---|---|---|---|\n",
     );
     for c in checks {
-        let status = match &c.reason {
-            Some(reason) => format!("skip: {reason}"),
-            None => c.status.clone(),
+        let status = match (&c.reason, &c.tool) {
+            (Some(reason), _) => format!("skip: {reason}"),
+            (None, Some(tool)) => format!("{} ({tool})", c.status),
+            (None, None) => c.status.clone(),
         };
         let _ = writeln!(
             out,

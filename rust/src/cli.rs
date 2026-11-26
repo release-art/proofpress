@@ -1,12 +1,14 @@
 //! The `proof-pdf` command line (brief stage 4): `verify` in Rust, with the Python command's options and reports.
 //!
-//! Exit codes: 0 pass, 1 findings, 2 a file refused or unreadable, 64 a usage error; `--help` and `--version` exit 0.
+//! Exit codes: 0 pass, 1 findings, 2 a file refused or unreadable, 3 a tool timed out, 64 a usage error; `--help`
+//! and `--version` exit 0.
 //! A panic outside any check exits 70 (`EX_SOFTWARE`); each check's own panics are findings.
 
 mod args;
 mod config;
 mod output;
 mod run;
+mod tools;
 
 use std::ffi::OsString;
 use std::io::{IsTerminal, Write};

@@ -6,10 +6,11 @@ use super::args::{Pdfx, Verify};
 use super::run::{FileReport, Plan};
 use crate::findings::{Finding, Severity, Verdict};
 
-/// The exit codes (brief, stage 4): with several files the worst wins, refused before findings before a pass.
+/// The exit codes (brief, stage 4): with several files the worst wins, refused, then a timeout, then findings.
 pub(crate) const PASS: i32 = 0;
 pub(crate) const FINDINGS: i32 = 1;
 pub(crate) const REFUSED: i32 = 2;
+pub(crate) const TIMEOUT: i32 = 3;
 pub(crate) const USAGE: i32 = 64;
 
 pub(crate) fn exit_code(reports: &[FileReport]) -> i32 {
@@ -17,6 +18,8 @@ pub(crate) fn exit_code(reports: &[FileReport]) -> i32 {
         |r: &FileReport| r.unreadable.is_some() || r.report.as_ref().is_some_and(|r| r.verdict == Verdict::Refused);
     if reports.iter().any(refused) {
         REFUSED
+    } else if reports.iter().any(|r| r.timed_out) {
+        TIMEOUT
     } else if reports.iter().all(FileReport::ok) {
         PASS
     } else {

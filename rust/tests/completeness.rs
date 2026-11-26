@@ -59,7 +59,11 @@ fn every_fixture_exists_and_names_only_known_checks() {
 fn an_implemented_check_has_a_failing_and_a_passing_fixture() {
     let fixtures = fixtures();
     let mut missing = Vec::new();
-    for check in ALL.iter().filter(|c| c.status == Status::Implemented) {
+    // A check that reports an external tool's verdict is tested with stand-in tools, by the command line's tests.
+    for check in ALL
+        .iter()
+        .filter(|c| c.status == Status::Implemented && c.tool.is_none())
+    {
         let fails = fixtures.values().any(|f| f.expect.contains_key(check.id));
         let passes = fixtures
             .values()

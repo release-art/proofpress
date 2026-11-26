@@ -1588,7 +1588,8 @@ title = "Peak total ink stays under the limit"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
+tool = "Ghostscript"
 
 [[check]]
 id = "overprint"
@@ -1868,7 +1869,8 @@ title = "veraPDF passes the PDF/A flavour"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
+tool = "veraPDF"
 
 [[check]]
 id = "structure"
