@@ -979,7 +979,7 @@ expect = { "x5.g-ref-present" = "nothing is placed from another file, a warning 
 
 [x5g-ref-on-image]
 levels = ["x5g"]
-expect = { "x5.g-proxy-is-form" = "/Ref on an image XObject (8.2)", "x5.g-ref-present" = "so no form proxy either (warning)" }
+expect = { "x5.g-proxy-is-form" = "/Ref on an image XObject, ignored by readers (8.2; warning)", "x5.g-ref-present" = "so no form proxy either (warning)", "x5.g-ref-filespec-external" = "the image's /Ref is no reference, so its /F owes /EF (15930-7 6.7)" }
 
 [x5g-ref-no-id]
 levels = ["x5g"]

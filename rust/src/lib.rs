@@ -12,6 +12,7 @@ pub mod cli;
 mod common;
 pub mod content;
 pub mod document;
+pub mod extract;
 mod file;
 mod filters;
 pub mod graphics;

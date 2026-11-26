@@ -35,7 +35,13 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 9** (the writer and the other commands): the writer, `crop`, `inspect` and `preview` are done; `extract`
-  is next. `layout` and `texlog` stay Python (decision log, 2026-11-26). Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
+  is under way, moved to the core in slices, each parity-checked against the Python as it stood before the slice
+  (`document.json` and every written file; vector PDFs compared without their random `/ID`) and committed alone:
+  A, pages, document information and XMP, font programs, ICC profiles and output intents (`extract.rs`,
+  `_core.extract`); B, images and their soft masks (decoded samples to PNG or TIFF, JPEG, JPEG 2000 and CCITT copied);
+  C, the page walk's text runs (with `/ToUnicode`) and spot colours; D, the structure tree and interactive features;
+  E, vector artwork (on the writer); F, image thumbnails without Pillow, then pikepdf and Pillow leave the runtime
+  dependencies. The Python keeps the layout analysis and the assembly of `document.json`. `layout` and `texlog` stay Python (decision log, 2026-11-26). Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
   and X-5 row is implemented or skip. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
   owner said to carry on past the PDF/X-4 milestone (phase 6, finished 2026-11-26).
 
@@ -111,6 +117,7 @@ record it as not conforming to that one rule).
 | 9 (part) | the writer commit | `writer.rs` (graft map, raw streams, damaged objects reported, Identity `/Crypt` dropped) and `writer/crop.rs`; `_core.crop` and `UnreadablePdfError`; `proof_pdf.crop` no longer uses pikepdf. Parity: 588 crops of fixtures and test-db samples rendered by Ghostscript at 72 dpi; 586 pixel-identical, 2 damaged files now refused (pikepdf had repaired them); 14 skipped (pikepdf or Ghostscript could not open them) |
 | 9 (part) | the inspect commit | `checks/inventory.rs` on the print walk and the contrast measure; `_core.inspect`; `proof_pdf.inventory` no longer uses pikepdf. Parity with the Python on the fixtures (339 identical, 5 damaged fixtures read strictly) and 10,475 test-db files (see Deviations) |
 | 9 (part) | the preview commit | `preview.rs` (feature `preview`): pages rendered by `hayro` over the MediaBox, guides from a pixel-space overlay PDF, panics caught per page; `_core.render`; `preview` and extract's review page no longer run Ghostscript; `_internal/proc.py` deleted |
+| 9 (part) | the extract A commit | `extract.rs`, `_core.extract`: pages (inherited `/CropBox` and `/Rotate`), information and XMP, font programs, ICC profiles and output intents, and the reader's damage, which `extract` now lists in `failures`; also the X-5g `/Ref` fix of another session (below) |
 
 ## Register coverage
 
@@ -142,6 +149,13 @@ removed 300 of them. What is left, each a deliberate refusal under PDF 1.7 or ge
   unrelated bytes after `%%EOF`.
 - 3 whose object stream cannot be decoded, and 1 whose referenced object has an invalid entry: gaps, reported as damage.
 - 4 encrypted files, refused as X-4 requires.
+
+2026-11-26, X-5 against pdfToolbox 17.1 ("Verify compliance with PDFX-5g", "-5pg" and "-5n") over the 52 X-5g, X-5pg
+and X-5n fixtures: 33 verdicts agree. pdfToolbox fails `x5pg-good` alone, as it does not look for a profile named by a
+relative `/URLs` (as at X-4p). It passes 18 that we fail: it opens targets but does not compare their identity, page,
+printing condition, full conformance, or another version of them; under X-5n it does not compare `/ColorantTable` or
+`/ICCVersion` with the external profile. Of the rows that need no target, the oracle upheld four (`/EF` under 6.7, DeviceN
+`/Process`, a version 2 n-colorant profile, `/Mac` in `/URLs`) and made `x5.g-proxy-is-form` a warning (decision log).
 
 Every Ghent, Altona and GWG Processing Steps file and every fixture opens sound, so the re-plan point (the parser
 refusing real print output) has not triggered.
@@ -405,6 +419,18 @@ Oracle consultations:
   size. Over every test-db sample set but `kura-bench` and `iust-pdfcorpus` plus the fixtures (10,829 files, 9 dpi,
   guides on): 10,720 rendered, 101 refused (61 unreadable, 40 encrypted), 8 pages too small at 9 dpi or beyond 65,535
   pixels; no panic and no file over 120 seconds.
+
+- Phase 9, `extract` slice A, against the Python as at `5032bd0`, on the fixtures and 16 test-db sets (3,901 files):
+  3,406 identical; 311 that the Python extract already failed on and still does (pikepdf's `copy_foreign` on vector
+  pieces, images it cannot transcode), which later slices replace; 66 where one side fails (the core refuses 52 damaged
+  or password-protected files pikepdf opens or repairs; the Python crashed on 11 the core reads, fonts whose names are
+  not UTF-8 among them); 118 different: 67 whose page tree reads short in the core (references beyond `/Size`, damaged
+  objects), now named in `failures`; 36 `/Info` values that are not text, which pikepdf printed as `pikepdf.Array(...)`
+  and the core leaves out; the rest are v5 profiles now described by their own `desc` tag, font programs whose Flate
+  data fails its checksum (refused, as everywhere in the core), and the asset order of files whose `/Resources` sit on a
+  `/Pages` node, which qpdf pushes down to the pages before the Python walked them. Vector PDFs are compared without
+  their `/ID`, which pikepdf writes at random. The parity script first ran with relative paths from a temporary
+  directory, so every file failed on both sides and matched; the numbers above are from the corrected run.
 
 ## Owner requests
 

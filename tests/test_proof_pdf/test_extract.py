@@ -558,9 +558,21 @@ class TestTaggedStructure:
 
 
 def test_font_descriptor_facts_read_flags_weight_and_slant():
-    descriptor = pikepdf.Dictionary(
-        Flags=(1 << 18) | 2, ItalicAngle=-12, FontWeight=400, FontFamily=pikepdf.String("Acme")
-    )
+    raw = dict.fromkeys(
+        (
+            "flags",
+            "weight",
+            "italic_angle",
+            "family",
+            "stretch",
+            "ascent",
+            "descent",
+            "cap_height",
+            "x_height",
+            "stem_v",
+        )
+    ) | {"bbox": None}
+    descriptor = raw | {"flags": (1 << 18) | 2, "italic_angle": -12.0, "weight": 400.0, "family": "Acme"}
     facts = extract._descriptor_facts(descriptor, "Acme-Regular")
     assert (facts["bold"], facts["italic"], facts["family"], facts["flags"]) == (
         True,
@@ -568,7 +580,7 @@ def test_font_descriptor_facts_read_flags_weight_and_slant():
         "Acme",
         ["serif", "force-bold"],
     )
-    plain = extract._descriptor_facts(pikepdf.Dictionary(Flags=32, FontWeight=700), "Acme-Black")
+    plain = extract._descriptor_facts(raw | {"flags": 32.0, "weight": 700.0}, "Acme-Black")
     assert (plain["bold"], plain["italic"], plain["flags"]) == (True, False, ["nonsymbolic"])
 
 
@@ -631,3 +643,8 @@ def test_a_state_set_again_keeps_the_latest_value_last():
     old = vector._StateOp("w", (1,))
     line = vector._put({"a": old, "w": old}, "a", vector._StateOp("w", (2,)))
     assert list(line) == ["w", "a"]
+
+
+def test_what_the_core_cannot_read_is_listed_as_a_failure(tmp_path):
+    result = extract.extract_pdf(PDFS / "x4-damaged-object.pdf", tmp_path, kinds=())
+    assert any(f.startswith("reading the file: object.damaged:") for f in result.failures), result.failures

@@ -1170,7 +1170,7 @@ status = "implemented"
 id = "x5.g-proxy-is-form"
 title = "External content is placed through a form proxy"
 clauses = ["iso-15930-8:8.2"]
-severity = "error"
+severity = "warning"
 applies = ["x5g", "x5pg"]
 status = "implemented"
 

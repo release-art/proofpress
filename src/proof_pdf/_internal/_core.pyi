@@ -33,3 +33,9 @@ def render(data: bytes, dpi: float, guides: bool = False, safe_mm: float | None 
     ``safe_mm`` inside the trim, when given) drawn when ``guides`` is true. Raises ``UnreadablePdfError`` for a file
     that cannot be read, and ``ValueError`` for a page too large to render at ``dpi``.
     """
+
+def extract(data: bytes) -> tuple[str, list[bytes]]:
+    """What ``extract`` recovers from the PDF ``data`` that needs no content walk (page boxes, document information and
+    XMP, font programs, ICC profiles and output intents) as JSON, with the recovered files' bytes the JSON indexes.
+    Raises ``UnreadablePdfError`` for a file that cannot be read.
+    """

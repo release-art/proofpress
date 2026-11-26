@@ -104,11 +104,24 @@ fn render(py: Python<'_>, data: &[u8], dpi: f64, guides: bool, safe_mm: Option<f
         })
 }
 
+/// What `extract` recovers from the PDF `data` that needs no content walk: page boxes, document information and XMP,
+/// font programs and ICC profiles with the output intents, as JSON, with the recovered files' bytes the JSON indexes.
+/// Raises `UnreadablePdfError` for a file that cannot be read.
+#[pyfunction]
+fn extract(py: Python<'_>, data: &[u8]) -> PyResult<(String, Vec<Vec<u8>>)> {
+    let recovered = py
+        .detach(|| crate::extract::recover(data))
+        .map_err(UnreadablePdfError::new_err)?;
+    serde_json::to_string(&recovered.facts)
+        .map(|facts| (facts, recovered.blobs))
+        .map_err(value_error)
+}
+
 /// The module itself, `proof_pdf._internal._core` to Python.
 #[pymodule]
 mod _core {
     #[pymodule_export]
-    use super::{UnreadablePdfError, crop, inspect, render, run, verify};
+    use super::{UnreadablePdfError, crop, extract, inspect, render, run, verify};
 }
 
 #[cfg(test)]
@@ -195,6 +208,26 @@ mod tests {
             let message = |args: (&[u8], f64)| render.call1(args).unwrap_err().to_string();
             assert!(message((b"x".as_slice(), 72.0)).starts_with("UnreadablePdfError"));
             assert!(message((file.as_slice(), 0.0)).starts_with("ValueError: page 1 at 0 dpi"));
+        });
+    }
+
+    #[test]
+    fn extract_returns_facts_and_blobs_or_says_why() {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = pyo3::wrap_pymodule!(_core)(py);
+            let extract = module.bind(py).getattr("extract").unwrap();
+            let file = std::fs::read(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../tests/fixtures/pdfs/x4-good.pdf"
+            ))
+            .unwrap();
+            let (json, blobs): (String, Vec<Vec<u8>>) = extract.call1((file.as_slice(),)).unwrap().extract().unwrap();
+            let facts: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert_eq!(facts["pages"][0]["number"], 1);
+            assert_eq!((blobs.len(), &facts["xmp"]), (3, &serde_json::json!({"data": 0})));
+            let error = extract.call1((b"x".as_slice(),)).unwrap_err().to_string();
+            assert!(error.starts_with("UnreadablePdfError"), "{error}");
         });
     }
 

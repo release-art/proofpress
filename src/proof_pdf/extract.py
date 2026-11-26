@@ -19,7 +19,6 @@ import collections
 import collections.abc
 import dataclasses
 import hashlib
-import io
 import json
 import logging
 import pathlib
@@ -28,13 +27,12 @@ import shutil
 import typing
 
 import pikepdf
-from PIL import ImageCms
 
 from ._internal import (
+    _core,
     contrast,
     interactive,
     spots,
-    structure,
     tables as table_finder,
     tagged as tagged_reader,
     xmp,
@@ -46,7 +44,6 @@ from ._internal.spaces import (
     GRAY,
     RGB,
     classify_colour_space,
-    output_intents,
     reachable as _objects,
 )
 from ._internal.vector import INVISIBLE, Group, artwork
@@ -73,10 +70,21 @@ JOIN_PT = 0.5
 LINE_GAP_EM = 0.5
 SPACE_EM = 0.15
 
-_FONT_FILES = {"/FontFile": ".t1", "/FontFile2": ".ttf", "/FontFile3": ".cff"}
-_OPENTYPE = "/OpenType"
+_FONT_FILES = {"FontFile": ".t1", "FontFile2": ".ttf", "FontFile3": ".cff"}
 _SUBSET_PREFIX = re.compile(r"^[A-Z]{6}\+")
 _ERRORS = (pikepdf.PdfError, NotImplementedError, ValueError, OSError, TypeError, KeyError, IndexError)
+
+
+@dataclasses.dataclass(frozen=True)
+class _CoreFacts:
+    """What the Rust core read (``_core.extract``): the facts, and the recovered files' bytes they index."""
+
+    facts: dict[str, typing.Any]
+    blobs: list[bytes]
+
+    def blob(self, ref: dict[str, typing.Any]) -> bytes | str:
+        """The bytes a blob reference names, or the reason they could not be read."""
+        return self.blobs[ref["data"]] if "data" in ref else ref["error"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -193,16 +201,20 @@ def extract_pdf(
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     failures: list[str] = []
+    raw, blobs = _core.extract(path.read_bytes())
+    core = _CoreFacts(json.loads(raw), blobs)
+    # What the core could not read is missing from everything below, so say so.
+    failures += [f"reading the file: {problem}" for problem in core.facts["damage"]]
     with pikepdf.open(path) as pdf:
         tagged = tagged_reader.read(pdf)
         recovered = _Recovery(pdf, out_dir, failures, vector_text, tagged)
-        for number, page in enumerate(pdf.pages, start=1):
-            recovered.page(number, page, "images" in kinds, "vector" in kinds, gap_pt, max_fraction)
+        for facts, page in zip(core.facts["pages"], pdf.pages, strict=False):
+            recovered.page(facts, page, "images" in kinds, "vector" in kinds, gap_pt, max_fraction)
         if "images" in kinds:
             recovered.unplaced_images()
         if "fonts" in kinds:
-            recovered.fonts()
-        intents = recovered.profiles() if "icc" in kinds else []
+            recovered.fonts(core)
+        intents = recovered.profiles(core) if "icc" in kinds else []
         lines = _lines(recovered.text)
         spot_colours = _spot_colours(pdf, recovered.pages)
         boxes = _merge_boxes(recovered.boxes)
@@ -212,7 +224,7 @@ def extract_pdf(
             path=str(path),
             out_dir=str(out_dir),
             pages=recovered.pages,
-            metadata=_metadata(pdf, out_dir, failures),
+            metadata=_metadata(core, out_dir, failures),
             output_intents=intents,
             assets=recovered.assets,
             text=recovered.text,
@@ -257,19 +269,24 @@ class _Recovery:
         self._masks: set[tuple[int, int]] = set()  # soft masks, saved beside the image they belong to
         self._font_pages: dict[str, set[int]] = {}
 
-    def page(self, number: int, page: pikepdf.Page, images: bool, vector: bool, gap_pt: float, fraction: float) -> None:
-        media = structure.media_box(page.obj)
+    def page(  # noqa: PLR0913 -- the page's facts, its walk, and the options of both
+        self,
+        facts: dict[str, typing.Any],
+        page: pikepdf.Page,
+        images: bool,
+        vector: bool,
+        gap_pt: float,
+        fraction: float,
+    ) -> None:
+        number, media = facts["number"], facts["media_pt"]
         self.pages.append(
             {
                 "number": number,
-                "rotate": int(page.obj.get("/Rotate", 0)),
+                "rotate": facts["rotate"],
                 "width_pt": media[2] - media[0] if media else None,
                 "height_pt": media[3] - media[1] if media else None,
                 "media_pt": media,
-                **{
-                    f"{key}_pt": structure.own_box(page.obj, f"{key.capitalize()}Box")
-                    for key in ("crop", "bleed", "trim", "art")
-                },
+                **{f"{key}_pt": facts[f"{key}_pt"] for key in ("crop", "bleed", "trim", "art")},
             }
         )
         walker = Walker()
@@ -445,95 +462,72 @@ class _Recovery:
             "vector", target.relative_to(self.out).as_posix(), [], {"shapes": shapes, "digest": digest, "text": text}
         )
 
-    def fonts(self) -> None:
-        for obj in _objects(self.pdf):
-            if not isinstance(obj, pikepdf.Dictionary) or str(obj.get("/Type")) != "/FontDescriptor":
+    def fonts(self, core: "_CoreFacts") -> None:
+        for font in core.facts["fonts"]:
+            full = (font["font_name"] or "unnamed").lstrip("/")
+            name = _SUBSET_PREFIX.sub("", full)
+            kind = font["subtype"] or ""
+            suffix = _FONT_FILES[font["key"]]
+            if font["key"] == "FontFile3":
+                suffix = ".otf" if kind == "OpenType" else ".cff"
+            program = core.blob(font["program"])
+            if isinstance(program, str):
+                self.failures.append(f"font {full}: {program}")
                 continue
-            for key, suffix in _FONT_FILES.items():
-                program = obj.get(key)
-                if program is None:
-                    continue
-                full = str(obj.get("/FontName", "unnamed")).lstrip("/")
-                name = _SUBSET_PREFIX.sub("", full)
-                kind = str(program.get("/Subtype", "")).lstrip("/")
-                if key == "/FontFile3":
-                    suffix = ".otf" if f"/{kind}" == _OPENTYPE else ".cff"
-                self._add(
-                    ("font", program.objgen),
-                    lambda program=program, full=full, name=name, kind=kind, suffix=suffix, d=obj: self._write_font(
-                        program, full, name, kind, suffix, _descriptor_facts(d, name)
-                    ),
-                )
-        for asset in self.assets:
-            if asset.kind == "font":  # a font has no position; the pages that set text in it go in the details
-                asset.details["pages"] = sorted(self._font_pages.get(asset.details["name"], ()))
-
-    def _write_font(
-        self, program: pikepdf.Object, full: str, name: str, kind: str, suffix: str, descriptor: dict[str, typing.Any]
-    ) -> Asset | None:
-        target = self.out / "fonts" / f"{_slug(full)}{suffix}"
-        try:
+            target = self.out / "fonts" / f"{_slug(full)}{suffix}"
             target.parent.mkdir(exist_ok=True)
-            target.write_bytes(bytes(program.read_bytes()))
-        except _ERRORS as exc:
-            self.failures.append(f"font {full}: {exc}")
-            return None
-        return Asset(
-            "font",
-            target.relative_to(self.out).as_posix(),
-            [],
-            {
+            target.write_bytes(program)
+            details = {
                 "name": name,
                 "full_name": full,
                 "subset": full != name,
                 "program": kind or suffix.lstrip("."),
-                "descriptor": descriptor,
-            },
-        )
+                "descriptor": _descriptor_facts(font["descriptor"], name),
+            }
+            self.assets.append(Asset("font", target.relative_to(self.out).as_posix(), [], details))
+        for asset in self.assets:
+            if asset.kind == "font":  # a font has no position; the pages that set text in it go in the details
+                asset.details["pages"] = sorted(self._font_pages.get(asset.details["name"], ()))
 
-    def profiles(self) -> list[dict[str, typing.Any]]:
+    def profiles(self, core: "_CoreFacts") -> list[dict[str, typing.Any]]:
         """Write every ICC profile (output intents and ICCBased spaces); return the output intents."""
         written: dict[str, dict[str, typing.Any]] = {}
-
-        def save(stream: pikepdf.Object, role: str) -> dict[str, typing.Any] | None:
-            try:
-                data = bytes(stream.read_bytes())
-            except _ERRORS as exc:
-                self.failures.append(f"ICC profile: {exc}")
-                return None
+        saved: list[dict[str, typing.Any] | None] = []
+        for profile in core.facts["profiles"]:
+            data = core.blob(profile["data"])
+            if isinstance(data, str):
+                self.failures.append(f"ICC profile: {data}")
+                saved.append(None)
+                continue
             digest = hashlib.sha1(data).hexdigest()
             if digest not in written:
-                description = _profile_description(data)
+                description = profile["description"]
                 target = self.out / "icc" / f"{_slug(description or 'profile')}-{digest[:8]}.icc"
                 target.parent.mkdir(exist_ok=True)
                 target.write_bytes(data)
                 written[digest] = {
                     "file": target.relative_to(self.out).as_posix(),
                     "description": description,
-                    "components": int(stream.get("/N", 0)),
+                    "components": int(profile["components"] or 0),
                     "roles": [],
                 }
                 self.assets.append(Asset("icc", written[digest]["file"], [], written[digest]))
-            if role not in written[digest]["roles"]:
-                written[digest]["roles"].append(role)
-            return written[digest]
-
+            if profile["role"] not in written[digest]["roles"]:
+                written[digest]["roles"].append(profile["role"])
+            saved.append(written[digest])
         intents = []
-        for intent in output_intents(self.pdf):
-            profile = intent.get("/DestOutputProfile")
-            saved = save(profile, "output intent") if profile is not None else None
+        for intent in core.facts["output_intents"]:
+            index = intent["profile"]
+            entry = saved[index] if index is not None else None
             intents.append(
                 {
-                    "subtype": str(intent.get("/S", "")).lstrip("/"),
-                    "output_condition_identifier": _text(intent.get("/OutputConditionIdentifier")),
-                    "output_condition": _text(intent.get("/OutputCondition")),
-                    "registry": _text(intent.get("/RegistryName")),
-                    "profile": saved["file"] if saved else None,
+                    "subtype": intent["subtype"] or "",
+                    "output_condition_identifier": intent["output_condition_identifier"],
+                    "output_condition": intent["output_condition"],
+                    "registry": intent["registry"],
+                    "profile": entry["file"] if entry else None,
                 }
             )
-        for obj in _objects(self.pdf):
-            if isinstance(obj, pikepdf.Array) and len(obj) == 2 and str(obj[0]) == "/ICCBased":
-                save(obj[1], "colour space")
         return intents
 
 
@@ -646,26 +640,26 @@ _BOLD_WORDS = re.compile(r"bold|black|heavy|demi|semibold", re.IGNORECASE)
 _ITALIC_WORDS = re.compile(r"italic|oblique|slanted", re.IGNORECASE)
 
 
-def _descriptor_facts(descriptor: pikepdf.Object, name: str) -> dict[str, typing.Any]:
+def _descriptor_facts(descriptor: dict[str, typing.Any], name: str) -> dict[str, typing.Any]:
     """What a font descriptor says about the face: its flags, weight, slant and metrics (1000-unit em), with bold and
     italic worked out from the flags, the numbers and, failing those, the name."""
-    flags = int(descriptor.get("/Flags", 0))
+    flags = int(descriptor["flags"] or 0)
     named = [label for bit, label in _FONT_FLAGS.items() if flags & (1 << (bit - 1))]
-    weight, angle = descriptor.get("/FontWeight"), float(descriptor.get("/ItalicAngle", 0) or 0)
+    weight, angle = descriptor["weight"], float(descriptor["italic_angle"] or 0)
     facts: dict[str, typing.Any] = {
-        "family": _text(descriptor.get("/FontFamily")),
+        "family": descriptor["family"],
         "weight": int(weight) if weight is not None else None,
-        "stretch": _text(descriptor.get("/FontStretch")),
+        "stretch": descriptor["stretch"],
         "italic_angle": angle,
         "flags": named,
         "bold": "force-bold" in named or (weight is not None and int(weight) >= 700) or bool(_BOLD_WORDS.search(name)),
         "italic": "italic" in named or angle != 0 or bool(_ITALIC_WORDS.search(name)),
-        "ascent": _number(descriptor.get("/Ascent")),
-        "descent": _number(descriptor.get("/Descent")),
-        "cap_height": _number(descriptor.get("/CapHeight")),
-        "x_height": _number(descriptor.get("/XHeight")),
-        "stem_v": _number(descriptor.get("/StemV")),
-        "bbox": [float(v) for v in descriptor["/FontBBox"]] if "/FontBBox" in descriptor else None,
+        "ascent": descriptor["ascent"],
+        "descent": descriptor["descent"],
+        "cap_height": descriptor["cap_height"],
+        "x_height": descriptor["x_height"],
+        "stem_v": descriptor["stem_v"],
+        "bbox": descriptor["bbox"],
     }
     return {k: v for k, v in facts.items() if v is not None}
 
@@ -677,22 +671,22 @@ def _number(value: typing.Any) -> float | None:
         return None
 
 
-def _metadata(pdf: pikepdf.Pdf, out_dir: pathlib.Path, failures: list[str]) -> dict[str, typing.Any]:
+def _metadata(core: "_CoreFacts", out_dir: pathlib.Path, failures: list[str]) -> dict[str, typing.Any]:
     """The document info, and the XMP packet both saved as ``xmp.xml`` and decoded (long values, such as embedded
     thumbnails, are left in the file and named in the data)."""
-    info = {str(k).lstrip("/"): str(v) for k, v in pdf.docinfo.items()}
-    packet = pdf.Root.get("/Metadata")
     decoded: dict[str, typing.Any] | None = None
     saved = None
-    if packet is not None:
+    if core.facts["xmp"] is not None:
+        data = core.blob(core.facts["xmp"])
         try:
-            data = bytes(packet.read_bytes())
+            if isinstance(data, str):
+                raise ValueError(data)
             (out_dir / "xmp.xml").write_bytes(data)
             saved = "xmp.xml"
             decoded = _elide(xmp.parse(data))
         except (*_ERRORS, ValueError) as exc:
             failures.append(f"XMP metadata: {exc}")
-    return {"pdf_version": pdf.pdf_version, "info": info, "xmp": decoded, "xmp_file": saved}
+    return {"pdf_version": core.facts["pdf_version"], "info": core.facts["info"], "xmp": decoded, "xmp_file": saved}
 
 
 def _elide(value: typing.Any) -> typing.Any:
@@ -841,17 +835,6 @@ def _filters(obj: pikepdf.Object) -> list[str]:
     if value is None:
         return []
     return [str(f).lstrip("/") for f in (value if isinstance(value, pikepdf.Array) else [value])]
-
-
-def _profile_description(data: bytes) -> str | None:
-    try:
-        return ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(data))).strip() or None
-    except ImageCms.PyCMSError, OSError, ValueError, TypeError:
-        return None
-
-
-def _text(value: pikepdf.Object | None) -> str | None:
-    return None if value is None else str(value)
 
 
 def _slug(name: str) -> str:

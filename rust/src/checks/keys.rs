@@ -111,8 +111,19 @@ pub(super) fn filespec_embedded(doc: &Document, _: &Settings) -> Vec<Finding> {
 /// ISO 15930-8 8.2 relaxes 6.7 for PDF/X-5g and X-5pg: the file a reference `XObject`'s `/Ref` names need not be
 /// embedded, though it may be (X5-Q3). Every other file specification still embeds its file.
 pub(super) fn filespec_embedded_x5(doc: &Document, _: &Settings) -> Vec<Finding> {
+    // Only a form proxy's `/Ref` is a reference: one on an image or any other stream is an unknown key, and its file
+    // specification owes `/EF` like any other.
+    let files: Vec<&Dict> = super::x5g::proxies(doc)
+        .iter()
+        .filter_map(|p| {
+            p.reference
+                .get(b"F")
+                .and_then(|f| doc.resolve(f))
+                .and_then(Object::dict)
+        })
+        .collect();
     filespec_rule(doc, X5_G_REF_FILESPEC_EXTERNAL, "8.2", &|n| {
-        n.under(b"F") && n.inside(b"Ref")
+        files.iter().any(|f| std::ptr::eq(*f, n.dict))
     })
 }
 

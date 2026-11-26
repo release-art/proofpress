@@ -148,7 +148,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x5.identification-value` | XMP declares an X-5 level | iso-15930-8:6.2 | error | x5g, x5n, x5pg | implemented |
 | `x5.self-contained-is-x4` | A self-contained file claims X-4, not X-5 | iso-15930-8:5 | error | x5g, x5pg | skip: At X-5g it is the same test as x5.g-ref-present, a warning (X5-Q1); at X-5pg the external profile means the file is never self-contained |
 | `x5.g-ref-present` | At least one reference XObject exists | iso-15930-8:8.2 | warning | x5g, x5pg | implemented |
-| `x5.g-proxy-is-form` | External content is placed through a form proxy | iso-15930-8:8.2 | error | x5g, x5pg | implemented |
+| `x5.g-proxy-is-form` | External content is placed through a form proxy | iso-15930-8:8.2 | warning | x5g, x5pg | implemented |
 | `x5.g-ref-id-required` | Every reference has a file ID | iso-15930-8:8.2 | error | x5g, x5pg | implemented |
 | `x5.g-ref-filespec-external` | A reference's file may be outside the file | iso-15930-8:8.2, iso-15930-7:6.7 | error | x5g, x5pg | implemented |
 | `x5.g-proxy-metadata` | A proxy form has metadata | iso-15930-8:8.3 | error | x5g, x5pg | implemented |

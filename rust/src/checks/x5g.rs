@@ -66,7 +66,8 @@ pub(super) fn ref_present(doc: &Document, _: &Settings) -> Vec<Finding> {
         .collect()
 }
 
-/// 8.2: a reference is made through a form `XObject`, the proxy, and nothing else.
+/// 8.2: a reference is made through a form `XObject`, the proxy. `/Ref` is defined for forms only (ISO 32000-1
+/// 8.10.4), so on anything else it is an unknown key a reader ignores, and no clause forbids it: a warning.
 pub(super) fn proxy_is_form(doc: &Document, _: &Settings) -> Vec<Finding> {
     referring(doc)
         .into_iter()
@@ -77,7 +78,7 @@ pub(super) fn proxy_is_form(doc: &Document, _: &Settings) -> Vec<Finding> {
             at(
                 X5_G_PROXY_IS_FORM,
                 num,
-                format!("{what} with /Ref, not a form XObject"),
+                format!("{what} with /Ref, which only a form XObject can use, so nothing is placed from another file"),
                 "8.2",
             )
         })
