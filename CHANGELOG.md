@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The print checks that read the PDF now run in the Rust core: placement (`outside-media`, `xobject-missing`,
+  `artwork-bleed`, `outside-bleed`), inks (`overprint`, `white-overprint`, `rich-black`, `k-only-text`), page geometry,
+  the colour mode (`blend-space`, `spot-ink`, `spot-definition`, `colour-space`, `rgb-only`, `gray-only`,
+  `icc-profile`), image resolution and text (`missing-glyph`, `font-embedded`, `font-type3`, `text-size`, `hairline`,
+  `safe-area`, `contrast`). On 10,013 test files their findings and messages match the Python's except where the
+  Python read the PDF wrongly:
+  - A file the core refuses, or reads with damaged parts left out, fails the checks it could not judge ("could not be
+    checked"); the Python checked whatever pikepdf had repaired.
+  - A form starts from the graphics state of the `Do` that paints it, colour and overprint included (ISO 32000-2
+    8.10.1), and a form without `/Resources` uses the page's (7.8.3).
+  - An `/XObject` entry that is not a stream is missing, not an image.
+  - Sampled PDF functions interpolate between their samples (7.10.2) where the Python took the nearest one.
+  - CMYK JPEG and JPEG 2000 images are decoded in the core (`zune-jpeg`, `hayro-jpeg2000`), and colours are converted
+    to L\*a\*b\* with LittleCMS 2.20 (`lcms2`, linked statically).
 - The package now contains a compiled Rust core (`proof_pdf._internal._core`), the start of the port described in
   `docs/briefs/rust-port.md`. It is built with maturin, so releases ship a wheel per platform (macOS arm64, Linux x86-64
   and arm64, manylinux, Windows x64) and installing from source needs Rust. Nothing user-visible uses it yet.
