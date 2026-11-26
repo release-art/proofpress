@@ -54,9 +54,9 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x4.filter.no-lzw` | LZW compression is not used | iso-15930-7:6.8 | error | x4, x4p | implemented |
 | `x4.filter.no-crypt` | The Crypt filter is not used | iso-15930-7:6.8 | error | x4, x4p | implemented |
 | `x4.filter.standard-only` | Only standard filters are used | iso-15930-7:6.8 | error | x4, x4p | implemented |
-| `x4.image.dct-valid` | JPEG data is valid | iso-15930-7:6.8 | error | x4, x4p | todo |
+| `x4.image.dct-valid` | JPEG data is valid | iso-15930-7:6.8 | error | x4, x4p | implemented |
 | `x4.image.jpx-valid` | JPEG 2000 data is valid | iso-15930-7:6.8, iso-15930-7:6.27 | error | x4, x4p | implemented |
-| `x4.image.jbig2-valid` | JBIG2 data is valid | iso-15930-7:6.8 | error | x4, x4p | todo |
+| `x4.image.jbig2-valid` | JBIG2 data is valid | iso-15930-7:6.8 | error | x4, x4p | implemented |
 | `x4.trapped.present` | XMP states whether the file is trapped | iso-15930-7:6.9 | error | x4, x4p | implemented |
 | `x4.trapped.true-or-false` | The trapped state is True or False | iso-15930-7:6.9 | error | x4, x4p | implemented |
 | `x4.trapped.trapnet-implies-true` | TrapNet annotations need the trapped state True | iso-15930-7:6.9 | error | x4, x4p | implemented |
