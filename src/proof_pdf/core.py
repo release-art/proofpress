@@ -17,7 +17,7 @@ import pathlib
 
 import pikepdf
 
-from ._internal import colour, contrast, pdfx, ported, resolution, structure, text, verapdf
+from ._internal import colour, contrast, pdfx, ported, resolution, text, verapdf
 from .models import ColourMode, FileReport, Finding, Profile, Severity
 
 logger = logging.getLogger(__name__)
@@ -120,14 +120,8 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
         with pikepdf.open(path) as pdf:
             if profile.pdfx:
                 findings += pdfx.check(pdf)
-            if profile.geometry is not None:
-                findings += structure.check_geometry(pdf, profile.geometry)
             findings += _structure_rules(pdf, profile)
             findings += ported.check(path, profile)
-            if profile.require_bleed:
-                findings += structure.check_artwork_bleed(pdf)
-            if profile.no_marks:
-                findings += structure.check_outside_bleed(pdf, profile.geometry)
             findings += _text_checks(pdf, profile)
             if profile.colour:
                 findings += colour.check_transparency(pdf)
@@ -153,10 +147,6 @@ def _check_pdf(path: pathlib.Path, profile: Profile) -> tuple[list[Finding], boo
 
 def _structure_rules(pdf: pikepdf.Pdf, profile: Profile) -> list[Finding]:
     findings: list[Finding] = []
-    if profile.output_condition is not None:
-        findings += structure.check_output_condition(pdf, profile.output_condition)
-    if profile.uniform_pages or profile.pages_multiple_of:
-        findings += structure.check_pages(pdf, uniform=profile.uniform_pages, multiple_of=profile.pages_multiple_of)
     if profile.allow_spots is not None:
         findings += colour.check_spot_inks(pdf, profile.allow_spots)
     return findings

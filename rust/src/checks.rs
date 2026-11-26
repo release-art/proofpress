@@ -13,6 +13,7 @@ mod jpx;
 mod keys;
 mod metadata;
 mod optional;
+mod page;
 mod painted;
 mod spots;
 mod walk;
@@ -54,11 +55,57 @@ impl From<Level> for Settings {
 pub struct Params {
     /// `rich-black`: the largest text, in points, that may not be set in a built black.
     pub small_text_pt: f64,
+    /// `geometry`, `bleed` and `centring`: the finished page the job expects; none turns them off.
+    pub geometry: Option<Geometry>,
+    /// `page-size` and `page-rotate`: whether every page must be the first page's size, unrotated.
+    pub uniform_pages: bool,
+    /// `page-count`: the number the page count must be a multiple of; none or 0 turns it off.
+    pub pages_multiple_of: Option<i64>,
+    /// `output-condition`: the printing condition an output intent must name, matched without regard to case.
+    pub output_condition: Option<String>,
 }
 
 impl Default for Params {
     fn default() -> Self {
-        Self { small_text_pt: 12.0 }
+        Self {
+            small_text_pt: 12.0,
+            geometry: None,
+            uniform_pages: false,
+            pages_multiple_of: None,
+            output_condition: None,
+        }
+    }
+}
+
+/// A finished page: its trim size and bleed in millimetres, the tolerance either is held to, and a different bleed on
+/// the binding edge (left on odd pages when `binding` is `left`, right otherwise).
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Geometry {
+    /// The trim's width.
+    pub trim_w_mm: f64,
+    /// The trim's height.
+    pub trim_h_mm: f64,
+    /// The bleed on every side but the binding edge.
+    pub bleed_mm: f64,
+    /// How far a size or bleed may be off.
+    #[serde(default = "Geometry::default_tolerance")]
+    pub tolerance_mm: f64,
+    /// The bleed on the binding edge, when it differs.
+    #[serde(default)]
+    pub binding_bleed_mm: Option<f64>,
+    /// Which edge odd pages bind on.
+    #[serde(default = "Geometry::default_binding")]
+    pub binding: String,
+}
+
+impl Geometry {
+    fn default_tolerance() -> f64 {
+        0.25
+    }
+
+    fn default_binding() -> String {
+        "left".to_owned()
     }
 }
 
@@ -194,6 +241,15 @@ const RUNS: &[(&Check, Run)] = &[
     (f::WHITE_OVERPRINT, ink::white_overprint),
     (f::RICH_BLACK, ink::rich_black),
     (f::K_ONLY_TEXT, ink::k_only_text),
+    (f::GEOMETRY, page::geometry),
+    (f::BLEED, page::bleed),
+    (f::CENTRING, page::centring),
+    (f::PAGE_COUNT, page::page_count),
+    (f::PAGE_SIZE, page::page_size),
+    (f::PAGE_ROTATE, page::page_rotate),
+    (f::OUTPUT_CONDITION, page::output_condition),
+    (f::ARTWORK_BLEED, painted::artwork_bleed),
+    (f::OUTSIDE_BLEED, painted::outside_bleed),
 ];
 
 /// Verify `bytes`, the file named `file`, at `level`: open it, reading everything reachable, report what tiers 1 to 5
@@ -318,6 +374,39 @@ pub fn guarded(check: &'static Check, run: &dyn Fn() -> Vec<Finding>) -> Vec<Fin
             format!("check {} failed inside proof-pdf: {reason}", check.id),
         )]
     })
+}
+
+/// Documents for the checks' unit tests.
+#[cfg(test)]
+pub(crate) mod test_doc {
+    use crate::document::Document;
+    use crate::document::test_pdf::classic;
+    use crate::pipeline::Limits;
+
+    /// A document whose pages have the dictionary entries and content of `pages`, whose catalog has `catalog` besides
+    /// `/Pages`, and with the objects `more` (numbered below 100).
+    pub(crate) fn paged(pages: &[(&str, &str)], catalog: &str, more: &[(u32, Vec<u8>)]) -> Document {
+        let kids: Vec<String> = (0..pages.len()).map(|i| format!("{} 0 R", 100 + 2 * i)).collect();
+        let mut objects: Vec<(u32, Vec<u8>)> = vec![
+            (1, format!("<< /Type /Catalog /Pages 2 0 R {catalog} >>").into_bytes()),
+            (
+                2,
+                format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), kids.len()).into_bytes(),
+            ),
+        ];
+        for (i, (entries, data)) in pages.iter().enumerate() {
+            let n = u32::try_from(100 + 2 * i).unwrap();
+            let page = format!("<< /Type /Page /Parent 2 0 R {entries} /Contents {} 0 R >>", n + 1);
+            objects.push((n, page.into_bytes()));
+            objects.push((
+                n + 1,
+                format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len()).into_bytes(),
+            ));
+        }
+        objects.extend(more.iter().cloned());
+        let refs: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
+        Document::open(&classic(&refs, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap()
+    }
 }
 
 #[cfg(test)]

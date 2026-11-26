@@ -220,19 +220,19 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `missing-glyph` | Text shows no missing glyphs |  | error | print | todo |
 | `font-embedded` | Fonts are embedded |  | error | print | todo |
 | `font-type3` | Type 3 fonts are reported |  | error | print | todo |
-| `geometry` | Pages are the expected trim size |  | error | print | todo |
-| `bleed` | Pages carry the expected bleed |  | error | print | todo |
-| `centring` | The trim is centred in the bleed |  | error | print | todo |
-| `artwork-bleed` | Artwork reaches into the bleed |  | error | print | todo |
-| `outside-bleed` | Nothing is painted beyond the bleed |  | error | print | todo |
+| `geometry` | Pages are the expected trim size |  | error | print | implemented |
+| `bleed` | Pages carry the expected bleed |  | error | print | implemented |
+| `centring` | The trim is centred in the bleed |  | error | print | implemented |
+| `artwork-bleed` | Artwork reaches into the bleed |  | error | print | implemented |
+| `outside-bleed` | Nothing is painted beyond the bleed |  | error | print | implemented |
 | `outside-media` | Nothing is painted wholly off the page |  | warning | print | implemented |
 | `xobject-missing` | Painted XObjects exist |  | error | print | implemented |
 | `bleedbox` | Pages with a trim have a BleedBox |  | error | print | todo |
 | `boxes` | Each page has a MediaBox |  | error | print | todo |
-| `page-size` | Pages share one size |  | error | print | todo |
-| `page-count` | The page count fits the rule |  | error | print | todo |
-| `page-rotate` | Pages are not rotated |  | error | print | todo |
-| `output-condition` | The output intent names the expected condition |  | error | print | todo |
+| `page-size` | Pages share one size |  | error | print | implemented |
+| `page-count` | The page count fits the rule |  | error | print | implemented |
+| `page-rotate` | Pages are not rotated |  | warning | print | implemented |
+| `output-condition` | The output intent names the expected condition |  | error | print | implemented |
 | `pdfa` | veraPDF passes the PDF/A flavour |  | error | print | todo |
 | `structure` | The file can be read |  | error | print | todo |
 | `internal` | The engine itself failed on this file |  | error | x4, x4p, x5g, x5pg, x5n, print | skip: Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it |

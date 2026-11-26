@@ -572,7 +572,7 @@ expect = { "x4.pre-separated.absent" = "two pages painting only Cyan and only Ma
 
 [print-outside-media]
 levels = ["print"]
-expect = { "outside-media" = "a 10 pt square at (2000, 2000), wholly beyond the MediaBox (warning)" }
+expect = { "outside-media" = "a 10 pt square at (2000, 2000), wholly beyond the MediaBox (warning)", "outside-bleed" = "and so beyond the bleed box too" }
 
 [print-xobject-missing]
 levels = ["print"]
@@ -595,3 +595,44 @@ expect = { "white-overprint" = "white text set to overprint", "overprint" = "and
 [rich-black-text]
 levels = ["print"]
 expect = { "rich-black" = "12 pt text in C60 M50 Y40 K90, at the default 12 pt limit (advisory)", "k-only-text" = "and so not K only" }
+
+# Today's page-geometry fixtures, verified for print with the parameters a profile would give.
+
+[good]
+levels = ["print"]
+expect = {}
+params = { geometry = { trim_w_mm = 105.0, trim_h_mm = 148.0, bleed_mm = 3.0 }, uniform_pages = true, pages_multiple_of = 1, output_condition = "sRGB" }
+
+[wrong-size]
+levels = ["print"]
+expect = { "geometry" = "an A5 page where the profile wants A6", "bleed" = "and no bleed where 3 mm is wanted" }
+params = { geometry = { trim_w_mm = 105.0, trim_h_mm = 148.0, bleed_mm = 3.0 } }
+
+[two-sizes]
+levels = ["print"]
+expect = { "page-size" = "page 2 is A5 after an A6 page 1" }
+params = { uniform_pages = true }
+
+[three-pages]
+levels = ["print"]
+expect = { "page-count" = "3 pages where the profile wants a multiple of 2" }
+params = { pages_multiple_of = 2 }
+
+[book-interior]
+levels = ["print"]
+expect = { "bleed" = "no bleed on the binding edge where the profile wants 3 mm all round", "centring" = "and so the trim sits off-centre on the media box" }
+params = { geometry = { trim_w_mm = 105.0, trim_h_mm = 148.0, bleed_mm = 3.0 } }
+
+[bleed-short]
+levels = ["print"]
+expect = { "artwork-bleed" = "a fill that stops at the trim on the left" }
+
+[crop-marks]
+levels = ["print"]
+expect = { "outside-bleed" = "crop marks in the margin, beyond the bleed box", "output-condition" = "the intent names sRGB IEC61966-2.1 where the profile wants FOGRA39" }
+params = { output_condition = "FOGRA39" }
+
+[print-rotated]
+levels = ["print"]
+expect = { "page-rotate" = "x4-good turned with /Rotate 90 (warning)", "artwork-bleed" = "and so its bleed coverage is not checked (warning)", "outside-bleed" = "and nor is what lies beyond the bleed (warning)" }
+params = { uniform_pages = true }

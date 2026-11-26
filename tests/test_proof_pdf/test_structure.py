@@ -5,11 +5,10 @@ import dataclasses
 import pikepdf
 import pytest
 
-from proof_pdf._internal import structure
 from proof_pdf._internal.pdfx import x4
 from proof_pdf.models import PageGeometry, Severity
 
-from .conftest import A6, BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W, xmp_bytes
+from .conftest import A6, BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W, ported_findings, xmp_bytes
 
 
 def _checks(findings) -> set[str]:
@@ -167,7 +166,7 @@ class TestGeometry:
 
     def test_correct_card_is_clean(self, make_pdf):
         with pikepdf.open(make_pdf()) as pdf:
-            assert structure.check_geometry(pdf, A6) == []
+            assert ported_findings(pdf, {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(A6)) == []
 
     def test_landscape_matches_without_a_flag(self, make_pdf):
         """Orientation-agnostic: the same two numbers the other way round."""
@@ -177,7 +176,7 @@ class TestGeometry:
             "BleedBox": [0, 0, MEDIA_H, MEDIA_W],
         }
         with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            assert structure.check_geometry(pdf, A6) == []
+            assert ported_findings(pdf, {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(A6)) == []
 
     def test_card_package_output_passes(self, make_pdf):
         """Measured on a real LaTeX card-package build: TrimBox inset
@@ -188,7 +187,7 @@ class TestGeometry:
             "TrimBox": [19.84, 19.84, 317.48, 439.37],
         }
         with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            assert structure.check_geometry(pdf, A6) == []
+            assert ported_findings(pdf, {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(A6)) == []
 
     def test_real_defect_from_a_build(self, make_pdf):
         """The measured output of the retired `subjectFlashcard.cls`: 25pt horizontal, 20pt vertical inset."""
@@ -198,7 +197,7 @@ class TestGeometry:
             "BleedBox": [0, 0, 337.32198, 459.21146],
         }
         with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            findings = structure.check_geometry(pdf, A6)
+            findings = ported_findings(pdf, {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(A6))
         assert "geometry" in _checks(findings)
         assert "101.3" in next(f.message for f in findings if f.check == "geometry")
         # Its bleed is the 7mm crop-mark margin, not the 1.5mm it should declare.
@@ -213,7 +212,9 @@ class TestGeometry:
             "BleedBox": [0, 0, MEDIA_W, MEDIA_H],
         }
         with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            assert "centring" in _checks(structure.check_geometry(pdf, A6))
+            assert "centring" in _checks(
+                ported_findings(pdf, {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(A6))
+            )
 
     @pytest.mark.parametrize(("tolerance_mm", "expect_finding"), [(0.25, True), (2.0, False)], ids=["tight", "loose"])
     def test_tolerance_is_honoured(self, make_pdf, tolerance_mm, expect_finding):
@@ -224,7 +225,11 @@ class TestGeometry:
             "BleedBox": [0, 0, MEDIA_W, MEDIA_H],
         }
         with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
-            findings = structure.check_geometry(pdf, dataclasses.replace(A6, tolerance_mm=tolerance_mm))
+            findings = ported_findings(
+                pdf,
+                {"geometry", "bleed", "centring"},
+                geometry=dataclasses.asdict(dataclasses.replace(A6, tolerance_mm=tolerance_mm)),
+            )
         assert ("geometry" in _checks(findings)) is expect_finding
 
     def test_other_stock_passes_with_its_own_numbers(self, make_pdf):
@@ -238,11 +243,11 @@ class TestGeometry:
         }
         with pikepdf.open(make_pdf(boxes=boxes)) as pdf:
             geometry = PageGeometry(trim_w_mm=85, trim_h_mm=55, bleed_mm=3)
-            assert structure.check_geometry(pdf, geometry) == []
+            assert ported_findings(pdf, {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(geometry)) == []
 
     def test_missing_trim_is_left_to_check_page_boxes(self, make_pdf):
         with pikepdf.open(make_pdf(boxes={"MediaBox": [0, 0, MEDIA_W, MEDIA_H]})) as pdf:
-            assert structure.check_geometry(pdf, A6) == []
+            assert ported_findings(pdf, {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(A6)) == []
 
 
 def _with_intent(identifier: str | None, *, description_profile: bool = False) -> pikepdf.Pdf:
@@ -263,21 +268,24 @@ def _with_intent(identifier: str | None, *, description_profile: bool = False) -
 
 class TestOutputCondition:
     def test_a_matching_identifier_passes_case_insensitively(self):
-        assert structure.check_output_condition(_with_intent("FOGRA51 (PSO Coated v3)"), "fogra51") == []
+        assert (
+            ported_findings(_with_intent("FOGRA51 (PSO Coated v3)"), {"output-condition"}, output_condition="fogra51")
+            == []
+        )
 
     def test_a_different_condition_is_an_error_naming_both(self):
-        [finding] = structure.check_output_condition(_with_intent("sRGB IEC61966-2.1"), "FOGRA51")
+        [finding] = ported_findings(_with_intent("sRGB IEC61966-2.1"), {"output-condition"}, output_condition="FOGRA51")
         assert finding.severity is Severity.ERROR and finding.check == "output-condition"
         assert "sRGB IEC61966-2.1" in finding.message and "FOGRA51" in finding.message
 
     def test_the_icc_profile_description_counts_too(self):
         pdf = _with_intent(None, description_profile=True)
-        assert structure.check_output_condition(pdf, "sRGB") == []
+        assert ported_findings(pdf, {"output-condition"}, output_condition="sRGB") == []
 
     def test_no_output_intent_is_an_error(self):
         pdf = pikepdf.new()
         pdf.add_blank_page()
-        [finding] = structure.check_output_condition(pdf, "FOGRA51")
+        [finding] = ported_findings(pdf, {"output-condition"}, output_condition="FOGRA51")
         assert "no output intent" in finding.message
 
 
@@ -292,34 +300,76 @@ def _pages(*sizes_mm: tuple[float, float], rotate: dict[int, int] | None = None)
 
 class TestPageSet:
     def test_a_count_that_is_not_a_multiple_is_an_error(self):
-        [finding] = structure.check_pages(_pages(*[(105, 148)] * 10), uniform=False, multiple_of=4)
+        [finding] = ported_findings(
+            _pages(*[(105, 148)] * 10),
+            {"page-count", "page-size", "page-rotate"},
+            uniform_pages=False,
+            pages_multiple_of=4 or None,
+        )
         assert finding.check == "page-count" and "10 pages" in finding.message
 
     def test_a_multiple_passes(self):
-        assert structure.check_pages(_pages(*[(105, 148)] * 8), uniform=False, multiple_of=4) == []
+        assert (
+            ported_findings(
+                _pages(*[(105, 148)] * 8),
+                {"page-count", "page-size", "page-rotate"},
+                uniform_pages=False,
+                pages_multiple_of=4 or None,
+            )
+            == []
+        )
 
     def test_a_page_of_another_size_is_named(self):
-        [finding] = structure.check_pages(_pages((105, 148), (105, 148), (148, 210)), uniform=True, multiple_of=None)
+        [finding] = ported_findings(
+            _pages((105, 148), (105, 148), (148, 210)),
+            {"page-count", "page-size", "page-rotate"},
+            uniform_pages=True,
+            pages_multiple_of=None or None,
+        )
         assert finding.check == "page-size" and finding.page == 3
         assert "148 x 210" in finding.message and "105 x 148" in finding.message
 
     def test_sizes_within_a_tenth_of_a_millimetre_are_the_same(self):
-        assert structure.check_pages(_pages((105, 148), (105.05, 148.05)), uniform=True, multiple_of=None) == []
+        assert (
+            ported_findings(
+                _pages((105, 148), (105.05, 148.05)),
+                {"page-count", "page-size", "page-rotate"},
+                uniform_pages=True,
+                pages_multiple_of=None or None,
+            )
+            == []
+        )
 
     def test_a_rotated_page_is_a_warning(self):
-        [finding] = structure.check_pages(
-            _pages((105, 148), (105, 148), rotate={1: 90}), uniform=True, multiple_of=None
+        [finding] = ported_findings(
+            _pages((105, 148), (105, 148), rotate={1: 90}),
+            {"page-count", "page-size", "page-rotate"},
+            uniform_pages=True,
+            pages_multiple_of=None or None,
         )
         assert finding.check == "page-rotate" and finding.severity is Severity.WARN and finding.page == 2
 
     def test_nothing_is_checked_unless_asked(self):
-        assert structure.check_pages(_pages((105, 148), (148, 210)), uniform=False, multiple_of=None) == []
+        assert (
+            ported_findings(
+                _pages((105, 148), (148, 210)),
+                {"page-count", "page-size", "page-rotate"},
+                uniform_pages=False,
+                pages_multiple_of=None or None,
+            )
+            == []
+        )
 
     def test_the_trim_box_is_the_size_when_there_is_one(self):
         pdf = _pages((111, 154), (111, 154))
         for page in pdf.pages:
             page.obj["/TrimBox"] = [8.5, 8.5, 8.5 + 105 / 25.4 * 72, 8.5 + 148 / 25.4 * 72]
-        assert structure.check_pages(pdf, uniform=True, multiple_of=None) == []
+        assert (
+            ported_findings(
+                pdf, {"page-count", "page-size", "page-rotate"}, uniform_pages=True, pages_multiple_of=None or None
+            )
+            == []
+        )
 
 
 class TestBindingBleed:
@@ -346,31 +396,64 @@ class TestBindingBleed:
         assert right.bleeds_mm(1) == (3, 3, 0, 3) and right.bleeds_mm(2) == (0, 3, 3, 3)
 
     def test_a_correct_interior_is_clean(self):
-        assert structure.check_geometry(self._pdf((0, 3), (3, 0), (0, 3)), self.BOOK) == []
+        assert (
+            ported_findings(
+                self._pdf((0, 3), (3, 0), (0, 3)),
+                {"geometry", "bleed", "centring"},
+                geometry=dataclasses.asdict(self.BOOK),
+            )
+            == []
+        )
 
     def test_bleed_on_the_wrong_side_is_flagged_on_that_page_only(self):
-        findings = structure.check_geometry(self._pdf((0, 3), (0, 3), (0, 3)), self.BOOK)  # page 2 repeats page 1
+        findings = ported_findings(
+            self._pdf((0, 3), (0, 3), (0, 3)), {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(self.BOOK)
+        )  # page 2 repeats page 1
         assert {(f.check, f.page) for f in findings} == {("bleed", 2), ("centring", 2)}
         [bleed] = [f for f in findings if f.check == "bleed"]
         assert "expected 3, 3, 0, 3 mm" in bleed.message
 
     def test_bleed_on_the_binding_edge_is_flagged(self):
-        assert "bleed" in {f.check for f in structure.check_geometry(self._pdf((3, 3)), self.BOOK)}
+        assert "bleed" in {
+            f.check
+            for f in ported_findings(
+                self._pdf((3, 3)), {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(self.BOOK)
+            )
+        }
 
     def test_centring_follows_the_expected_asymmetry(self):
-        [finding] = [f for f in structure.check_geometry(self._pdf((1.5, 3)), self.BOOK) if f.check == "centring"]
+        [finding] = [
+            f
+            for f in ported_findings(
+                self._pdf((1.5, 3)), {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(self.BOOK)
+            )
+            if f.check == "centring"
+        ]
         assert "expected left minus right -3.00 mm" in finding.message
 
     def test_without_a_binding_bleed_an_asymmetric_page_is_off_centre(self):
         [finding] = [
-            f for f in structure.check_geometry(self._pdf((0, 3)), PageGeometry(105, 148, 3)) if f.check == "centring"
+            f
+            for f in ported_findings(
+                self._pdf((0, 3)),
+                {"geometry", "bleed", "centring"},
+                geometry=dataclasses.asdict(PageGeometry(105, 148, 3)),
+            )
+            if f.check == "centring"
         ]
         assert "expected left minus right" not in finding.message  # today's message
 
     def test_equal_bleed_is_exactly_the_old_behaviour(self):
         for geometry in (PageGeometry(105, 148, 3), PageGeometry(105, 148, 3, binding_bleed_mm=3, binding="right")):
-            assert structure.check_geometry(self._pdf((3, 3), (3, 3)), geometry) == []
-            off = structure.check_geometry(self._pdf((3, 8)), geometry)
+            assert (
+                ported_findings(
+                    self._pdf((3, 3), (3, 3)), {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(geometry)
+                )
+                == []
+            )
+            off = ported_findings(
+                self._pdf((3, 8)), {"geometry", "bleed", "centring"}, geometry=dataclasses.asdict(geometry)
+            )
             assert {f.check for f in off} == {"bleed", "centring"}
             assert all("on every side" in f.message for f in off if f.check == "bleed")
             assert all("expected left minus right" not in f.message for f in off if f.check == "centring")

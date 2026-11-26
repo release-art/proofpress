@@ -1764,7 +1764,7 @@ title = "Pages are the expected trim size"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "bleed"
@@ -1772,7 +1772,7 @@ title = "Pages carry the expected bleed"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "centring"
@@ -1780,7 +1780,7 @@ title = "The trim is centred in the bleed"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "artwork-bleed"
@@ -1788,7 +1788,7 @@ title = "Artwork reaches into the bleed"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "outside-bleed"
@@ -1796,7 +1796,7 @@ title = "Nothing is painted beyond the bleed"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "outside-media"
@@ -1836,7 +1836,7 @@ title = "Pages share one size"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "page-count"
@@ -1844,15 +1844,15 @@ title = "The page count fits the rule"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "page-rotate"
 title = "Pages are not rotated"
 clauses = []
-severity = "error"
+severity = "warning"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "output-condition"
@@ -1860,7 +1860,7 @@ title = "The output intent names the expected condition"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "pdfa"

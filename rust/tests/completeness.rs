@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use proof_pdf::checks::verify;
+use proof_pdf::checks::{Params, Settings, verify_settings};
 use proof_pdf::findings::{ALL, Check, Level, Status};
 use serde::Deserialize;
 
@@ -14,6 +14,9 @@ use serde::Deserialize;
 struct Fixture {
     levels: Vec<String>,
     expect: BTreeMap<String, String>,
+    /// The print checks' parameters it is verified with, when not the defaults.
+    #[serde(default)]
+    params: Params,
 }
 
 fn repo() -> &'static Path {
@@ -115,7 +118,11 @@ fn every_fixture_raises_exactly_its_expected_checks() {
         .unwrap();
         let bytes = std::fs::read(path).unwrap();
         for name_of_level in &fixture.levels {
-            let report = verify(&file, &bytes, level(name_of_level));
+            let settings = Settings {
+                level: level(name_of_level),
+                params: fixture.params.clone(),
+            };
+            let report = verify_settings(&file, &bytes, &settings);
             let found: BTreeSet<&str> = report.findings.iter().map(|f| f.check.id).collect();
             let expected: BTreeSet<&str> = fixture.expect.keys().map(String::as_str).collect();
             if found != expected {

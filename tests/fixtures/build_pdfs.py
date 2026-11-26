@@ -741,6 +741,7 @@ def _print_fixtures() -> dict[str, pikepdf.Pdf]:
     return {
         "print-outside-media": _x4_page(b"0 0 0 1 k 2000 2000 10 10 re f"),
         "print-xobject-missing": _x4_page(b"q 10 0 0 10 0 0 cm /Nothing Do Q"),
+        "print-rotated": _x4_with(lambda pdf: pdf.pages[0].obj.__setitem__("/Rotate", 90)),
     }
 
 

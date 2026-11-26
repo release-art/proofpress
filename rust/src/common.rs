@@ -6,6 +6,7 @@ pub(crate) mod family;
 pub(crate) mod font;
 pub(crate) mod icc;
 pub(crate) mod jpx;
+pub(crate) mod pyfmt;
 pub(crate) mod rect;
 pub(crate) mod text;
 pub(crate) mod xmp;

@@ -8,6 +8,7 @@ new block of setup.
 """
 
 import pathlib
+import tempfile
 import types
 import zlib
 from typing import Any, cast
@@ -15,8 +16,8 @@ from typing import Any, cast
 import pikepdf
 import pytest
 
-from proof_pdf._internal import proc
-from proof_pdf.models import PageGeometry
+from proof_pdf._internal import ported, proc
+from proof_pdf.models import Finding, PageGeometry
 
 # An A6 card (105x148 mm) centred inside a 3 mm bleed: the "correct" baseline.
 A6 = PageGeometry(trim_w_mm=105.0, trim_h_mm=148.0, bleed_mm=3.0)
@@ -29,6 +30,14 @@ GOOD_BOXES = {
     "TrimBox": [BLEED, BLEED, BLEED + TRIM_W, BLEED + TRIM_H],
     "BleedBox": [0, 0, MEDIA_W, MEDIA_H],
 }
+
+
+def ported_findings(pdf: pikepdf.Pdf, checks: set[str], **params: object) -> list[Finding]:
+    """The Rust core's findings of *checks* on *pdf*, with the print checks' *params*."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = pathlib.Path(tmp) / "ported.pdf"
+        pdf.save(path)
+        return [f for f in ported.run(path, params) if f.check in checks]
 
 
 @pytest.fixture

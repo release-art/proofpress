@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use cucumber::{World, given, then, when};
-use proof_pdf::checks::verify;
+use proof_pdf::checks::{Settings, verify, verify_settings};
 use proof_pdf::findings::{Level, Report, Verdict};
 use proof_pdf::pipeline::{Listener, publish};
 
@@ -106,6 +106,16 @@ fn verified(world: &mut Pipeline, level: String) {
 #[when("it is verified for print")]
 fn verified_for_print(world: &mut Pipeline) {
     world.report = Some(verify(&world.fixture.0, &world.fixture.1, Level::Print));
+}
+
+/// For print with the profile's parameters, given as JSON.
+#[when(expr = "it is verified for print with {string}")]
+fn verified_for_print_with(world: &mut Pipeline, params: String) {
+    let settings = Settings {
+        level: Level::Print,
+        params: serde_json::from_str(&params).expect("parameters as JSON"),
+    };
+    world.report = Some(verify_settings(&world.fixture.0, &world.fixture.1, &settings));
 }
 
 fn report(world: &Pipeline) -> &Report {

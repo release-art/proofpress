@@ -24,10 +24,12 @@ record it as not conforming to that one rule).
 ## Status
 
 - **Phase 4** (content, page model and colour): 4.1 to 4.5 done; 4.6 under way. The walk now places what it paints
-  (CTM, clip, path, text and image extents) and reads colours as the print checks do; six print checks run in Rust:
-  `outside-media`, `xobject-missing`, `overprint`, `white-overprint`, `rich-black`, `k-only-text`. Profile parameters
-  reach the core as JSON (`Settings`, `Params`). Next in 4.6: the colour-mode checks (colour spaces, RGB-only,
-  gray-only, spots, ICC, blend space), then text, resolution and the page geometry checks. The brief's pace checkpoint for
+  (CTM, clip, path, text and image extents) and reads colours as the print checks do; 15 print checks run in Rust:
+  what is painted where (`outside-media`, `xobject-missing`, `artwork-bleed`, `outside-bleed`), the inks
+  (`overprint`, `white-overprint`, `rich-black`, `k-only-text`) and the page geometry (`geometry`, `bleed`, `centring`,
+  `page-count`, `page-size`, `page-rotate`, `output-condition`). Profile parameters reach the core as JSON (`Settings`,
+  `Params`). Next in 4.6: the colour-mode checks (colour spaces, RGB-only, gray-only, spot inks and definitions, ICC,
+  blend space), then text and fonts, contrast, and resolution. The brief's pace checkpoint for
   `paint.py` falls on 2026-12-02, one week into phase 4.
 
 ## Done
@@ -70,7 +72,8 @@ record it as not conforming to that one rule).
 | 4.4 | `a7499b9`; test-db `a2661129` | `x4.jpx.baseline` (T.801 M.9.2) and `x4.image.jpx-valid` (header only); fixtures now baseline JPX; 3 more fixtures |
 | 4.5 | `cd26fbf` | Pre-separated files (6.1.2, X4-Q2): every painting page one colorant, differing between pages; 1 fixture; none in Ghent, Altona or GWG Processing Steps |
 | 4.6 (part) | `2d4b7c0` | Tier 7 geometry and font metrics; `outside-media` and `xobject-missing` ported, parity-proved and their Python deleted; `bin/parity/print.py`; 2 fixtures |
-| 4.6 (part) | the commit after `2d4b7c0` | Colour families and fills in the walk; `Settings` and `Params` for print checks; `overprint`, `white-overprint`, `rich-black`, `k-only-text` ported, parity-proved and their Python deleted |
+| 4.6 (part) | `82d1893` | Colour families and fills in the walk; `Settings` and `Params` for print checks; `overprint`, `white-overprint`, `rich-black`, `k-only-text` ported, parity-proved and their Python deleted |
+| 4.6 (part) | the commit after `82d1893` | Page geometry and bleed: 9 checks ported with their parameters, parity-proved and their Python deleted; ICC description reader; Python's `:g` and `repr` for messages; fixtures may give parameters |
 
 ## Register coverage
 
@@ -80,7 +83,7 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 |---|---|---|---|
 | PDF/X-4 and X-4p | 109 | 28 | 4 |
 | PDF/X-5 | 0 | 35 | 18 |
-| House and structure checks | 25 | 31 | 1 (`internal`) |
+| House and structure checks | 34 | 22 | 1 (`internal`) |
 
 ## Gates
 
@@ -254,6 +257,16 @@ Oracle consultations:
   decision) and qpdf reads anyway. Python's overprint is one flag, `OP` or `op`; its text colours include the fill
   in every render mode and count invisible text; the K-only message counts colours, not runs. All kept for parity,
   to revisit once the port is done.
+- Task 4.6, the third port (`geometry`, `bleed`, `centring`, `page-count`, `page-size`, `page-rotate`,
+  `output-condition`, `artwork-bleed`, `outside-bleed`, with an A4 geometry, 4 mm binding bleed, uniform pages in
+  fours and FOGRA39): 9,205 files identical with 67,381 findings among them, 65 different, every one a file whose
+  objects lie beyond its trailer's `/Size`, which the core reads as null (task 2.1's decision) and qpdf reads anyway.
+  In 38 of them the catalog itself is beyond `/Size`, so the core sees no pages and the file reads as sound with
+  nothing to judge; see "Owner actions".
+- Task 4.6: `boxes` and `bleedbox` come from the Python PDF/X layer (`pdfx/x4.py`), which the plan does not port; the
+  `x4.boxes.*` rows replace them.
+- Task 4.6: the profile's on/off switches for print checks stay in Python (`ported.check`); the core runs every
+  implemented print check and Python keeps those the profile turns on.
 - Task 4.6: the walk now starts a form from the graphics state of its `Do`, colour and overprint included (8.10.1),
   where it used to start from the default; an unbalanced `Q` keeps the state and restores only the CTM, as the Python
   does; an `XObject` entry that is not a stream is missing (7.8.3), not an image. Ghent and Altona are unchanged.
@@ -272,6 +285,10 @@ Oracle consultations:
 
 - **JPEG 2000 standards:** done 2026-11-26 on the owner's word: ITU-T T.800 and T.801 (08/2002), test-db `580f8e51`;
   the owner then supplied T.800 (06/2019) and T.801 (06/2021), test-db `a2661129`.
+- **Objects beyond `/Size`:** 65 corpus files (pdf.js, unsafe-docs, jhove error sets; no print output) reference
+  objects numbered at or beyond the trailer's `/Size`; the core reads those references as null, as decided in task
+  2.1, and qpdf reads the objects. Where the catalog is one of them, the file has no pages for the checks and is
+  reported sound. Worth deciding whether a file whose `/Root` does not resolve should be refused.
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.

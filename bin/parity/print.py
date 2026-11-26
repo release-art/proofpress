@@ -25,9 +25,14 @@ import pikepdf
 from proof_pdf._internal import _core
 from proof_pdf.models import Finding, Severity
 
-# Each check being ported, by id, with the Python it replaces, run with the profile's defaults. Empty between ports;
-# a check leaves when its Python is deleted, its numbers recorded in docs/briefs/pdfx-progress.md.
+# The parameters both sides run with, as the core takes them (ported.params gives them for a profile).
+PARAMS: dict[str, object] = {}
+
+# Each check being ported, by id, with the Python it replaces, run with PARAMS. A check leaves when its Python is
+# deleted, its numbers recorded in docs/briefs/pdfx-progress.md. Empty between ports.
 PORTED: dict[str, Callable[[pikepdf.Pdf], list[Finding]]] = {}
+# Python checks that raise several ids: the other ids by the first.
+ALSO: dict[str, tuple[str, ...]] = {}
 
 Key = tuple[str, str, str, int | None]
 
@@ -41,14 +46,14 @@ def python(path: pathlib.Path) -> list[Key] | str:
 
 
 def rust(path: pathlib.Path) -> list[Key] | str:
-    report = json.loads(_core.verify(str(path), path.read_bytes(), "print"))
+    report = json.loads(_core.verify(str(path), path.read_bytes(), "print", json.dumps(PARAMS)))
     if report["structure"] != "sound":
         return f"rust: {report['structure']}"
     severity = {"error": str(Severity.ERROR), "warning": str(Severity.WARN)}
     return sorted(
         (f["check"], severity[f["severity"]], f["message"], f["page"])
         for f in report["findings"]
-        if f["check"] in PORTED
+        if f["check"] in PORTED or any(f["check"] in also for also in ALSO.values())
     )
 
 
@@ -105,7 +110,7 @@ def main(arguments: list[str]) -> int:
             ]
             differences.append((path, only))
     print(dict(counts))
-    for path, diff in differences[:40]:
+    for path, diff in differences[:200]:
         print(f"  {path}")
         for line in diff[:4]:
             print(f"    {line}")
