@@ -30,7 +30,7 @@ fn upper(family: Family) -> &'static str {
     }
 }
 
-fn text(name: &[u8]) -> String {
+pub(super) fn text(name: &[u8]) -> String {
     String::from_utf8_lossy(name).into_owned()
 }
 
@@ -61,16 +61,19 @@ pub(super) fn intent_family(doc: &Document) -> Option<Family> {
     }
 }
 
+/// One paint as the colour-mode checks read it: its kind, colour spaces and ink, and an image `XObject`'s number.
+pub(super) type Paint = (Kind, Vec<graphics::Use>, graphics::Ink, Option<u32>);
+
 /// What each page holds for the colour-mode checks: its paints outside pattern cells, its spot inks and its
 /// transparency reasons.
 #[derive(Default)]
-struct Page {
-    paints: Vec<(Kind, Vec<graphics::Use>, graphics::Ink)>,
+pub(super) struct Page {
+    pub(super) paints: Vec<Paint>,
     spots: BTreeSet<String>,
     transparency: BTreeSet<&'static str>,
 }
 
-fn pages(doc: &Document) -> BTreeMap<u32, Page> {
+pub(super) fn pages(doc: &Document) -> BTreeMap<u32, Page> {
     let mut out: BTreeMap<u32, Page> = BTreeMap::new();
     for event in graphics::walk(doc) {
         match event {
@@ -80,7 +83,16 @@ fn pages(doc: &Document) -> BTreeMap<u32, Page> {
                 ink,
                 frames,
                 ..
-            } if !ink.cell => out.entry(page_of(&frames)).or_default().paints.push((kind, uses, *ink)),
+            } if !ink.cell => {
+                let object = match frames.last() {
+                    Some(Location::Object(num, _)) if kind == Kind::Image => Some(*num),
+                    _ => None,
+                };
+                out.entry(page_of(&frames))
+                    .or_default()
+                    .paints
+                    .push((kind, uses, *ink, object));
+            }
             Event::Spots { names, frames } => {
                 let page = out.entry(page_of(&frames)).or_default();
                 page.spots.extend(names.iter().map(|n| text(n)));
@@ -95,7 +107,7 @@ fn pages(doc: &Document) -> BTreeMap<u32, Page> {
 }
 
 /// A paint's resource name as the messages give it: `/Im0`, or `(inline)`.
-fn shown(kind: Kind, name: &[u8]) -> String {
+pub(super) fn shown(kind: Kind, name: &[u8]) -> String {
     if kind == Kind::InlineImage || name.is_empty() {
         text(name)
     } else {
@@ -107,7 +119,7 @@ fn shown(kind: Kind, name: &[u8]) -> String {
 /// other colours use.
 fn painted_in(page: &Page, wanted: Family) -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>) {
     let (mut images, mut colours, mut spots) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
-    for (kind, uses, ink) in &page.paints {
+    for (kind, uses, ink, _) in &page.paints {
         let mask = uses.iter().any(|u| u.role == Role::ImageMask);
         match kind {
             Kind::Image | Kind::InlineImage if !mask => {
@@ -134,11 +146,11 @@ fn painted_in(page: &Page, wanted: Family) -> (BTreeSet<String>, BTreeSet<String
     (images, colours, spots)
 }
 
-fn on_page(check: &'static crate::findings::Check, page: u32, message: String) -> Finding {
+pub(super) fn on_page(check: &'static crate::findings::Check, page: u32, message: String) -> Finding {
     Finding::new(check, message).at(vec![Location::Page(page)])
 }
 
-fn warning(finding: Finding) -> Finding {
+pub(super) fn warning(finding: Finding) -> Finding {
     Finding {
         severity: Severity::Warning,
         ..finding

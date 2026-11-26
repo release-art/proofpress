@@ -45,6 +45,7 @@ PORTED = frozenset(
         "hairline",
         "safe-area",
         "spot-definition",
+        "gray-only",
     }
 )
 _SEVERITY = {"error": Severity.ERROR, "warning": Severity.WARN}
@@ -69,13 +70,14 @@ def run(path: pathlib.Path, params: dict[str, object] | None = None) -> list[Fin
 
 def check(path: pathlib.Path, profile: Profile) -> list[Finding]:
     """The findings of the ported checks *profile* turns on."""
-    cmyk, rgb = profile.colour_mode is ColourMode.CMYK, profile.colour_mode is ColourMode.RGB
+    cmyk, rgb, gray = (profile.colour_mode is mode for mode in (ColourMode.CMYK, ColourMode.RGB, ColourMode.GRAY))
     switches = (
         (True, ("outside-media", "xobject-missing", "page-count", "text-size", "hairline", "safe-area")),
         (profile.missing_glyphs, ("missing-glyph",)),
         (profile.fonts, ("font-embedded", "font-type3")),
         (profile.colour and cmyk, ("overprint", "white-overprint", "rich-black", "colour-space")),
         (profile.colour and rgb, ("rgb-only",)),
+        (profile.colour and gray, ("gray-only",)),
         (
             profile.colour,
             ("blend-space", "icc-profile", "image-dpi", "image-dpi-max", "image-stretch", "spot-definition"),
@@ -103,6 +105,7 @@ def params(profile: Profile) -> dict[str, object]:
         "allow_spots": list(profile.allow_spots) if profile.allow_spots is not None else None,
         "strict_cmyk": profile.strict_cmyk,
         "colour_mode": str(profile.colour_mode),
+        "allow_k_only": profile.allow_k_only,
         "min_dpi": profile.min_dpi,
         "warn_dpi": profile.warn_dpi,
         "max_dpi": profile.max_dpi,

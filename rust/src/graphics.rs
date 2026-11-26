@@ -108,6 +108,8 @@ pub(crate) struct Ink {
     pub(crate) size: f64,
     /// An image's or shading's own colour family; `None` for the rest, or a shading that is not there.
     pub(crate) space: Option<Family>,
+    /// An image's or shading's own `/ColorSpace` entry, as its dictionary writes it.
+    pub(crate) own_space: Option<Object>,
     /// Whether it is inside a tiling pattern's cell, which the print checks see only through the pattern's families.
     pub(crate) cell: bool,
     /// An image's or shading's resource name, `(inline)` for an inline image; empty for the rest.
@@ -573,6 +575,7 @@ fn ink(state: &State, size: f64, space: Option<Family>) -> Ink {
         overprint: state.overprint,
         size,
         space,
+        own_space: None,
         cell: state.ctm.is_none(),
         name: Vec::new(),
         matrix: None,
@@ -941,6 +944,7 @@ impl Walker<'_> {
                     let uses = space.map(|s| self.use_of(resources, Role::Shading, s, &state));
                     let painted = Ink {
                         name: last.and_then(Object::name).map_or_default(<[u8]>::to_vec),
+                        own_space: space.cloned(),
                         ..ink(&state, 0.0, family)
                     };
                     self.push(Kind::Shading, uses.into_iter().collect(), None, &state, frames, painted);
@@ -973,6 +977,7 @@ impl Walker<'_> {
         );
         let painted = Ink {
             name: b"(inline)".to_vec(),
+            own_space: image.dict.get(b"ColorSpace").cloned(),
             matrix: state.ctm,
             pixels: pixels(self.doc, &image.dict),
             ..ink(state, 0.0, Some(family))
@@ -1316,6 +1321,7 @@ impl Walker<'_> {
                 }
                 let painted = Ink {
                     name: name.to_vec(),
+                    own_space: space.cloned(),
                     matrix: state.ctm,
                     pixels: pixels(self.doc, dict),
                     ..ink(state, 0.0, Some(family::classify(self.doc, space, None)))

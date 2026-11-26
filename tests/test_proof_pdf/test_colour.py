@@ -979,4 +979,3 @@ def test_a_malformed_output_intent_entry_is_ignored_not_a_crash():
     pdf = _pdf_with_profiles((_srgb(), 3))
     pdf.Root.OutputIntents = pikepdf.Array([None, 5])
     assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB)) == []
-    assert colour.intent_family(pdf) is None

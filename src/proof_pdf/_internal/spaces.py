@@ -150,12 +150,3 @@ def output_intents(pdf: pikepdf.Pdf) -> list[pikepdf.Object]:
     if not isinstance(intents, pikepdf.Array):
         return []
     return [intent for intent in intents if isinstance(intent, pikepdf.Dictionary)]
-
-
-def intent_family(pdf: pikepdf.Pdf) -> str | None:
-    """The colour family of the PDF's first output-intent profile (by its ``/N``), or ``None`` without one."""
-    for intent in output_intents(pdf):
-        profile = intent.get("/DestOutputProfile")
-        if profile is not None and "/N" in profile:
-            return _ICC_COMPONENTS.get(int(profile["/N"]))
-    return None

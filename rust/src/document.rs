@@ -182,6 +182,13 @@ impl Document {
         }
     }
 
+    /// Image stream `num`'s data as [`Self::image_data`] gives it, when that is a JPEG that reaches its end-of-image
+    /// marker: a decoder that runs out of data first fills in the rest, where Pillow refuses the image.
+    pub(crate) fn whole_jpeg(&self, num: u32) -> Option<Vec<u8>> {
+        self.image_data(num)
+            .filter(|data| crate::filters::dct_len(data).is_some())
+    }
+
     fn decoded(&self, num: u32) -> Option<Decoded> {
         let Some(Slot::Loaded {
             object: Object {

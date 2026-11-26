@@ -669,6 +669,26 @@ levels = ["print"]
 expect = { "rgb-only" = "CMYK artwork in an RGB job" }
 params = { colour_mode = "rgb" }
 
+[gray-vector]
+levels = ["print"]
+expect = {}
+params = { colour_mode = "gray" }
+
+[gray-k-only-vector]
+levels = ["print"]
+expect = {}
+params = { colour_mode = "gray", allow_k_only = true }
+
+[gray-rgb-intent]
+levels = ["print"]
+expect = { "gray-only" = "an RGB output intent in a gray job" }
+params = { colour_mode = "gray" }
+
+[gray-cmyk-image-not-k-only]
+levels = ["print"]
+expect = { "gray-only" = "a CMYK image with C, M or Y ink, K-only allowed", "image-dpi" = "and its image is placed below 300 dpi" }
+params = { colour_mode = "gray", allow_k_only = true }
+
 [mixed-rgb-profiles]
 levels = ["print"]
 expect = { "icc-profile" = "two RGB profiles in an RGB job", "image-dpi" = "and its images are placed below 300 dpi" }

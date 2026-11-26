@@ -66,7 +66,7 @@ fn is_white(fill: &Fill) -> bool {
 }
 
 /// Gray, or CMYK with no cyan, magenta or yellow: only the K plate, or no ink.
-fn is_k_only(fill: &Fill) -> bool {
+pub(super) fn is_k_only(fill: &Fill) -> bool {
     match fill.family {
         Family::Gray => true,
         Family::Cmyk => part(fill, 3).iter().all(|x| *x <= EPSILON),

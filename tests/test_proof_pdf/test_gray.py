@@ -7,7 +7,6 @@ import pikepdf
 import pytest
 from PIL import Image
 
-from proof_pdf._internal import colour
 from proof_pdf.models import ColourMode, Severity
 
 from ._samples import build
@@ -21,7 +20,7 @@ PATTERN = b"/Pattern cs /P1 scn 0 0 10 10 re f"
 
 
 def _check(pdf, *, k_only=False):
-    return colour.check_gray_only(pdf, allow_k_only=k_only)
+    return ported_findings(pdf, {"gray-only"}, colour_mode=str(ColourMode.GRAY), allow_k_only=k_only)
 
 
 def _flagged(findings, severity=Severity.ERROR) -> bool:
@@ -212,17 +211,14 @@ class TestImages:
             [finding] = _check(_pdf_with_image(make), k_only=True)
             assert "not treated as K-only" in finding.message
 
-    def test_an_image_is_decoded_once_however_often_it_is_placed(self, mocker):
-        spy = mocker.spy(colour, "_cmy_problem")
-        pdf = _pdf_with_image(lambda p: _cmyk_image(p, b"\x00\x00\x00\x80" * 4), b"q /Im1 Do Q q /Im1 Do Q q /Im1 Do Q")
+    def test_an_image_placed_often_is_one_finding_per_page(self):
+        pdf = _pdf_with_image(lambda p: _cmyk_image(p, b"\x01\x00\x00\x80" * 4), b"q /Im1 Do Q q /Im1 Do Q q /Im1 Do Q")
         pdf.pages.append(pdf.pages[0])  # the same image on a second page
-        assert _check(pdf, k_only=True) == []
-        assert spy.call_count == 1
+        assert [f.page for f in _check(pdf, k_only=True)] == [1, 2]
 
-    def test_strict_mode_never_decodes(self, mocker):
-        spy = mocker.spy(colour, "_cmy_problem")
-        _check(_pdf_with_image(lambda p: _cmyk_image(p, b"\x00\x00\x00\x80" * 4)))
-        assert spy.call_count == 0
+    def test_strict_mode_does_not_decode(self):
+        [finding] = _check(_pdf_with_image(_broken_jpeg))
+        assert finding.message == "image /Im1 is in a CMYK colour space in a gray job"
 
     @pytest.mark.parametrize(
         ("space", "data", "strict", "allowed"),

@@ -1628,7 +1628,7 @@ title = "A gray job paints only gray"
 clauses = []
 severity = "error"
 applies = ["print"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "k-only-text"

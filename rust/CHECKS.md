@@ -203,7 +203,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `white-overprint` | White is never set to overprint |  | error | print | implemented |
 | `colour-space` | Colour spaces suit the job's colour mode |  | error | print | implemented |
 | `rgb-only` | An RGB job paints only RGB |  | error | print | implemented |
-| `gray-only` | A gray job paints only gray |  | error | print | todo |
+| `gray-only` | A gray job paints only gray |  | error | print | implemented |
 | `k-only-text` | Text is 100% black only |  | error | print | implemented |
 | `rich-black` | Small text is not in rich black |  | warning | print | implemented |
 | `spot-ink` | Spot inks are on the allowed list |  | error | print | implemented |

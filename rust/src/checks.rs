@@ -7,6 +7,7 @@ mod annots;
 mod boxes;
 mod colour;
 mod contents;
+mod gray;
 mod ink;
 mod intent;
 mod jpx;
@@ -72,6 +73,8 @@ pub struct Params {
     pub strict_cmyk: bool,
     /// `icc-profile`: the job's colour model, which decides what its embedded profiles must agree with.
     pub colour_mode: ColourMode,
+    /// `gray-only`: whether `DeviceCMYK` on the K plate alone counts as gray.
+    pub allow_k_only: bool,
     /// `image-dpi`: the resolution images must reach.
     pub min_dpi: f64,
     /// `image-dpi`: the resolution below which an image is worth a warning, above the minimum.
@@ -112,6 +115,7 @@ impl Default for Params {
             allow_spots: None,
             strict_cmyk: false,
             colour_mode: ColourMode::Cmyk,
+            allow_k_only: false,
             min_dpi: 300.0,
             warn_dpi: None,
             max_dpi: None,
@@ -302,6 +306,7 @@ const RUNS: &[(&Check, Run)] = &[
     (f::RGB_ONLY, modes::rgb_only),
     (f::ICC_PROFILE, modes::icc_profile),
     (f::SPOT_DEFINITION, modes::spot_definition),
+    (f::GRAY_ONLY, gray::gray_only),
     (f::IMAGE_DPI, resolution::image_dpi),
     (f::IMAGE_DPI_MAX, resolution::image_dpi_max),
     (f::IMAGE_STRETCH, resolution::image_stretch),
