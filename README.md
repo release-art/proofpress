@@ -50,7 +50,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 `inspect` reports what is in a PDF without judging it, and `texlog` lints a LaTeX build log. `preview` rasterises each page and draws the trim, bleed and safe guides from the PDF's own boxes, so a geometry finding can be seen.
 
 ```zsh
-pip install proof-pdf          # Python 3.15; needs verapdf and gs (Ghostscript) on PATH. Wheels for macOS arm64, Linux
+pip install proof-pdf          # Python 3.15; verapdf (--pdfa) and gs (--tac) on PATH when asked for. Wheels for macOS arm64, Linux
                                # x86-64 and arm64, Windows x64; elsewhere pip builds the Rust core, which needs rustup
 
 proof-pdf verify job/ --trim-mm 105x148 --bleed-mm 3 --exclude '*_preview.pdf'
@@ -78,7 +78,7 @@ A job's config file works from Python too. `proof_pdf.load_profile(path=None, *,
 `proof-pdf.toml`, `PROOF_PDF_CONFIG`, `PROOF_PDF_PROFILE`) and returns a `LoadedConfig`: the `Profile`, the `exclude` globs, the `exempt`
 map, and `jobs`, `timeout` and the tool names. A file the CLI would reject raises `proof_pdf.ConfigError`. Pass those to
 `core.expand_targets` and `core.verify_files`, so the CLI and your code share one definition. `core.missing_tools(profile)` names the
-tools the profile needs (veraPDF for PDF/A, Ghostscript for colour) that are not on `PATH`, so a caller can fail early with one message.
+tools the profile needs (veraPDF for PDF/A, Ghostscript for total ink) that are not on `PATH`, so a caller can fail early with one message.
 
 ### Checks
 
