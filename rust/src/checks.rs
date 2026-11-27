@@ -29,6 +29,7 @@ mod resolution;
 mod spots;
 mod targets;
 mod text;
+mod transparency;
 mod walk;
 mod x4;
 mod x4p;
@@ -264,6 +265,9 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X1A_COLOUR_PRINT_SPACES, colour::x1a_print_spaces),
     (f::X1A_COLOUR_NO_DEFAULT_SPACE, colour::x1a_unused_default),
     (f::X1A_SPOT_ALTERNATE_CMYK_OR_GRAY, colour::x1a_alternates),
+    (f::X13_TRANSPARENCY_SMASK, transparency::smask),
+    (f::X13_TRANSPARENCY_EXTGSTATE_VALUES, transparency::extgstate_values),
+    (f::X13_TRANSPARENCY_NO_GROUP, transparency::no_group),
     (f::X13_TRAPPED_PRESENT, info::trapped_present),
     (f::X13_TRAPPED_TRUE_OR_FALSE, info::trapped_true_or_false),
     (f::X13_TRAPPED_TRAPNET_IMPLIES_TRUE, annots::x13_trapnet_implies_true),

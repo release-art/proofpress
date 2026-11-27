@@ -1976,6 +1976,55 @@ def _older_colour_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _x4_xobject(paint: bytes, make: Callable[[pikepdf.Pdf], pikepdf.Object]) -> pikepdf.Pdf:
+    """x4-good with ``paint`` appended to its page content and the XObject ``make`` makes as /X in its resources."""
+    pdf = _x4_page(paint)
+    pdf.pages[0].obj.Resources["/XObject"] = pikepdf.Dictionary(X=make(pdf))
+    return pdf
+
+
+def _older_transparency_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of 6.16 in 15930-4 and -6, and of L-Q3 at the 2001 and 2002 levels (expected.toml says what each
+    raises), with the transparency they allow."""
+    name = pikepdf.Name
+    fill = b"q /GS gs 0 0 0 1 k 0 0 10 10 re f Q"
+
+    def mask_form(pdf: pikepdf.Pdf, group: bool = True) -> pikepdf.Object:
+        form = pdf.make_stream(b"0 g 0 0 10 10 re f", Type=name.XObject, Subtype=name.Form, BBox=[0, 0, 10, 10])
+        if group:
+            form["/Group"] = pikepdf.Dictionary(Type=name.Group, S=name.Transparency, CS=name.DeviceGray)
+        return pdf.make_indirect(form)
+
+    def gstate(**entries: pikepdf.Object | float) -> pikepdf.Dictionary:
+        return pikepdf.Dictionary({"/Type": name.ExtGState, **{f"/{k}": v for k, v in entries.items()}})
+
+    def soft_mask(pdf: pikepdf.Pdf) -> pikepdf.Pdf:
+        mask = pikepdf.Dictionary(Type=name.Mask, S=name.Luminosity, G=mask_form(pdf))
+        pdf.pages[0].obj.Resources["/ExtGState"] = pikepdf.Dictionary({"/GS": pdf.make_indirect(gstate(SMask=mask))})
+        return pdf
+
+    def masked_image(pdf: pikepdf.Pdf) -> pikepdf.Object:
+        image = _image(pdf, width=2, height=2, space=name.DeviceCMYK, components=4)
+        image["/SMask"] = _image(pdf, width=2, height=2, space=name.DeviceGray, components=1)
+        return image
+
+    def page_group(pdf: pikepdf.Pdf) -> pikepdf.Pdf:
+        pdf.pages[0].obj["/Group"] = pikepdf.Dictionary(Type=name.Group, S=name.Transparency, CS=name.DeviceCMYK)
+        return pdf
+
+    return {
+        "x13-smask-extgstate": _older("x1a-2001", base=soft_mask(_x4_page(fill))),
+        "x13-image-smask": _older("x3-2003", base=_x4_xobject(b"q 10 0 0 10 0 0 cm /X Do Q", masked_image)),
+        "x13-opacity": _older("x3-2002", base=_x4_painted(fill, {}, gstate(ca=0.5))),
+        "x13-blend-multiply": _older("x1a-2003", base=_x4_painted(fill, {}, gstate(BM=name.Multiply))),
+        "x13-form-group": _older("x3-2003", base=_x4_xobject(b"q /X Do Q", mask_form)),
+        "x13-opaque-transparency-keys": _older(
+            "x1a-2001", base=_x4_painted(fill, {}, gstate(SMask=name("/None"), BM=name.Compatible, CA=1, ca=1))
+        ),
+        "x13-page-group": _older("x1a-2003", base=page_group(_x4_good())),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -2068,6 +2117,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4p_fixtures(),
         **_older_fixtures(),
         **_older_colour_fixtures(),
+        **_older_transparency_fixtures(),
         **_x5_targets(),
         **_x5n_fixtures(),
         **_print_fixtures(),

@@ -294,8 +294,8 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x13.boxes.trim-within-crop` | TrimBox or ArtBox lies inside the CropBox | iso-15930-1:6.14, iso-15930-3:6.7 | error | x1a-2001, x3-2002 | todo |
 | `x13.extgstate.no-tr2` | No ExtGState has /TR2 | iso-15930-1:6.15, iso-15930-3:6.8, iso-15930-4:6.9, iso-15930-6:6.9 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
 | `x13.annot.outside-bleed-trapnet-only` | Every annotation but TrapNet lies outside the bleed | iso-15930-1:6.19, iso-15930-3:6.12 | error | x1a-2001, x3-2002 | todo |
-| `x13.transparency.smask` | No soft masks | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-3:D.2, iso-15930-4:6.16, iso-15930-6:6.16 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.transparency.extgstate-values` | ExtGState blend mode and opacity are opaque values | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-3:D.2, iso-15930-4:6.16, iso-15930-6:6.16 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.transparency.no-group` | No form XObject is a transparency group | iso-15930-4:6.16, iso-15930-6:6.16 | error | x1a-2003, x3-2003 | todo |
+| `x13.transparency.smask` | No soft masks | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-3:D.2, iso-15930-4:6.16, iso-15930-6:6.16 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.transparency.extgstate-values` | ExtGState blend mode and opacity are opaque values | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-3:D.2, iso-15930-4:6.16, iso-15930-6:6.16 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.transparency.no-group` | No form XObject is a transparency group | iso-15930-4:6.16, iso-15930-6:6.16 | error | x1a-2003, x3-2003 | implemented |
 | `x13.viewer-prefs.areas` | Viewer-preference areas are MediaBox or BleedBox when a page has a BleedBox | iso-15930-4:6.17, iso-15930-6:6.17 | error | x1a-2003, x3-2003 | todo |
 | `x3.output-intent.registry-name-color-org-2003` | An ICC-registered condition names the ICC registry, with or without the final slash | iso-15930-6:6.2.2 | error | x3-2003 | implemented |

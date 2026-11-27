@@ -1348,3 +1348,33 @@ expect = { "x1a.spot.alternate-cmyk-or-gray" = "a Separation whose alternate is 
 [x1a-unused-default]
 levels = ["x1a-2001"]
 expect = { "x1a.colour.no-default-space" = "the page holds a DefaultRGB space no print element uses (15930-1 6.3.1, Q12, a warning)" }
+
+# ---- Older levels: transparency (15930-4 and -6 6.16; L-Q3 at X-1a:2001 and X-3:2002; task 2.2).
+[x13-smask-extgstate]
+levels = ["x1a-2001"]
+expect = { "x13.transparency.smask" = "an ExtGState with a luminosity soft mask is set (L-Q3, 15930-1 6.2)" }
+
+[x13-image-smask]
+levels = ["x3-2003"]
+expect = { "x13.transparency.smask" = "an image with an /SMask is drawn (15930-6 6.16)" }
+
+[x13-opacity]
+levels = ["x3-2002"]
+expect = { "x13.transparency.extgstate-values" = "an ExtGState with /ca 0.5 is set (L-Q3, 15930-3 Annex D.2)" }
+
+[x13-blend-multiply]
+levels = ["x1a-2003"]
+expect = { "x13.transparency.extgstate-values" = "an ExtGState with /BM /Multiply is set (15930-4 6.16)" }
+
+[x13-form-group]
+levels = ["x3-2003"]
+expect = { "x13.transparency.no-group" = "a form XObject with a transparency group is drawn (15930-6 6.16)" }
+
+# The keys at their opaque values, and a page group (Q19): allowed.
+[x13-opaque-transparency-keys]
+levels = ["x1a-2001"]
+expect = {}
+
+[x13-page-group]
+levels = ["x1a-2003"]
+expect = {}

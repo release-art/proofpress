@@ -14,7 +14,7 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 
 ## Status
 
-- Phases 0 and 1 are done. Phase 2 is in progress: 2.1 (colour) is done; next is 2.2 (transparency).
+- Phases 0 and 1 are done. Phase 2 is in progress: 2.1 (colour) and 2.2 (transparency) are done; next is 2.3 (filters).
 
 ## Done
 
@@ -26,21 +26,22 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 | 1.2 | this commit | 47 `x4.*` checks and the 21 structure checks applied at the older levels; `cite` maps their clauses; X-4 and X-5 expectations unchanged |
 | 1.3 | this commit | Info identification, dates, title and Trapped, the TrapNet rules (12 checks, `checks/info.rs`); bases `x1a-2001-good`, `x3-2002-good`, `x1a-2003-good`, `x3-2003-good` and 13 negatives; scenarios in `x13-identification-trapping.feature` |
 | 2.1 | this commit | Output intent and print-element colour at the older levels (14 checks); 18 fixtures, `x13-colour.feature` |
+| 2.2 | this commit | Transparency at the older levels (3 checks, `checks/transparency.rs`); 7 fixtures, `x13-transparency.feature` |
 | 0.3 | test-db `156acfd5` | 88 claims in test-db, pdfToolbox passes 47; `docs/pdfx/x1a3-claims.csv` |
 
 ## Register coverage
 
-Task 2.1: 14 more implemented (31 `x13`/`x1a`/`x3` ids of 43 so far; 18 `todo` left). Task 1.3: 12 new rows implemented. Task 1.2: 47 `x4.*` rows reused (45 implemented, 2 skip), plus the structure checks. Task 1.1: the 42 new ids (the register's 37 new rows, with the output-intent and ICC version rows split, optional
+Task 2.2: 3 more (15 `todo` left). Task 2.1: 14 more implemented. Task 1.3: 12 new rows implemented. Task 1.2: 47 `x4.*` rows reused (45 implemented, 2 skip), plus the structure checks. Task 1.1: the 42 new ids (the register's 37 new rows, with the output-intent and ICC version rows split, optional
 content and 16-bit images from L-Q4, and the X-1a:2001 embedded-file warning) are in `checks.toml` as `todo`; task 1.2 added `x3.output-intent.registry-name-color-org-2003` (Q15).
 
 ## Gates
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green, 2026-11-27, task 2.1 (100% lines, regions, functions) |
+| `bin/rust/check.sh` | green, 2026-11-27, task 2.2 (100% lines, regions, functions) |
 | `bin/docker/test.sh` | green at the end of phase 1, 2026-11-27: 965 passed |
 | `bin/suites/pdfx.sh` | end of phase 1, 2026-11-27: 39 files, 39 accepted, 0 problems |
-| Python (ruff, pyright, pytest) | green, 2026-11-27, task 2.1: 966 passed |
+| Python (ruff, pyright, pytest) | green, 2026-11-27, task 2.2: 966 passed |
 
 ## Corpus and oracle
 
@@ -50,6 +51,13 @@ mismatched or bare values. pdfToolbox 17.1's stock profiles pass 32 X-1a:2001, 1
 file claiming X-3:2002 with an X-1a conformance key; it crashed on one file. The stock profiles judge by the 2003 edition
 and accept files valid at the earlier edition they claim, so they do not separate editions. All 47 passing files are
 PDF 1.3 with classic cross-reference tables. Detail in test-db `docs/pdfx/x1a3-register.md` §6.
+
+Running the checks written so far over those 47 (task 2.2): all are detected at their claimed level; two fail
+`x13.output-intent.dest-profile-by-icc-name`, both without an embedded profile under `RegistryName
+http://www.color.org` but with an identifier that is no ICC reference name (an X-1a:2001 file naming "Coated FOGRA27
+(ISO 12647-2:2004)", an X-3:2002 file naming "X-3"). By 15930-1 and -3 6.x a profile is then required; pdfToolbox
+judges by the 2003 rule, where the registry name alone suffices. To classify with the oracle in task 3.3; two files
+are below the plan's "more than a few" line.
 
 ## Decisions taken
 

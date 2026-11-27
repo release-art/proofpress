@@ -2533,7 +2533,7 @@ title = "No soft masks"
 clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-3:D.2", "iso-15930-4:6.16", "iso-15930-6:6.16"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.transparency.extgstate-values"
@@ -2541,7 +2541,7 @@ title = "ExtGState blend mode and opacity are opaque values"
 clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-3:D.2", "iso-15930-4:6.16", "iso-15930-6:6.16"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.transparency.no-group"
@@ -2549,7 +2549,7 @@ title = "No form XObject is a transparency group"
 clauses = ["iso-15930-4:6.16", "iso-15930-6:6.16"]
 severity = "error"
 applies = ["x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.viewer-prefs.areas"

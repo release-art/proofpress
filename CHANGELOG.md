@@ -20,7 +20,7 @@ What existing users will notice, most important first (the entries below give th
   says which; the text report adds "as PDF/X-3:2002" and the summary says "PDF/X as claimed"). Their checks are
   being written; until then those levels report them as not evaluated. Written so far: the X-4 rules these levels
   share, identification, dates, title and `/Trapped` in the Info dictionary, and the output intent and colour
-  rules (`x13.*`, `x1a.*`, `x3.*`).
+  rules, and transparency (`x13.*`, `x1a.*`, `x3.*`).
 - **`/Trapped` is judged in the XMP** (`pdf:Trapped`), where ISO 15930-7 6.9 puts it; an Info `/Trapped` must agree.
 - **Damaged files are read strictly.** A file that pikepdf repaired silently now fails, with the reason; an encrypted
   file fails, even with an empty password. A damaged object or stream no longer stops the whole file: the rest is
