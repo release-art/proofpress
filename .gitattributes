@@ -2,5 +2,7 @@
 rust/CHECKS.md text eol=lf
 README.md text eol=lf
 rust/src/snapshots/*.snap text eol=lf
+# x4p-not-a-profile references this file by URL, and its /CheckSum is the MD5 of the LF bytes.
+tests/fixtures/icc/LICENSE-little-cms text eol=lf
 *.pdf binary
 *.icc binary
