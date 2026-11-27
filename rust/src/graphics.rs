@@ -138,9 +138,31 @@ pub(crate) struct Ink {
     pub(crate) mcid: Option<i64>,
     /// What page furniture this is, when marked content says it is an artifact (`Header`, `Pagination`...).
     pub(crate) artifact: Option<String>,
+    /// What it takes to show a text run again on its own.
+    pub(crate) show: Option<Box<Show>>,
     /// A stroked path's line width on the page: the line width by the CTM's scale (the square root of its
     /// determinant).
     pub(crate) stroke_width: Option<f64>,
+}
+
+/// A text-showing operator with the text state it ran in, enough to show the run again elsewhere.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Show {
+    /// `Tj` or `TJ` (`'` and `"` show their string as `Tj` would), with the operand to match.
+    pub(crate) operator: &'static [u8],
+    pub(crate) operand: Option<Object>,
+    /// The font's entry in the resources in effect: a reference, or a dictionary written in place.
+    pub(crate) font: Option<Object>,
+    /// The font size `Tf` set, before any matrix.
+    pub(crate) size: f64,
+    pub(crate) char_spacing: f64,
+    pub(crate) word_spacing: f64,
+    /// Horizontal scaling as a factor.
+    pub(crate) h_scale: f64,
+    pub(crate) rise: f64,
+    pub(crate) render_mode: i64,
+    /// Text space to page space when the run began.
+    pub(crate) trm: Option<Matrix>,
 }
 
 /// What kind of thing a paint is.
@@ -230,6 +252,8 @@ struct State {
     /// The clip's extent on the page, once one is set; an empty one keeps its corners crossed.
     clip: Option<Rect>,
     font: Rc<Font>,
+    /// The font's entry in the resources `Tf` named.
+    font_entry: Option<Object>,
     size: f64,
     char_spacing: f64,
     word_spacing: f64,
@@ -261,6 +285,7 @@ impl Default for State {
             ctm: Some(IDENTITY),
             clip: None,
             font: Rc::new(Font::default()),
+            font_entry: None,
             size: 0.0,
             char_spacing: 0.0,
             word_spacing: 0.0,
@@ -561,6 +586,7 @@ struct Run {
     codes: Vec<u32>,
     text: Option<String>,
     rotation: f64,
+    show: Show,
 }
 
 /// A kern wider than this, in thousandths of the font size, reads as a word space: TeX and most layout engines space
@@ -619,6 +645,23 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
     );
     let vertical = trm.map_or(1.0, |m| m[2].hypot(m[3]));
     let rotation = trm.map_or(0.0, |m| m[1].atan2(m[0]).to_degrees());
+    let show = Show {
+        operator: if name == b"TJ" { b"TJ" } else { b"Tj" },
+        operand: if name == b"TJ" {
+            op.operands.first()
+        } else {
+            op.operands.last()
+        }
+        .cloned(),
+        font: state.font_entry.clone(),
+        size,
+        char_spacing: state.char_spacing,
+        word_spacing: state.word_spacing,
+        h_scale: scale,
+        rise: state.rise,
+        render_mode: state.text_mode,
+        trm,
+    };
     cursor.text = mul(&translation(advance, 0.0), &cursor.text);
     Run {
         bbox,
@@ -628,6 +671,7 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
         codes,
         text,
         rotation,
+        show,
     }
 }
 
@@ -640,6 +684,7 @@ fn text_ink(state: &State, run: Run) -> Ink {
         codes: run.codes,
         text: run.text,
         rotation: run.rotation,
+        show: Some(Box::new(run.show)),
         h_scale: state.scale,
         char_spacing: if state.size == 0.0 {
             0.0
@@ -674,6 +719,7 @@ fn ink(state: &State, size: f64, space: Option<Family>) -> Ink {
         char_spacing: 0.0,
         mcid: None,
         artifact: None,
+        show: None,
         stroke_width: None,
     }
 }
@@ -1343,6 +1389,13 @@ impl Walker<'_> {
         let doc = self.doc;
         state.size = number(op.operands.get(1));
         let named = op.operands.first().and_then(Object::name);
+        state.font_entry = resources
+            .and_then(|r| r.get(b"Font"))
+            .and_then(|f| doc.resolve(f))
+            .and_then(Object::dict)
+            .zip(named)
+            .and_then(|(fonts, n)| fonts.get(n))
+            .cloned();
         state.font = match named.and_then(|n| resource_ref(doc, resources, b"Font", n)) {
             Some((Some(num), dict)) => Rc::clone(self.fonts.entry(num).or_insert_with(|| {
                 let mut font = font::load(doc, dict);

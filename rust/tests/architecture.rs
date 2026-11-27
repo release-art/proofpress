@@ -37,10 +37,12 @@ const ALLOWED: &[(&str, &[&str])] = &[
     ("python", &["findings", "checks", "cli", "writer", "preview", "extract"]),
     // The command line, like the Python module, hands whole files to the checks and reports back.
     ("cli", &["findings", "checks"]),
-    // What `extract` recovers, read from tier 5 and the helpers.
+    // What `extract` recovers, read from tiers 5 to 8; vector pieces are written with the writer.
     (
         "extract",
-        &["pipeline", "findings", "document", "common", "graphics", "checks"],
+        &[
+            "pipeline", "findings", "document", "common", "content", "graphics", "checks", "writer",
+        ],
     ),
     // Previews read files with hayro's own parser, never the tiers: a picture judges nothing.
     ("preview", &[]),

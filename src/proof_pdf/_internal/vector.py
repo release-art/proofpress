@@ -15,27 +15,15 @@ boxes, so a pictogram drawn in separated pieces comes out as several files.
 import bisect
 import collections
 import dataclasses
-import hashlib
-import io
 import math
 import typing
 
-import pikepdf
-
-from . import content
-from .paint import Fill, Paint, TextShow
-from .spaces import CMYK, GRAY, RGB, lookup_resource, spot_names
-
 Rect = tuple[float, float, float, float]
 
+Matrix = tuple[float, float, float, float, float, float]
+
 _POINT_COUNT = {"m": 1, "l": 1, "c": 3, "v": 2, "y": 2}
-_PATH_OPS = frozenset((*_POINT_COUNT, "re", "h"))
-_PAINT_OPS = frozenset(("S", "s", "f", "F", "f*", "B", "B*", "b", "b*"))
 _STROKES = frozenset(("S", "s", "B", "B*", "b", "b*"))
-_FILL_COLOUR = frozenset(("g", "rg", "k"))
-_STROKE_COLOUR = frozenset(("G", "RG", "K"))
-_LINE_STYLE = frozenset(("J", "j", "M", "d", "ri", "i"))
-MIN_PAGE_PT = 3.0
 INVISIBLE = 3  # text render mode 3: an OCR layer, not something to draw
 # A plain rule longer than this share of the page's longer side is layout (a table rule, a divider), never artwork;
 # a cluster is artwork when at least ARTWORK_SHARE of its shapes are not plain rectangles or lines.
@@ -62,41 +50,20 @@ FLOWING_LINES = 3
 STACK_EDGE_EM = 0.25
 STACK_PITCH_EM = 2.2
 ROW_GAP_EM = 0.6
-_DEVICE_SPACES = frozenset(("/DeviceGray", "/DeviceRGB", "/DeviceCMYK", "/Pattern"))
-
-
-@dataclasses.dataclass(frozen=True)
-class _Ref:
-    """A named resource a state operator points at, carried along because the new page has to hold it."""
-
-    index: int  # which operand is the name
-    category: str
-    obj: pikepdf.Object
-
-
-@dataclasses.dataclass(frozen=True)
-class _StateOp:
-    operator: str
-    operands: tuple[typing.Any, ...]
-    ref: _Ref | None = None
-
-
-@dataclasses.dataclass(frozen=True)
-class _State:
-    fill: tuple[_StateOp, ...] = ()
-    stroke: tuple[_StateOp, ...] = ()
-    line: dict[typing.Any, _StateOp] = dataclasses.field(default_factory=dict)  # by operator; ExtGStates by object
-    width: float = 1.0
 
 
 @dataclasses.dataclass(frozen=True)
 class Shape:
-    path: tuple[tuple[str, tuple[typing.Any, ...]], ...]  # (operator, operands), the paint operator last
-    ctm: content.Matrix
-    state: _State
+    """A painted path as the Rust core read it (``_core.extract``'s ``shapes``)."""
+
+    path: tuple[tuple[str, tuple[float, ...]], ...]  # (operator, operands), the paint operator last
+    ctm: Matrix
     bbox: Rect
     index: int = 0  # position in paint order on the page
     mcid: int | None = None  # the marked-content id it was painted under, for the structure tree
+    width: float = 1.0  # the line width in force
+    fill_ops: str = "g 0"  # the fill colour operators in force, as written (a spot colour by name)
+    stroke_ops: str = "g 0"
 
     @property
     def subpaths(self) -> int:
@@ -126,11 +93,11 @@ class Shape:
 
     @property
     def fill(self) -> str | None:
-        return _colour(self.state.fill) if self.paint not in ("S", "s") else None
+        return self.fill_ops if self.paint not in ("S", "s") else None
 
     @property
     def stroke(self) -> str | None:
-        return _colour(self.state.stroke) if self.paint in _STROKES else None
+        return self.stroke_ops if self.paint in _STROKES else None
 
     @property
     def pen(self) -> tuple[float, str] | None:
@@ -139,11 +106,7 @@ class Shape:
 
     @property
     def stroke_width(self) -> float | None:
-        return (
-            self.state.width * abs(self.ctm[0] * self.ctm[3] - self.ctm[1] * self.ctm[2]) ** 0.5
-            if self.stroke
-            else None
-        )
+        return self.width * abs(self.ctm[0] * self.ctm[3] - self.ctm[1] * self.ctm[2]) ** 0.5 if self.stroke else None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -151,8 +114,8 @@ class Label:
     """A run of text overlapping artwork: a dimension, a pin name, a caption. It is shown again inside the piece."""
 
     bbox: Rect
-    show: TextShow
-    fill: Fill
+    size: float  # the font size Tf set
+    paint: int  # its index among the page walk's paints (``_core.extract``'s ``paints``), to show it again
     text: str | None
     reach: float = 0.0  # how far from its box it joins things; 0 means the grouping gap
 
@@ -172,90 +135,23 @@ class Group:
         """The readable text the piece carries, in the order it was shown."""
         return [label.text for label in self.labels if label.text and label.text.strip()]
 
-    def render(self) -> tuple[str, bytes]:
-        """``(digest, pdf bytes)``: the group alone on a page cropped to it, moved to the origin.
-
-        The digest is of the content stream and the resources it uses, so the same artwork gives the same digest
-        wherever it sits, and artwork sharing a resource keeps one digest while a different one never collides.
-        """
-        x0, y0, x1, y1 = self.bbox
-        pdf = pikepdf.new()
-        resources: dict[str, pikepdf.Dictionary] = {}
-        names: dict[tuple, str] = {}
-
-        def named(ref: _Ref) -> pikepdf.Name:
-            key = (ref.category, ref.obj.objgen if ref.obj.objgen != (0, 0) else id(ref.obj))
-            if key not in names:
-                names[key] = f"/R{len(names)}"
-                resources.setdefault(ref.category, pikepdf.Dictionary())[names[key]] = pdf.copy_foreign(ref.obj)
-            return pikepdf.Name(names[key])
-
-        def emit(op: _StateOp) -> pikepdf.ContentStreamInstruction:
-            operands = list(op.operands)
-            if op.ref is not None:
-                operands[op.ref.index] = named(op.ref)
-            return pikepdf.ContentStreamInstruction(operands, pikepdf.Operator(op.operator))
-
-        instructions: list[pikepdf.ContentStreamInstruction] = []
-        for shape in self.shapes:
-            instructions += _shape_ops(shape, (x0, y0), emit)
-        for label in self.labels:
-            instructions += _label_ops(label, (x0, y0), named)
-        data = pikepdf.unparse_content_stream(instructions)
-        # PDF forbids pages under 3 units: a smaller piece sits in the corner of a 3 pt page (see its placement).
-        page = pdf.add_blank_page(page_size=(max(x1 - x0, MIN_PAGE_PT), max(y1 - y0, MIN_PAGE_PT)))
-        page.Contents = pdf.make_stream(data)
-        page.Resources = pikepdf.Dictionary(dict(resources))
-        digest = hashlib.sha1(data + repr(sorted(names)).encode()).hexdigest()
-        buffer = io.BytesIO()
-        pdf.save(buffer)
-        return digest, buffer.getvalue()
-
-
-def _op(operator: str, *operands: typing.Any) -> pikepdf.ContentStreamInstruction:
-    return pikepdf.ContentStreamInstruction(list(operands), pikepdf.Operator(operator))
-
-
-def _shape_ops(shape: Shape, origin: tuple[float, float], emit) -> list[pikepdf.ContentStreamInstruction]:
-    moved = content.mul(shape.ctm, (1.0, 0.0, 0.0, 1.0, -origin[0], -origin[1]))
-    state = shape.state
-    return [
-        _op("q"),
-        _op("cm", *[round(v, 4) + 0.0 for v in moved]),
-        *[emit(op) for op in (*state.line.values(), *state.fill, *state.stroke)],
-        *[_op(operator, *operands) for operator, operands in shape.path],
-        _op("Q"),
-    ]
-
-
-_FILL_OPERATORS = {GRAY: "g", RGB: "rg", CMYK: "k"}
-
-
-def _label_ops(label: Label, origin: tuple[float, float], named) -> list[pikepdf.ContentStreamInstruction]:
-    show = label.show
-    if show.font_resource is None:
-        return []
-    moved = (*show.trm[:4], show.trm[4] - origin[0], show.trm[5] - origin[1])
-    colour = _FILL_OPERATORS.get(label.fill.family)
-    return [
-        _op("q"),
-        *([_op(colour, *label.fill.value)] if colour and label.fill.value else []),
-        _op("BT"),
-        _op("Tf", named(_Ref(0, "/Font", show.font_resource)), show.size),
-        _op("Tc", show.char_spacing),
-        _op("Tw", show.word_spacing),
-        _op("Tz", round(show.h_scale * 100, 4)),
-        _op("Ts", show.rise),
-        _op("Tr", show.render_mode),
-        _op("Tm", *[round(v, 4) + 0.0 for v in moved]),
-        _op(show.operator, *show.operands),
-        _op("ET"),
-        _op("Q"),
-    ]
+    def request(self, page: int) -> dict[str, typing.Any]:
+        """What the core needs to write this piece alone on a page cropped to it (``_core.vector_pieces``)."""
+        return {
+            "page": page,
+            "bbox": list(self.bbox),
+            "shapes": [s.index for s in self.shapes],
+            "labels": [label.paint for label in self.labels],
+        }
 
 
 def artwork(
-    page: pikepdf.Page, *, gap_pt: float, max_fraction: float, texts: typing.Sequence[Paint] = ()
+    media: typing.Sequence[float] | None,
+    everything: list[Shape],
+    *,
+    gap_pt: float,
+    max_fraction: float,
+    labels: typing.Sequence[Label] = (),
 ) -> tuple[list[Group], list[Shape]]:
     """``(groups, boxes)``: the artwork on *page* as groups of touching shapes, and the plain rectangles and lines
     that are not part of any.
@@ -268,17 +164,12 @@ def artwork(
     backgrounds never join anything. What is left over are the panels and rules of the layout, which a caller may want
     as data. Text mostly inside a piece but not touching it is added afterwards.
     """
-    media = page.mediabox
+    media = media or (0.0, 0.0, 612.0, 792.0)
     width, height = abs(float(media[2]) - float(media[0])), abs(float(media[3]) - float(media[1]))
     limit = max_fraction * width * height  # for one shape: bigger than this is a background
     group_limit = GROUP_FRACTION * width * height  # for a whole drawing, which may fill most of a page
     longest_rule = LONG_RULE_FRACTION * max(width, height)
-    everything = _collect(page)
-    labels = [
-        Label(t.bbox, t.show, t.fill, t.text)
-        for t in texts
-        if t.show is not None and t.bbox is not None and t.render_mode != INVISIBLE
-    ]
+    labels = list(labels)
     candidates: list[Shape | Label] = [
         s
         for s in everything
@@ -375,7 +266,7 @@ def _flowing(labels: list[Label]) -> set[int]:
     """
     rows: dict[tuple[float, float], list[Label]] = collections.defaultdict(list)
     for label in labels:
-        rows[(round(label.bbox[1] * 2) / 2, round(label.show.size, 1))].append(label)
+        rows[(round(label.bbox[1] * 2) / 2, round(label.size, 1))].append(label)
     lines: list[tuple[Rect, list[Label]]] = []
     for members in rows.values():
         current: list[Label] = []
@@ -391,8 +282,8 @@ def _flowing(labels: list[Label]) -> set[int]:
         if sum(len(m.text or "") for m in members) + len(members) - 1 > MAX_LABEL_CHARS:
             flowing |= {id(m) for m in members}
     chain: list[tuple[Rect, list[Label]]] = []
-    for line in sorted(lines, key=lambda ln: (round(ln[1][0].show.size, 1), round(ln[0][0]), -ln[0][1])):
-        if chain and not _stacked(chain[-1][0], line[0], chain[-1][1][0].show.size, line[1][0].show.size):
+    for line in sorted(lines, key=lambda ln: (round(ln[1][0].size, 1), round(ln[0][0]), -ln[0][1])):
+        if chain and not _stacked(chain[-1][0], line[0], chain[-1][1][0].size, line[1][0].size):
             chain = []
         chain.append(line)
         if len(chain) >= FLOWING_LINES:
@@ -512,20 +403,6 @@ def _clusters(nodes: list, gap_pt: float) -> list[list]:
     return [[nodes[i] for i in sorted(indexes)] for indexes in members.values()]
 
 
-def _colour(ops: tuple[_StateOp, ...]) -> str:
-    """The colour operators in force as written in the content stream, e.g. ``k 0 0 0 0.65``; black if none were set.
-
-    A spot colour is named instead (``spot PANTONE 165 C 1``): its resource name means nothing outside the page.
-    """
-    if not ops:
-        return "g 0"
-    first = ops[0]
-    if first.operator in ("cs", "CS") and first.ref is not None and (names := spot_names(first.ref.obj, None)):
-        tint = _number(list(ops[1].operands)) if len(ops) > 1 else 1.0
-        return f"spot {'+'.join(names)} {tint:g}"
-    return " ".join(f"{op.operator} {' '.join(str(o) for o in op.operands)}".strip() for op in ops)
-
-
 def _area(r: Rect) -> float:
     return max(r[2] - r[0], 0.0) * max(r[3] - r[1], 0.0)
 
@@ -538,138 +415,6 @@ def _union(rects: list[Rect]) -> Rect:
     return (min(r[0] for r in rects), min(r[1] for r in rects), max(r[2] for r in rects), max(r[3] for r in rects))
 
 
-class _Collector:
-    """Walks a page's operators keeping the state they leave, and gathers every painted path as a :class:`Shape`."""
-
-    def __init__(self) -> None:
-        self.shapes: list[Shape] = []
-        self.state = _State()
-        self.entered: list[_State] = []  # the state to give back when a Form XObject ends
-        self.saved: dict[int, list[_State]] = {0: []}  # q-stack per nesting depth
-        self.depth = 0
-        self.path: list[tuple[str, tuple[typing.Any, ...]]] = []
-        self.points: list[tuple[float, float]] = []
-        self.marked: list[int | None] = []
-
-    def feed(self, op: content.Operation) -> None:
-        self._scope(op.depth)
-        name, args = op.operator, op.operands
-        if name == "q":
-            self.saved[self.depth].append(self.state)
-        elif name == "Q":
-            self.state = self.saved[self.depth].pop() if self.saved[self.depth] else self.state
-        elif name in _PATH_OPS:
-            self.path.append((name, tuple(args)))
-            self.points += _points(name, args)
-        elif name in _PAINT_OPS:
-            self._paint(op)
-        elif name == "n":
-            self.path, self.points = [], []
-        elif name in ("BMC", "BDC", "EMC"):
-            _marked(self.marked, op)
-        else:
-            self.state = _update(self.state, op)
-
-    def _scope(self, depth: int) -> None:
-        while self.depth < depth:  # a Form XObject runs in a copy of the state and gives it back
-            self.entered.append(self.state)
-            self.depth += 1
-            self.saved[self.depth] = []
-        while self.depth > depth:
-            self.state = self.entered.pop()
-            self.depth -= 1
-
-    def _paint(self, op: content.Operation) -> None:
-        if self.points:
-            self.path.append((op.operator, ()))
-            box = _bbox(op.ctm, self.points, op.operator, self.state.width)
-            mcid = next((m for m in reversed(self.marked) if m is not None), None)
-            self.shapes.append(Shape(tuple(self.path), op.ctm, self.state, box, len(self.shapes), mcid))
-        self.path, self.points = [], []
-
-
-def _collect(page: pikepdf.Page) -> list[Shape]:
-    collector = _Collector()
-    for op in content.iter_operations(page):
-        collector.feed(op)
-    return collector.shapes
-
-
-def _put(line: dict[typing.Any, _StateOp], key: typing.Any, op: _StateOp) -> dict[typing.Any, _StateOp]:
-    """*line* with *op* set under *key*, as the latest: a state set again later must take effect after the others."""
-    return {**{k: v for k, v in line.items() if k != key}, key: op}
-
-
-def _marked(marked: list[int | None], op: content.Operation) -> None:
-    """Track BMC/BDC/EMC nesting, keeping each level's MCID (only the page's own stream has meaningful ones)."""
-    if op.operator == "EMC":
-        if marked:
-            marked.pop()
-        return
-    mcid = None
-    if op.operator == "BDC" and len(op.operands) > 1 and op.depth == 0:
-        props = op.operands[1]
-        if isinstance(props, pikepdf.Name):
-            props = lookup_resource(op.resources, "/Properties", [props])
-        if isinstance(props, pikepdf.Dictionary) and props.get("/MCID") is not None:
-            mcid = int(props["/MCID"])
-    marked.append(mcid)
-
-
-def _update(state: _State, op: content.Operation) -> _State:
-    name, args = op.operator, op.operands
-    if name in _FILL_COLOUR:
-        return dataclasses.replace(state, fill=(_StateOp(name, tuple(args)),))
-    if name in _STROKE_COLOUR:
-        return dataclasses.replace(state, stroke=(_StateOp(name, tuple(args)),))
-    if name in ("cs", "CS"):
-        colour = _StateOp(name, tuple(args), _ref(op, "/ColorSpace", 0) if _named(args, 0) else None)
-        return dataclasses.replace(state, **{"fill" if name == "cs" else "stroke": (colour,)})
-    if name in ("sc", "scn", "SC", "SCN"):
-        pattern = _ref(op, "/Pattern", len(args) - 1) if args and isinstance(args[-1], pikepdf.Name) else None
-        colour = _StateOp(name, tuple(args), pattern)
-        field = "fill" if name in ("sc", "scn") else "stroke"
-        current = getattr(state, field)
-        base = current[:1] if current and current[0].operator in ("cs", "CS") else ()
-        return dataclasses.replace(state, **{field: (*base, colour)})
-    if name == "w":
-        return dataclasses.replace(state, width=_number(args), line=_put(state.line, "w", _StateOp(name, tuple(args))))
-    if name in _LINE_STYLE:
-        return dataclasses.replace(state, line=_put(state.line, name, _StateOp(name, tuple(args))))
-    if name == "gs":
-        ref = _ref(op, "/ExtGState", 0)
-        if ref is not None:
-            key = ("gs", ref.obj.objgen if ref.obj.objgen != (0, 0) else id(ref.obj))
-            return dataclasses.replace(state, line=_put(state.line, key, _StateOp(name, tuple(args), ref)))
-    return state
-
-
-def _named(args: list, index: int) -> bool:
-    return len(args) > index and str(args[index]) not in _DEVICE_SPACES
-
-
-def _ref(op: content.Operation, category: str, index: int) -> _Ref | None:
-    obj = lookup_resource(op.resources, category, [op.operands[index]]) if len(op.operands) > index else None
-    return None if obj is None else _Ref(index, category, obj)
-
-
-def _number(args: list) -> float:
-    try:
-        return float(args[0])
-    except IndexError, TypeError, ValueError:
-        return 1.0
-
-
-def _points(name: str, args: list) -> list[tuple[float, float]]:
-    values = [_number([a]) for a in args]
-    if name == "re" and len(values) == 4:
-        return [(values[0], values[1]), (values[0] + values[2], values[1] + values[3])]
+def _points(name: str, values: list[float]) -> list[tuple[float, float]]:
     count = _POINT_COUNT.get(name, 0)
     return [(values[2 * i], values[2 * i + 1]) for i in range(count) if 2 * i + 1 < len(values)]
-
-
-def _bbox(ctm: content.Matrix, points: list[tuple[float, float]], paint: str, width: float) -> Rect:
-    mapped = [(ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]) for x, y in points]
-    xs, ys = [p[0] for p in mapped], [p[1] for p in mapped]
-    pad = width / 2 * (abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]) ** 0.5) if paint in _STROKES else 0.0
-    return (min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad)

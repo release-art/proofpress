@@ -637,14 +637,6 @@ def test_a_compound_hairline_path_too_big_for_a_background_still_joins_its_drawi
     assert [a.details["shapes"] for a in result.assets if a.kind == "vector"] == [4]
 
 
-def test_a_state_set_again_keeps_the_latest_value_last():
-    from proof_pdf._internal import vector
-
-    old = vector._StateOp("w", (1,))
-    line = vector._put({"a": old, "w": old}, "a", vector._StateOp("w", (2,)))
-    assert list(line) == ["w", "a"]
-
-
 def test_what_the_core_cannot_read_is_listed_as_a_failure(tmp_path):
     result = extract.extract_pdf(PDFS / "x4-damaged-object.pdf", tmp_path, kinds=())
     assert any(f.startswith("reading the file: object.damaged:") for f in result.failures), result.failures

@@ -21,7 +21,7 @@ required-features = ["cli"]
 python = ["dep:pyo3", "dep:serde_json", "cli", "preview", "extract"]
 # The proof-pdf command line (src/cli.rs, src/bin/proof-pdf.rs).
 # What `extract` recovers (src/extract.rs), with images written as PNG and TIFF.
-extract = ["dep:hayro-jbig2", "dep:png", "dep:tiff", "tiff/deflate"]
+extract = ["dep:hayro-jbig2", "dep:png", "dep:serde_json", "dep:tiff", "tiff/deflate"]
 # Page previews rendered by hayro (src/preview.rs).
 preview = ["dep:hayro"]
 cli = ["dep:clap", "dep:globset", "dep:process-wrap", "dep:serde_json", "dep:tiff", "dep:toml"]

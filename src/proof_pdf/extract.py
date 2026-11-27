@@ -37,7 +37,7 @@ from ._internal import (
     tagged as tagged_reader,
     xmp,
 )
-from ._internal.paint import Fill, Paint, Walker
+from ._internal.paint import Fill
 from ._internal.previews import build as build_previews
 from ._internal.spaces import (
     CMYK,
@@ -45,7 +45,7 @@ from ._internal.spaces import (
     RGB,
     reachable as _objects,
 )
-from ._internal.vector import INVISIBLE, Group, artwork
+from ._internal.vector import INVISIBLE, Group, Label, Shape, artwork
 from .inventory import inspect_pdf
 from .layout import Figure, Layout, Line, Table, analyse
 
@@ -200,13 +200,14 @@ def extract_pdf(
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     failures: list[str] = []
-    raw, blobs = _core.extract(path.read_bytes(), "images" in kinds)
+    data = path.read_bytes()
+    raw, blobs = _core.extract(data, "images" in kinds, "vector" in kinds)
     core = _CoreFacts(json.loads(raw), blobs)
     # What the core could not read is missing from everything below, so say so.
     failures += [f"reading the file: {problem}" for problem in core.facts["damage"]]
     with pikepdf.open(path) as pdf:
-        tagged = tagged_reader.read(pdf)
-        recovered = _Recovery(pdf, out_dir, failures, vector_text, tagged, core)
+        tagged = tagged_reader.from_core(core.facts["structure"])
+        recovered = _Recovery(pdf, out_dir, failures, vector_text, tagged, core, data)
         for facts, page in zip(core.facts["pages"], pdf.pages, strict=False):
             recovered.page(facts, page, "images" in kinds, "vector" in kinds, gap_pt, max_fraction)
         if "images" in kinds:
@@ -233,7 +234,7 @@ def extract_pdf(
             palette=_palette(boxes, layout, spot_colours, recovered.artwork_colours),
             spot_colours=spot_colours,
             structure=_structure(tagged, recovered.text, recovered.marked_boxes),
-            interactive=interactive.collect(pdf, out_dir, failures),
+            interactive=interactive.from_core(core.facts["interactive"], core.blobs, out_dir, failures),
             inventory=inspect_pdf(path, with_contrast=False).to_dict(),
             notes=_notes(recovered.text),
             failures=failures,
@@ -255,6 +256,7 @@ class _Recovery:
         vector_text: bool = True,
         tagged: tagged_reader.Tagged | None = None,
         core: "_CoreFacts | None" = None,
+        data: bytes = b"",
     ) -> None:
         self.pdf, self.out, self.failures = pdf, out_dir, failures
         self.vector_text = vector_text
@@ -268,10 +270,25 @@ class _Recovery:
         self._by_key: dict[typing.Any, Asset] = {}  # the same image or artwork placed again adds a placement
         self._masks: set[int] = set()  # soft masks' object numbers, saved beside the image they belong to
         self.core = core
+        self.data = data
         self._images = {image["num"]: image for image in core.facts["images"]} if core else {}
         self._paints: dict[int, list[dict[str, typing.Any]]] = {}
-        for paint in core.facts["paints"] if core else []:
-            self._paints.setdefault(paint["page"], []).append(paint)
+        for index, paint in enumerate(core.facts["paints"] if core else []):
+            self._paints.setdefault(paint["page"], []).append({**paint, "index": index})
+        self._shapes: dict[int, list[Shape]] = {}
+        for shape in core.facts["shapes"] if core else []:
+            self._shapes.setdefault(shape["page"], []).append(
+                Shape(
+                    tuple((op, tuple(operands)) for op, operands in shape["path"]),
+                    tuple(shape["ctm"]),
+                    tuple(shape["bbox"]),
+                    shape["index"],
+                    shape["mcid"],
+                    shape["width"],
+                    shape["fill"],
+                    shape["stroke"],
+                )
+            )
         self._spot_inks: dict[str, list[str]] = core.facts["spot_inks"] if core else {}
         self._font_pages: dict[str, set[int]] = {}
 
@@ -307,14 +324,16 @@ class _Recovery:
                 self._image(number, paint["image"], placement, paint)
         self.pages[-1]["spot_inks"] = sorted(self._spot_inks.get(str(number), []))
         if vector:
-            # The vector pieces still draw their text from the Python walk, until they move to the core too.
-            walker = Walker()
-            texts = [
-                e
-                for e in walker.walk(page)
-                if e.bbox is not None and e.kind == "text" and e.glyphs and e.font and (e.text or "x").strip()
+            labels = [
+                Label(tuple(p["bbox"]), p["tf_size"], p["index"], p["text"])
+                for p in self._paints.get(number, [])
+                if p["kind"] == "text"
+                and p["bbox"] is not None
+                and p["glyphs"]
+                and (p["text"] or "x").strip()
+                and p["render_mode"] != INVISIBLE
             ]
-            self._vector(number, page, gap_pt, fraction, texts if self.vector_text else [])
+            self._vector(number, media, gap_pt, fraction, labels if self.vector_text else [])
 
     def _text_run(self, number: int, paint: dict[str, typing.Any]) -> TextRun:
         x0, y0, x1, y1 = paint["bbox"]
@@ -405,12 +424,10 @@ class _Recovery:
             {key: image[key] for key in ("pixels", "colour_space", "bits", "filters", "stencil", "soft_mask")},
         )
 
-    def _vector(self, number: int, page: pikepdf.Page, gap_pt: float, fraction: float, texts: list[Paint]) -> None:
-        try:
-            found, boxes = artwork(page, gap_pt=gap_pt, max_fraction=fraction, texts=texts)
-        except _ERRORS as exc:
-            self.failures.append(f"page {number}: vector artwork: {exc}")
-            return
+    def _vector(
+        self, number: int, media: list[float] | None, gap_pt: float, fraction: float, labels: list[Label]
+    ) -> None:
+        found, boxes = artwork(media, self._shapes.get(number, []), gap_pt=gap_pt, max_fraction=fraction, labels=labels)
         for box in boxes:
             x0, y0, x1, y1 = box.bbox
             self.boxes.append(
@@ -429,14 +446,15 @@ class _Recovery:
                     _describe(box.stroke),
                 )
             )
-        for index, group in enumerate(found, start=1):
+        raw, blobs = _core.vector_pieces(self.data, json.dumps([group.request(number) for group in found]))
+        for index, (group, piece) in enumerate(zip(found, json.loads(raw), strict=True), start=1):
             self._note_colours(group)
             x0, y0, x1, y1 = group.bbox
-            try:
-                digest, data = group.render()
-            except _ERRORS as exc:
-                self.failures.append(f"page {number}: vector group at ({x0:.1f}, {y0:.1f}): {exc}")
-                continue
+            # The digest is of the content and the resources it names, so the same artwork gives the same digest
+            # wherever it sits, and artwork sharing a resource keeps one digest while a different one never collides.
+            keys = repr(sorted(tuple(key) for key in piece["keys"])).encode()
+            digest = hashlib.sha1(blobs[piece["content"]] + keys).hexdigest()
+            data = blobs[piece["pdf"]]
             asset = self._add(
                 ("vector", digest),
                 lambda data=data, digest=digest, group=group, name=f"p{number:03d}-v{index:02d}": self._write_vector(

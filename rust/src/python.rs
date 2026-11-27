@@ -108,21 +108,36 @@ fn render(py: Python<'_>, data: &[u8], dpi: f64, guides: bool, safe_mm: Option<f
 /// font programs and ICC profiles with the output intents, and with `images` every image written out, as JSON, with the recovered files' bytes the JSON indexes.
 /// Raises `UnreadablePdfError` for a file that cannot be read.
 #[pyfunction]
-#[pyo3(signature = (data, images = false))]
-fn extract(py: Python<'_>, data: &[u8], images: bool) -> PyResult<(String, Vec<Vec<u8>>)> {
+#[pyo3(signature = (data, images = false, vector = false))]
+fn extract(py: Python<'_>, data: &[u8], images: bool, vector: bool) -> PyResult<(String, Vec<Vec<u8>>)> {
     let recovered = py
-        .detach(|| crate::extract::recover(data, images))
+        .detach(|| crate::extract::recover(data, images, vector))
         .map_err(UnreadablePdfError::new_err)?;
     serde_json::to_string(&recovered.facts)
         .map(|facts| (facts, recovered.blobs))
         .map_err(value_error)
 }
 
+/// The pieces of vector artwork the JSON `requests` asks for (page, box, shape indices and text-run indices, as
+/// `extract` reported them; or an `image` object number alone, filling the box, for a thumbnail), each written
+/// out as a one-page PDF: JSON naming each piece's content stream, resources and PDF among the bytes returned with
+/// it. Raises `UnreadablePdfError` for a file that cannot be read and `ValueError` for requests that are not of the
+/// right shape.
+#[pyfunction]
+fn vector_pieces(py: Python<'_>, data: &[u8], requests: &str) -> PyResult<(String, Vec<Vec<u8>>)> {
+    use crate::extract::PiecesError;
+    py.detach(|| crate::extract::vector_pieces(data, requests))
+        .map_err(|e| match e {
+            PiecesError::Unreadable(why) => UnreadablePdfError::new_err(why),
+            PiecesError::Request(why) => value_error(why),
+        })
+}
+
 /// The module itself, `proof_pdf._internal._core` to Python.
 #[pymodule]
 mod _core {
     #[pymodule_export]
-    use super::{UnreadablePdfError, crop, extract, inspect, render, run, verify};
+    use super::{UnreadablePdfError, crop, extract, inspect, render, run, vector_pieces, verify};
 }
 
 #[cfg(test)]
@@ -229,6 +244,23 @@ mod tests {
             assert_eq!((blobs.len(), &facts["xmp"]), (3, &serde_json::json!({"data": 0})));
             let error = extract.call1((b"x".as_slice(),)).unwrap_err().to_string();
             assert!(error.starts_with("UnreadablePdfError"), "{error}");
+        });
+    }
+
+    #[test]
+    fn vector_pieces_or_says_why() {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = pyo3::wrap_pymodule!(_core)(py);
+            let pieces = module.bind(py).getattr("vector_pieces").unwrap();
+            let file = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/pdfs/good.pdf")).unwrap();
+            let request = r#"[{"page": 1, "bbox": [0, 0, 10, 10], "shapes": [0], "labels": []}]"#;
+            let (json, blobs): (String, Vec<Vec<u8>>) =
+                pieces.call1((file.as_slice(), request)).unwrap().extract().unwrap();
+            assert!(json.contains("\"pdf\":1") && blobs[1].starts_with(b"%PDF-"), "{json}");
+            let message = |args: (&[u8], &str)| pieces.call1(args).unwrap_err().to_string();
+            assert!(message((file.as_slice(), "{")).starts_with("ValueError"));
+            assert!(message((b"x".as_slice(), "[]")).starts_with("UnreadablePdfError"));
         });
     }
 

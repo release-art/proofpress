@@ -34,8 +34,17 @@ def render(data: bytes, dpi: float, guides: bool = False, safe_mm: float | None 
     that cannot be read, and ``ValueError`` for a page too large to render at ``dpi``.
     """
 
-def extract(data: bytes, images: bool = False) -> tuple[str, list[bytes]]:
-    """What ``extract`` recovers from the PDF ``data`` that needs no content walk (page boxes, document information and
-    XMP, font programs, ICC profiles and output intents, and with ``images`` every image written out) as JSON, with
-    the recovered files' bytes the JSON indexes. Raises ``UnreadablePdfError`` for a file that cannot be read.
+def extract(data: bytes, images: bool = False, vector: bool = False) -> tuple[str, list[bytes]]:
+    """What ``extract`` recovers from the PDF ``data``: page boxes, document information and XMP, font programs, ICC
+    profiles, output intents, the page walk's text runs and placed images, the structure tree and interactive
+    features; with ``images`` every image written out, with ``vector`` every painted path. JSON, with the recovered
+    files' bytes the JSON indexes. Raises ``UnreadablePdfError`` for a file that cannot be read.
+    """
+
+def vector_pieces(data: bytes, requests: str) -> tuple[str, list[bytes]]:
+    """The pieces of vector artwork the JSON ``requests`` asks for (page, box, shape indices and text-run indices, as
+    ``extract`` reported them; or an ``image`` object number alone, filling the box, for a thumbnail), each
+    written out as a one-page PDF: JSON naming each piece's content stream, resources and PDF among the bytes
+    returned with it. Raises ``UnreadablePdfError`` for a file that cannot be read and ``ValueError`` for requests
+    that are not of the right shape.
     """

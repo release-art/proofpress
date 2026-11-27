@@ -120,6 +120,7 @@ record it as not conforming to that one rule).
 | 9 (part) | the extract A commit | `extract.rs`, `_core.extract`: pages (inherited `/CropBox` and `/Rotate`), information and XMP, font programs, ICC profiles and output intents, and the reader's damage, which `extract` now lists in `failures`; also the X-5g `/Ref` fix of another session (below) |
 | 9 (part) | the extract B commit | `extract/image.rs` (feature `extract`): images copied (JPEG, JPEG 2000, CCITT in a TIFF) or decoded to PNG or Deflate TIFF, JBIG2 with `hayro-jbig2`, soft masks as files of their own; extract no longer uses `pikepdf.PdfImage` |
 | 9 (part) | the extract C commit | The page walk carries marked content (MCID, artifact), each text run's text (`/ToUnicode`, Adobe Latin CIDs, Latin-1), direction, scale and spacing, and an image's object number; extract reads text runs, image placements and spot inks from it, and lists undecodable content in `failures` |
+| 9 (part) | the extract D and E commit | `extract/tagged.rs` (the structure tree with the role map and layout attributes), `extract/interactive.rs` (fields, links, annotations, outline, page labels, layers, attachments) and `extract/vector.rs` (every painted path with its state, and pieces written as one-page PDFs on the writer, `_core.vector_pieces`); extract no longer reads these with pikepdf, and the 41 files whose pieces pikepdf's `copy_foreign` refused now extract |
 
 ## Register coverage
 
@@ -454,6 +455,28 @@ Oracle consultations:
   range running past U+10FFFF now leaves the whole CMap unread, as before, and Adobe's Latin CIDs apply only to an
   Identity encoding.
 
+- Phase 9, `extract` slices D and E (structure tree, interactive features, vector artwork), against the Python as at
+  `c1763f5`, vector pieces compared by render: fixtures, Ghent, Altona, GWG, PDF/UA, PDF 2.0 and iText examples
+  identical but for destinations, one reading difference and one piece off by 1/255 in a pixel. On 13 test-db sets
+  (3,408 files): 3,015 identical; 190 failing on both sides as before; 50 the Python failed on and the core reads (41
+  `copy_foreign` refusals on vector pieces, damaged content streams); 151 different. A file may differ in several
+  ways: destinations now keep every number written (the Python dropped zeros, `[70 288 0]` read as `[70 288]`, and
+  some whole positions), and `GoToR` and `Launch` file specifications are the file's name where the Python printed the
+  dictionary (together most of the 106 files differing in interactive features); 36 are vector pieces whose text
+  labels now come from the core's page walk, as the text output has since slice C (each matches with labels off); a
+  handful are content the core reads as damaged (named in `failures`); 4 are document information read byte by byte as
+  pikepdf reads it, where slice A had read them as UTF-8; one repeated drawing
+  splits into two assets because its offset falls on a rounding tie at the fourth decimal; and one link is read from a
+  different revision of a hybrid-reference file (see owner actions). The run found four of ours, fixed: UTF-16 text
+  with a little-endian mark or an odd last byte read pair by pair, as pikepdf reads it; the three bytes
+  PDFDocEncoding leaves undefined in its printable range read as U+FFFD, as pikepdf reads them; a page label written
+  twice kept once, the last; and a default appearance's `//Name` keeping its second slash. Two files timed out at 300
+  seconds: one page of 64,485 paths spends 8 minutes in the Python grouping's sweep (`_clusters`), unchanged from
+  before the slice and quadratic when many boxes share an x range; left as it is, an open item for when the grouping
+  moves to the core. The commit also carries slice F's core side (spot colour spaces in `_core.extract`, an image
+  drawn alone by `_core.vector_pieces` for thumbnails), written in the same files while the run went and unused until
+  slice F.
+
 ## Owner requests
 
 - 2026-11-25: add a Windows x64 build to CI and the release wheels. Done: a `windows` CI job (Rust tests, a wheel that
@@ -468,6 +491,9 @@ Oracle consultations:
   objects numbered at or beyond the trailer's `/Size`; the core reads those references as null, as decided in task
   2.1, and qpdf reads the objects. Where the catalog is one of them, the file has no pages for the checks and is
   reported sound. Worth deciding whether a file whose `/Root` does not resolve should be refused.
+- **Hybrid-reference files:** in `cc-main-2021-31-sample/2253587.pdf` (three revisions, the last with an
+  `/XRefStm`), the core and qpdf read different versions of a link's object; worth checking which revision the spec's
+  hybrid lookup order (ISO 32000-2 7.5.8.4) gives before trusting either.
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.

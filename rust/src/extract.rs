@@ -7,6 +7,9 @@
 //! pikepdf walks them, so assets keep their order.
 
 mod image;
+mod interactive;
+mod tagged;
+mod vector;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,6 +20,7 @@ use crate::checks::contents;
 use crate::checks::contrast::describe;
 use crate::checks::painted::page_of;
 use crate::common::family::{self, Family};
+use crate::common::function;
 use crate::common::icc;
 use crate::common::rect::rect;
 use crate::common::text;
@@ -43,10 +47,18 @@ pub struct Facts {
     output_intents: Vec<Intent>,
     /// Every image `XObject` reachable from the catalog, written out, when images were asked for.
     images: Vec<ImageFile>,
+    /// Form fields, links, annotations, outline, page labels, layers and attachments.
+    interactive: serde_json::Value,
+    /// Every painted path, for vector artwork, when vector artwork was asked for.
+    shapes: Vec<vector::ShapeFacts>,
+    /// The structure tree, when the file is tagged.
+    structure: Option<tagged::Structure>,
     /// What each page paints that `extract` reports, in the order painted: text runs and placed images.
     paints: Vec<Painted>,
     /// The spot inks each page selects, by page number from 1, sorted.
     spot_inks: BTreeMap<u32, BTreeSet<String>>,
+    /// Every distinct `Separation` and `DeviceN` space reachable from the catalog, in the order met.
+    spot_colours: Vec<SpotColour>,
     /// What the reader found damaged or missing, each as `check: message`: the parts of the file nothing above
     /// could read.
     damage: Vec<String>,
@@ -127,12 +139,23 @@ struct Painted {
     glyphs: usize,
     font: Option<String>,
     size: f64,
+    /// A text run's font size as `Tf` set it, before any matrix.
+    tf_size: f64,
     /// Its fill colour in words, as the inventory writes colours.
     colour: String,
     rotation: f64,
     h_scale: f64,
     char_spacing: f64,
     render_mode: i64,
+}
+
+/// A spot colour space: its ink names, its alternate space and the alternate's components at full tint (`None` when
+/// the tint transform is not understood), rounded to 4 places.
+#[derive(Debug, PartialEq, Serialize)]
+struct SpotColour {
+    names: Vec<String>,
+    alternate_space: Option<String>,
+    alternate: Option<Vec<f64>>,
 }
 
 /// An image `XObject` written as a file, with what its dictionary says.
@@ -185,12 +208,13 @@ impl Recovered {
     }
 }
 
-/// Read `bytes` and recover the facts above, writing out every image when `images` is true.
+/// Read `bytes` and recover the facts above, writing out every image when `images` is true and reading every painted
+/// path when `vector` is.
 ///
 /// # Errors
 ///
 /// The reason a file cannot be read: its structure is too damaged, or it is encrypted.
-pub fn recover(bytes: &[u8], images: bool) -> Result<Recovered, String> {
+pub fn recover(bytes: &[u8], images: bool, vector: bool) -> Result<Recovered, String> {
     let doc = Document::open(bytes, &Limits::default()).map_err(|refusal| refusal.message)?;
     let mut out = Recovered::default();
     out.facts.pdf_version = String::from_utf8_lossy(doc.version()).into_owned();
@@ -211,6 +235,11 @@ pub fn recover(bytes: &[u8], images: bool) -> Result<Recovered, String> {
     }
     intents(&doc, &mut out);
     walk(&doc, &mut out.facts);
+    out.facts.structure = tagged::read(&doc);
+    if vector {
+        out.facts.shapes = vector::shapes(&doc);
+    }
+    out.facts.interactive = interactive::collect(&doc, &mut out);
     let mut fonts = BTreeSet::new();
     reachable(&doc, |num, object| {
         if images
@@ -220,6 +249,15 @@ pub fn recover(bytes: &[u8], images: bool) -> Result<Recovered, String> {
         {
             let file = image_file(&doc, num, dict, &mut out);
             out.facts.images.push(file);
+        }
+        if let Some(spot) = spot_colour(&doc, object)
+            && !out
+                .facts
+                .spot_colours
+                .iter()
+                .any(|s| s.names == spot.names && s.alternate_space == spot.alternate_space)
+        {
+            out.facts.spot_colours.push(spot);
         }
         let Some(dict) = object.dict() else {
             if let Some([space, profile]) = object.array()
@@ -258,6 +296,58 @@ pub fn recover(bytes: &[u8], images: bool) -> Result<Recovered, String> {
         }
     });
     Ok(out)
+}
+
+/// `object` read as a `Separation` or `DeviceN` space, or `None` when it is not one or is malformed.
+fn spot_colour(doc: &Document, object: &Object) -> Option<SpotColour> {
+    let [head, inks, alternate, transform, ..] = object.array()? else {
+        return None;
+    };
+    let names = match head.name()? {
+        b"Separation" => vec![name(doc, inks)?],
+        b"DeviceN" => doc
+            .resolve(inks)?
+            .array()?
+            .iter()
+            .map(|n| name(doc, n))
+            .collect::<Option<_>>()?,
+        _ => return None,
+    };
+    let alternate_space = match family::classify(doc, Some(alternate), None) {
+        Family::Gray => Some("DeviceGray".to_owned()),
+        Family::Rgb => Some("DeviceRGB".to_owned()),
+        Family::Cmyk => Some("DeviceCMYK".to_owned()),
+        Family::Other => space_label(doc, alternate),
+    };
+    let alternate = function::evaluate(doc, transform, &vec![1.0; names.len()])
+        .map(|values| values.into_iter().map(|v| vector::round(v, 4)).collect());
+    Some(SpotColour {
+        names,
+        alternate_space,
+        alternate,
+    })
+}
+
+/// A colour space's name, its array's head, or `ICCBased(N)`.
+fn space_label(doc: &Document, space: &Object) -> Option<String> {
+    let space = doc.resolve(space)?;
+    if let Some(name) = space.name() {
+        return Some(String::from_utf8_lossy(name).into_owned());
+    }
+    let [head, rest @ ..] = space.array()? else { return None };
+    let head = name(doc, head)?;
+    if head != "ICCBased" {
+        return Some(head);
+    }
+    let n = rest
+        .first()
+        .and_then(|s| doc.resolve(s))
+        .and_then(Object::dict)
+        .and_then(|d| d.get(b"N"))
+        .and_then(|n| doc.resolve(n))
+        .and_then(Object::integer)
+        .unwrap_or(0);
+    Some(format!("ICCBased({n})"))
 }
 
 /// Image `num` written out, with its soft mask and the facts its dictionary gives.
@@ -336,6 +426,7 @@ fn walk(doc: &Document, facts: &mut Facts) {
                     glyphs: ink.glyphs,
                     font: ink.font.as_ref().filter(|_| kind == "text").map(|f| f.name.clone()),
                     size: ink.size,
+                    tf_size: ink.show.as_ref().map_or(0.0, |s| s.size),
                     colour: describe(Some(&ink.fill)),
                     rotation: ink.rotation,
                     h_scale: ink.h_scale,
@@ -346,6 +437,30 @@ fn walk(doc: &Document, facts: &mut Facts) {
             _ => {}
         }
     }
+}
+
+/// Why pieces of vector artwork could not be written.
+#[derive(Debug, PartialEq)]
+pub enum PiecesError {
+    /// The file cannot be read: why.
+    Unreadable(String),
+    /// The requests are not JSON of the right shape: why.
+    Request(String),
+}
+
+/// The pieces of vector artwork `requests` (JSON, as the Python grouping writes them) asks for, each written out: its
+/// content stream, the resources it names and its PDF, as JSON whose blobs index the bytes returned with it.
+///
+/// # Errors
+///
+/// When the file cannot be read, or the requests are not JSON of the right shape.
+pub fn vector_pieces(bytes: &[u8], requests: &str) -> Result<(String, Vec<Vec<u8>>), PiecesError> {
+    let requests: Vec<vector::Piece> =
+        serde_json::from_str(requests).map_err(|e| PiecesError::Request(e.to_string()))?;
+    let doc = Document::open(bytes, &Limits::default()).map_err(|refusal| PiecesError::Unreadable(refusal.message))?;
+    let mut blobs = Vec::new();
+    let pieces = vector::pieces(&doc, &requests, &mut blobs);
+    Ok((serde_json::Value::from(pieces).to_string(), blobs))
 }
 
 /// The number `object` refers to, when it is a reference.
@@ -482,12 +597,47 @@ fn name(doc: &Document, object: &Object) -> Option<String> {
 
 /// `object` as text, as pikepdf's `str()` gives it: a text string decoded, a name with its slash, a number or boolean
 /// as Python writes it. Anything else, null included, is `None`.
+/// UTF-16 behind either byte order mark, its pairs decoded as far as they go, a lone surrogate replaced.
+fn loose_utf16(bytes: &[u8]) -> Option<String> {
+    let (big, rest) = match bytes {
+        [0xFE, 0xFF, rest @ ..] => (true, rest),
+        [0xFF, 0xFE, rest @ ..] => (false, rest),
+        _ => return None,
+    };
+    let units = rest.as_chunks::<2>().0.iter().map(|pair| {
+        if big {
+            u16::from_be_bytes(*pair)
+        } else {
+            u16::from_le_bytes(*pair)
+        }
+    });
+    Some(
+        char::decode_utf16(units)
+            .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect(),
+    )
+}
+
 fn pdf_str(doc: &Document, object: &Object) -> Option<String> {
     Some(match &doc.resolve(object)?.value {
         // PDF 2.0 adds UTF-8 text strings behind a byte order mark (ISO 32000-2 7.9.2.2.1), as pikepdf reads them.
         Value::String(bytes, _) => match bytes.strip_prefix(b"\xEF\xBB\xBF") {
             Some(utf8) => String::from_utf8_lossy(utf8).into_owned(),
-            None => text::decode(bytes).unwrap_or_else(|| String::from_utf8_lossy(bytes).into_owned()),
+            // UTF-16 that is not valid (an odd last byte, a lone surrogate, little-endian behind its own mark) is read
+            // pair by pair, as pikepdf reads it; and a byte PDFDocEncoding leaves undefined is a replacement character
+            // if it is one of the three printable-range gaps, else (a NUL, say) its Latin-1 value, rather than costing
+            // the whole string.
+            None => text::decode(bytes).or_else(|| loose_utf16(bytes)).unwrap_or_else(|| {
+                bytes
+                    .iter()
+                    .map(|&b| {
+                        text::decode(&[b]).unwrap_or_else(|| match b {
+                            0x7F | 0x9F | 0xAD => char::REPLACEMENT_CHARACTER.to_string(),
+                            _ => char::from(b).to_string(),
+                        })
+                    })
+                    .collect()
+            }),
         },
         Value::Name(n) => format!("/{}", String::from_utf8_lossy(n)),
         Value::Integer(i) => i.to_string(),
@@ -545,6 +695,7 @@ mod tests {
         recover(
             &classic(&refs, &format!("<< /Size SIZE /Root 1 0 R {trailer} >>")),
             true,
+            true,
         )
         .unwrap()
     }
@@ -592,8 +743,8 @@ mod tests {
                 (1, b"<< /Type /Catalog /Metadata 3 0 R >>".to_vec()),
                 (
                     2,
-                    b"<< /Title (Caf\xe9) /Subject <FEFF00E9> /Author <9F> /Keywords <EFBBBFC3A9> /Trapped /False /Pages 7 /Scale 1.5 \
-                      /Marked true /Off false /Gone null /Lost 99 0 R >>"
+                    b"<< /Title (Caf\xe9) /Subject <FEFF00E9> /Author <9F01> /Keywords <EFBBBFC3A9> /Trapped /False /Pages 7 /Scale 1.5 \
+                      /Marked true /Off false /Gone null /Lost 99 0 R /LE <FFFE4100> /Odd <FEFF004100> /Lone <FEFFD800> >>"
                         .to_vec(),
                 ),
                 (3, stream("/Type /Metadata /Subtype /XML", b"<x:xmpmeta/>")),
@@ -603,8 +754,8 @@ mod tests {
         let got = json(&recovered);
         assert_eq!(
             got["info"],
-            json!({"Author": "\u{FFFD}", "Keywords": "é", "Marked": "True", "Off": "False", "Pages": "7", "Scale": "1.5",
-                   "Subject": "é", "Title": "Café", "Trapped": "/False"})
+            json!({"Author": "\u{FFFD}\u{1}", "Keywords": "é", "Marked": "True", "Off": "False", "Pages": "7", "Scale": "1.5",
+                   "Subject": "é", "Title": "Café", "Trapped": "/False", "LE": "A", "Odd": "A", "Lone": "\u{FFFD}"})
         );
         assert_eq!(got["xmp"], json!({"data": 0}));
         assert_eq!(recovered.blobs, [b"<x:xmpmeta/>".to_vec()]);
@@ -768,8 +919,8 @@ mod tests {
         ];
         let refs: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
         let bytes = classic(&refs, "<< /Size SIZE /Root 1 0 R >>");
-        assert_eq!(json(&recover(&bytes, false).unwrap())["images"], json!([]));
-        let recovered = recover(&bytes, true).unwrap();
+        assert_eq!(json(&recover(&bytes, false, false).unwrap())["images"], json!([]));
+        let recovered = recover(&bytes, true, false).unwrap();
         let images = json(&recovered)["images"].clone();
         let summary: Vec<Json> = images
             .as_array()
@@ -805,6 +956,47 @@ mod tests {
         assert_eq!(
             images[1]["data"],
             json!({"error": "its /BitsPerComponent is not 1, 2, 4, 8 or 16"})
+        );
+    }
+
+    #[test]
+    fn spot_colours_once_each_with_their_alternates() {
+        let spaces = "[/Separation /Gold /DeviceCMYK 3 0 R] [/Separation /Gold /DeviceCMYK 3 0 R] \
+            [/DeviceN [/A /B] [/Lab << >>] << >>] [/Separation /P [/ICCBased 4 0 R] 3 0 R] \
+            [/Separation /F /Foo 3 0 R] [/Separation /N 5 3 0 R] [/Separation /M [[1]] 3 0 R] \
+            [/DeviceN /A /DeviceGray 3 0 R] [/Indexed /DeviceRGB 0 <00>] [/Separation] \
+            [/Separation 5 /DeviceGray 3 0 R] [/DeviceN 99 0 R /DeviceGray 3 0 R] [/DeviceN [/A 5] /DeviceGray 3 0 R] \
+            [/Separation /G /DeviceGray 3 0 R] [/Separation /R /DeviceRGB 3 0 R] [/Separation /D 98 0 R 3 0 R] \
+            [/Separation /E [] 3 0 R] [/Separation /Q [/ICCBased 6 0 R] 3 0 R]";
+        let recovered = file(
+            &[
+                (1, format!("<< /Type /Catalog /X [{spaces}] >>").into_bytes()),
+                (
+                    3,
+                    b"<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0.123456 1 0] /N 1 >>".to_vec(),
+                ),
+                (4, stream("", b"not a profile")),
+                (6, stream("/N 2", b"not a profile")),
+            ],
+            "",
+        );
+        let got = json(&recovered)["spot_colours"].clone();
+        let tint = json!([0.0, 0.1235, 1.0, 0.0]);
+        assert_eq!(
+            got,
+            json!([
+                {"names": ["Q"], "alternate_space": "ICCBased(2)", "alternate": tint},
+                {"names": ["E"], "alternate_space": null, "alternate": tint},
+                {"names": ["D"], "alternate_space": null, "alternate": tint},
+                {"names": ["R"], "alternate_space": "DeviceRGB", "alternate": tint},
+                {"names": ["G"], "alternate_space": "DeviceGray", "alternate": tint},
+                {"names": ["M"], "alternate_space": null, "alternate": tint},
+                {"names": ["N"], "alternate_space": null, "alternate": tint},
+                {"names": ["F"], "alternate_space": "Foo", "alternate": tint},
+                {"names": ["P"], "alternate_space": "ICCBased(0)", "alternate": tint},
+                {"names": ["A", "B"], "alternate_space": "Lab", "alternate": null},
+                {"names": ["Gold"], "alternate_space": "DeviceCMYK", "alternate": tint},
+            ])
         );
     }
 
@@ -892,6 +1084,6 @@ mod tests {
 
     #[test]
     fn a_file_that_cannot_be_read_is_refused() {
-        assert!(recover(b"not a pdf", false).is_err());
+        assert!(recover(b"not a pdf", false, false).is_err());
     }
 }
