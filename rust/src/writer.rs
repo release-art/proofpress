@@ -76,7 +76,7 @@ impl<'a> Writer<'a> {
     /// `dict` as PDF syntax, its references grafted.
     pub(crate) fn dict(&mut self, dict: &Dict) -> Vec<u8> {
         let mut out = Vec::new();
-        self.write_dict(dict.entries.iter().map(|(k, v)| (k.as_slice(), v)), &mut out);
+        self.write_dict(dict.entries().iter().map(|(k, v)| (k.as_slice(), v)), &mut out);
         out
     }
 
@@ -98,7 +98,7 @@ impl<'a> Writer<'a> {
                 }
                 out.push(b']');
             }
-            Value::Dict(dict) => self.write_dict(dict.entries.iter().map(|(k, v)| (k.as_slice(), v)), out),
+            Value::Dict(dict) => self.write_dict(dict.entries().iter().map(|(k, v)| (k.as_slice(), v)), out),
             Value::Reference(num, _) => match self.graft(*num) {
                 Some(new) => out.extend(format!("{new} 0 R").as_bytes()),
                 None => out.extend(b"null"),
@@ -122,7 +122,7 @@ impl<'a> Writer<'a> {
         let body = match (self.doc.raw_stream(old), &object.value) {
             (Some(data), Value::Dict(dict)) => {
                 let dict = self.without_identity_crypt(dict);
-                let entries = dict.entries.iter().filter(|(k, _)| k != b"Length");
+                let entries = dict.entries().iter().filter(|(k, _)| k != b"Length");
                 let mut out = Vec::new();
                 self.write_dict(entries.map(|(k, v)| (k.as_slice(), v)), &mut out);
                 let length = format!("<</Length {}", data.len());
@@ -175,13 +175,11 @@ impl<'a> Writer<'a> {
         };
         let pick = |list: &[Object]| -> Vec<Object> { kept.iter().filter_map(|i| list.get(*i).cloned()).collect() };
         let mut out = dict.clone();
-        out.entries.retain(|(k, _)| k != b"Filter" && k != b"DecodeParms");
+        out.retain(|(k, _)| k != b"Filter" && k != b"DecodeParms");
         if !kept.is_empty() {
-            out.entries
-                .push((b"Filter".to_vec(), object(Value::Array(pick(&filters)))));
+            out.push(b"Filter".to_vec(), object(Value::Array(pick(&filters))));
             if !parms.is_empty() {
-                out.entries
-                    .push((b"DecodeParms".to_vec(), object(Value::Array(pick(&parms)))));
+                out.push(b"DecodeParms".to_vec(), object(Value::Array(pick(&parms))));
             }
         }
         out

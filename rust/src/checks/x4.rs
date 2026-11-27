@@ -99,7 +99,7 @@ pub(super) fn ur_only(doc: &Document) -> Vec<Finding> {
         .and_then(Object::dict);
     perms
         .into_iter()
-        .flat_map(|p| p.entries.iter())
+        .flat_map(|p| p.entries().iter())
         .filter(|(key, _)| key != b"UR" && key != b"UR3")
         .map(|(key, _)| {
             let key = String::from_utf8_lossy(key);
@@ -158,7 +158,7 @@ fn collect<'a>(doc: &'a Document, num: u32, buffer: Buffer, object: &'a Object, 
                 _ => None,
             };
             out.extend(font.and_then(|n| named("font", n)));
-            for (_, value) in &dict.entries {
+            for (_, value) in dict.entries() {
                 collect(doc, num, buffer, value, out);
             }
         }

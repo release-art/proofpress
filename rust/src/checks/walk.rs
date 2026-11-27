@@ -139,7 +139,7 @@ fn visit<'a>(num: u32, object: &'a Object, key: Option<&'a [u8]>, parent: Parent
             } else {
                 Parent::Key(key)
             };
-            for (k, value) in &dict.entries {
+            for (k, value) in dict.entries() {
                 visit(num, value, Some(k.as_slice()), inner, found);
             }
         }

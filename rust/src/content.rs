@@ -221,7 +221,7 @@ fn inline_image(
         let Read::Value(value) = syntax::read(parser, &mut notes).map_err(Problem::Syntax)? else {
             return Err(Problem::InlineDict);
         };
-        dict.entries.push((spelled_out(&key).to_vec(), value));
+        dict.push(spelled_out(&key).to_vec(), value);
     }
     let after_id = data.get(parser.position()..).unwrap_or_default();
     // A single white-space byte follows ID (8.9.7). Writers also put CR LF there, one end of line; that reading is taken

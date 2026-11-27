@@ -91,7 +91,7 @@ impl<'a> Reader<'a> {
             .and_then(|d| doc.resolve(d))
             .and_then(Object::dict)
         {
-            for (key, value) in &dests.entries {
+            for (key, value) in dests.entries() {
                 reader.names.insert(String::from_utf8_lossy(key).into_owned(), value);
             }
         }

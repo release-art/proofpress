@@ -307,7 +307,7 @@ fn reachable(doc: &Document) -> Vec<&Object> {
         match &resolved.value {
             Value::Dict(dict) => {
                 let mut entries: Vec<&(Vec<u8>, Object)> =
-                    dict.entries.iter().filter(|(k, _)| k != b"Parent").collect();
+                    dict.entries().iter().filter(|(k, _)| k != b"Parent").collect();
                 entries.sort_by(|a, b| a.0.cmp(&b.0));
                 stack.extend(entries.into_iter().map(|(_, v)| v));
             }

@@ -242,7 +242,7 @@ fn separations(doc: &Document) -> Vec<(Vec<u8>, Object, Object, Vec<Location>)> 
                         .and_then(|c| doc.resolve(c))
                         .and_then(Object::dict);
                     stack.extend(
-                        colorants.map_or_default(|c| c.entries.iter().map(|(_, v)| v.clone()).collect::<Vec<_>>()),
+                        colorants.map_or_default(|c| c.entries().iter().map(|(_, v)| v.clone()).collect::<Vec<_>>()),
                     );
                 }
                 _ => {}
@@ -295,7 +295,7 @@ fn same(doc: &Document, left: &Object, right: &Object, depth: usize) -> bool {
             let skip = |key: &[u8]| matches!(key, b"Length" | b"Filter" | b"DecodeParms");
             let keys = |dict: &Dict| -> Vec<Vec<u8>> {
                 let mut keys: Vec<Vec<u8>> = dict
-                    .entries
+                    .entries()
                     .iter()
                     .map(|(k, _)| k.clone())
                     .filter(|k| !skip(k))
@@ -305,7 +305,7 @@ fn same(doc: &Document, left: &Object, right: &Object, depth: usize) -> bool {
             };
             keys(lefts) == keys(rights)
                 && lefts
-                    .entries
+                    .entries()
                     .iter()
                     .filter(|(key, _)| !skip(key))
                     .all(|(key, value)| rights.get(key).is_some_and(|other| same(doc, value, other, depth + 1)))
@@ -542,7 +542,7 @@ pub(super) fn solidities(doc: &Document, _: &Settings) -> Vec<Finding> {
         else {
             continue;
         };
-        for (ink, value) in &values.entries {
+        for (ink, value) in values.entries() {
             let Some(value) = doc.resolve(value).and_then(|v| number(&v.value)) else {
                 continue;
             };

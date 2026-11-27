@@ -508,7 +508,7 @@ fn info(doc: &Document) -> BTreeMap<String, String> {
         .get(b"Info")
         .and_then(|i| doc.resolve(i))
         .and_then(Object::dict);
-    dict.map(|d| d.entries.iter())
+    dict.map(|d| d.entries().iter())
         .into_iter()
         .flatten()
         .filter_map(|(key, value)| Some((String::from_utf8_lossy(key).into_owned(), pdf_str(doc, value)?)))
@@ -663,7 +663,7 @@ fn reachable<'a>(doc: &'a Document, mut visit: impl FnMut(Option<u32>, &'a Objec
         visit(reference(next), object);
         match &object.value {
             Value::Dict(dict) => {
-                let mut entries: Vec<_> = dict.entries.iter().filter(|(k, _)| k != b"Parent").collect();
+                let mut entries: Vec<_> = dict.entries().iter().filter(|(k, _)| k != b"Parent").collect();
                 entries.sort_by(|a, b| a.0.cmp(&b.0));
                 stack.extend(entries.into_iter().map(|(_, v)| v));
             }

@@ -4,6 +4,8 @@
 //! they first appeared, compared after `#xx` decoding (7.3.5); a key given twice keeps the last value, and the values it
 //! beat move into `overridden` layers, so nothing in the file is lost (see the architecture note, "Duplicate keys").
 
+use std::collections::HashMap;
+
 use super::lexer::{Defect, hex_bytes, literal_bytes, name_bytes};
 use super::{Damage, Event, Form, Located, Parser, Reason};
 
@@ -32,23 +34,81 @@ pub(crate) enum Value {
     Reference(u32, u16),
 }
 
+/// Entries from which a dictionary keeps an index of its keys: below it a scan is as quick, and the index costs memory.
+const INDEXED: usize = 16;
+
 /// A dictionary in key order, with the layers of values that later duplicates overrode.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Dict {
-    pub(crate) entries: Vec<(Vec<u8>, Object)>,
+    entries: Vec<(Vec<u8>, Object)>,
     /// Layer 0 holds what the winning values overrode, layer 1 what those overrode, and so on.
     pub(crate) overridden: Vec<Vec<(Vec<u8>, Object)>>,
+    /// Each key's first position in `entries`, once there are [`INDEXED`] of them; empty below that. Derived from
+    /// `entries` alone, which only the methods here change, so it stays in step and equal entries mean equal indexes.
+    index: HashMap<Vec<u8>, usize>,
 }
 
 impl Dict {
+    /// A dictionary of `entries`, in their order.
+    pub(crate) fn from_entries(entries: Vec<(Vec<u8>, Object)>) -> Self {
+        let mut dict = Self {
+            entries,
+            ..Self::default()
+        };
+        dict.reindex();
+        dict
+    }
+
+    /// The entries in key order.
+    pub(crate) fn entries(&self) -> &[(Vec<u8>, Object)] {
+        &self.entries
+    }
+
     /// The value under `key`, by its decoded bytes.
     pub(crate) fn get(&self, key: &[u8]) -> Option<&Object> {
-        self.entries.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+        self.position(key).and_then(|i| self.entries.get(i)).map(|(_, v)| v)
+    }
+
+    /// Append `key` and `value` as they are, even when `key` is already there (the first one stays the one found).
+    pub(crate) fn push(&mut self, key: Vec<u8>, value: Object) {
+        let at = self.entries.len();
+        if at + 1 == INDEXED {
+            self.entries.push((key, value));
+            self.reindex();
+            return;
+        }
+        if at >= INDEXED {
+            self.index.entry(key.clone()).or_insert(at);
+        }
+        self.entries.push((key, value));
+    }
+
+    /// Keep only the entries `keep` accepts.
+    pub(crate) fn retain(&mut self, keep: impl FnMut(&(Vec<u8>, Object)) -> bool) {
+        self.entries.retain(keep);
+        self.reindex();
+    }
+
+    fn position(&self, key: &[u8]) -> Option<usize> {
+        if self.entries.len() >= INDEXED {
+            self.index.get(key).copied()
+        } else {
+            self.entries.iter().position(|(k, _)| k == key)
+        }
+    }
+
+    fn reindex(&mut self) {
+        self.index.clear();
+        if self.entries.len() >= INDEXED {
+            for (i, (key, _)) in self.entries.iter().enumerate() {
+                self.index.entry(key.clone()).or_insert(i);
+            }
+        }
     }
 
     fn insert(&mut self, key: Vec<u8>, value: Object) -> bool {
-        let Some(slot) = self.entries.iter_mut().find(|(k, _)| *k == key) else {
-            self.entries.push((key, value));
+        let Some(slot) = self.position(&key).and_then(|i| self.entries.get_mut(i)) else {
+            self.push(key, value);
             return false;
         };
         let mut beaten = std::mem::replace(&mut slot.1, value);
@@ -283,6 +343,52 @@ mod tests {
             notes,
             [Note::DuplicateKey(21), Note::DuplicateKey(29), Note::DuplicateKey(35)]
         );
+    }
+
+    #[test]
+    fn a_large_dictionary_is_found_through_its_index() {
+        let mut text = b"<<".to_vec();
+        for i in 0..40 {
+            text.extend(format!(" /K{i} {i}").bytes());
+        }
+        text.extend(b" /K3 99 >>");
+        let (read, notes) = one(&text);
+        let d = as_value(read.unwrap()).unwrap().dict().unwrap().clone();
+        assert_eq!(notes.len(), 1, "the duplicate is still seen");
+        assert_eq!(d.get(b"K3").and_then(Object::integer), Some(99));
+        assert_eq!(d.get(b"K39").and_then(Object::integer), Some(39));
+        assert_eq!(d.get(b"K40"), None);
+        assert_eq!(d.index.len(), 40);
+
+        let int = |i| Object {
+            value: Value::Integer(i),
+            start: 0,
+            end: 0,
+        };
+        let mut pushed = Dict::default();
+        for i in 0..20 {
+            pushed.push(format!("K{}", i % 18).into_bytes(), int(i));
+        }
+        assert_eq!(
+            pushed.get(b"K1").and_then(Object::integer),
+            Some(1),
+            "the first of a pushed duplicate"
+        );
+        assert_eq!(pushed.get(b"K17").and_then(Object::integer), Some(17));
+        assert_eq!(
+            pushed,
+            Dict::from_entries(pushed.entries().to_vec()),
+            "built either way, the same"
+        );
+
+        pushed.retain(|(k, _)| k.len() == 2);
+        assert_eq!(
+            (pushed.entries().len(), pushed.index.len()),
+            (12, 0),
+            "small again: no index"
+        );
+        assert_eq!(pushed.get(b"K9").and_then(Object::integer), Some(9));
+        assert_eq!(pushed.get(b"K10"), None);
     }
 
     #[test]

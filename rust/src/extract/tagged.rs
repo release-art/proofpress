@@ -115,7 +115,7 @@ pub(super) fn read(doc: &Document) -> Option<Structure> {
         .and_then(|m| doc.resolve(m))
         .and_then(Object::dict)
         .map_or_else(BTreeMap::new, |m| {
-            m.entries
+            m.entries()
                 .iter()
                 .filter_map(|(k, v)| {
                     let to = pdf_str(doc, v)?;
@@ -291,7 +291,7 @@ impl Reader<'_> {
         };
         let mut found = BTreeMap::new();
         for group in groups.iter().filter_map(|g| g.dict()) {
-            for (key, item) in &group.entries {
+            for (key, item) in group.entries() {
                 if ATTRIBUTES.contains(&key.as_slice())
                     && let Some(plain) = self.plain(item)
                 {

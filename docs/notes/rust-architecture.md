@@ -102,6 +102,8 @@ libraries:
 - **Copying between documents memoises,** as MuPDF's graft map does, so shared children are copied once. Objects are renumbered when
   written, as qpdf does.
 - **Dictionaries keep their order,** as lopdf's `IndexMap` does: a key keeps the place where it first appeared.
+  A dictionary of 16 or more entries also keeps a map from each key to its place, so a lookup does not scan it; the entries
+  change only through `Dict`'s own methods, which keep that map in step (decision log, 2026-11-27).
 
 **Duplicate keys.** ISO 32000-2 7.3.7 forbids them but does not say which copy wins. The last one wins, which is also what qpdf 12
 does (it warns "last occurrence overrides earlier ones"). The copies it beat are kept, not lost: every dictionary, nested ones

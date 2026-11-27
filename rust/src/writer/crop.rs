@@ -102,7 +102,7 @@ fn page_body(writer: &mut Writer<'_>, doc: &Document, page: &Page<'_>, window: [
     let mut out = format!("<</Type /Page /Parent {tree} 0 R").into_bytes();
     for (key, value) in page
         .dict
-        .entries
+        .entries()
         .iter()
         .filter(|(k, _)| !DROPPED.contains(&k.as_slice()) && k != b"Type")
     {
@@ -163,7 +163,7 @@ fn used_names(doc: &Document, page: &Page<'_>) -> Option<BTreeSet<Vec<u8>>> {
     for item in &read.items {
         match item {
             Item::Op(op) => op.operands.iter().for_each(&mut collect),
-            Item::Image(image) => image.dict.entries.iter().for_each(|(_, v)| collect(v)),
+            Item::Image(image) => image.dict.entries().iter().for_each(|(_, v)| collect(v)),
         }
     }
     Some(names)
@@ -172,7 +172,7 @@ fn used_names(doc: &Document, page: &Page<'_>) -> Option<BTreeSet<Vec<u8>>> {
 /// `resources` with each named category holding only the entries `used` names; all of them when `used` is `None`.
 fn prune(doc: &Document, resources: &Dict, used: Option<&BTreeSet<Vec<u8>>>) -> Dict {
     let mut out = Dict::default();
-    for (key, value) in &resources.entries {
+    for (key, value) in resources.entries() {
         let category = doc
             .resolve(value)
             .and_then(Object::dict)
@@ -180,23 +180,20 @@ fn prune(doc: &Document, resources: &Dict, used: Option<&BTreeSet<Vec<u8>>>) -> 
         let kept = match (category, used) {
             (Some(category), Some(used)) => {
                 let entries = category
-                    .entries
+                    .entries()
                     .iter()
                     .filter(|(k, _)| used.contains(k))
                     .cloned()
                     .collect();
                 Object {
-                    value: Value::Dict(Dict {
-                        entries,
-                        overridden: Vec::new(),
-                    }),
+                    value: Value::Dict(Dict::from_entries(entries)),
                     start: 0,
                     end: 0,
                 }
             }
             _ => value.clone(),
         };
-        out.entries.push((key.clone(), kept));
+        out.push(key.clone(), kept);
     }
     out
 }
@@ -258,7 +255,7 @@ mod tests {
         let xobjects = resources.get(b"XObject").and_then(Object::dict).unwrap();
         assert!(xobjects.get(b"Used").is_some() && xobjects.get(b"Unused").is_none());
         assert_eq!(
-            resources.get(b"Font").and_then(Object::dict).map(|f| f.entries.len()),
+            resources.get(b"Font").and_then(Object::dict).map(|f| f.entries().len()),
             Some(0)
         );
         assert!(resources.get(b"ProcSet").is_some());
@@ -272,7 +269,7 @@ mod tests {
         let pages = doc.pages();
         let resources = pages[0].get(b"Resources").and_then(Object::dict).unwrap();
         let xobjects = resources.get(b"XObject").and_then(Object::dict).unwrap();
-        assert_eq!(xobjects.entries.len(), 2);
+        assert_eq!(xobjects.entries().len(), 2);
     }
 
     #[test]
@@ -319,7 +316,7 @@ mod tests {
         resources
             .get(b"XObject")
             .and_then(Object::dict)
-            .map_or(0, |x| x.entries.len())
+            .map_or(0, |x| x.entries().len())
     }
 
     #[test]

@@ -517,16 +517,20 @@ Oracle consultations:
 - **Release:** push `dev/crabify`, then run the Release workflow by hand (Actions, "Release", a plain version such
   as 0.0.1): it builds and checks every wheel and the sdist and publishes nothing. Only then tag. The local dry run
   passed on macOS arm64; Linux, Windows and the manylinux wheels are proved only in CI.
-- **Speed, an open item (narrowed 2026-11-27):** five corpus files (web PDFs, not print jobs) took 48 to 202 seconds and
-  timed out in the corpus run's 60 seconds. Profiling showed most of the time re-inflating the same ICC profile at each
-  colour-space use, once per check that walks the pages. A `Document` now keeps the streams it decodes (up to 256 MiB;
-  decision log, 2026-11-27); one walk per file stays undone. Four of the five now finish alone in 5 to 13 seconds. The full
-  corpus run (test-db `results/pdfx/results-20261127T114523Z.tsv`) took 7,900 seconds summed over files, against 9,564,
-  with one timeout and no verdict changed but those four. **Left:** test-db's `loc-gov-1000` file `HH5OITTKV27J…` (86
-  seconds alone) is not a decoding problem. Its first page has a `/ColorSpace` resource dictionary of 38,037 entries and
-  about 51,000 inline images, each naming one of them; `Dict::get` is a linear scan, so every walk does about 10⁹ key
-  comparisons. An indexed lookup for large dictionaries in the syntax tier would fix it, without the single walk. The
-  Python grouping of vector artwork (`_clusters`) is the same story for `extract`.
+- **Speed, settled 2026-11-27:** five corpus files (web PDFs, not print jobs) took 48 to 202 seconds and timed out in the
+  corpus run's 60 seconds. Two causes, two fixes, without the single walk (decision log, 2026-11-27):
+  - Checks re-inflated the same ICC profile at every colour-space use, once per walk. A `Document` now keeps the streams it
+    decodes, up to 256 MiB. Four of the five files then verified alone in 5 to 13 seconds.
+  - The fifth (test-db `loc-gov-1000`, `HH5OITTKV27J…`) has a 38,037-entry `/ColorSpace` dictionary and about 51,000 inline
+    images naming its entries, and `Dict::get` scanned. Dictionaries of 16 or more entries now keep a key index: 86 seconds
+    became 3.
+  - Corpus run (test-db `results/pdfx/results-20261127T120138Z.tsv`): 0 timeouts, no mismatch, and no verdict changed but
+    the five former timeouts. Summed per-file seconds: 9,564 before, 7,900 after the cache, 8,276 after the index. These are
+    wall times under parallel load (load average about 23 during the last run), so the last two differ by noise.
+  - **Still slowest:** the two Altona technical2 files, at about 54 seconds under load and 38 alone, unchanged throughout.
+    Their time is in `x4.spot.colorants-match`, which has LittleCMS build a colour transform again for each comparison.
+    Caching transforms would be the fix. The Python grouping of vector artwork (`_clusters`) is the same story for
+    `extract`.
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.

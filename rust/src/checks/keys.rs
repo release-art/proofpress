@@ -198,7 +198,7 @@ fn halftones<'a>(doc: &'a Document, nodes: &[Node<'a>]) -> Vec<(u32, &'a Dict, O
     for node in nodes.iter().filter(halftone) {
         out.push((node.num, node.dict, None));
         if node.dict.get(b"HalftoneType").and_then(Object::integer) == Some(5) {
-            for (key, value) in &node.dict.entries {
+            for (key, value) in node.dict.entries() {
                 if let Some(component) = doc.resolve(value).and_then(Object::dict) {
                     out.push((node.num, component, Some(key.as_slice())));
                 }

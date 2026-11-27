@@ -43,7 +43,7 @@ fn roles(num: u32, object: &Object, out: &mut BTreeSet<(u32, usize)>) {
                 _ => None,
             };
             out.extend(font.map(|n| (num, n.start)));
-            dict.entries.iter().for_each(|(_, v)| roles(num, v, out));
+            dict.entries().iter().for_each(|(_, v)| roles(num, v, out));
         }
         Value::Array(items) => {
             match (items.first().and_then(Object::name), items.get(1)) {
@@ -93,7 +93,7 @@ fn faults(
         }
         Value::Array(items) => items.iter().for_each(|i| faults(doc, spelled, i, special, out)),
         Value::Dict(dict) => {
-            for (key, value) in &dict.entries {
+            for (key, value) in dict.entries() {
                 push(out, key, None);
                 faults(doc, spelled, value, special, out);
             }

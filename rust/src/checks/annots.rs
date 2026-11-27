@@ -224,7 +224,7 @@ fn appearances<'a>(doc: &'a Document, pages: &'a [Page<'a>]) -> Vec<(usize, &'a 
         } else {
             out.extend(
                 normal
-                    .entries
+                    .entries()
                     .iter()
                     .filter_map(|(_, s)| Some((i, doc.resolve(s)?.dict()?))),
             );

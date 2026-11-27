@@ -87,7 +87,7 @@ fn metadata_streams(doc: &Document) -> BTreeSet<u32> {
     fn walk(object: &Object, out: &mut BTreeSet<u32>) {
         match &object.value {
             Value::Dict(dict) => {
-                for (key, value) in &dict.entries {
+                for (key, value) in dict.entries() {
                     if let (b"Metadata", Value::Reference(num, _)) = (key.as_slice(), &value.value) {
                         out.insert(*num);
                     }
@@ -699,7 +699,7 @@ pub(super) fn unlisted_not_predefined(doc: &Document, _: &Settings) -> Vec<Findi
     let (Some(info), Some(packet)) = (info(doc), document_xmp(doc)) else {
         return Vec::new();
     };
-    info.entries
+    info.entries()
         .iter()
         .map(|(key, _)| String::from_utf8_lossy(key).into_owned())
         .filter(|key| !CROSSWALK.iter().any(|(listed, ..)| listed == key))

@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 
 use super::{intent, jpx, x4p};
 use crate::common::icc;
-use crate::document::{Document, Object, Value};
+use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
     Check, Finding, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
     X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_PRE_SEPARATED_ABSENT, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
@@ -62,7 +62,7 @@ fn leaves<'a>(doc: &'a Document, space: &'a Object, via: Via, depth: usize, out:
                 .and_then(|a| a.get(b"Colorants"))
                 .and_then(|c| doc.resolve(c))
                 .and_then(Object::dict);
-            for (_, separation) in colorants.map_or_default(|c| c.entries.as_slice()) {
+            for (_, separation) in colorants.map_or_default(Dict::entries) {
                 leaves(doc, separation, Via::Alternate, depth + 1, out);
             }
         }

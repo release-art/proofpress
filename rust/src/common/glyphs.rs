@@ -163,7 +163,7 @@ fn type3(doc: &Document, font: &Dict, encoding: Encoding) -> Box<dyn Fn(u8) -> L
                 Value::Reference(num, _) => doc.stream_data(num).and_then(|data| glyph_width(&data)),
                 _ => None,
             };
-            d.entries
+            d.entries()
                 .iter()
                 .map(|(k, v)| (k.clone(), width(v).map(|w| w * scale)))
                 .collect()

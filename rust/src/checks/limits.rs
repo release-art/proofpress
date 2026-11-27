@@ -43,7 +43,7 @@ fn excesses(object: &Object, in_content: bool, out: &mut Vec<String>) {
         }
         Value::Array(items) => items.iter().for_each(|i| excesses(i, in_content, out)),
         Value::Dict(dict) => {
-            for (key, value) in &dict.entries {
+            for (key, value) in dict.entries() {
                 name(key, out);
                 excesses(value, in_content, out);
             }
@@ -76,7 +76,7 @@ pub(super) fn lexical(doc: &Document, _: &Settings) -> Vec<Finding> {
                     op.at
                 }
                 Item::Image(image) => {
-                    for (key, value) in &image.dict.entries {
+                    for (key, value) in image.dict.entries() {
                         let key = Object {
                             value: Value::Name(key.clone()),
                             start: 0,
@@ -155,7 +155,7 @@ fn widest_device_n(object: &Object) -> Option<usize> {
             };
             items.iter().filter_map(widest_device_n).chain(own).max()
         }
-        Value::Dict(dict) => dict.entries.iter().filter_map(|(_, v)| widest_device_n(v)).max(),
+        Value::Dict(dict) => dict.entries().iter().filter_map(|(_, v)| widest_device_n(v)).max(),
         _ => None,
     }
 }

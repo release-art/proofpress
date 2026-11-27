@@ -128,7 +128,7 @@ impl Document {
             cache: Mutex::default(),
         };
         let mut stack: Vec<(u32, u16)> = Vec::new();
-        for (_, value) in doc.xref.trailer.entries.iter().rev() {
+        for (_, value) in doc.xref.trailer.entries().iter().rev() {
             references(value, &mut stack);
         }
         let mut seen = BTreeSet::new();
@@ -561,7 +561,7 @@ fn references(object: &Object, stack: &mut Vec<(u32, u16)>) {
     match &object.value {
         Value::Reference(num, generation) => stack.push((*num, *generation)),
         Value::Array(items) => items.iter().for_each(|o| references(o, stack)),
-        Value::Dict(dict) => dict.entries.iter().for_each(|(_, o)| references(o, stack)),
+        Value::Dict(dict) => dict.entries().iter().for_each(|(_, o)| references(o, stack)),
         _ => {}
     }
 }
