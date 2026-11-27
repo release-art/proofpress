@@ -12,12 +12,18 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 
+use crate::checks::Settings;
+use crate::checks::contents;
+use crate::checks::contrast::describe;
+use crate::checks::painted::page_of;
 use crate::common::family::{self, Family};
 use crate::common::icc;
 use crate::common::rect::rect;
 use crate::common::text;
 use crate::document::{Dict, Document, Object, Value};
+use crate::findings::Level;
 use crate::findings::{OBJECT_DANGLING_REFERENCE, Severity};
+use crate::graphics::{self, Event, Kind};
 use crate::pipeline::Limits;
 
 /// The font program keys of a font descriptor (ISO 32000-2 Table 120), in the order they are looked for.
@@ -37,6 +43,10 @@ pub struct Facts {
     output_intents: Vec<Intent>,
     /// Every image `XObject` reachable from the catalog, written out, when images were asked for.
     images: Vec<ImageFile>,
+    /// What each page paints that `extract` reports, in the order painted: text runs and placed images.
+    paints: Vec<Painted>,
+    /// The spot inks each page selects, by page number from 1, sorted.
+    spot_inks: BTreeMap<u32, BTreeSet<String>>,
     /// What the reader found damaged or missing, each as `check: message`: the parts of the file nothing above
     /// could read.
     damage: Vec<String>,
@@ -98,6 +108,31 @@ struct Profile {
     data: Blob,
     /// The profile's own description (its `desc` tag).
     description: Option<String>,
+}
+
+/// A text run or a placed image, on page `page` (from 1), with its bounding box in page space.
+#[derive(Debug, PartialEq, Serialize)]
+struct Painted {
+    page: u32,
+    kind: &'static str,
+    bbox: Option<[f64; 4]>,
+    mcid: Option<i64>,
+    artifact: Option<String>,
+    /// An image's object number and placement matrix.
+    image: Option<u32>,
+    matrix: Option<[f64; 6]>,
+    /// A text run's characters (`None` when its font does not tell them), and its codes when it does not.
+    text: Option<String>,
+    codes: Option<Vec<u32>>,
+    glyphs: usize,
+    font: Option<String>,
+    size: f64,
+    /// Its fill colour in words, as the inventory writes colours.
+    colour: String,
+    rotation: f64,
+    h_scale: f64,
+    char_spacing: f64,
+    render_mode: i64,
 }
 
 /// An image `XObject` written as a file, with what its dictionary says.
@@ -165,6 +200,7 @@ pub fn recover(bytes: &[u8], images: bool) -> Result<Recovered, String> {
         // Errors lose data, and so does a dangling reference, which reads as null (a warning for verifying); the other
         // warnings are about how the file is written, not what can be read from it.
         .filter(|f| f.severity == Severity::Error || f.check == OBJECT_DANGLING_REFERENCE)
+        .chain(contents::damaged(&doc, &Settings::from(Level::Print)))
         .map(|f| format!("{}: {}", f.check.id, f.message))
         .collect();
     out.facts.pages = pages(&doc);
@@ -174,6 +210,7 @@ pub fn recover(bytes: &[u8], images: bool) -> Result<Recovered, String> {
         out.facts.xmp = Some(out.blob(data, "the XMP packet"));
     }
     intents(&doc, &mut out);
+    walk(&doc, &mut out.facts);
     let mut fonts = BTreeSet::new();
     reachable(&doc, |num, object| {
         if images
@@ -261,6 +298,53 @@ fn image_file(doc: &Document, num: u32, dict: &Dict, out: &mut Recovered) -> Ima
         filters,
         stencil: dict.get(b"ImageMask").and_then(|m| doc.resolve(m)).map(|m| &m.value) == Some(&Value::Bool(true)),
         soft_mask: smask.is_some(),
+    }
+}
+
+/// The text runs and placed images of every page, and each page's spot inks, from the page walk.
+fn walk(doc: &Document, facts: &mut Facts) {
+    for event in graphics::walk(doc) {
+        match event {
+            Event::Spots { names, frames } => facts
+                .spot_inks
+                .entry(page_of(&frames))
+                .or_default()
+                .extend(names.iter().map(|n| String::from_utf8_lossy(n).into_owned())),
+            Event::Paint {
+                kind,
+                bbox,
+                ink,
+                frames,
+                ..
+            } if !ink.cell => {
+                let (kind, render_mode) = match kind {
+                    Kind::Text(mode) => ("text", mode),
+                    Kind::Image if ink.object.is_some() => ("image", 0),
+                    _ => continue,
+                };
+                let text = ink.text.clone();
+                facts.paints.push(Painted {
+                    page: page_of(&frames),
+                    kind,
+                    bbox: bbox.map(|b| [b.x0, b.y0, b.x1, b.y1]),
+                    mcid: ink.mcid,
+                    artifact: ink.artifact.clone(),
+                    image: ink.object,
+                    matrix: ink.matrix,
+                    codes: (kind == "text" && text.is_none()).then(|| ink.codes.clone()),
+                    text,
+                    glyphs: ink.glyphs,
+                    font: ink.font.as_ref().filter(|_| kind == "text").map(|f| f.name.clone()),
+                    size: ink.size,
+                    colour: describe(Some(&ink.fill)),
+                    rotation: ink.rotation,
+                    h_scale: ink.h_scale,
+                    char_spacing: ink.char_spacing,
+                    render_mode,
+                });
+            }
+            _ => {}
+        }
     }
 }
 
@@ -721,6 +805,88 @@ mod tests {
         assert_eq!(
             images[1]["data"],
             json!({"error": "its /BitsPerComponent is not 1, 2, 4, 8 or 16"})
+        );
+    }
+
+    #[test]
+    fn the_page_walk_gives_text_runs_placed_images_and_spot_inks() {
+        let content = "/S cs 1 scn /P << /MCID 2 >> BDC BT /F 10 Tf 1 0 0 1 72 72 Tm (Hi) Tj ET EMC BT /C 5 Tf <0001> Tj ET \
+            q 20 0 0 10 0 0 cm /Im Do Q q 9 0 0 9 0 0 cm BI /W 1 /H 1 /CS /G /BPC 8 ID x EI Q 0 0 5 5 re f \
+            /Pattern cs /T scn 0 0 5 5 re f";
+        let recovered = file(
+            &[
+                (1, b"<< /Type /Catalog /Pages 2 0 R >>".to_vec()),
+                (2, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec()),
+                (
+                    3,
+                    b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R /Resources << \
+                      /Font << /F << /Subtype /Type1 /BaseFont /Helvetica >> /C << /Subtype /Type0 /BaseFont /Cid \
+                      /Encoding /Identity-H /DescendantFonts [<< /Subtype /CIDFontType2 >>] >> >> /XObject << /Im 5 0 R >> \
+                      /ColorSpace << /S [/Separation /Gold /DeviceCMYK 7 0 R] >> /Pattern << /T 6 0 R >> >> >>"
+                        .to_vec(),
+                ),
+                (4, stream("", content.as_bytes())),
+                (
+                    5,
+                    stream(
+                        "/Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8",
+                        &[0],
+                    ),
+                ),
+                (
+                    6,
+                    stream(
+                        "/PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep 1 /YStep 1 /Resources << >>",
+                        b"BT ET 0 0 1 1 re f",
+                    ),
+                ),
+                (7, b"<< /FunctionType 2 /Domain [0 1] /C1 [0 0 1 0] /N 1 >>".to_vec()),
+            ],
+            "",
+        );
+        let got = json(&recovered);
+        assert_eq!(got["spot_inks"], json!({"1": ["Gold"]}));
+        let paints = got["paints"].as_array().unwrap();
+        assert_eq!(paints.len(), 3);
+        let (text, image) = (&paints[0], &paints[2]);
+        assert_eq!((&paints[1]["text"], &paints[1]["codes"]), (&json!(null), &json!([1])));
+        assert_eq!(
+            [
+                &text["kind"],
+                &text["text"],
+                &text["codes"],
+                &text["font"],
+                &text["mcid"],
+                &text["colour"]
+            ],
+            [
+                &json!("text"),
+                &json!("Hi"),
+                &json!(null),
+                &json!("Helvetica"),
+                &json!(2),
+                &json!("spot Gold 100%")
+            ]
+        );
+        assert_eq!(
+            (&text["size"], &text["render_mode"], &text["glyphs"]),
+            (&json!(10.0), &json!(0), &json!(2))
+        );
+        assert_eq!(
+            [
+                &image["kind"],
+                &image["image"],
+                &image["matrix"],
+                &image["bbox"],
+                &image["font"]
+            ],
+            [
+                &json!("image"),
+                &json!(5),
+                &json!([20.0, 0.0, 0.0, 10.0, 0.0, 0.0]),
+                &json!([0.0, 0.0, 20.0, 10.0]),
+                &json!(null)
+            ]
         );
     }
 

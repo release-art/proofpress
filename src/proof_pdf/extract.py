@@ -269,6 +269,10 @@ class _Recovery:
         self._masks: set[int] = set()  # soft masks' object numbers, saved beside the image they belong to
         self.core = core
         self._images = {image["num"]: image for image in core.facts["images"]} if core else {}
+        self._paints: dict[int, list[dict[str, typing.Any]]] = {}
+        for paint in core.facts["paints"] if core else []:
+            self._paints.setdefault(paint["page"], []).append(paint)
+        self._spot_inks: dict[str, list[str]] = core.facts["spot_inks"] if core else {}
         self._font_pages: dict[str, set[int]] = {}
 
     def page(  # noqa: PLR0913 -- the page's facts, its walk, and the options of both
@@ -291,46 +295,49 @@ class _Recovery:
                 **{f"{key}_pt": facts[f"{key}_pt"] for key in ("crop", "bleed", "trim", "art")},
             }
         )
-        walker = Walker()
-        texts: list[Paint] = []
-        for event in walker.walk(page):
-            if event.bbox is None:
+        for paint in self._paints.get(number, []):
+            if paint["bbox"] is None:
                 continue
-            x0, y0, x1, y1 = event.bbox
-            if event.kind == "text" and event.glyphs and event.font is not None and (event.text or "x").strip():
-                self.text.append(self._text_run(number, event))
-                self._font_pages.setdefault(event.font.name, set()).add(number)
-                texts.append(event)
-            elif event.kind == "image" and images and event.xobject is not None:
-                placement = Placement(number, x0, y0, x1 - x0, y1 - y0, list(event.matrix) if event.matrix else None)
-                self._image(number, typing.cast(pikepdf.Stream, event.xobject), placement, event)
-        self.pages[-1]["spot_inks"] = sorted(walker.spots)
+            x0, y0, x1, y1 = paint["bbox"]
+            if paint["kind"] == "text" and paint["glyphs"] and (paint["text"] or "x").strip():
+                self.text.append(self._text_run(number, paint))
+                self._font_pages.setdefault(paint["font"], set()).add(number)
+            elif paint["kind"] == "image" and images:
+                placement = Placement(number, x0, y0, x1 - x0, y1 - y0, paint["matrix"])
+                self._image(number, paint["image"], placement, paint)
+        self.pages[-1]["spot_inks"] = sorted(self._spot_inks.get(str(number), []))
         if vector:
+            # The vector pieces still draw their text from the Python walk, until they move to the core too.
+            walker = Walker()
+            texts = [
+                e
+                for e in walker.walk(page)
+                if e.bbox is not None and e.kind == "text" and e.glyphs and e.font and (e.text or "x").strip()
+            ]
             self._vector(number, page, gap_pt, fraction, texts if self.vector_text else [])
 
-    def _text_run(self, number: int, event: Paint) -> TextRun:
-        assert event.bbox is not None and event.font is not None
-        x0, y0, x1, y1 = event.bbox
-        element = self.tagged.at(number, event.mcid) if self.tagged else None
+    def _text_run(self, number: int, paint: dict[str, typing.Any]) -> TextRun:
+        x0, y0, x1, y1 = paint["bbox"]
+        element = self.tagged.at(number, paint["mcid"]) if self.tagged else None
         return TextRun(
             number,
-            event.text,
-            list(event.codes) if event.text is None else None,
+            paint["text"],
+            paint["codes"],
             x0,
             y0,
             x1 - x0,
             y1 - y0,
-            event.font.name,
-            event.size,
-            contrast.describe(event.fill),
-            round(event.rotation, 2),
-            round(event.h_scale, 4),
-            round(event.char_spacing, 4),
-            event.render_mode == INVISIBLE,
-            event.mcid,
+            paint["font"],
+            paint["size"],
+            paint["colour"],
+            round(paint["rotation"], 2),
+            round(paint["h_scale"], 4),
+            round(paint["char_spacing"], 4),
+            paint["render_mode"] == INVISIBLE,
+            paint["mcid"],
             self.tagged.elements[element.block].role if element and self.tagged else None,
             element.block if element else None,
-            event.artifact,
+            paint["artifact"],
         )
 
     def _annotate(
@@ -360,13 +367,11 @@ class _Recovery:
             asset.placements.append(placement)
         return asset
 
-    def _image(self, number: int, obj: pikepdf.Stream, placement: Placement, event: Paint) -> None:
-        objnum = obj.objgen[0]
-        key = ("image", objnum or id(obj))
-        asset = self._add(key, lambda: self._write_image(number, objnum, objnum or len(self.assets)), placement)
-        self._annotate(asset, number, [event.mcid], event.artifact)
-        if event.mcid is not None and event.bbox is not None:
-            self.marked_boxes.append((number, event.mcid, event.bbox))
+    def _image(self, number: int, num: int, placement: Placement, paint: dict[str, typing.Any]) -> None:
+        asset = self._add(("image", num), lambda: self._write_image(number, num, num), placement)
+        self._annotate(asset, number, [paint["mcid"]], paint["artifact"])
+        if paint["mcid"] is not None:
+            self.marked_boxes.append((number, paint["mcid"], tuple(paint["bbox"])))
 
     def unplaced_images(self) -> None:
         """Images stored in the file that no page paints (left over in a form or resource dictionary)."""

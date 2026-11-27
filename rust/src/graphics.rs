@@ -114,6 +114,8 @@ pub(crate) struct Ink {
     pub(crate) cell: bool,
     /// An image's or shading's resource name, `(inline)` for an inline image; empty for the rest.
     pub(crate) name: Vec<u8>,
+    /// An image `XObject`'s object number.
+    pub(crate) object: Option<u32>,
     /// The CTM an image is placed with, which maps its unit square onto the page.
     pub(crate) matrix: Option<Matrix>,
     /// An image's `/Width` and `/Height` in samples, when both are positive numbers.
@@ -124,6 +126,18 @@ pub(crate) struct Ink {
     pub(crate) notdef: usize,
     /// A text run's character codes, in the order shown.
     pub(crate) codes: Vec<u32>,
+    /// A text run's characters, when its font tells them (`Font::text`), a space for each kern wider than
+    /// `WORD_GAP`.
+    pub(crate) text: Option<String>,
+    /// A text run's direction, in degrees counter-clockwise from the page's x axis.
+    pub(crate) rotation: f64,
+    /// A text run's horizontal scaling (`Tz`) as a factor, and its character spacing (`Tc`) in ems of its font size.
+    pub(crate) h_scale: f64,
+    pub(crate) char_spacing: f64,
+    /// The marked-content id in force in the page's own content, which a tagged file's structure tree refers to.
+    pub(crate) mcid: Option<i64>,
+    /// What page furniture this is, when marked content says it is an artifact (`Header`, `Pagination`...).
+    pub(crate) artifact: Option<String>,
     /// A stroked path's line width on the page: the line width by the CTM's scale (the square root of its
     /// determinant).
     pub(crate) stroke_width: Option<f64>,
@@ -283,6 +297,8 @@ struct Walker<'a> {
     q_depth: usize,
     /// The page's deepest nesting so far: states saved by `q`, and by the forms and patterns around them.
     deepest: (usize, usize),
+    /// Open marked-content sequences, innermost last: each one's MCID (in the page's own content only) and artifact.
+    marked: Vec<(Option<i64>, Option<String>)>,
 }
 
 /// Every page's events, in page order.
@@ -295,6 +311,7 @@ pub(crate) fn walk(doc: &Document) -> Vec<Event> {
         fonts: BTreeMap::new(),
         patterns: BTreeSet::new(),
         q_depth: 0,
+        marked: Vec::new(),
         deepest: (0, 0),
     };
     for (i, page) in doc.pages().iter().enumerate() {
@@ -542,7 +559,13 @@ struct Run {
     glyphs: usize,
     notdef: usize,
     codes: Vec<u32>,
+    text: Option<String>,
+    rotation: f64,
 }
+
+/// A kern wider than this, in thousandths of the font size, reads as a word space: TeX and most layout engines space
+/// words with kerns, not space glyphs.
+const WORD_GAP: f64 = 150.0;
 
 fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
     let name = op.name.as_slice();
@@ -561,9 +584,12 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
     let (font, size, scale) = (&state.font, state.size, state.scale);
     let mut advance = 0.0;
     let (mut glyphs, mut notdef, mut codes) = (0, 0, Vec::new());
+    let mut parts: Vec<Option<String>> = Vec::new();
     for item in items {
         if let Value::String(bytes, _) = &item.value {
-            for code in font.codes(bytes) {
+            let shown = font.codes(bytes);
+            parts.push(font.text(&shown));
+            for code in shown {
                 codes.push(code);
                 glyphs += 1;
                 notdef += usize::from(font.is_notdef(code));
@@ -573,9 +599,17 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
                 }
             }
         } else {
-            advance -= number(Some(item)) / 1000.0 * size * scale;
+            let kern = number(Some(item));
+            advance -= kern / 1000.0 * size * scale;
+            if kern < -WORD_GAP {
+                parts.push(Some(" ".to_owned()));
+            }
         }
     }
+    let text = parts
+        .iter()
+        .any(Option::is_some)
+        .then(|| parts.into_iter().flatten().collect());
     let low = font.descent / 1000.0 * size + state.rise;
     let high = font.ascent / 1000.0 * size + state.rise;
     let trm = state.ctm.map(|ctm| mul(&cursor.text, &ctm));
@@ -584,6 +618,7 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
         &[(0.0, low), (advance, low), (0.0, high), (advance, high)],
     );
     let vertical = trm.map_or(1.0, |m| m[2].hypot(m[3]));
+    let rotation = trm.map_or(0.0, |m| m[1].atan2(m[0]).to_degrees());
     cursor.text = mul(&translation(advance, 0.0), &cursor.text);
     Run {
         bbox,
@@ -591,6 +626,27 @@ fn show(op: &Op, state: &mut State, cursor: &mut Cursor) -> Run {
         glyphs,
         notdef,
         codes,
+        text,
+        rotation,
+    }
+}
+
+/// What a text run painted in `state` shows.
+fn text_ink(state: &State, run: Run) -> Ink {
+    Ink {
+        font: Some(Rc::clone(&state.font)),
+        glyphs: run.glyphs,
+        notdef: run.notdef,
+        codes: run.codes,
+        text: run.text,
+        rotation: run.rotation,
+        h_scale: state.scale,
+        char_spacing: if state.size == 0.0 {
+            0.0
+        } else {
+            state.char_spacing / state.size
+        },
+        ..ink(state, run.size, None)
     }
 }
 
@@ -605,12 +661,19 @@ fn ink(state: &State, size: f64, space: Option<Family>) -> Ink {
         own_space: None,
         cell: state.ctm.is_none(),
         name: Vec::new(),
+        object: None,
         matrix: None,
         pixels: None,
         font: None,
         glyphs: 0,
         notdef: 0,
         codes: Vec::new(),
+        text: None,
+        rotation: 0.0,
+        h_scale: 1.0,
+        char_spacing: 0.0,
+        mcid: None,
+        artifact: None,
         stroke_width: None,
     }
 }
@@ -737,7 +800,43 @@ impl Walker<'_> {
     }
 
     /// Report a paint of `kind` at `bbox`.
+    /// `BMC` and `BDC` open a marked-content sequence (14.6), which may carry an MCID (14.7.4.2, meant only in a
+    /// page's own content) or mark an artifact (14.8.2.2) of the kind its `/Subtype` or `/Type` names; `EMC` closes
+    /// the innermost.
+    fn marked_content(&mut self, op: &Op, resources: Option<&Dict>) {
+        if op.name == b"EMC" {
+            self.marked.pop();
+            return;
+        }
+        let tag = op.operands.first().and_then(Object::name);
+        let properties = op
+            .operands
+            .get(1)
+            .filter(|_| op.name == b"BDC")
+            .and_then(|p| match &p.value {
+                Value::Name(n) => resource(self.doc, resources, b"Properties", n),
+                _ => self.doc.resolve(p),
+            });
+        let properties = properties.and_then(Object::dict);
+        let mcid = properties
+            .filter(|_| self.ancestors.is_empty())
+            .and_then(|p| p.get(b"MCID"))
+            .and_then(|m| self.doc.resolve(m))
+            .and_then(Object::integer);
+        let artifact = (tag == Some(b"Artifact")).then(|| {
+            properties
+                .and_then(|p| p.get(b"Subtype").or_else(|| p.get(b"Type")))
+                .and_then(|k| self.doc.resolve(k))
+                .and_then(Object::name)
+                .map_or_else(|| "Artifact".to_owned(), |k| String::from_utf8_lossy(k).into_owned())
+        });
+        self.marked.push((mcid, artifact));
+    }
+
     fn push(&mut self, kind: Kind, uses: Vec<Use>, bbox: Option<Rect>, state: &State, frames: &[Location], ink: Ink) {
+        let mut ink = ink;
+        ink.mcid = self.marked.iter().rev().find_map(|(m, _)| *m);
+        ink.artifact = self.marked.iter().rev().find_map(|(_, a)| a.clone());
         let visible = if kind == Kind::Shading {
             non_empty(state.clip)
         } else {
@@ -959,6 +1058,7 @@ impl Walker<'_> {
                     cursor.end(&mut state, bbox);
                 }
                 b"n" => cursor.end(&mut state, None),
+                b"BMC" | b"BDC" | b"EMC" => self.marked_content(op, resources),
                 b"W" | b"W*" => cursor.clip = true,
                 b"Tj" | b"TJ" | b"'" | b"\"" => {
                     let run = show(op, &mut state, &mut cursor);
@@ -968,15 +1068,17 @@ impl Walker<'_> {
                         2 | 6 => &[Role::Fill, Role::Stroke],
                         _ => &[],
                     };
-                    let painted = Ink {
-                        font: Some(Rc::clone(&state.font)),
-                        glyphs: run.glyphs,
-                        notdef: run.notdef,
-                        codes: run.codes,
-                        ..ink(&state, run.size, None)
-                    };
-                    let kind = Kind::Text(state.text_mode);
-                    self.paint(resources, kind, roles, &state, frames, page, run.bbox, painted);
+                    let (kind, bbox) = (Kind::Text(state.text_mode), run.bbox);
+                    self.paint(
+                        resources,
+                        kind,
+                        roles,
+                        &state,
+                        frames,
+                        page,
+                        bbox,
+                        text_ink(&state, run),
+                    );
                 }
                 b"sh" => {
                     let shading = last
@@ -1193,6 +1295,7 @@ impl Walker<'_> {
                     fonts: BTreeMap::new(),
                     patterns: self.patterns.iter().copied().chain([num]).collect(),
                     q_depth: 0,
+                    marked: Vec::new(),
                     deepest: (0, 0),
                 };
                 let cell = State {
@@ -1373,6 +1476,7 @@ impl Walker<'_> {
                 }
                 let painted = Ink {
                     name: name.to_vec(),
+                    object: Some(num),
                     own_space: space.cloned(),
                     matrix: state.ctm,
                     pixels: pixels(self.doc, dict),
@@ -1463,6 +1567,70 @@ mod tests {
         objects.extend(more.iter().cloned());
         let refs: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
         events(&refs)
+    }
+
+    #[test]
+    fn marked_content_and_text_runs() {
+        // MCIDs and artifacts of the page's own content, a property list by name, sequences closed by EMC; inside a
+        // form an MCID means nothing.
+        let resources = "<< /Properties << /P << /MCID 7 >> >> /XObject << /F 5 0 R >> /Font << /H << /Subtype /Type1 \
+            /ToUnicode 6 0 R >> >> >>";
+        let data = "/P /P BDC 0 0 1 1 re f EMC /Span << /MCID 3 >> BDC /Artifact << /Subtype /Header >> BDC \
+            0 0 1 1 re f EMC /Artifact BMC /Artifact << /Type /Pagination >> BDC 0 0 1 1 re f EMC EMC EMC EMC \
+            /Artifact << >> BDC 0 0 1 1 re f EMC /Q << /MCID 4 >> BDC /F Do EMC 0 0 1 1 re f /Span /Nowhere BDC \
+            0 0 1 1 re f EMC BT /H 10 Tf 2 Tc 50 Tz [(A) -200 (B) -100 (C)] TJ /H 0 Tf (A) Tj ET";
+        let cmap = "beginbfchar <41> <0061> endbfchar";
+        let more = [
+            (
+                5,
+                stream(
+                    "/Subtype /Form /BBox [0 0 1 1]",
+                    "/S << /MCID 9 >> BDC 0 0 1 1 re f EMC",
+                ),
+            ),
+            (6, stream("", cmap)),
+        ];
+        let marks: Vec<(Option<i64>, Option<String>)> = run(resources, data, &more)
+            .into_iter()
+            .filter_map(|e| match e {
+                Event::Paint { ink, .. } => Some((ink.mcid, ink.artifact.clone())),
+                _ => None,
+            })
+            .collect();
+        let artifact = |kind: &str| Some(kind.to_owned());
+        assert_eq!(
+            marks,
+            [
+                (Some(7), None),
+                (Some(3), artifact("Header")),
+                (Some(3), artifact("Pagination")),
+                (None, artifact("Artifact")),
+                (Some(4), None),
+                (None, None),
+                (None, None),
+                (None, None),
+                (None, None),
+            ]
+        );
+        let texts: Vec<(Option<String>, f64, f64, f64)> = run(resources, data, &more)
+            .into_iter()
+            .filter_map(|e| match e {
+                Event::Paint {
+                    kind: Kind::Text(_),
+                    ink,
+                    ..
+                } => Some((ink.text.clone(), ink.rotation, ink.h_scale, ink.char_spacing)),
+                _ => None,
+            })
+            .collect();
+        // A kern wider than a word gap reads as a space; B and C have no mapping. At size 0 spacing has no ems.
+        assert_eq!(
+            texts,
+            [
+                (Some("a \u{FFFD}\u{FFFD}".to_owned()), 0.0, 0.5, 0.2),
+                (Some("a".to_owned()), 0.0, 0.5, 0.0)
+            ]
+        );
     }
 
     fn use_of(role: Role, name: &str) -> Shape {
@@ -2020,6 +2188,7 @@ mod tests {
             fonts: BTreeMap::new(),
             patterns: BTreeSet::new(),
             q_depth: 0,
+            marked: Vec::new(),
             deepest: (0, 0),
         };
         let five = Object {

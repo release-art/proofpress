@@ -119,6 +119,7 @@ record it as not conforming to that one rule).
 | 9 (part) | the preview commit | `preview.rs` (feature `preview`): pages rendered by `hayro` over the MediaBox, guides from a pixel-space overlay PDF, panics caught per page; `_core.render`; `preview` and extract's review page no longer run Ghostscript; `_internal/proc.py` deleted |
 | 9 (part) | the extract A commit | `extract.rs`, `_core.extract`: pages (inherited `/CropBox` and `/Rotate`), information and XMP, font programs, ICC profiles and output intents, and the reader's damage, which `extract` now lists in `failures`; also the X-5g `/Ref` fix of another session (below) |
 | 9 (part) | the extract B commit | `extract/image.rs` (feature `extract`): images copied (JPEG, JPEG 2000, CCITT in a TIFF) or decoded to PNG or Deflate TIFF, JBIG2 with `hayro-jbig2`, soft masks as files of their own; extract no longer uses `pikepdf.PdfImage` |
+| 9 (part) | the extract C commit | The page walk carries marked content (MCID, artifact), each text run's text (`/ToUnicode`, Adobe Latin CIDs, Latin-1), direction, scale and spacing, and an image's object number; extract reads text runs, image placements and spot inks from it, and lists undecodable content in `failures` |
 
 ## Register coverage
 
@@ -444,6 +445,14 @@ Oracle consultations:
   does not read (named in `failures`); and 6 with Lab images, now failures where pikepdf wrote a Lab TIFF. The first run
   found two bugs, fixed: the CCITT TIFF header was two bytes short (the IFD's entry count), and a JBIG2 image took its
   JBIG2 page's size instead of its own `/Width` and `/Height`.
+
+- Phase 9, `extract` slice C (the page walk), against the Python as at `177e7e2`: fixtures, Ghent, Altona and GWG (493
+  files) 436 identical, 3 reading differences, the rest failing on both sides as before. On 13 more test-db sets (3,408
+  files): 3,028 identical; 108 differ only in the last digit of a text size; the rest are fonts whose names are not
+  UTF-8 (the Python read them as unknown one-byte fonts), damaged objects and undecodable content (now named in
+  `failures`), and one `/BaseFont` written as a string. Two of ours were found and fixed on the way: a `/ToUnicode`
+  range running past U+10FFFF now leaves the whole CMap unread, as before, and Adobe's Latin CIDs apply only to an
+  Identity encoding.
 
 ## Owner requests
 

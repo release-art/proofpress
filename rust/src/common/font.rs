@@ -7,7 +7,7 @@
 //! and one that has no descriptor to the usual ascent and descent, so a run in an unembedded standard font is placed
 //! approximately. A malformed font dictionary gives the same fallback font as a missing one.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::document::{Dict, Document, Object, Value};
 
@@ -15,9 +15,13 @@ use crate::document::{Dict, Document, Object, Value};
 const FALLBACK_WIDTH: f64 = 500.0;
 const DEFAULT_ASCENT: f64 = 800.0;
 const DEFAULT_DESCENT: f64 = -200.0;
+/// Adobe's GB1, CNS1 and Korea1 collections give CIDs 1 to 95 to ASCII 0x20 to 0x7E; Japan1 differs at a few.
+const ADOBE_LATIN: [&[u8]; 3] = [b"GB1", b"CNS1", b"Korea1"];
+const ADOBE_LATIN_CIDS: u32 = 95;
 
 /// A font's metrics.
 #[derive(Clone, Debug, PartialEq)]
+#[expect(clippy::struct_excessive_bools, reason = "independent facts a font dictionary gives")]
 pub(crate) struct Font {
     /// 1 for a simple font, 2 for a composite one.
     pub(crate) code_bytes: usize,
@@ -36,6 +40,12 @@ pub(crate) struct Font {
     pub(crate) embedded: bool,
     /// Whether the font dictionary has a `/ToUnicode` entry.
     pub(crate) to_unicode: bool,
+    /// Its `/ToUnicode` `CMap`'s `bfchar` and `bfrange` mappings, code to text; empty when there is none or it cannot
+    /// be read.
+    unicode: BTreeMap<u32, String>,
+    /// A composite font of one of Adobe's GB1, CNS1 or Korea1 collections with an Identity encoding, whose codes are
+    /// CIDs and CIDs 1 to 95 ASCII.
+    adobe_latin: bool,
     /// The codes a simple font's `/Differences` maps to `.notdef`.
     notdef: BTreeSet<i64>,
     /// For a composite font, whether its encoding is `Identity-H` or `Identity-V`, so that code 0 is CID 0, `.notdef`.
@@ -59,6 +69,8 @@ impl Default for Font {
             subtype: "unknown".to_owned(),
             embedded: false,
             to_unicode: false,
+            unicode: BTreeMap::new(),
+            adobe_latin: false,
             notdef: BTreeSet::new(),
             identity: None,
             known: false,
@@ -79,6 +91,31 @@ impl Font {
 
     /// Whether `code` shows `.notdef`: code 0 in a composite font with an identity encoding, or a code a simple font's
     /// `/Differences` maps there.
+    /// The characters `codes` show: from `/ToUnicode`, else for an Adobe collection its Latin CIDs, else Latin-1 for a
+    /// simple font; `None` when nothing tells. A code neither gives is U+FFFD.
+    pub(crate) fn text(&self, codes: &[u32]) -> Option<String> {
+        if self.unicode.is_empty() && !self.adobe_latin {
+            return (self.code_bytes == 1).then(|| codes.iter().map(|&c| char::from((c & 0xFF) as u8)).collect());
+        }
+        let latin = |code: u32| {
+            (self.adobe_latin && (1..=ADOBE_LATIN_CIDS).contains(&code))
+                .then(|| char::from_u32(code + 31).map(String::from))
+                .flatten()
+        };
+        let shown: Vec<String> = codes
+            .iter()
+            .map(|&code| {
+                self.unicode
+                    .get(&code)
+                    .filter(|s| !s.is_empty())
+                    .cloned()
+                    .or_else(|| latin(code))
+                    .unwrap_or_else(|| "\u{FFFD}".to_owned())
+            })
+            .collect();
+        (!self.unicode.is_empty() || shown.iter().any(|c| c != "\u{FFFD}")).then(|| shown.concat())
+    }
+
     pub(crate) fn is_notdef(&self, code: u32) -> bool {
         match self.identity {
             Some(identity) => identity && code == 0,
@@ -155,6 +192,144 @@ fn embeds(doc: &Document, descriptor: &Dict) -> bool {
 }
 
 /// A font's `/BaseFont` without a subset prefix (six capitals and a plus sign, 9.6.4); `?` without one.
+/// Whether CID font `source` belongs to Adobe's GB1, CNS1 or Korea1 collection.
+fn adobe_latin(doc: &Document, source: &Dict) -> bool {
+    let info = source
+        .get(b"CIDSystemInfo")
+        .and_then(|i| doc.resolve(i))
+        .and_then(Object::dict);
+    let string = |key: &[u8]| match info
+        .and_then(|i| i.get(key))
+        .and_then(|v| doc.resolve(v))
+        .map(|v| &v.value)
+    {
+        Some(Value::String(bytes, _)) => Some(bytes.as_slice()),
+        _ => None,
+    };
+    string(b"Registry") == Some(b"Adobe") && string(b"Ordering").is_some_and(|o| ADOBE_LATIN.contains(&o))
+}
+
+/// The `/ToUnicode` `CMap` of `font`, read as the Python inventory read it: every `bfchar` block, then every `bfrange`
+/// block, later mappings winning; destinations are UTF-16BE, decoded with U+FFFD for what does not decode. A `CMap`
+/// with a malformed entry gives no mappings at all.
+fn unicode(doc: &Document, font: &Dict) -> BTreeMap<u32, String> {
+    let data = match font.get(b"ToUnicode").map(|t| &t.value) {
+        Some(Value::Reference(num, _)) => doc.stream_data(*num),
+        _ => None,
+    };
+    data.and_then(|d| bf_mappings(&d)).unwrap_or_default()
+}
+
+/// The blocks of `data` between `begin` and `end`, each as its hex strings and brackets.
+fn blocks<'a>(data: &'a [u8], begin: &[u8], end: &[u8]) -> Vec<Vec<&'a [u8]>> {
+    let mut out = Vec::new();
+    let mut rest = data;
+    while let Some(start) = find(rest, begin) {
+        let after = rest.get(start + begin.len()..).unwrap_or_default();
+        let Some(stop) = find(after, end) else { break };
+        let block = after.get(..stop).unwrap_or_default();
+        let mut tokens = Vec::new();
+        let mut i = 0;
+        while let Some(&b) = block.get(i) {
+            match b {
+                b'<' => {
+                    let close = block.get(i..).and_then(|t| t.iter().position(|&c| c == b'>'));
+                    let Some(close) = close else { break };
+                    tokens.push(block.get(i..=i + close).unwrap_or_default());
+                    i += close + 1;
+                }
+                b'[' | b']' => {
+                    tokens.push(block.get(i..=i).unwrap_or_default());
+                    i += 1;
+                }
+                _ => i += 1,
+            }
+        }
+        out.push(tokens);
+        rest = after.get(stop + end.len()..).unwrap_or_default();
+    }
+    out
+}
+
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|w| w == needle)
+}
+
+/// A hex string's bytes, white space ignored; `None` for a digit that is not hex. An odd count ends in a 0 digit.
+fn hex(token: &[u8]) -> Option<Vec<u8>> {
+    let digits: Vec<u8> = token
+        .iter()
+        .filter(|b| !matches!(b, b'<' | b'>') && !b.is_ascii_whitespace())
+        .map(|&b| char::from(b).to_digit(16).and_then(|d| u8::try_from(d).ok()))
+        .collect::<Option<_>>()?;
+    // Python's bytes.fromhex refuses an odd count, so the whole CMap is unread.
+    digits
+        .len()
+        .is_multiple_of(2)
+        .then(|| digits.chunks(2).map(|p| p.iter().fold(0, |a, d| a * 16 + d)).collect())
+}
+
+/// A source code's bytes as a number, big-endian.
+fn code_of(bytes: &[u8]) -> u32 {
+    bytes.iter().fold(0u32, |a, &b| a.wrapping_shl(8) | u32::from(b))
+}
+
+/// UTF-16BE `bytes` as text, U+FFFD for an unpaired surrogate or an odd last byte.
+fn utf16(bytes: &[u8]) -> String {
+    let (pairs, odd) = bytes.as_chunks::<2>();
+    let mut text = String::from_utf16_lossy(&pairs.iter().map(|p| u16::from_be_bytes(*p)).collect::<Vec<_>>());
+    if !odd.is_empty() {
+        text.push('\u{FFFD}');
+    }
+    text
+}
+
+fn bf_mappings(data: &[u8]) -> Option<BTreeMap<u32, String>> {
+    let mut map = BTreeMap::new();
+    for tokens in blocks(data, b"beginbfchar", b"endbfchar") {
+        for [source, target] in tokens.as_chunks::<2>().0 {
+            map.insert(code_of(&hex(source)?), utf16(&hex(target)?));
+        }
+    }
+    for tokens in blocks(data, b"beginbfrange", b"endbfrange") {
+        let mut rest = tokens.as_slice();
+        while let [low, high, target, after @ ..] = rest {
+            let (low, high) = (code_of(&hex(low)?), code_of(&hex(high)?));
+            if *target == b"[" {
+                let listed: Vec<&[u8]> = after.iter().copied().take_while(|t| *t != b"]").collect();
+                // An array that is not closed leaves the whole `CMap` unread.
+                if listed.len() == after.len() {
+                    return None;
+                }
+                for (code, dst) in (low..=high).zip(&listed) {
+                    map.insert(code, utf16(&hex(dst)?));
+                }
+                rest = after.get(listed.len() + 1..).unwrap_or_default();
+            } else {
+                let base: Vec<char> = utf16(&hex(target)?).chars().collect();
+                for offset in 0..=high.saturating_sub(low).min(0xFFFF) {
+                    // Past U+10FFFF Python's `chr` fails, and with it the whole `CMap`; a surrogate it keeps, and
+                    // text cannot hold one, so it is U+FFFD.
+                    let text = match base.split_last() {
+                        Some((last, head)) => {
+                            let next = u32::from(*last) + offset;
+                            if next > 0x10_FFFF {
+                                return None;
+                            }
+                            let next = char::from_u32(next).unwrap_or('\u{FFFD}');
+                            head.iter().chain(std::iter::once(&next)).collect()
+                        }
+                        None => String::new(),
+                    };
+                    map.insert(low.wrapping_add(offset), text);
+                }
+                rest = after;
+            }
+        }
+    }
+    Some(map)
+}
+
 fn base_name(doc: &Document, font: &Dict) -> String {
     let Some(name) = font
         .get(b"BaseFont")
@@ -209,6 +384,8 @@ fn read(doc: &Document, font: &Dict) -> Option<Font> {
             subtype,
             embedded: program,
             to_unicode: font.get(b"ToUnicode").is_some(),
+            unicode: unicode(doc, font),
+            adobe_latin: matches!(encoding, Some(b"Identity-H" | b"Identity-V")) && adobe_latin(doc, source),
             notdef: BTreeSet::new(),
             identity: Some(matches!(encoding, Some(b"Identity-H" | b"Identity-V"))),
             known: true,
@@ -247,6 +424,8 @@ fn read(doc: &Document, font: &Dict) -> Option<Font> {
         descent,
         embedded: subtype == "Type3" || program,
         to_unicode: font.get(b"ToUnicode").is_some(),
+        unicode: unicode(doc, font),
+        adobe_latin: false,
         name,
         subtype,
         notdef: notdef_codes(doc, font.get(b"Encoding"))?,
@@ -493,5 +672,121 @@ mod tests {
             "a dangling entry"
         );
         assert!(!Font::default().known);
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+    use crate::document::test_pdf::classic;
+    use crate::pipeline::Limits;
+
+    /// The font object 10 of a file whose object 11 is a stream of `cmap`.
+    fn font(dict: &str, cmap: &str) -> Font {
+        let stream = format!("<< /Length {} >>\nstream\n{cmap}\nendstream", cmap.len());
+        let objects: Vec<(u32, &[u8])> = vec![
+            (1, b"<< /Font 10 0 R >>"),
+            (10, dict.as_bytes()),
+            (11, stream.as_bytes()),
+        ];
+        let doc = Document::open(&classic(&objects, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap();
+        let dict = doc
+            .resolve(&Object {
+                value: Value::Reference(10, 0),
+                start: 0,
+                end: 0,
+            })
+            .unwrap()
+            .dict()
+            .unwrap();
+        load(&doc, dict)
+    }
+
+    const SIMPLE: &str = "<< /Subtype /Type1 /ToUnicode 11 0 R >>";
+
+    fn shown(cmap: &str, codes: &[u32]) -> Option<String> {
+        font(SIMPLE, cmap).text(codes)
+    }
+
+    #[test]
+    fn to_unicode_cmaps() {
+        let cmap = "1 beginbfchar <41> <0042> <42> <00430044> endbfchar \
+            2 beginbfrange <50> <52> <0061> <60> <61> [<0078> <0079>] <70> <70> <> endbfrange";
+        assert_eq!(
+            shown(cmap, &[0x41, 0x42, 0x50, 0x52, 0x60, 0x61, 0x70]).as_deref(),
+            Some("BCDacxy\u{FFFD}")
+        );
+        // A code the CMap does not map is U+FFFD; an odd last byte and a lone surrogate are U+FFFD too.
+        assert_eq!(shown(cmap, &[0x99]).as_deref(), Some("\u{FFFD}"));
+        assert_eq!(
+            shown("beginbfchar <41> <004100> <42> <D800> endbfchar", &[0x41, 0x42]).as_deref(),
+            Some("A\u{FFFD}\u{FFFD}")
+        );
+        // A range into the surrogates gives U+FFFD (past U+10FFFF the whole CMap is unread, below); a later mapping
+        // wins.
+        assert_eq!(
+            shown("beginbfrange <01> <02> <D7FF> endbfrange", &[1, 2]).as_deref(),
+            Some("\u{D7FF}\u{FFFD}")
+        );
+        assert_eq!(
+            shown(
+                "beginbfchar <41> <0041> endbfchar beginbfchar <41> <0042> endbfchar",
+                &[0x41]
+            )
+            .as_deref(),
+            Some("B")
+        );
+        // A malformed CMap maps nothing, and the font reads as Latin-1: a digit that is not hex, an odd count of
+        // digits, an array that is not closed, an unclosed string, a block without its end.
+        for broken in [
+            "beginbfchar <4G> <0041> endbfchar",
+            "beginbfchar <041> <0041> endbfchar",
+            "beginbfrange <41> <42> [<0041> endbfrange",
+            "beginbfchar <41 endbfchar",
+            "beginbfchar <41> <0042>",
+            "beginbfchar <41> <004G> endbfchar",
+            "beginbfrange <4G> <42> <0041> endbfrange",
+            "beginbfrange <41> <4G> <0041> endbfrange",
+            "beginbfrange <41> <42> <004G> endbfrange",
+            "beginbfrange <41> <42> [<004G>] endbfrange",
+            "beginbfrange <41> <42> <DBFFDFFF> endbfrange",
+        ] {
+            assert_eq!(shown(broken, &[0x41]).as_deref(), Some("A"), "{broken}");
+        }
+        // A /ToUnicode that is not a stream maps nothing either.
+        assert_eq!(
+            font("<< /Subtype /Type1 /ToUnicode /Identity-H >>", "")
+                .text(&[0x41])
+                .as_deref(),
+            Some("A")
+        );
+    }
+
+    #[test]
+    fn composite_fonts_tell_text_only_through_a_cmap_or_an_adobe_collection() {
+        let composite = |info: &str| {
+            format!(
+                "<< /Subtype /Type0 /Encoding /Identity-H /DescendantFonts [<< /Subtype /CIDFontType2 {info} >>] >>"
+            )
+        };
+        assert_eq!(font(&composite(""), "").text(&[1]), None);
+        let gb1 = composite("/CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 2 >>");
+        assert_eq!(font(&gb1, "").text(&[34, 95, 500]).as_deref(), Some("A~\u{FFFD}"));
+        assert_eq!(font(&gb1, "").text(&[500]), None);
+        let japan = composite("/CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) >>");
+        assert_eq!(font(&japan, "").text(&[34]), None);
+        let named = composite("/CIDSystemInfo << /Registry /Adobe /Ordering /GB1 >>");
+        // Through another CMap the codes are not CIDs.
+        let cmapped = gb1.replace("Identity-H", "UniGB-UCS2-H");
+        assert_eq!(font(&cmapped, "").text(&[34]), None);
+        assert_eq!(font(&named, "").text(&[34]), None);
+        // With a CMap every code is told, a gap as U+FFFD.
+        let mapped = format!("<< /Subtype /Type0 /ToUnicode 11 0 R {}", &composite("")[2..]);
+        assert_eq!(
+            font(&mapped, "beginbfchar <0001> <0041> endbfchar")
+                .text(&[1, 2])
+                .as_deref(),
+            Some("A\u{FFFD}")
+        );
     }
 }

@@ -107,7 +107,7 @@ fn name(bytes: &[u8]) -> String {
 }
 
 /// Every content stream can be read to its end: its filters decode, and tier 6 meets no damage.
-pub(super) fn damaged(doc: &Document, _: &Settings) -> Vec<Finding> {
+pub(crate) fn damaged(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for read in contents(doc) {
         for &num in &read.undecoded {

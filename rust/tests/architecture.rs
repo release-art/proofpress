@@ -38,7 +38,10 @@ const ALLOWED: &[(&str, &[&str])] = &[
     // The command line, like the Python module, hands whole files to the checks and reports back.
     ("cli", &["findings", "checks"]),
     // What `extract` recovers, read from tier 5 and the helpers.
-    ("extract", &["pipeline", "findings", "document", "common"]),
+    (
+        "extract",
+        &["pipeline", "findings", "document", "common", "graphics", "checks"],
+    ),
     // Previews read files with hayro's own parser, never the tiers: a picture judges nothing.
     ("preview", &[]),
     // The binaries are separate crates: they reach the library as `proof_pdf::`, never by `crate::` paths.
