@@ -11,14 +11,20 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3.15",
     "Topic :: Printing",
     "Topic :: Software Development :: Quality Assurance",
     "Typing :: Typed",
 ]
-requires-python = ">=3.15,<3.16"
+requires-python = ">=3.11"
 dependencies = [
-    "typer>=0.27.3",
+    "typer>=0.27.3,<0.29", # 0.29 vendors click: Parameter.type, which the config reader needs, is gone
 ]
 
 [project.urls]
@@ -31,7 +37,7 @@ Changelog = "https://github.com/release-art/proofpress/blob/main/CHANGELOG.md"
 proof-pdf = "proof_pdf.cli:pdf_app"
 
 [tool.ruff]
-target-version = "py315"
+target-version = "py311"
 lint.select = ["A", "B", "C", "E", "F", "I", "W", "N", "C4", "T20", "PTH"]
 lint.ignore = ["N802"]
 line-length = 120
@@ -55,7 +61,7 @@ forced-separate = ["tests"]
 
 [tool.pyright]
 include = ["src", "tests"]
-pythonVersion = "3.15"
+pythonVersion = "3.11"
 
 [tool.pdm]
 distribution = true

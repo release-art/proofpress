@@ -12,14 +12,22 @@ permissions:
 
 jobs:
   test:
+    # The oldest Python the package supports and the newest; the abi3 extension is the same build for both.
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.15"]
     runs-on: ubuntu-latest
     env:
       PDM_NON_INTERACTIVE: 1
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
+        id: python
         with:
-          python-version: "3.15"
+          python-version: ${{ matrix.python }}
+      # pdm would otherwise take .python-version (3.15).
+      - run: echo "PDM_PYTHON=${{ steps.python.outputs.python-path }}" >> "$GITHUB_ENV"
       # pdm builds the Rust extension with maturin, which runs cargo from the root: make the pinned toolchain the default.
       - run: rustup toolchain install && rustup default "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
         working-directory: rust

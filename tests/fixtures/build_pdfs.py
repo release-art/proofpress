@@ -1491,6 +1491,8 @@ def _x4_content_fixtures() -> dict[str, pikepdf.Pdf]:
         "x4-inline-image-unknown-end": _x4_page(b"q BI /W 1 /H 1 /BPC 8 /CS /G /F /DCT ID x EI Q"),
         # 7.8.2: content that cannot be read on.
         "x4-content-unreadable": _x4_page(b"q (unterminated"),
+        # proof-pdf's own limit: more graphics states saved by q at once than the reader keeps (4096).
+        "x4-content-limit": _x4_page(b"q " * 4097),
         # 6.23: the ri operator, and an ExtGState's /RI, with an intent the PDF Reference does not define.
         "x4-ri-unknown": _x4_page(b"/Vivid ri"),
         "x4-gstate-ri-unknown": gstate,

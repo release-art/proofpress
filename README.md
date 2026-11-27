@@ -17,7 +17,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 
 `verify` runs four layers, each of which can be switched off:
 
-- **PDF/A** with [veraPDF](https://verapdf.org), when asked (`--pdfa`; `--flavour 2b` by default).
+- **PDF/A** with [veraPDF](https://verapdf.org), when asked (`--pdfa`; `--flavour 2b` by default, and it needs `--pdfa`).
 - **PDF/X**: every requirement of ISO 15930-7 (PDF/X-4, X-4p) and ISO 15930-8 (PDF/X-5g, X-5pg, X-5n) that a file can be
   judged on, from the output intent and metadata to fonts, colour, transparency and referenced files (`--pdfx x4` by
   default, another level with `--pdfx x4p|x5g|x5pg|x5n`, `--no-pdfx` to skip). The counts are under [Checks](#checks).
@@ -26,7 +26,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
   For a book interior, `--binding-bleed-mm 0` (with `--binding left|right`, the bound edge of page 1; it alternates page by page) expects no bleed on the binding edge,
   so the sheet is wider by the outer bleed only; the centring check follows the asymmetry.
-- **Colour**: total ink coverage, when asked (`--tac`; `--max-tac`, 300% default; opt-in `--warn-tac N`, below it, warns when the peak is between N and the limit; the peak is measured per pixel on Ghostscript's separations, one plate per ink, so each spot colour counts once at its tint), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default; opt-in `--warn-dpi N` warns below N, `--max-dpi N` warns above N since it only grows the file, `--max-stretch-pct P` warns when an image's two axes differ by more than P percent, larger over smaller less one; none has a default, and `--warn-dpi` must exceed `--min-dpi`; each message gives the worst placement in mm from the page's bottom-left),
+- **Colour**: total ink coverage, when asked (`--tac`; `--max-tac`, 300% default, and opt-in `--warn-tac N` both need `--tac`, or `tac = true` in a config file; `--warn-tac`, below `--max-tac`, warns when the peak is between N and the limit; the peak is measured per pixel on Ghostscript's separations, one plate per ink, so each spot colour counts once at its tint), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default; opt-in `--warn-dpi N` warns below N, `--max-dpi N` warns above N since it only grows the file, `--max-stretch-pct P` warns when an image's two axes differ by more than P percent, larger over smaller less one; none has a default, and `--warn-dpi` must exceed `--min-dpi`; each message gives the worst placement in mm from the page's bottom-left),
   overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged,
   and **white that overprints is an error** (it adds no ink, so it vanishes on press). A page that uses transparency must blend
   in the output intent's colour space (a mismatch is an error, an undeclared space a warning).
@@ -52,7 +52,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 `inspect` reports what is in a PDF without judging it, and `texlog` lints a LaTeX build log. `preview` rasterises each page and draws the trim, bleed and safe guides from the PDF's own boxes, so a geometry finding can be seen.
 
 ```zsh
-pip install proof-pdf          # Python 3.15; verapdf (--pdfa) and gs (--tac) on PATH when asked for. Wheels for macOS arm64, Linux
+pip install proof-pdf          # Python 3.11+; verapdf (--pdfa) and gs (--tac) on PATH when asked for. Wheels for macOS arm64, Linux
                                # x86-64 and arm64, Windows x64; elsewhere pip builds the Rust core, which needs rustup
 
 proof-pdf verify job/ --trim-mm 105x148 --bleed-mm 3 --exclude '*_preview.pdf'
@@ -104,16 +104,16 @@ Generated from `rust/checks.toml`; every check, with its clauses, is in [rust/CH
 
 | Level | Implemented | Not yet | Not checkable (skip) |
 |---|---|---|---|
-| PDF/X-4 | 145 | 0 | 5 |
-| PDF/X-4p | 155 | 0 | 5 |
-| PDF/X-5g | 159 | 0 | 25 |
-| PDF/X-5pg | 169 | 0 | 25 |
-| PDF/X-5n | 159 | 0 | 24 |
-| PDF/X-1a:2001 | 81 | 0 | 3 |
-| PDF/X-3:2002 | 83 | 0 | 3 |
-| PDF/X-1a:2003 | 91 | 0 | 3 |
-| PDF/X-3:2003 | 92 | 0 | 3 |
-| Print checks | 54 | 0 | 4 |
+| PDF/X-4 | 146 | 0 | 5 |
+| PDF/X-4p | 156 | 0 | 5 |
+| PDF/X-5g | 160 | 0 | 25 |
+| PDF/X-5pg | 170 | 0 | 25 |
+| PDF/X-5n | 160 | 0 | 24 |
+| PDF/X-1a:2001 | 82 | 0 | 3 |
+| PDF/X-3:2002 | 84 | 0 | 3 |
+| PDF/X-1a:2003 | 92 | 0 | 3 |
+| PDF/X-3:2003 | 93 | 0 | 3 |
+| Print checks | 55 | 0 | 4 |
 
 The print checks:
 
@@ -172,6 +172,7 @@ The print checks:
 | `stream.eol` | Stream data is followed by an end of line before endstream | warning |
 | `stream.filter` | Every stream names filters ISO 32000 defines | error |
 | `content.damaged` | Every content stream can be read to its end | error |
+| `content.limit` | Every content stream stays within proof-pdf's safety limits | error |
 | `content.operator` | Undefined operators appear only inside BX and EX | error |
 | `content.compatibility` | BX and EX pair up | error |
 | `page.media-box` | Every page has a MediaBox, its own or inherited | error |
@@ -328,7 +329,7 @@ and `:tl2025` tracks the TeX Live year. Each image reports its commit in `PROOFP
 
 ## Development
 
-Python 3.15 and [PDM](https://pdm-project.org).
+Python 3.15 (the package supports 3.11 and later) and [PDM](https://pdm-project.org).
 
 ```zsh
 git config core.hooksPath .githooks   # ruff + pyright before each commit

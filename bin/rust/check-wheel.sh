@@ -1,6 +1,6 @@
 #!/bin/bash
-# bin/rust/check-wheel.sh WHEEL [VERSION]   fail if the wheel's extension links a shared library outside the operating
-# system, or (with VERSION) if the wheel's version is not VERSION. The release job runs it on every wheel it builds.
+# bin/rust/check-wheel.sh WHEEL [VERSION]   fail if the wheel is not one abi3 wheel for every CPython from 3.11, if its
+# extension links a shared library outside the operating system, or (with VERSION) if the wheel's version is not VERSION. The release job runs it on every wheel it builds.
 set -euo pipefail
 wheel="$1"
 work=$(mktemp -d)
@@ -10,6 +10,7 @@ if [[ -n "${2:-}" ]]; then
   got=$(sed -n 's/^Version: //p' "$work"/*.dist-info/METADATA)
   [[ "$got" == "$2" ]] || { echo "wheel version $got, expected $2" >&2; exit 1; }
 fi
+grep -q '^Tag: cp311-abi3-' "$work"/*.dist-info/WHEEL || { echo "$(basename "$wheel") is not a cp311-abi3 wheel" >&2; exit 1; }
 status=0
 for lib in $(find "$work" -name '_core*.so' -o -name '_core*.pyd'); do
   case "$(uname -s)" in

@@ -9,7 +9,8 @@
 //! when given, at the size width × height × components × bits when unfiltered, and otherwise at the first filter's
 //! end-of-data marker. When none of these applies the end is unknown, and the rest of the content is a gap.
 //!
-//! Reading stops at the first damage; what was read before it stands.
+//! Reading stops at the first damage, or where the content passes a limit (more states saved by `q` and not restored, or
+//! more operands waiting for an operator, than [`Limits`] allows); what was read before it stands.
 
 use crate::document::{Dict, Object, Value};
 use crate::filters::{self, Filter};
@@ -77,6 +78,10 @@ pub(crate) enum Problem {
     UnknownOperator(Vec<u8>),
     /// An `EX` with no `BX` open, or a `BX` still open at the end.
     Compatibility,
+    /// A `q` past [`Limits::saved_states`] states saved and not restored; the rest is a gap.
+    SavedStates,
+    /// An operand past [`Limits::operands`] waiting for an operator; the rest is a gap.
+    Operands,
 }
 
 /// The content read, with what went wrong and tier 2's notes, each where it was.
@@ -110,6 +115,7 @@ pub(crate) fn read(streams: &[&[u8]], limits: &Limits, spaces: Spaces<'_>) -> Co
     let mut content = Content::default();
     let mut operands = Vec::new();
     let mut depth = 0_usize;
+    let mut saved = 0_usize;
     let mut parser = Parser::new(&joined, 0, Mode::Content, limits.nesting);
     loop {
         let mut notes = Vec::new();
@@ -118,6 +124,10 @@ pub(crate) fn read(streams: &[&[u8]], limits: &Limits, spaces: Spaces<'_>) -> Co
             .notes
             .extend(notes.into_iter().map(|n| (locate(note_at(&n)).stream, n)));
         let (word, offset) = match read {
+            Ok(Read::Value(object)) if operands.len() >= limits.operands => {
+                content.problems.push((locate(object.start), Problem::Operands));
+                break;
+            }
             Ok(Read::Value(object)) => {
                 operands.push(object);
                 continue;
@@ -150,6 +160,12 @@ pub(crate) fn read(streams: &[&[u8]], limits: &Limits, spaces: Spaces<'_>) -> Co
             continue;
         }
         match word.as_slice() {
+            b"q" if saved >= limits.saved_states => {
+                content.problems.push((at, Problem::SavedStates));
+                break;
+            }
+            b"q" => saved += 1,
+            b"Q" => saved = saved.saturating_sub(1),
             b"BX" => depth += 1,
             b"EX" if depth == 0 => content.problems.push((at, Problem::Compatibility)),
             b"EX" => depth -= 1,
@@ -569,5 +585,23 @@ mod tests {
         let noted = content(&[b"n", b"/A#zz n <<\n/K 1 /K 2>> BDC"]);
         assert_eq!(noted.notes.iter().map(|(s, _)| *s).collect::<Vec<_>>(), [1, 1]);
         assert_eq!(content(&[]), Content::default());
+    }
+
+    #[test]
+    fn limits_stop_the_reading() {
+        let limits = Limits {
+            saved_states: 2,
+            operands: 3,
+            ..Limits::default()
+        };
+        let within = |data: &[u8]| read(&[data], &limits, &|_| None);
+        // A restored state frees its place; the third unrestored one passes the limit, however many follow.
+        let flood = b"q Q q q ".repeat(1_000_000);
+        let c = within(&flood);
+        assert_eq!(names(&c), ["q", "Q", "q", "q"]);
+        assert_eq!(c.problems, [(At { stream: 0, offset: 8 }, Problem::SavedStates)]);
+        let c = within(b"1 2 3 n 1 2 3 4 n");
+        assert_eq!(names(&c), ["n"]);
+        assert_eq!(c.problems, [(At { stream: 0, offset: 14 }, Problem::Operands)]);
     }
 }

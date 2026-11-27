@@ -424,6 +424,7 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X4P_REF_ICC_VERSION, x4p::icc_version),
     (f::X4P_REF_NO_COLORANT_TABLE, x4p::no_colorant_table),
     (f::CONTENT_DAMAGED, contents::damaged),
+    (f::CONTENT_LIMIT, contents::limit),
     (f::CONTENT_OPERATOR, contents::operator),
     (f::CONTENT_COMPATIBILITY, contents::compatibility),
     (f::X4_CONTENT_KNOWN_OPERATORS, contents::known_operators),

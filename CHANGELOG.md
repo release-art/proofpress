@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-27
+
+### Changed
+
+- **Python 3.11 and later**, no longer 3.15 only: one `abi3` wheel per platform. Free-threaded CPython cannot load it.
+- `--flavour` without `--pdfa`, and `--max-tac` or `--warn-tac` without `--tac` (or the same keys in a config file),
+  are a usage error (exit 64): since 0.4.0 made PDF/A and total ink opt-in, a pipeline upgraded from 0.3 would
+  otherwise silently stop running them.
+- A switch on the command line (`--no-pdfa`, `--no-pdfx`, `--no-colour`, ...) wins over its config key either way.
+- `preview --gs`, `preview --timeout` and `extract --gs` (and their config keys) are still accepted but print a warning
+  that they are ignored: previews no longer use Ghostscript.
+- Findings that judge by the built-in copy of the ICC characterization registry give the copy's date, e.g.
+  `is not a name in the ICC registry (copy of 2026-11-25)`, since verifying never fetches the registry.
+
+### Fixed
+
+- Commands that read a config file failed with an `AttributeError` when Typer 0.29 was installed; Typer is now capped
+  below 0.29.
+- A content stream that saves more than 4096 graphics states (`q`) without restoring them, or puts more than 4096
+  operands before an operator, fails the new check `content.limit` and is not read further: a 39 KB file of 20 million
+  `q` took 17.7 GB of memory.
+
 ## [0.4.0] - 2026-11-27
 
 proof-pdf now runs on a core written in Rust: every check, and the PDF reading and writing of every command. pikepdf and
@@ -300,7 +322,8 @@ First release.
 - Weekly Docker image builds, with `:latest`, `:tl2025` and a `:<version>` tag per release. Each image records its
   commit, and `proof-pdf --version` shows it.
 
-[Unreleased]: https://github.com/release-art/proofpress/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/release-art/proofpress/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/release-art/proofpress/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/release-art/proofpress/compare/v0.3.8...v0.4.0
 [0.3.8]: https://github.com/release-art/proofpress/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/release-art/proofpress/compare/v0.3.6...v0.3.7

@@ -2181,6 +2181,14 @@ applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003",
 status = "implemented"
 
 [[check]]
+id = "content.limit"
+title = "Every content stream stays within proof-pdf's safety limits"
+clauses = []
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
 id = "content.operator"
 title = "Undefined operators appear only inside BX and EX"
 clauses = ["iso-32000-2:7.8.2"]

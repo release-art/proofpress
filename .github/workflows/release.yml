@@ -43,7 +43,7 @@ jobs:
         with:
           rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
           target: ${{ matrix.target }}
-          args: --release --out dist --interpreter python3.15
+          args: --release --out dist # one abi3 wheel (cp311-abi3) for every CPython from 3.11
           manylinux: auto
       - if: runner.os == 'Windows'
         run: python -m pip install pefile
@@ -62,6 +62,20 @@ jobs:
           "$bin/proof-pdf" extract tests/fixtures/pdfs/rgb-image.pdf --out out --previews
           test -s out/rgb-image/previews/image/p001-im10.png
           "$bin/proof-pdf" preview tests/fixtures/pdfs/x4-good.pdf --out out/preview
+      # The same wheel on the oldest Python it claims.
+      - uses: actions/setup-python@v6
+        id: oldest
+        with:
+          python-version: "3.11"
+          update-environment: false
+      - name: Install on Python 3.11 and run it
+        shell: bash
+        run: |
+          "${{ steps.oldest.outputs.python-path }}" -m venv clean311
+          bin=clean311/bin; [ -d clean311/Scripts ] && bin=clean311/Scripts
+          "$bin/pip" install dist/*.whl
+          "$bin/proof-pdf" verify tests/fixtures/pdfs/x4-good.pdf
+          "$bin/proof-pdf" preview tests/fixtures/pdfs/x4-good.pdf --out out/preview311
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.target }}

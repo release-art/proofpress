@@ -3,6 +3,7 @@
 import asyncio
 import os
 import pathlib
+import sys
 
 import pytest
 
@@ -127,7 +128,7 @@ class TestVerifyFile:
 
     async def test_a_profile_the_command_refuses_raises(self, make_pdf):
         with pytest.raises(ValueError, match="must be below --max-tac"):
-            await core.verify_file(make_pdf(), Profile(pdfx=False, warn_tac=400.0))
+            await core.verify_file(make_pdf(), Profile(pdfx=False, tac=True, warn_tac=400.0))
 
 
 class TestConcurrency:
@@ -184,6 +185,16 @@ class TestExemption:
 
     def test_no_exemptions_means_none(self):
         assert core.exemption(pathlib.PurePath("a.pdf"), {}) is None
+
+
+@pytest.mark.skipif(sys.version_info < (3, 13), reason="PurePath.full_match is new in 3.13")
+@pytest.mark.parametrize(
+    "glob", ["*.pdf", "**/*.pdf", "res/**", "a/*/c.pdf", "?.pdf", "[ab].pdf", "[!ab].pdf", "/a/b.pdf"]
+)
+@pytest.mark.parametrize("path", ["a.pdf", "c.pdf", "b/a.pdf", "res/x/y.pdf", "a/b/c.pdf", "a/b/x/c.pdf", "/a/b.pdf"])
+def test_full_match_agrees_with_the_standard_library(glob, path):
+    pure = pathlib.PurePosixPath(path)
+    assert core._full_match(pure, glob) is pure.full_match(glob)  # type: ignore[attr-defined]
 
 
 class TestVerifyFilesExemptions:

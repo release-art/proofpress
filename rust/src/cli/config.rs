@@ -134,6 +134,7 @@ fn command(table: &Table, name: &str, at: &str) -> Result<Table, Usage> {
 
 /// Fill the options the command line left unset from `table`, whose relative paths are relative to `base`.
 pub(crate) fn apply(o: &mut Verify, table: &Table, base: &Path, at: &str) -> Result<(), Usage> {
+    let (cli_level, cli_pdfa, cli_colour, cli_glyphs, cli_fonts) = given(o);
     for (key, value) in table {
         let key = key.replace('_', "-");
         let bad = |what: &str| Usage(format!("{at}: {key} must be {what}, got {value}"));
@@ -159,26 +160,29 @@ pub(crate) fn apply(o: &mut Verify, table: &Table, base: &Path, at: &str) -> Res
                 &mut o.exempt,
                 exemptions(value).ok_or_else(|| bad("a table of glob = reason"))?,
             ),
-            "pdfx" => match value {
-                Value::Boolean(on) => o.layers.no_pdfx |= !on,
-                _ => fill(
-                    &mut o.layers.pdfx,
-                    enumerated(
+            "pdfx" => {
+                if let Value::Boolean(on) = value {
+                    switch(&mut o.layers.no_pdfx, !on, cli_level);
+                } else {
+                    let level = enumerated(
                         &text()?,
                         bad("x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003 or x3-2003"),
-                    )?,
-                ),
-            },
-            "no-pdfx" => o.layers.no_pdfx |= flag()?,
+                    )?;
+                    if !cli_level {
+                        o.layers.pdfx = Some(level);
+                    }
+                }
+            }
+            "no-pdfx" => switch(&mut o.layers.no_pdfx, flag()?, cli_level),
             "file-alone" => o.file_alone |= flag()?,
             "target-versions" => fill(&mut o.target_versions, enumerated(&text()?, bad("accept or reject"))?),
-            "pdfa" => o.layers.pdfa |= flag()?,
+            "pdfa" => switch(&mut o.layers.pdfa, flag()?, cli_pdfa),
             "flavour" => fill(&mut o.layers.flavour, text()?),
             "tac" => o.layers.tac |= flag()?,
             "max-tac" => fill(&mut o.layers.max_tac, number()?),
             "warn-tac" => fill(&mut o.layers.warn_tac, number()?),
-            "colour" => o.inks.no_colour |= !flag()?,
-            "no-colour" => o.inks.no_colour |= flag()?,
+            "colour" => switch(&mut o.inks.no_colour, !flag()?, cli_colour),
+            "no-colour" => switch(&mut o.inks.no_colour, flag()?, cli_colour),
             "colour-mode" => fill(&mut o.inks.colour_mode, enumerated(&text()?, bad("cmyk, rgb or gray"))?),
             "strict-cmyk" => o.inks.strict_cmyk |= flag()?,
             "allow-k-only" => o.inks.allow_k_only |= flag()?,
@@ -192,10 +196,10 @@ pub(crate) fn apply(o: &mut Verify, table: &Table, base: &Path, at: &str) -> Res
             "min-delta-l" => fill(&mut o.inks.min_delta_l, number()?),
             "proof-profile" => fill(&mut o.inks.proof_profile, base.join(text()?)),
             "k-only-text" => o.lettering.k_only_text |= flag()?,
-            "missing-glyphs" => o.lettering.no_missing_glyphs |= !flag()?,
-            "no-missing-glyphs" => o.lettering.no_missing_glyphs |= flag()?,
-            "fonts" => o.lettering.no_fonts |= !flag()?,
-            "no-fonts" => o.lettering.no_fonts |= flag()?,
+            "missing-glyphs" => switch(&mut o.lettering.no_missing_glyphs, !flag()?, cli_glyphs),
+            "no-missing-glyphs" => switch(&mut o.lettering.no_missing_glyphs, flag()?, cli_glyphs),
+            "fonts" => switch(&mut o.lettering.no_fonts, !flag()?, cli_fonts),
+            "no-fonts" => switch(&mut o.lettering.no_fonts, flag()?, cli_fonts),
             "min-text-pt" => fill(&mut o.lettering.min_text_pt, number()?),
             "min-stroke-pt" => fill(&mut o.lettering.min_stroke_pt, number()?),
             "safe-mm" => fill(&mut o.lettering.safe_mm, number()?),
@@ -223,7 +227,32 @@ pub(crate) fn apply(o: &mut Verify, table: &Table, base: &Path, at: &str) -> Res
             _ => return Err(Usage(format!("{at}: [verify] has no option {key:?}"))),
         }
     }
-    Ok(())
+    // Checked once the command line's switches are merged in, so `--tac` on it serves a file's `max-tac`.
+    match o.idle(|option| table.keys().any(|k| k.replace('_', "-") == option)) {
+        Some((option, switch, layer)) => Err(Usage(format!(
+            "{at}: {option} needs {switch} = true: {layer} is opt-in since 0.4.0"
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// Which paired switches the command line gave either way (`--pdfa` or `--no-pdfa`, ...): those are not the file's
+/// to change. In order: the PDF/X level, PDF/A, colour, missing glyphs, fonts.
+fn given(o: &Verify) -> (bool, bool, bool, bool, bool) {
+    (
+        o.layers.pdfx.is_some() || o.layers.no_pdfx,
+        o.layers.pdfa || o.legacy.no_pdfa,
+        o.inks.no_colour || o.legacy.colour,
+        o.lettering.no_missing_glyphs || o.legacy_text.missing_glyphs,
+        o.lettering.no_fonts || o.legacy.fonts,
+    )
+}
+
+/// Turn `slot` on from the file unless the command line gave the switch either way.
+fn switch(slot: &mut bool, on: bool, given: bool) {
+    if !given {
+        *slot |= on;
+    }
 }
 
 /// Set `slot` from the file unless the command line set it.
@@ -424,6 +453,42 @@ mod tests {
     }
 
     #[test]
+    fn a_switch_on_the_command_line_wins_either_way() {
+        // A switch the command line gave either way wins over the file, in both directions.
+        let on: Table = "pdfx = 'x5n'\npdfa = true\ncolour = true\nmissing-glyphs = true\nfonts = true\n"
+            .parse()
+            .unwrap();
+        let args = [
+            "--no-pdfx",
+            "--no-pdfa",
+            "--no-colour",
+            "--no-missing-glyphs",
+            "--no-fonts",
+        ];
+        let mut o = options(&args);
+        apply(&mut o, &on, Path::new("/"), "t").unwrap();
+        assert_eq!((o.layers.no_pdfx, o.layers.pdfx, o.layers.pdfa), (true, None, false));
+        assert!(o.inks.no_colour && o.lettering.no_missing_glyphs && o.lettering.no_fonts);
+        let off: Table = "pdfx = false\npdfa = false\ncolour = false\nmissing-glyphs = false\nfonts = false\n\
+            no-pdfx = true\nno-colour = true\nno-missing-glyphs = true\nno-fonts = true\n"
+            .parse()
+            .unwrap();
+        let args = ["--pdfx", "x4", "--pdfa", "--colour", "--missing-glyphs", "--fonts"];
+        let mut o = options(&args);
+        apply(&mut o, &off, Path::new("/"), "t").unwrap();
+        assert_eq!(
+            (o.layers.no_pdfx, o.layers.pdfx, o.layers.pdfa),
+            (false, Some(Pdfx::X4), true)
+        );
+        assert!(!o.inks.no_colour && !o.lettering.no_missing_glyphs && !o.lettering.no_fonts);
+        let mut o = options(&["--pdfx", "x4"]);
+        apply(&mut o, &"pdfx = 'x5n'".parse().unwrap(), Path::new("/"), "t").unwrap();
+        assert_eq!(o.layers.pdfx, Some(Pdfx::X4));
+        let mut o = options(&["--no-pdfx"]);
+        assert!(error(apply(&mut o, &"pdfx = 'x9'".parse().unwrap(), Path::new("/"), "t")).contains("x4, x4p"));
+    }
+
+    #[test]
     fn wrong_values_name_the_key() {
         let wrong = |text: &str| {
             let table: Table = text.parse().unwrap();
@@ -496,6 +561,22 @@ mod tests {
             );
         }
         assert!(wrong("colour-mode = 'cmy'").contains("cmyk, rgb or gray"));
+        // An opt-in layer's option without its switch, under either spelling.
+        let ink = "needs tac = true: total ink is opt-in since 0.4.0";
+        assert_eq!(wrong("max-tac = 280"), format!("f.toml: max-tac {ink}"));
+        assert_eq!(wrong("warn_tac = 250"), format!("f.toml: warn-tac {ink}"));
+        assert_eq!(
+            wrong("flavour = '2u'"),
+            "f.toml: flavour needs pdfa = true: PDF/A is opt-in since 0.4.0"
+        );
+        // A tool path alone is fine: a shared config names it once for runs with and without the layer.
+        let fine = |args: &[&str], text: &str| {
+            let table: Table = text.parse().unwrap();
+            apply(&mut options(args), &table, Path::new("/"), "f.toml")
+        };
+        assert!(fine(&[], "gs = 'gs'\nverapdf = 'verapdf'\ntimeout = 60").is_ok());
+        assert!(fine(&["--tac"], "max-tac = 280").is_ok());
+        assert!(fine(&[], "pdfa = true\nflavour = '2u'\ntac = true\nwarn-tac = 250").is_ok());
         assert!(wrong("binding = 'top'").contains("left or right"));
     }
 }

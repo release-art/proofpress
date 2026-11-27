@@ -198,6 +198,7 @@ class TestPreviewsCli:
         result = runner.invoke(cli.pdf_app, args)
         assert result.exit_code == 0, result.output
         assert (tmp_path / "good" / "previews" / "index.html").is_file()
+        assert "warning: --gs is ignored: previews no longer use Ghostscript" in result.stderr
 
 
 PACKET = b"""<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>

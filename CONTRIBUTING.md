@@ -12,7 +12,8 @@ bin/test.sh                           # pytest with coverage
 - `pdm install` builds the Rust core (`rust/`) into the extension `proof_pdf._internal._core` with maturin, so it needs
   `rustup` too; the toolchain is the one pinned in `rust/rust-toolchain.toml`. Rebuild after changing Rust with
   `pdm install` again.
-- Code is formatted and linted with ruff, type-checked with pyright (0 errors), and runs on Python 3.15.
+- Code is formatted and linted with ruff, type-checked with pyright (0 errors), and runs on Python 3.11 and later (development is on 3.15; ruff and
+  pyright hold the code to 3.11, and CI tests 3.11 and 3.15). The wheel is one `abi3` build per platform.
 - The Rust core lives in `rust/`. Install `rustup` (the toolchain version is
   pinned in `rust/rust-toolchain.toml`) and `cargo-nextest`, `cargo-llvm-cov` and `cargo-deny`, then run `bin/rust/check.sh`
   (`--fix` formats first). The `python` feature's tests link libpython 3.15, found through `PYO3_PYTHON` (pdm's

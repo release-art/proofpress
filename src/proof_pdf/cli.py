@@ -115,6 +115,13 @@ UnusedTimeoutOpt = typing.Annotated[
 ]
 
 
+def _warn_ignored(**given: object) -> None:
+    """One stderr line naming the ignored options that were set, on the command line or in the config file."""
+    if flags := [f"--{flag}" for flag, value in given.items() if value is not None]:
+        verb = "is" if len(flags) == 1 else "are"
+        typer.echo(f"warning: {' and '.join(flags)} {verb} ignored: previews no longer use Ghostscript", err=True)
+
+
 @pdf_app.command(
     "verify",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True, "help_option_names": []},
@@ -215,6 +222,7 @@ def extract_cmd(
     quiet: QuietOpt = False,
 ) -> None:
     """Recover images, fonts, ICC profiles and vector artwork from each PDF, with a document.json saying where."""
+    _warn_ignored(gs=gs_bin)
     unknown = sorted(set(kind or []) - set(extract.KINDS))
     if unknown:
         raise typer.BadParameter(f"unknown kind {', '.join(unknown)}; choose from {', '.join(extract.KINDS)}")
@@ -350,6 +358,7 @@ def preview_cmd(
     quiet: QuietOpt = False,
 ) -> None:
     """Rasterise each PDF to one PNG per page, overlaying the page-box guides."""
+    _warn_ignored(gs=gs_bin, timeout=timeout)
     targets = core.expand_targets(files or [], exclude or [])
     if not targets:
         typer.echo("no PDFs to preview", err=True)
