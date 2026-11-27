@@ -525,7 +525,9 @@ Oracle consultations:
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.
-- **Later, X5-Q9:** ISO 15930-1, -3, -4 and -6 are listed in test-db's `docs/standards-wanted.md`; not to buy now.
+- **X5-Q9, resolved:** the owner bought CGATS/ISO 15930-1, -3, -4 and -6 on 2026-11-27 (test-db `28afab10`), with the PDF
+  References 1.3 and 1.4 they build on (`8b4cdd50`). Evaluating X-5 targets at X-1a and X-3 is now
+  [`pdfx-1a-3-plan.md`](pdfx-1a-3-plan.md) question L-Q10.
 
 - Task 7.4: the three veraPDF files that reference an absent path are Reference XObjects, so they are X-5g material:
   phase 8 (8.3, targets) reads them. The one test-db file with a `/DestOutputProfileRef` has a PDF/A intent, not a
