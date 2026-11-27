@@ -34,8 +34,10 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 9** (the writer and the other commands): the writer, `crop`, `inspect`, `preview` and `extract` are done,
-  and pikepdf and Pillow have left the runtime dependencies. `extract` moved to the core in slices, each parity-checked
+- **Phase 10** (release) is next: the Python tests, the Docker images, the release workflow, `spikes/`, the README's
+  check table, the changelog's behaviour changes, a last corpus run and a release dry run.
+- **Phase 9** (the writer and the other commands) finished 2026-11-27; see its stage report. The writer, `crop`,
+  `inspect`, `preview` and `extract` are done, and pikepdf and Pillow have left the runtime dependencies. `extract` moved to the core in slices, each parity-checked
   against the Python as it stood before the slice
   (`document.json` and every written file; vector PDFs compared without their random `/ID`) and committed alone:
   A, pages, document information and XMP, font programs, ICC profiles and output intents (`extract.rs`,
@@ -138,10 +140,10 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green, 2026-11-26 (100% lines, regions, functions) |
-| Python (ruff, pyright, pytest) | green, 2026-11-26: 1073 passed (the Python checks' own tests went with them) |
-| `bin/docker/test.sh` | green at the end of phase 8, 2026-11-26: 1073 passed |
-| `bin/suites/pdfx.sh` | 2026-11-26: 39 files, 39 accepted, 0 problems |
+| `bin/rust/check.sh` | green, 2026-11-27 (100% lines, regions, functions) |
+| Python (ruff, pyright, pytest) | green, 2026-11-27: 965 passed (the tests of the deleted Python modules went with them) |
+| `bin/docker/test.sh` | green at the end of phase 9, 2026-11-27: 965 passed |
+| `bin/suites/pdfx.sh` | 2026-11-27: 39 files, 39 accepted, 0 problems |
 
 ## Corpus and oracle
 
@@ -697,3 +699,21 @@ Oracle consultations:
 - **Unexpected.** No row is `todo` any more, so the "not written yet" safeguard is tested on a made-up catalogue. The
   library is compiled twice for coverage (unit tests and integration tests); new code needs unit tests for every path.
 - **Departures.** See "Deviations from the plan": generated files stay in proofpress's fixtures; two rows are skips.
+
+### Phase 9 (the writer and the other commands), finished 2026-11-27
+
+- **What changed.** The core writes PDFs (`writer.rs`, a graft map with raw streams) and does every command's PDF
+  work: `crop` on the writer, `inspect` on the print walk, `preview` with `hayro` in place of Ghostscript, and
+  `extract` in six slices (pages and metadata, images, the page walk's text, the structure tree and interactive
+  features, vector artwork, spot colours and thumbnails). The commands stay in Python (Typer); `layout` and `texlog`
+  read no PDF and stay Python (decision log). pikepdf and Pillow are development dependencies only, and the nine
+  Python modules the core replaced are deleted.
+- **Parity.** Each command and slice was compared with the Python as it stood before it, on the fixtures and test-db
+  (numbers under "Deviations from the plan"): crops pixel-identical; every other difference classified as a fix, a
+  reading difference named in `failures`, or a decided format change.
+- **Unexpected.** pikepdf's text decoding has its own rules (UTF-16 read pair by pair, three PDFDocEncoding gaps as
+  U+FFFD), now matched. The Python grouping of vector artwork is quadratic when many paths share an x range (8
+  minutes on one page of 64,485 paths), unchanged from before. One hybrid-reference file reads differently from qpdf
+  (owner actions). A bare `pdm lock` upgrades every package, and Typer 0.29 breaks a CLI test; the lock was redone with
+  `--update-reuse`.
+- **Departures.** Slices D and E went into one commit, with slice F's core side (see "Deviations from the plan").
