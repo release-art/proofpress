@@ -1,7 +1,7 @@
 # Porting proof-pdf to Rust: spike results
 
 Read 2026-11-06, on macOS arm64 with rustc 1.99.1, Python 3.15.0, pikepdf 10.17.0. The request said `pdf-verify`; nothing has
-that name, so this is about `proof-pdf`. Spike code is in `spikes/crabify/`.
+that name, so this is about `proof-pdf`. Spike code was in `spikes/crabify/`, removed in phase 10 of the PDF/X plan; it is in git history up to `e59b894`.
 
 **Decided 2026-11-06: a strict parser of our own.** The plan is `docs/briefs/rust-port.md`, which supersedes the estimates and the
 stage table here. Sections that compare or recommend `hayro-syntax` and `lopdf` record how that decision was reached.

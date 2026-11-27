@@ -109,7 +109,7 @@ Worth keeping, but not scheduled. Move one into the brief's backlog when it is w
 - Draw a sample of the 29,711 web PDFs listed in Kura's `bench/MANIFEST.csv`: 1,927 from Common Crawl and 27,784 from the DARPA
   SafeDocs crawl, each with source URL and SHA-256. That is the large set of real-world files the parser has not met. They are web
   documents, not print jobs.
-- Run Kura as a third opinion in `spikes/crabify/oracle.py`. Where veraPDF, qpdf and Kura agree a file is damaged, a refusal is fair.
+- Run Kura as a third opinion in the spikes' `oracle.py` (git history up to `e59b894`). Where veraPDF, qpdf and Kura agree a file is damaged, a refusal is fair.
 - Use the cases in test-db's `samples/pdf-differences/` as tests when porting the checks: `DefaultColorSpaces` and `IndexedColor` for colour,
   `NegativeFontSize` and `TextClipModeChanges` for text, `Inline-Image-Abbreviations` for the parser.
 

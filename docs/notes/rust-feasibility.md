@@ -173,6 +173,8 @@ Decide at these points, each with what would change the plan:
 
 ## What exists to start from
 
+The spike code below was removed in phase 10 of the PDF/X plan; it is in git history up to `e59b894`.
+
 - `spikes/crabify/parity/src/strict.rs`: the strict parser, 808 lines, with the walk in `strict_b.rs`.
 - `spikes/crabify/proofcore/`: the X-4 port as a PyO3 module and a CLI.
 - `spikes/crabify/codecs/`: ICC, TIFF ink, image decoding and crop experiments.

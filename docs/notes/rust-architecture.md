@@ -2,7 +2,7 @@
 
 Agreed in discussion with the owner, 2026-11-09 to 2026-11-25. This is the shape of the code; the brief
 ([`../briefs/rust-port.md`](../briefs/rust-port.md)) holds the plan, the stages and the module layout, and was brought in line with
-this note on 2026-11-25. The spikes in `spikes/crabify/` are evidence of what is possible, not a design to inherit.
+this note on 2026-11-25. The spikes (`spikes/crabify/`, in git history up to `e59b894`) are evidence of what is possible, not a design to inherit.
 
 Clause numbers are ISO 32000-2:2020 with Errata Collection 3, held in `proof-pdf-test-db` (`standards/iso/`).
 
