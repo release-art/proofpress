@@ -34,8 +34,8 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 10** (release) is next: the Python tests, the Docker images, the release workflow, `spikes/`, the README's
-  check table, the changelog's behaviour changes, a last corpus run and a release dry run.
+- **The plan is carried out.** Phase 10 (release) finished 2026-11-27; see its stage report. What is left is the
+  owner's: push, run the release workflow by hand as a dry run, then tag (owner actions).
 - **Phase 9** (the writer and the other commands) finished 2026-11-27; see its stage report. The writer, `crop`,
   `inspect`, `preview` and `extract` are done, and pikepdf and Pillow have left the runtime dependencies. `extract` moved to the core in slices, each parity-checked
   against the Python as it stood before the slice
@@ -125,6 +125,12 @@ record it as not conforming to that one rule).
 | 9 (part) | the extract C commit | The page walk carries marked content (MCID, artifact), each text run's text (`/ToUnicode`, Adobe Latin CIDs, Latin-1), direction, scale and spacing, and an image's object number; extract reads text runs, image placements and spot inks from it, and lists undecodable content in `failures` |
 | 9 (part) | the extract D and E commit | `extract/tagged.rs` (the structure tree with the role map and layout attributes), `extract/interactive.rs` (fields, links, annotations, outline, page labels, layers, attachments) and `extract/vector.rs` (every painted path with its state, and pieces written as one-page PDFs on the writer, `_core.vector_pieces`); extract no longer reads these with pikepdf, and the 41 files whose pieces pikepdf's `copy_foreign` refused now extract |
 | 9 (part) | the extract F commit | Spot colour spaces read by the core; image thumbnails rendered from the image drawn alone (`_core.vector_pieces` with `image`); pikepdf and Pillow leave the runtime dependencies; the Python modules the core replaced are deleted with their module-only tests |
+| 9 | `e59b894` | Phase 9 report; the lock records pikepdf and Pillow as development dependencies without upgrading anything |
+| 10 (spikes) | `f7877b9` | `spikes/` removed; the notes that cite it point at git history up to `e59b894` |
+| 10 (README) | `bd53332` | The README's check counts and print-check list generated from `checks.toml` by `build.rs`, refreshed by `check.sh --fix`, a test failing while stale |
+| 10 (changelog) | `1cbf85e` | The behaviour changes summarised at the top of `[Unreleased]`, PDF/A and total ink opt-in first |
+| 10 (tests) | `33876cc` | The Python tests settled (decision log): the Python surface plus the checks end to end through the core; `core_findings` |
+| 10 (release) | `8c010fa`, `ac8a62f` | The release workflow runs by hand as a dry run (no publishing); its clean install runs `verify`, `extract --previews` and `preview` on the bare wheel |
 
 ## Register coverage
 
@@ -144,6 +150,8 @@ From `cargo test --test completeness -- --nocapture` (implemented / todo / skip)
 | Python (ruff, pyright, pytest) | green, 2026-11-27: 965 passed (the tests of the deleted Python modules went with them) |
 | `bin/docker/test.sh` | green at the end of phase 9, 2026-11-27: 965 passed |
 | `bin/suites/pdfx.sh` | 2026-11-27: 39 files, 39 accepted, 0 problems |
+| `bin/suites/pdfx.sh --all` | 2026-11-27, `ac8a62f`: 44,608 files, 0 crash, 5 timeout, 0 mismatch (test-db `209bd99a`) |
+| Release dry run (local) | 2026-11-27, `ac8a62f` at 0.0.1: sdist, wheel from it, wheel check, clean install runs `verify`, `extract --previews`, `preview` |
 
 ## Corpus and oracle
 
@@ -506,6 +514,14 @@ Oracle consultations:
 - **Hybrid-reference files:** in `cc-main-2021-31-sample/2253587.pdf` (three revisions, the last with an
   `/XRefStm`), the core and qpdf read different versions of a link's object; worth checking which revision the spec's
   hybrid lookup order (ISO 32000-2 7.5.8.4) gives before trusting either.
+- **Release:** push `dev/crabify`, then run the Release workflow by hand (Actions, "Release", a plain version such
+  as 0.0.1): it builds and checks every wheel and the sdist and publishes nothing. Only then tag. The local dry run
+  passed on macOS arm64; Linux, Windows and the manylinux wheels are proved only in CI.
+- **Speed, an open item:** five corpus files (web PDFs, not print jobs) take 48 to 202 seconds and time out in the
+  corpus run's 60 seconds. Each check that reads the pages walks them again (about 20 walks per `verify`), and the
+  reader decodes a stream afresh each time it is asked. Walking once per file, or caching decoded content streams
+  within a file, would fix it; either is a design change to the tiers, so it waits for a decision. The Python
+  grouping of vector artwork (`_clusters`) is the same story for `extract`.
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.
@@ -717,3 +733,20 @@ Oracle consultations:
   (owner actions). A bare `pdm lock` upgrades every package, and Typer 0.29 breaks a CLI test; the lock was redone with
   `--update-reuse`.
 - **Departures.** Slices D and E went into one commit, with slice F's core side (see "Deviations from the plan").
+
+### Phase 10 (release), finished 2026-11-27
+
+- **What changed.** `spikes/` is gone. The README's check counts and print-check list are generated from
+  `checks.toml`. The changelog opens with the behaviour changes, PDF/A and total ink opt-in first. The Python tests are
+  settled as the Python surface plus the checks end to end (decision log). The Docker images build without pikepdf or
+  Pillow and pass the smoke test. The release workflow runs by hand as a dry run, and its clean install now runs real
+  commands on the bare wheel.
+- **Done when.** `checks.toml` has no `todo` (PDF/X-4 145 implemented and 5 skip, X-4p 155 and 5, X-5g 159 and 25,
+  X-5pg 169 and 25, X-5n 159 and 24, print 54 and 4). The release dry run passes locally; the CI one needs a push
+  (owner actions).
+- **Corpus.** 44,608 test-db files at PDF/X-4: no crash, no mismatch with the expectations, 1,676 refused, 339 read
+  with gaps, 5 timeouts (owner actions, "Speed"). The results file is in test-db (`results/pdfx/`).
+- **Unexpected.** The dry run found that Cargo refuses a Python-style version (`0.0.0.dev1`); the workflow now asks
+  for plain semver. The corpus run found the repeated walks above.
+- **Departures.** "Rebuild the Docker images" needed no change to the Dockerfile: the images take their Python
+  environment from the lock, which no longer installs pikepdf or Pillow.
