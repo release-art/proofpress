@@ -1273,3 +1273,78 @@ expect = { "x13.info.agent-names" = "Info has no /Producer (15930-4 6.7, a recom
 [x13-xmp-mod-date-differs]
 levels = ["x3-2003"]
 expect = { "x13.xmp.mod-date-agrees" = "XMP's modification date is a day before Info /ModDate (15930-6 6.7, L-Q5)" }
+
+# ---- Older levels: output intent and print-element colour (task 2.1).
+[x13-icc-name-no-registry]
+levels = ["x1a-2001"]
+expect = { "x13.output-intent.icc-name-needs-registry" = "identifier FOGRA39, an ICC registry name, with no /RegistryName (15930-1 6.3.2)" }
+
+[x13-no-profile-unregistered-2003]
+levels = ["x3-2003"]
+expect = { "x13.output-intent.dest-profile-by-registry" = "no /RegistryName and no /DestOutputProfile (15930-6 6.2.2)" }
+
+[x13-no-profile-unregistered-2002]
+levels = ["x3-2002"]
+expect = { "x13.output-intent.dest-profile-by-icc-name" = "an identifier outside the ICC registry and no /DestOutputProfile (15930-3 6.2.2)" }
+
+[x3-no-profile-icc-colour]
+levels = ["x3-2002"]
+expect = { "x3.output-intent.dest-profile-for-colour" = "a registered condition without a profile, and a print element in ICCBased colour (15930-3 6.2.2)" }
+
+# A registered CMYK condition named without a profile, with CMYK print elements only: allowed.
+[x3-2002-registered-no-profile]
+levels = ["x3-2002"]
+expect = {}
+
+[x1a-profile-no-atob1]
+levels = ["x1a-2001"]
+expect = { "x1a.output-intent.profile-atob1" = "the output profile has no AToB1Tag (15930-1 6.3.2)" }
+
+[x1a-intent-rgb]
+levels = ["x1a-2003"]
+expect = { "x1a.output-intent.cmyk" = "the output profile's data colour space is RGB (15930-4 6.2.1, Q16)" }
+
+[x1a-no-output-condition]
+levels = ["x1a-2001"]
+expect = { "x1a.output-intent.output-condition-unregistered" = "an unregistered identifier and no /OutputCondition (15930-1 6.3.2, a recommendation)" }
+
+[x3-intent-no-info]
+levels = ["x3-2002"]
+expect = { "x3.output-intent.info" = "the PDF/X intent has no /Info (15930-3 6.2.2, a recommendation)" }
+
+[x13-profile-v4]
+levels = ["x3-2003"]
+expect = { "x13.output-intent.profile-version" = "the output profile is ICC version 4 (Q11)" }
+
+[x3-icc-v4]
+levels = ["x3-2003"]
+expect = { "x3.icc.profile-version" = "a print element's ICCBased profile is version 4 (Q11)" }
+
+[x3-2003-registry-https]
+levels = ["x3-2003"]
+expect = { "x3.output-intent.registry-name-color-org-2003" = "FOGRA39 under /RegistryName https://www.color.org (15930-6 6.2.2)" }
+
+# The ICC registry URL with a final slash, as 15930-6 spells it: right at X-3:2003 (Q15), a variant at X-1a:2003.
+[x3-2003-registry-slash]
+levels = ["x3-2003"]
+expect = {}
+
+[x1a-2003-registry-slash]
+levels = ["x1a-2003"]
+expect = { "x4.output-intent.registry-name-color-org" = "FOGRA39 under http://www.color.org/, not exactly the URL 15930-4 6.2.2 gives (Q15)" }
+
+[x1a-device-rgb]
+levels = ["x1a-2001"]
+expect = { "x1a.colour.print-spaces" = "a DeviceRGB fill (15930-1 6.3.1)" }
+
+[x1a-default-cmyk]
+levels = ["x1a-2003"]
+expect = { "x1a.colour.print-spaces" = "a DefaultCMYK ICCBased space remaps a DeviceCMYK fill (15930-4 6.2.1, Q12)" }
+
+[x1a-spot-rgb-alternate]
+levels = ["x1a-2003"]
+expect = { "x1a.spot.alternate-cmyk-or-gray" = "a Separation whose alternate is DeviceRGB (15930-4 6.2.3)" }
+
+[x1a-unused-default]
+levels = ["x1a-2001"]
+expect = { "x1a.colour.no-default-space" = "the page holds a DefaultRGB space no print element uses (15930-1 6.3.1, Q12, a warning)" }

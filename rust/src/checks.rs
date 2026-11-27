@@ -232,6 +232,38 @@ const JUDGES: &[(&Check, Judge)] = &[
 ];
 
 const RUNS: &[(&Check, Run)] = &[
+    (
+        f::X13_OUTPUT_INTENT_ICC_NAME_NEEDS_REGISTRY,
+        intent::icc_name_needs_registry,
+    ),
+    (
+        f::X13_OUTPUT_INTENT_DEST_PROFILE_BY_REGISTRY,
+        intent::dest_profile_by_registry,
+    ),
+    (
+        f::X13_OUTPUT_INTENT_DEST_PROFILE_BY_ICC_NAME,
+        intent::dest_profile_by_icc_name,
+    ),
+    (
+        f::X3_OUTPUT_INTENT_DEST_PROFILE_FOR_COLOUR,
+        colour::x3_dest_profile_for_colour,
+    ),
+    (f::X1A_OUTPUT_INTENT_PROFILE_ATOB1, intent::profile_atob1),
+    (f::X1A_OUTPUT_INTENT_CMYK, intent::cmyk),
+    (
+        f::X1A_OUTPUT_INTENT_OUTPUT_CONDITION_UNREGISTERED,
+        intent::output_condition_unregistered,
+    ),
+    (f::X3_OUTPUT_INTENT_INFO, intent::info),
+    (f::X13_OUTPUT_INTENT_PROFILE_VERSION, intent::older_profile_version),
+    (f::X3_ICC_PROFILE_VERSION, colour::x3_profile_version),
+    (
+        f::X3_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG_2003,
+        intent::registry_name_color_org_2003,
+    ),
+    (f::X1A_COLOUR_PRINT_SPACES, colour::x1a_print_spaces),
+    (f::X1A_COLOUR_NO_DEFAULT_SPACE, colour::x1a_unused_default),
+    (f::X1A_SPOT_ALTERNATE_CMYK_OR_GRAY, colour::x1a_alternates),
     (f::X13_TRAPPED_PRESENT, info::trapped_present),
     (f::X13_TRAPPED_TRUE_OR_FALSE, info::trapped_true_or_false),
     (f::X13_TRAPPED_TRAPNET_IMPLIES_TRUE, annots::x13_trapnet_implies_true),

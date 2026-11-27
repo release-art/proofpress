@@ -5,14 +5,19 @@
 //! nothing and `x4.output-intent.present` or `.unique` says why.
 
 use super::Settings;
+use super::info::per_level;
 use crate::common::{icc, text};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Finding, X4_OUTPUT_INTENT_CHANNELS, X4_OUTPUT_INTENT_DEST_PROFILE_PRESENT, X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY,
+    Finding, Level, X1A_OUTPUT_INTENT_CMYK, X1A_OUTPUT_INTENT_OUTPUT_CONDITION_UNREGISTERED,
+    X1A_OUTPUT_INTENT_PROFILE_ATOB1, X3_OUTPUT_INTENT_INFO, X3_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG_2003,
+    X4_OUTPUT_INTENT_CHANNELS, X4_OUTPUT_INTENT_DEST_PROFILE_PRESENT, X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY,
     X4_OUTPUT_INTENT_IDENTIFIER_PRESENT, X4_OUTPUT_INTENT_IDENTIFIER_REGISTERED,
     X4_OUTPUT_INTENT_IDENTIFIER_TEXT_STRING, X4_OUTPUT_INTENT_NO_DEST_PROFILE_REF, X4_OUTPUT_INTENT_OUTPUT_CONDITION,
     X4_OUTPUT_INTENT_PRESENT, X4_OUTPUT_INTENT_PROFILE_CLASS_PRTR, X4_OUTPUT_INTENT_PROFILE_VERSION,
     X4_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG, X4_OUTPUT_INTENT_REGISTRY_NAME_URL, X4_OUTPUT_INTENT_UNIQUE,
+    X13_OUTPUT_INTENT_DEST_PROFILE_BY_ICC_NAME, X13_OUTPUT_INTENT_DEST_PROFILE_BY_REGISTRY,
+    X13_OUTPUT_INTENT_ICC_NAME_NEEDS_REGISTRY, X13_OUTPUT_INTENT_PROFILE_VERSION,
 };
 
 /// The ICC characterization registry's `RegistryName` (6.4.2.1).
@@ -96,6 +101,18 @@ const ICC_REGISTRY: [&str; 73] = [
     "DCI P3",
     "Display P3",
 ];
+
+/// Where in [`ICC_REGISTRY`] the three-component (RGB) encodings start; the CMYK characterizations come first.
+const RGB_FROM: usize = 56;
+
+/// The data colour space of an ICC registry reference name: CMYK or RGB; `None` for a name not on the list.
+fn registry_space(identifier: &str) -> Option<[u8; 4]> {
+    let at = ICC_REGISTRY.iter().position(|n| *n == identifier)?;
+    Some(if at < RGB_FROM { *b"CMYK" } else { *b"RGB " })
+}
+
+/// The clauses of the older parts on the output intent (15930-1 6.3.2, -3 6.2.2, -4 and -6 6.2.2).
+pub(super) const OLDER_INTENT: [&str; 4] = ["6.3.2", "6.2.2", "6.2.2", "6.2.2"];
 
 /// Every output intent dictionary in the catalog's `/OutputIntents` whose `/S` is `GTS_PDFX`.
 fn pdfx_intents(doc: &Document) -> Vec<&Dict> {
@@ -379,6 +396,171 @@ pub(super) fn identifier_in_registry(doc: &Document, _: &Settings) -> Vec<Findin
     when(unlisted, X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY, &message, "6.4.2.1")
 }
 
+/// The data colour space of the printing condition at an older level: the embedded profile's, else that of the ICC
+/// registry entry the identifier names (the condition may be named without a profile there).
+pub(super) fn condition_space(doc: &Document) -> Option<[u8; 4]> {
+    profile(doc)
+        .map(|h| h.space)
+        .or_else(|| registry_space(&text_entry(doc, b"OutputConditionIdentifier")?))
+}
+
+/// A finding from `check` with `message`, citing `numbers`' clause for the level, when `failed`.
+fn when_older(
+    failed: bool,
+    check: &'static crate::findings::Check,
+    message: &str,
+    settings: &Settings,
+    numbers: [&'static str; 4],
+) -> Vec<Finding> {
+    if failed {
+        vec![per_level(Finding::new(check, message), settings, numbers)]
+    } else {
+        Vec::new()
+    }
+}
+
+/// Whether the PDF/X intent names the ICC registry: `http://www.color.org` exactly, or at PDF/X-3:2003, whose text
+/// spells it with a final slash, either spelling (Q15).
+fn names_icc_registry(doc: &Document, settings: &Settings) -> bool {
+    text_entry(doc, b"RegistryName").is_some_and(|name| {
+        name.as_bytes() == COLOR_ORG || (settings.level == Level::X32003 && name == "http://www.color.org/")
+    })
+}
+
+/// 15930-1 6.3.2, -3 6.2.2: an identifier that is an ICC registry reference name comes with the ICC `RegistryName`.
+pub(super) fn icc_name_needs_registry(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let Some(id) = text_entry(doc, b"OutputConditionIdentifier") else {
+        return Vec::new();
+    };
+    let failed = ICC_REGISTRY.contains(&id.as_str()) && !names_icc_registry(doc, settings);
+    let message = format!("{id:?} is an ICC registry name, but /RegistryName is not \"http://www.color.org\"");
+    when_older(
+        failed,
+        X13_OUTPUT_INTENT_ICC_NAME_NEEDS_REGISTRY,
+        &message,
+        settings,
+        OLDER_INTENT,
+    )
+}
+
+/// Whether the PDF/X intent embeds a `/DestOutputProfile`.
+pub(super) fn has_profile(doc: &Document) -> bool {
+    the_intent(doc).is_some_and(|i| i.get(b"DestOutputProfile").is_some())
+}
+
+/// 15930-4 and -6 6.2.2: without the ICC `RegistryName` the profile is embedded.
+pub(super) fn dest_profile_by_registry(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let failed = the_intent(doc).is_some() && !names_icc_registry(doc, settings) && !has_profile(doc);
+    let message = "the PDF/X intent names no ICC registry condition and embeds no /DestOutputProfile";
+    when_older(
+        failed,
+        X13_OUTPUT_INTENT_DEST_PROFILE_BY_REGISTRY,
+        message,
+        settings,
+        OLDER_INTENT,
+    )
+}
+
+/// 15930-1 6.3.2, -3 6.2.2: an identifier that is not an ICC registry name comes with an embedded profile.
+pub(super) fn dest_profile_by_icc_name(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let unregistered =
+        text_entry(doc, b"OutputConditionIdentifier").is_none_or(|id| !ICC_REGISTRY.contains(&id.as_str()));
+    let failed = the_intent(doc).is_some() && unregistered && !has_profile(doc);
+    let message = "the identifier is no ICC registry name and the PDF/X intent embeds no /DestOutputProfile";
+    when_older(
+        failed,
+        X13_OUTPUT_INTENT_DEST_PROFILE_BY_ICC_NAME,
+        message,
+        settings,
+        OLDER_INTENT,
+    )
+}
+
+/// 15930-1 6.3.2: the output profile has an `AToB1Tag` (device to PCS, colorimetric).
+pub(super) fn profile_atob1(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let missing =
+        profile_stream(doc).is_some_and(|(_, data)| icc::header(&data).is_some() && !icc::has_tag(&data, *b"A2B1"));
+    when(
+        missing,
+        X1A_OUTPUT_INTENT_PROFILE_ATOB1,
+        "the output intent's profile has no AToB1Tag",
+        "6.3.2",
+    )
+}
+
+/// PDF/X-1a (15930-1 6.3.1, -4 6.2.1; Q16): the printing condition is CMYK.
+pub(super) fn cmyk(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let Some(header) = profile(doc) else { return Vec::new() };
+    let message = format!(
+        "the output intent's profile is for {}, not CMYK",
+        signature(header.space)
+    );
+    when_older(
+        header.space != *b"CMYK",
+        X1A_OUTPUT_INTENT_CMYK,
+        &message,
+        settings,
+        ["6.3.1", "", "6.2.1", ""],
+    )
+}
+
+/// 15930-1 6.3.2 recommends `/OutputCondition` when the identifier is no ICC registry name.
+pub(super) fn output_condition_unregistered(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let Some(intent) = the_intent(doc) else {
+        return Vec::new();
+    };
+    let unregistered =
+        text_entry(doc, b"OutputConditionIdentifier").is_none_or(|id| !ICC_REGISTRY.contains(&id.as_str()));
+    let failed = unregistered && intent.get(b"OutputCondition").is_none();
+    let message = "the identifier is no ICC registry name and the PDF/X intent has no /OutputCondition";
+    when(
+        failed,
+        X1A_OUTPUT_INTENT_OUTPUT_CONDITION_UNREGISTERED,
+        message,
+        "6.3.2",
+    )
+}
+
+/// 15930-3 6.2.2 recommends the PDF/X intent's `/Info`.
+pub(super) fn info(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let missing = the_intent(doc).is_some_and(|i| i.get(b"Info").is_none());
+    when(missing, X3_OUTPUT_INTENT_INFO, "the PDF/X intent has no /Info", "6.2.2")
+}
+
+/// Q11: at the older levels the output profile is ICC version 2 (ICC.1:1998-09), any minor version.
+pub(super) fn older_profile_version(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let Some(header) = profile(doc) else { return Vec::new() };
+    let (major, minor) = header.version;
+    let message = format!("the output intent's profile is ICC version {major}.{minor}, not 2");
+    when_older(
+        major != 2,
+        X13_OUTPUT_INTENT_PROFILE_VERSION,
+        &message,
+        settings,
+        OLDER_INTENT,
+    )
+}
+
+/// 15930-6 6.2.2 (Q15): an ICC-registered condition names the ICC registry, its URL with or without the final slash.
+pub(super) fn registry_name_color_org_2003(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let (Some(name), Some(id)) = (
+        text_entry(doc, b"RegistryName"),
+        text_entry(doc, b"OutputConditionIdentifier"),
+    ) else {
+        return Vec::new();
+    };
+    let misspelt = registry(&name) == Registry::Variant
+        && !names_icc_registry(doc, settings)
+        && ICC_REGISTRY.contains(&id.as_str());
+    let message = format!("/RegistryName is {name:?}, not \"http://www.color.org/\"");
+    when(
+        misspelt,
+        X3_OUTPUT_INTENT_REGISTRY_NAME_COLOR_ORG_2003,
+        &message,
+        "6.2.2",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -526,5 +708,134 @@ mod tests {
         assert_eq!(ids(&[(1, named.as_bytes())]), ["x4.output-intent.dest-profile-present"]);
         let unreadable = b"<< /OutputIntents [7 0 R 8 0 R] >>";
         assert_eq!(ids(&[(1, unreadable), (8, b"5")]), ["x4.output-intent.present"]);
+    }
+
+    /// A file with the PDF/X intent `intent` (its profile, when given, is object 3).
+    fn intent_doc(intent: &str, profile: Option<&[u8]>) -> Document {
+        let catalog = format!("<< /Pages 2 0 R /OutputIntents [{intent}] >>");
+        let mut objects: Vec<(u32, Vec<u8>)> = vec![
+            (1, catalog.into_bytes()),
+            (2, b"<< /Type /Pages /Kids [] /Count 0 >>".to_vec()),
+        ];
+        if let Some(data) = profile {
+            let mut stream = format!("<< /N 4 /Length {} >>\nstream\n", data.len()).into_bytes();
+            stream.extend(data);
+            stream.extend(b"\nendstream");
+            objects.push((3, stream));
+        }
+        let refs: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
+        Document::open(&classic(&refs, "<< /Size SIZE /Root 1 0 R >>"), &Limits::default()).unwrap()
+    }
+
+    /// A 128-byte profile header of class `prtr`, with `space` and major `version`, and the tags `tags` (no data).
+    fn header(space: [u8; 4], version: u8, tags: &[[u8; 4]]) -> Vec<u8> {
+        let mut icc = vec![0u8; 128];
+        icc[8] = version;
+        icc[12..16].copy_from_slice(b"prtr");
+        icc[16..20].copy_from_slice(&space);
+        icc[36..40].copy_from_slice(b"acsp");
+        icc.extend(u32::try_from(tags.len()).unwrap().to_be_bytes());
+        for tag in tags {
+            icc.extend(*tag);
+            icc.extend(0u32.to_be_bytes());
+            icc.extend(0u32.to_be_bytes());
+        }
+        icc
+    }
+
+    /// The ids and cited clauses `run` finds at `level`.
+    fn older(doc: &Document, level: Level, run: fn(&Document, &Settings) -> Vec<Finding>) -> Vec<String> {
+        run(doc, &level.into())
+            .into_iter()
+            .map(|f| f.clause.map_or_default(|c| format!("{}:{}", c.standard, c.number)))
+            .collect()
+    }
+
+    #[test]
+    fn the_registry_and_the_profile_at_the_older_levels() {
+        let x1a = Level::X1a2001;
+        let fogra = "/OutputConditionIdentifier (FOGRA39)";
+        let unregistered = intent_doc(&format!("<< /S /GTS_PDFX {fogra} >>"), None);
+        assert_eq!(
+            older(&unregistered, x1a, icc_name_needs_registry),
+            ["iso-15930-1:6.3.2"]
+        );
+        let slash = intent_doc(
+            &format!("<< /S /GTS_PDFX {fogra} /RegistryName (http://www.color.org/) >>"),
+            None,
+        );
+        assert_eq!(
+            older(&slash, Level::X32002, icc_name_needs_registry),
+            ["iso-15930-3:6.2.2"]
+        );
+        assert_eq!(older(&slash, Level::X32003, dest_profile_by_registry), [""; 0]);
+        assert_eq!(
+            older(&slash, Level::X1a2003, dest_profile_by_registry),
+            ["iso-15930-4:6.2.2"]
+        );
+        assert_eq!(older(&slash, Level::X32003, registry_name_color_org_2003), [""; 0]);
+        let none = intent_doc("<< /S /GTS_PDFX >>", None);
+        for run in [icc_name_needs_registry, registry_name_color_org_2003] {
+            assert_eq!(older(&none, Level::X32003, run), [""; 0]);
+        }
+        assert_eq!(older(&none, x1a, dest_profile_by_icc_name), ["iso-15930-1:6.3.2"]);
+        assert_eq!(older(&none, x1a, output_condition_unregistered), ["iso-15930-1:6.3.2"]);
+        assert_eq!(older(&none, Level::X32002, info), ["iso-15930-3:6.2.2"]);
+        // Without a PDF/X intent nothing here is judged; x4.output-intent.present says why.
+        let absent = intent_doc("", None);
+        for run in [
+            dest_profile_by_registry,
+            dest_profile_by_icc_name,
+            output_condition_unregistered,
+            info,
+        ] {
+            assert_eq!(older(&absent, Level::X32002, run), [""; 0]);
+        }
+        assert_eq!(condition_space(&none), None);
+        assert_eq!(condition_space(&unregistered), Some(*b"CMYK"));
+        assert_eq!(
+            condition_space(&intent_doc(
+                "<< /S /GTS_PDFX /OutputConditionIdentifier (sRGB) >>",
+                None
+            )),
+            Some(*b"RGB ")
+        );
+        assert_eq!(ICC_REGISTRY[RGB_FROM], "sRGB");
+        let https = |id: &str| {
+            intent_doc(
+                &format!("<< /S /GTS_PDFX /OutputConditionIdentifier ({id}) /RegistryName (https://color.org) >>"),
+                None,
+            )
+        };
+        assert_eq!(
+            older(&https("FOGRA39"), Level::X32003, registry_name_color_org_2003),
+            ["iso-15930-6:6.2.2"]
+        );
+        assert_eq!(
+            older(&https("Custom"), Level::X32003, registry_name_color_org_2003),
+            [""; 0]
+        );
+    }
+
+    #[test]
+    fn the_output_profile_at_the_older_levels() {
+        let with = |profile: &[u8]| intent_doc("<< /S /GTS_PDFX /DestOutputProfile 3 0 R >>", Some(profile));
+        let good = with(&header(*b"CMYK", 2, &[*b"A2B1"]));
+        for run in [profile_atob1, cmyk, older_profile_version] {
+            assert_eq!(older(&good, Level::X1a2001, run), [""; 0]);
+        }
+        assert_eq!(condition_space(&good), Some(*b"CMYK"));
+        let bad = with(&header(*b"RGB ", 4, &[*b"A2B0"]));
+        assert_eq!(older(&bad, Level::X1a2001, profile_atob1), ["iso-15930-1:6.3.2"]);
+        assert_eq!(older(&bad, Level::X1a2003, cmyk), ["iso-15930-4:6.2.1"]);
+        assert_eq!(older(&bad, Level::X32003, older_profile_version), ["iso-15930-6:6.2.2"]);
+        // Not an ICC profile, or none: nothing to judge.
+        let junk = with(b"not a profile");
+        let none = intent_doc("<< /S /GTS_PDFX >>", None);
+        for doc in [&junk, &none] {
+            for run in [profile_atob1, cmyk, older_profile_version] {
+                assert_eq!(older(doc, Level::X1a2001, run), [""; 0]);
+            }
+        }
     }
 }

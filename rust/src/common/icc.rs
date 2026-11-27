@@ -127,6 +127,11 @@ fn desc_tag(profile: &[u8]) -> Option<&[u8]> {
 }
 
 /// The data of the tag `signature`, when the profile has a header and the tag.
+/// Whether a profile has the tag `signature` in its tag table.
+pub(crate) fn has_tag(profile: &[u8], signature: [u8; 4]) -> bool {
+    tag(profile, signature).is_some()
+}
+
 fn tag(profile: &[u8], signature: [u8; 4]) -> Option<&[u8]> {
     header(profile)?;
     let word = |at: usize| profile.get(at..).and_then(<[u8]>::first_chunk::<4>).map(|w| length(*w));

@@ -1841,11 +1841,14 @@ OLDER_VERSIONS = {
 }
 
 
-def _older(level: str, *, xmp: bool = False, **info: pikepdf.Object | None) -> pikepdf.Pdf:
-    """x4-good identified as PDF/X-1a or PDF/X-3 at ``level`` (ISO 15930-1, -3, -4, -6): Info carries the version (and
-    for X-1a:2001 the conformance) and the trapped state, and the X-4 XMP is dropped, as these levels do not need it.
-    ``info`` changes Info's entries, ``None`` removing one: one defect per negative."""
-    pdf = _x4_good()
+def _older(
+    level: str, *, xmp: bool = False, base: pikepdf.Pdf | None = None, **info: pikepdf.Object | None
+) -> pikepdf.Pdf:
+    """x4-good (or ``base``, x4-good changed in one way) identified as PDF/X-1a or PDF/X-3 at ``level`` (ISO 15930-1,
+    -3, -4, -6): Info carries the version (and for X-1a:2001 the conformance) and the trapped state, and the X-4 XMP is
+    dropped, as these levels do not need it. ``info`` changes Info's entries, ``None`` removing one: one defect per
+    negative."""
+    pdf = base if base is not None else _x4_good()
     if not xmp:
         del pdf.Root["/Metadata"]
     version, conformance = OLDER_VERSIONS[level]
@@ -1879,6 +1882,97 @@ def _older_fixtures() -> dict[str, pikepdf.Pdf]:
         "x13-title-empty": _older("x3-2002", Title=text("")),
         "x13-producer-missing": _older("x1a-2003", Producer=None),
         "x13-xmp-mod-date-differs": _older("x3-2003", xmp=True, ModDate=text("D:20261126120000Z")),
+    }
+
+
+def _profile_bytes(*, version: int | None = None, space: bytes | None = None, drop: bytes | None = None) -> bytes:
+    """The Little-CMS test profile with its major version or data colour space set, or the tag ``drop`` renamed out
+    of the way."""
+    data = bytearray(X4_PROFILE.read_bytes())
+    if version is not None:
+        data[8] = version
+    if space is not None:
+        data[16:20] = space
+    if drop is not None:
+        count = int.from_bytes(data[128:132], "big")
+        at = next(132 + 12 * i for i in range(count) if data[132 + 12 * i : 136 + 12 * i] == drop)
+        data[at : at + 4] = b"zzzz"
+    return bytes(data)
+
+
+def _with_intent(pdf: pikepdf.Pdf, *, profile: bytes | None = b"", **entries: pikepdf.Object | None) -> pikepdf.Pdf:
+    """``pdf`` with its PDF/X intent's entries changed (``None`` removes one) and, unless ``profile`` is empty bytes,
+    its /DestOutputProfile replaced by ``profile`` (``None`` removes it)."""
+    intent = pdf.Root.OutputIntents[0]
+    if profile is None:
+        del intent["/DestOutputProfile"]
+    elif profile:
+        stream = pdf.make_stream(zlib.compress(profile), N=3 if profile[16:20] == b"RGB " else 4)
+        stream["/Filter"] = pikepdf.Name.FlateDecode
+        intent["/DestOutputProfile"] = pdf.make_indirect(stream)
+    for key, value in entries.items():
+        if value is None:
+            del intent[f"/{key}"]
+        else:
+            intent[f"/{key}"] = value
+    return pdf
+
+
+def _older_colour_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of the older levels' output intent and colour rows (expected.toml says what each raises)."""
+    name, text = pikepdf.Name, pikepdf.String
+    fill = b"q 0 0 10 10 re f Q"
+    icc = text("http://www.color.org")
+    fogra = text("FOGRA39")
+
+    def tint(pdf: pikepdf.Pdf) -> pikepdf.Object:
+        return pdf.make_indirect(pikepdf.Dictionary(FunctionType=2, Domain=[0, 1], C0=[0, 0, 0], C1=[1, 0, 0], N=1))
+
+    def spot_rgb(pdf: pikepdf.Pdf) -> pikepdf.Object:
+        return pikepdf.Array([name.Separation, name("/Varnish"), name.DeviceRGB, tint(pdf)])
+
+    def older(level: str, change: Callable[[pikepdf.Pdf], pikepdf.Pdf], base: pikepdf.Pdf | None = None) -> pikepdf.Pdf:
+        return change(_older(level, base=base))
+
+    return {
+        "x13-icc-name-no-registry": older("x1a-2001", lambda p: _with_intent(p, OutputConditionIdentifier=fogra)),
+        "x13-no-profile-unregistered-2003": older("x3-2003", lambda p: _with_intent(p, profile=None)),
+        "x13-no-profile-unregistered-2002": older("x3-2002", lambda p: _with_intent(p, profile=None)),
+        "x3-no-profile-icc-colour": older(
+            "x3-2002",
+            lambda p: _with_intent(p, profile=None, RegistryName=icc, OutputConditionIdentifier=fogra),
+            _x4_painted(b"q /P cs 0 0 0 1 sc " + fill, {"P": _icc_space}),
+        ),
+        "x3-2002-registered-no-profile": older(
+            "x3-2002", lambda p: _with_intent(p, profile=None, RegistryName=icc, OutputConditionIdentifier=fogra)
+        ),
+        "x1a-profile-no-atob1": older("x1a-2001", lambda p: _with_intent(p, profile=_profile_bytes(drop=b"A2B1"))),
+        "x1a-intent-rgb": older("x1a-2003", lambda p: _with_intent(p, profile=_profile_bytes(space=b"RGB "))),
+        "x1a-no-output-condition": older("x1a-2001", lambda p: _with_intent(p, OutputCondition=None)),
+        "x3-intent-no-info": older("x3-2002", lambda p: _with_intent(p, Info=None)),
+        "x13-profile-v4": older("x3-2003", lambda p: _with_intent(p, profile=_profile_bytes(version=4))),
+        "x3-icc-v4": _older(
+            "x3-2003", base=_x4_painted(b"q /P cs 0 0 0 1 sc " + fill, {"P": lambda p: _icc_space(p, version=4)})
+        ),
+        "x3-2003-registry-https": older(
+            "x3-2003",
+            lambda p: _with_intent(p, RegistryName=text("https://www.color.org"), OutputConditionIdentifier=fogra),
+        ),
+        "x3-2003-registry-slash": older(
+            "x3-2003",
+            lambda p: _with_intent(p, RegistryName=text("http://www.color.org/"), OutputConditionIdentifier=fogra),
+        ),
+        "x1a-2003-registry-slash": older(
+            "x1a-2003",
+            lambda p: _with_intent(p, RegistryName=text("http://www.color.org/"), OutputConditionIdentifier=fogra),
+        ),
+        "x1a-device-rgb": _older("x1a-2001", base=_x4_page(b"q 1 0 0 rg 0 0 10 10 re f Q")),
+        "x1a-default-cmyk": _older("x1a-2003", base=_x4_painted(b"q 0 0 0 1 k " + fill, {"DefaultCMYK": _icc_space})),
+        "x1a-spot-rgb-alternate": _older("x1a-2003", base=_x4_painted(b"q /S cs 1 sc " + fill, {"S": spot_rgb})),
+        "x1a-unused-default": _older(
+            "x1a-2001",
+            base=_x4_painted(b"", {"DefaultRGB": lambda p: pikepdf.Array([name.CalRGB, pikepdf.Dictionary()])}),
+        ),
     }
 
 
@@ -1973,6 +2067,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_font_fixtures(),
         **_x4p_fixtures(),
         **_older_fixtures(),
+        **_older_colour_fixtures(),
         **_x5_targets(),
         **_x5n_fixtures(),
         **_print_fixtures(),

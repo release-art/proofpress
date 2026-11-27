@@ -257,19 +257,19 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `object.damaged` | Every object reachable from the trailer can be read | iso-32000-2:7.3, iso-32000-2:7.3.8.1, iso-32000-2:7.3.10, iso-32000-2:7.5.7 | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `object.dangling-reference` | References point at objects that exist | iso-32000-2:7.3.10 | warning | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `x13.structure.xref-table` | Cross-reference tables only: no cross-reference or object streams | iso-15930-1:6.2, iso-15930-3:6.1, iso-15930-4:6.1, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.output-intent.icc-name-needs-registry` | An ICC registry identifier comes with the ICC RegistryName | iso-15930-1:6.3.2, iso-15930-3:6.2.2 | error | x1a-2001, x3-2002 | todo |
-| `x13.output-intent.dest-profile-by-registry` | A condition the ICC registry does not name embeds its output profile | iso-15930-4:6.2.2, iso-15930-6:6.2.2 | error | x1a-2003, x3-2003 | todo |
-| `x13.output-intent.dest-profile-by-icc-name` | An identifier that is not an ICC registry name comes with an output profile | iso-15930-1:6.3.2, iso-15930-3:6.2.2 | error | x1a-2001, x3-2002 | todo |
-| `x3.output-intent.dest-profile-for-colour` | Colour outside the condition's process model comes with an output profile | iso-15930-3:6.2.2, iso-15930-6:6.2.2 | error | x3-2002, x3-2003 | todo |
-| `x1a.output-intent.profile-atob1` | The output profile has a colorimetric device-to-PCS table | iso-15930-1:6.3.2 | error | x1a-2001 | todo |
-| `x1a.output-intent.cmyk` | The printing condition is CMYK | iso-15930-1:6.3.1, iso-15930-1:6.3.3, iso-15930-1:6.9, iso-15930-4:6.2.1, iso-15930-4:6.2.3 | error | x1a-2001, x1a-2003 | todo |
-| `x1a.output-intent.output-condition-unregistered` | A condition outside the ICC registry is described for people | iso-15930-1:6.3.2 | warning | x1a-2001 | todo |
-| `x3.output-intent.info` | The PDF/X intent carries a description in /Info | iso-15930-3:6.2.2 | warning | x3-2002 | todo |
-| `x13.output-intent.profile-version` | The output profile is ICC version 2 | iso-15930-1:2, iso-15930-1:6.3.2, iso-15930-3:2, iso-15930-3:6.2.2, iso-15930-4:2, iso-15930-4:6.2.2, iso-15930-6:2, iso-15930-6:6.2.2 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x3.icc.profile-version` | ICCBased profiles are ICC version 2 | iso-15930-3:2, iso-15930-3:6.2.1, iso-15930-6:2, iso-15930-6:6.2.1 | error | x3-2002, x3-2003 | todo |
-| `x1a.colour.print-spaces` | Print elements use only CMYK, gray and separation colour | iso-15930-1:6.3.1, iso-15930-1:6.3.4, iso-15930-4:6.2.1, iso-15930-4:6.2.4 | error | x1a-2001, x1a-2003 | todo |
-| `x1a.colour.no-default-space` | No unused default colour space beside print elements | iso-15930-1:6.3.1, iso-15930-4:6.2.1 | warning | x1a-2001, x1a-2003 | todo |
-| `x1a.spot.alternate-cmyk-or-gray` | Spot colour alternates are DeviceCMYK or DeviceGray | iso-15930-1:6.3.3, iso-15930-4:6.2.3 | error | x1a-2001, x1a-2003 | todo |
+| `x13.output-intent.icc-name-needs-registry` | An ICC registry identifier comes with the ICC RegistryName | iso-15930-1:6.3.2, iso-15930-3:6.2.2 | error | x1a-2001, x3-2002 | implemented |
+| `x13.output-intent.dest-profile-by-registry` | A condition the ICC registry does not name embeds its output profile | iso-15930-4:6.2.2, iso-15930-6:6.2.2 | error | x1a-2003, x3-2003 | implemented |
+| `x13.output-intent.dest-profile-by-icc-name` | An identifier that is not an ICC registry name comes with an output profile | iso-15930-1:6.3.2, iso-15930-3:6.2.2 | error | x1a-2001, x3-2002 | implemented |
+| `x3.output-intent.dest-profile-for-colour` | Colour outside the condition's process model comes with an output profile | iso-15930-3:6.2.2, iso-15930-6:6.2.2 | error | x3-2002, x3-2003 | implemented |
+| `x1a.output-intent.profile-atob1` | The output profile has a colorimetric device-to-PCS table | iso-15930-1:6.3.2 | error | x1a-2001 | implemented |
+| `x1a.output-intent.cmyk` | The printing condition is CMYK | iso-15930-1:6.3.1, iso-15930-1:6.3.3, iso-15930-1:6.9, iso-15930-4:6.2.1, iso-15930-4:6.2.3 | error | x1a-2001, x1a-2003 | implemented |
+| `x1a.output-intent.output-condition-unregistered` | A condition outside the ICC registry is described for people | iso-15930-1:6.3.2 | warning | x1a-2001 | implemented |
+| `x3.output-intent.info` | The PDF/X intent carries a description in /Info | iso-15930-3:6.2.2 | warning | x3-2002 | implemented |
+| `x13.output-intent.profile-version` | The output profile is ICC version 2 | iso-15930-1:2, iso-15930-1:6.3.2, iso-15930-3:2, iso-15930-3:6.2.2, iso-15930-4:2, iso-15930-4:6.2.2, iso-15930-6:2, iso-15930-6:6.2.2 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x3.icc.profile-version` | ICCBased profiles are ICC version 2 | iso-15930-3:2, iso-15930-3:6.2.1, iso-15930-6:2, iso-15930-6:6.2.1 | error | x3-2002, x3-2003 | implemented |
+| `x1a.colour.print-spaces` | Print elements use only CMYK, gray and separation colour | iso-15930-1:6.3.1, iso-15930-1:6.3.4, iso-15930-4:6.2.1, iso-15930-4:6.2.4 | error | x1a-2001, x1a-2003 | implemented |
+| `x1a.colour.no-default-space` | No page holds a default colour space that remaps nothing | iso-15930-1:6.3.1, iso-15930-4:6.2.1 | warning | x1a-2001, x1a-2003 | implemented |
+| `x1a.spot.alternate-cmyk-or-gray` | Spot colour alternates are DeviceCMYK or DeviceGray | iso-15930-1:6.3.3, iso-15930-4:6.2.3 | error | x1a-2001, x1a-2003 | implemented |
 | `x13.font.embedding-permitted` | Embedded fonts permit embedding | iso-15930-1:6.4, iso-15930-3:6.3, iso-15930-4:6.3, iso-15930-6:6.3 | warning | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
 | `x13.filespec.absent` | No file specifications | iso-15930-3:6.15, iso-15930-4:6.4, iso-15930-6:6.4 | error | x3-2002, x1a-2003, x3-2003 | todo |
 | `x1a.filespec.embedded-file` | No embedded files | iso-15930-1:6.2, iso-15930-1:6.5 | warning | x1a-2001 | todo |
@@ -298,4 +298,4 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x13.transparency.extgstate-values` | ExtGState blend mode and opacity are opaque values | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-3:D.2, iso-15930-4:6.16, iso-15930-6:6.16 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
 | `x13.transparency.no-group` | No form XObject is a transparency group | iso-15930-4:6.16, iso-15930-6:6.16 | error | x1a-2003, x3-2003 | todo |
 | `x13.viewer-prefs.areas` | Viewer-preference areas are MediaBox or BleedBox when a page has a BleedBox | iso-15930-4:6.17, iso-15930-6:6.17 | error | x1a-2003, x3-2003 | todo |
-| `x3.output-intent.registry-name-color-org-2003` | An ICC-registered condition names the ICC registry, with or without the final slash | iso-15930-6:6.2.2 | error | x3-2003 | todo |
+| `x3.output-intent.registry-name-color-org-2003` | An ICC-registered condition names the ICC registry, with or without the final slash | iso-15930-6:6.2.2 | error | x3-2003 | implemented |

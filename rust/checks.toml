@@ -2237,7 +2237,7 @@ title = "An ICC registry identifier comes with the ICC RegistryName"
 clauses = ["iso-15930-1:6.3.2", "iso-15930-3:6.2.2"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.output-intent.dest-profile-by-registry"
@@ -2245,7 +2245,7 @@ title = "A condition the ICC registry does not name embeds its output profile"
 clauses = ["iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "error"
 applies = ["x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.output-intent.dest-profile-by-icc-name"
@@ -2253,7 +2253,7 @@ title = "An identifier that is not an ICC registry name comes with an output pro
 clauses = ["iso-15930-1:6.3.2", "iso-15930-3:6.2.2"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x3.output-intent.dest-profile-for-colour"
@@ -2261,7 +2261,7 @@ title = "Colour outside the condition's process model comes with an output profi
 clauses = ["iso-15930-3:6.2.2", "iso-15930-6:6.2.2"]
 severity = "error"
 applies = ["x3-2002", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.output-intent.profile-atob1"
@@ -2269,7 +2269,7 @@ title = "The output profile has a colorimetric device-to-PCS table"
 clauses = ["iso-15930-1:6.3.2"]
 severity = "error"
 applies = ["x1a-2001"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.output-intent.cmyk"
@@ -2277,7 +2277,7 @@ title = "The printing condition is CMYK"
 clauses = ["iso-15930-1:6.3.1", "iso-15930-1:6.3.3", "iso-15930-1:6.9", "iso-15930-4:6.2.1", "iso-15930-4:6.2.3"]
 severity = "error"
 applies = ["x1a-2001", "x1a-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.output-intent.output-condition-unregistered"
@@ -2285,7 +2285,7 @@ title = "A condition outside the ICC registry is described for people"
 clauses = ["iso-15930-1:6.3.2"]
 severity = "warning"
 applies = ["x1a-2001"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x3.output-intent.info"
@@ -2293,7 +2293,7 @@ title = "The PDF/X intent carries a description in /Info"
 clauses = ["iso-15930-3:6.2.2"]
 severity = "warning"
 applies = ["x3-2002"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.output-intent.profile-version"
@@ -2301,7 +2301,7 @@ title = "The output profile is ICC version 2"
 clauses = ["iso-15930-1:2", "iso-15930-1:6.3.2", "iso-15930-3:2", "iso-15930-3:6.2.2", "iso-15930-4:2", "iso-15930-4:6.2.2", "iso-15930-6:2", "iso-15930-6:6.2.2"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x3.icc.profile-version"
@@ -2309,7 +2309,7 @@ title = "ICCBased profiles are ICC version 2"
 clauses = ["iso-15930-3:2", "iso-15930-3:6.2.1", "iso-15930-6:2", "iso-15930-6:6.2.1"]
 severity = "error"
 applies = ["x3-2002", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.colour.print-spaces"
@@ -2317,15 +2317,15 @@ title = "Print elements use only CMYK, gray and separation colour"
 clauses = ["iso-15930-1:6.3.1", "iso-15930-1:6.3.4", "iso-15930-4:6.2.1", "iso-15930-4:6.2.4"]
 severity = "error"
 applies = ["x1a-2001", "x1a-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.colour.no-default-space"
-title = "No unused default colour space beside print elements"
+title = "No page holds a default colour space that remaps nothing"
 clauses = ["iso-15930-1:6.3.1", "iso-15930-4:6.2.1"]
 severity = "warning"
 applies = ["x1a-2001", "x1a-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.spot.alternate-cmyk-or-gray"
@@ -2333,7 +2333,7 @@ title = "Spot colour alternates are DeviceCMYK or DeviceGray"
 clauses = ["iso-15930-1:6.3.3", "iso-15930-4:6.2.3"]
 severity = "error"
 applies = ["x1a-2001", "x1a-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.font.embedding-permitted"
@@ -2565,4 +2565,4 @@ title = "An ICC-registered condition names the ICC registry, with or without the
 clauses = ["iso-15930-6:6.2.2"]
 severity = "error"
 applies = ["x3-2003"]
-status = "todo"
+status = "implemented"

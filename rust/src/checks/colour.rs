@@ -8,13 +8,16 @@
 use super::Settings;
 use std::collections::BTreeSet;
 
+use super::info::per_level;
 use super::{intent, jpx, x4p};
 use crate::common::icc;
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Location, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT, X4_ICC_CMYK_NOT_INTENT_PROFILE,
-    X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_PRE_SEPARATED_ABSENT, X4_SPOT_ALTERNATE_SPACE_RESTRICTED,
-    X4_TRANSPARENCY_GROUP_CS_RESTRICTED, X5_N_DEVICECMYK_NEEDS_CMYK, X5_N_DEVICEGRAY_NEEDS_BLACK, X5_N_NO_DEVICERGB,
+    Check, Finding, Location, X1A_COLOUR_NO_DEFAULT_SPACE, X1A_COLOUR_PRINT_SPACES, X1A_SPOT_ALTERNATE_CMYK_OR_GRAY,
+    X3_ICC_PROFILE_VERSION, X3_OUTPUT_INTENT_DEST_PROFILE_FOR_COLOUR, X4_COLOUR_DEVICE_SPACE_MATCHES_INTENT,
+    X4_ICC_CMYK_NOT_INTENT_PROFILE, X4_ICC_OVERPRINT_MODE_ZERO, X4_ICC_PROFILE_VERSION, X4_PRE_SEPARATED_ABSENT,
+    X4_SPOT_ALTERNATE_SPACE_RESTRICTED, X4_TRANSPARENCY_GROUP_CS_RESTRICTED, X5_N_DEVICECMYK_NEEDS_CMYK,
+    X5_N_DEVICEGRAY_NEEDS_BLACK, X5_N_NO_DEVICERGB,
 };
 use crate::graphics::{self, Event, Role, Use};
 
@@ -246,6 +249,147 @@ fn icc_leaves(doc: &Document) -> Vec<IccLeaf> {
         }
     }
     out
+}
+
+/// The spaces PDF/X-1a allows print elements (15930-1 6.3.1 and 6.3.4, -4 6.2.1 and 6.2.4), with the inline image
+/// abbreviations.
+const X1A_SPACES: [&[u8]; 9] = [
+    b"DeviceCMYK",
+    b"DeviceGray",
+    b"Separation",
+    b"DeviceN",
+    b"Indexed",
+    b"Pattern",
+    b"CMYK",
+    b"G",
+    b"I",
+];
+
+/// PDF/X-1a: print elements, and the bases of their `Indexed` and `Pattern` spaces, use only CMYK, gray, separation
+/// and `DeviceN` colour; a device space a `Default` space remaps uses that space instead, and fails (Q12). Alternates are
+/// `x1a.spot.alternate-cmyk-or-gray`'s.
+pub(super) fn x1a_print_spaces(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for (used, frames) in uses(doc) {
+        let mut found = Vec::new();
+        leaves(doc, &used.space, Via::Direct, 0, &mut found);
+        for leaf in found.iter().filter(|l| l.via != Via::Alternate) {
+            let space = family(leaf.space);
+            if !X1A_SPACES.contains(&space) {
+                let how = if used.defaulted { ", by a Default space," } else { "" };
+                let message = format!("a print element uses{how} {}", String::from_utf8_lossy(space));
+                let finding = Finding::new(X1A_COLOUR_PRINT_SPACES, message).at(frames.clone());
+                out.push(per_level(finding, settings, ["6.3.1", "", "6.2.1", ""]));
+            }
+        }
+    }
+    distinct(out)
+}
+
+/// PDF/X-1a (Q12, a warning by the oracle's judgement): a page whose resources hold a `Default` colour space that
+/// remaps none of its print elements. Only page resources are read; a form's own are not.
+pub(super) fn x1a_unused_default(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let used = uses(doc);
+    let mut out = Vec::new();
+    for (i, page) in doc.pages().iter().enumerate() {
+        let number = u32::try_from(i + 1).unwrap_or(u32::MAX);
+        let spaces = page
+            .get(b"Resources")
+            .and_then(|r| doc.resolve(r))
+            .and_then(Object::dict)
+            .and_then(|r| r.get(b"ColorSpace"))
+            .and_then(|c| doc.resolve(c))
+            .and_then(Object::dict);
+        let defaults = spaces
+            .map_or_default(Dict::entries)
+            .iter()
+            .filter(|(k, _)| k.starts_with(b"Default"))
+            .count();
+        let remapped = used
+            .iter()
+            .any(|(u, frames)| u.defaulted && frames.contains(&Location::Page(number)));
+        if defaults > 0 && !remapped {
+            let message = format!("page {number} has a Default colour space that remaps nothing");
+            let finding = Finding::new(X1A_COLOUR_NO_DEFAULT_SPACE, message).at(vec![Location::Page(number)]);
+            out.push(per_level(finding, settings, ["6.3.1", "", "6.2.1", ""]));
+        }
+    }
+    out
+}
+
+/// PDF/X-1a (15930-1 6.3.3, -4 6.2.3): every `Separation` and `DeviceN` space a print element reaches, those in a
+/// `/Colorants` included, has `DeviceGray` or `DeviceCMYK` as its alternate.
+pub(super) fn x1a_alternates(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for (used, frames) in uses(doc) {
+        let mut found = Vec::new();
+        leaves(doc, &used.space, Via::Direct, 0, &mut found);
+        for leaf in found
+            .iter()
+            .filter(|l| matches!(family(l.space), b"Separation" | b"DeviceN"))
+        {
+            let alternate = leaf.space.array().and_then(|a| a.get(2)).and_then(|a| doc.resolve(a));
+            let space = alternate.map_or(&b""[..], family);
+            if !matches!(space, b"DeviceGray" | b"DeviceCMYK") {
+                let message = format!(
+                    "a {} space has the alternate {}",
+                    String::from_utf8_lossy(family(leaf.space)),
+                    String::from_utf8_lossy(space)
+                );
+                let finding = Finding::new(X1A_SPOT_ALTERNATE_CMYK_OR_GRAY, message).at(frames.clone());
+                out.push(per_level(finding, settings, ["6.3.3", "", "6.2.3", ""]));
+            }
+        }
+    }
+    distinct(out)
+}
+
+/// PDF/X-3 (15930-3 6.2.2, -6 6.2.2): an intent without a `/DestOutputProfile` serves only print elements in the
+/// condition's own process colour: no `ICCBased`, `CalGray`, `CalRGB` or `Lab` space, no device space a `Default` space
+/// remaps, and, where the condition's family is known from the ICC registry, no device space of another family.
+pub(super) fn x3_dest_profile_for_colour(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    if intent::the_intent(doc).is_none() || intent::has_profile(doc) {
+        return Vec::new();
+    }
+    let condition = intent::condition_space(doc);
+    let mut out = Vec::new();
+    for (used, frames) in uses(doc) {
+        let mut found = Vec::new();
+        leaves(doc, &used.space, Via::Direct, 0, &mut found);
+        for leaf in &found {
+            let space = family(leaf.space);
+            let colorimetric = matches!(space, b"ICCBased" | b"CalGray" | b"CalRGB" | b"Lab");
+            let device = space.starts_with(b"Device") && space != b"DeviceN";
+            let foreign = device && condition.is_some_and(|c| !device_allowed(space, c));
+            if colorimetric || foreign {
+                let message = format!(
+                    "a print element uses {} while the PDF/X intent embeds no /DestOutputProfile",
+                    String::from_utf8_lossy(space)
+                );
+                let finding = Finding::new(X3_OUTPUT_INTENT_DEST_PROFILE_FOR_COLOUR, message).at(frames.clone());
+                out.push(per_level(finding, settings, ["", "6.2.2", "", "6.2.2"]));
+            }
+        }
+    }
+    distinct(out)
+}
+
+/// PDF/X-3 (Q11): every ICC profile a print element uses is version 2 (ICC.1:1998-09), any minor version.
+pub(super) fn x3_profile_version(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for IccLeaf { num, data, frames, .. } in icc_leaves(doc) {
+        let Some(header) = data.as_deref().and_then(icc::header) else {
+            continue;
+        };
+        let (major, minor) = header.version;
+        if major != 2 {
+            let what = num.map_or_else(String::new, |n| format!(" {n}"));
+            let message = format!("the ICC profile{what} is version {major}.{minor}, not 2");
+            let finding = Finding::new(X3_ICC_PROFILE_VERSION, message).at(frames);
+            out.push(per_level(finding, settings, ["", "6.2.1", "", "6.2.1"]));
+        }
+    }
+    distinct(out)
 }
 
 /// 6.4.3.3: every ICC profile used is version 2 or 4 (decision log, 2026-11-25).
@@ -816,5 +960,106 @@ mod tests {
         let found = not_intent_profile_at_level(&doc, &settings).unwrap();
         assert_eq!(found[0].message, "a DefaultCMYK uses the output intent's profile");
         std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    /// What `run` cites at `level` on a page painting `content` with the colour spaces `spaces`, under the catalog
+    /// entries `catalog`, with the objects `more`.
+    fn older(
+        run: fn(&Document, &Settings) -> Vec<Finding>,
+        level: Level,
+        (spaces, content): (&str, &str),
+        catalog: &str,
+        more: &[(u32, Vec<u8>)],
+    ) -> Vec<String> {
+        let page = format!("/MediaBox [0 0 10 10] /Resources << /ColorSpace << {spaces} >> >>");
+        let doc = crate::checks::test_doc::paged(&[(&page, content)], catalog, more);
+        run(&doc, &level.into())
+            .into_iter()
+            .map(|f| f.clause.map_or_default(|c| format!("{}:{}", c.standard, c.number)))
+            .collect()
+    }
+
+    #[test]
+    fn print_element_colour_at_x1a() {
+        let rgb = ("", "1 0 0 rg 0 0 1 1 re f");
+        assert_eq!(
+            older(x1a_print_spaces, Level::X1a2001, rgb, "", &[]),
+            ["iso-15930-1:6.3.1"]
+        );
+        let cmyk = ("", "0 0 0 1 k 0 0 1 1 re f");
+        assert_eq!(older(x1a_print_spaces, Level::X1a2003, cmyk, "", &[]), [""; 0]);
+        let defaulted = ("/DefaultCMYK [/CalRGB << >>]", "0 0 0 1 k 0 0 1 1 re f");
+        assert_eq!(
+            older(x1a_print_spaces, Level::X1a2003, defaulted, "", &[]),
+            ["iso-15930-4:6.2.1"]
+        );
+        let spot = |alternate: &str| {
+            (
+                format!(
+                    "/S [/Separation /Varnish {alternate} << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>]"
+                ),
+                "/S cs 1 sc 0 0 1 1 re f",
+            )
+        };
+        let (rgb_spot, paint) = spot("/DeviceRGB");
+        assert_eq!(
+            older(x1a_alternates, Level::X1a2001, (&rgb_spot, paint), "", &[]),
+            ["iso-15930-1:6.3.3"]
+        );
+        let (gray_spot, paint) = spot("/DeviceGray");
+        assert_eq!(
+            older(x1a_alternates, Level::X1a2003, (&gray_spot, paint), "", &[]),
+            [""; 0]
+        );
+        let unused = ("/DefaultCMYK [/CalRGB << >>]", "0 0 1 1 re f");
+        assert_eq!(
+            older(x1a_unused_default, Level::X1a2001, unused, "", &[]),
+            ["iso-15930-1:6.3.1"]
+        );
+        assert_eq!(older(x1a_unused_default, Level::X1a2003, defaulted, "", &[]), [""; 0]);
+        assert_eq!(older(x1a_unused_default, Level::X1a2003, cmyk, "", &[]), [""; 0]);
+        let short = ("/S [/Separation /Varnish]", "/S cs 1 sc 0 0 1 1 re f");
+        assert_eq!(
+            older(x1a_alternates, Level::X1a2003, short, "", &[]),
+            ["iso-15930-4:6.2.3"]
+        );
+    }
+
+    #[test]
+    fn colour_without_an_output_profile_at_x3() {
+        let lab = (
+            "/L [/Lab << /WhitePoint [0.95 1 1.09] >>]",
+            "/L cs 50 0 0 sc 0 0 1 1 re f",
+        );
+        let rgb = ("", "1 0 0 rg 0 0 1 1 re f");
+        let cmyk = ("", "0 0 0 1 k 0 0 1 1 re f");
+        let fogra = "/OutputIntents [<< /S /GTS_PDFX /OutputConditionIdentifier (FOGRA39) >>]";
+        let custom = "/OutputIntents [<< /S /GTS_PDFX /OutputConditionIdentifier (Custom) >>]";
+        let profiled = "/OutputIntents [<< /S /GTS_PDFX /DestOutputProfile 9 0 R >>]";
+        let run = x3_dest_profile_for_colour;
+        assert_eq!(older(run, Level::X32002, lab, fogra, &[]), ["iso-15930-3:6.2.2"]);
+        assert_eq!(older(run, Level::X32003, rgb, fogra, &[]), ["iso-15930-6:6.2.2"]);
+        assert_eq!(older(run, Level::X32003, cmyk, fogra, &[]), [""; 0]);
+        // A condition of unknown family judges only colorimetric spaces; with a profile, or no intent, nothing.
+        assert_eq!(older(run, Level::X32003, rgb, custom, &[]), [""; 0]);
+        let stream = profile(b"CMYK", 2);
+        assert_eq!(older(run, Level::X32003, lab, profiled, &[(9, stream)]), [""; 0]);
+        assert_eq!(older(run, Level::X32003, lab, "", &[]), [""; 0]);
+    }
+
+    #[test]
+    fn icc_profile_versions_at_x3() {
+        let space = ("/P [/ICCBased 9 0 R]", "/P cs 0 0 0 1 sc 0 0 1 1 re f");
+        let run = x3_profile_version;
+        assert_eq!(
+            older(run, Level::X32003, space, "", &[(9, profile(b"CMYK", 4))]),
+            ["iso-15930-6:6.2.1"]
+        );
+        assert_eq!(
+            older(run, Level::X32002, space, "", &[(9, profile(b"CMYK", 2))]),
+            [""; 0]
+        );
+        let junk = b"<< /N 4 /Length 3 >>\nstream\nabc\nendstream".to_vec();
+        assert_eq!(older(run, Level::X32002, space, "", &[(9, junk)]), [""; 0]);
     }
 }

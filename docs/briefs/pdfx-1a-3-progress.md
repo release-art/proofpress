@@ -14,7 +14,7 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 
 ## Status
 
-- Phase 0 is done (the stop questions are answered). Phase 1 is in progress, from task 1.1.
+- Phases 0 and 1 are done. Phase 2 is in progress: 2.1 (colour) is done; next is 2.2 (transparency).
 
 ## Done
 
@@ -25,19 +25,22 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 | 1.1 | this commit | Levels `x1a-2001`, `x3-2002`, `x1a-2003`, `x3-2003`; detection of a claimed older level; the report's `level`; the 42 new rows as `todo`; clause lists for 15930-1, -3, -4, -6 |
 | 1.2 | this commit | 47 `x4.*` checks and the 21 structure checks applied at the older levels; `cite` maps their clauses; X-4 and X-5 expectations unchanged |
 | 1.3 | this commit | Info identification, dates, title and Trapped, the TrapNet rules (12 checks, `checks/info.rs`); bases `x1a-2001-good`, `x3-2002-good`, `x1a-2003-good`, `x3-2003-good` and 13 negatives; scenarios in `x13-identification-trapping.feature` |
+| 2.1 | this commit | Output intent and print-element colour at the older levels (14 checks); 18 fixtures, `x13-colour.feature` |
 | 0.3 | test-db `156acfd5` | 88 claims in test-db, pdfToolbox passes 47; `docs/pdfx/x1a3-claims.csv` |
 
 ## Register coverage
 
-Task 1.3: 12 new rows implemented. Task 1.2: 47 `x4.*` rows reused (45 implemented, 2 skip), plus the structure checks. Task 1.1: the 42 new ids (the register's 37 new rows, with the output-intent and ICC version rows split, optional
+Task 2.1: 14 more implemented (31 `x13`/`x1a`/`x3` ids of 43 so far; 18 `todo` left). Task 1.3: 12 new rows implemented. Task 1.2: 47 `x4.*` rows reused (45 implemented, 2 skip), plus the structure checks. Task 1.1: the 42 new ids (the register's 37 new rows, with the output-intent and ICC version rows split, optional
 content and 16-bit images from L-Q4, and the X-1a:2001 embedded-file warning) are in `checks.toml` as `todo`; task 1.2 added `x3.output-intent.registry-name-color-org-2003` (Q15).
 
 ## Gates
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green, 2026-11-27, task 1.3 (100% lines, regions, functions) |
-| Python (ruff, pyright, pytest) | green, 2026-11-27, task 1.3: 966 passed |
+| `bin/rust/check.sh` | green, 2026-11-27, task 2.1 (100% lines, regions, functions) |
+| `bin/docker/test.sh` | green at the end of phase 1, 2026-11-27: 965 passed |
+| `bin/suites/pdfx.sh` | end of phase 1, 2026-11-27: 39 files, 39 accepted, 0 problems |
+| Python (ruff, pyright, pytest) | green, 2026-11-27, task 2.1: 966 passed |
 
 ## Corpus and oracle
 
@@ -73,6 +76,21 @@ X-1a:2001 (stop questions).
   and checks `git diff` on each before staging.
 
 ## Stage reports
+
+### Phase 1 (levels and identification), finished 2026-11-27
+
+- The four levels exist everywhere a level is named (`checks.toml`, `--pdfx`, `Profile.pdfx_level`, `_core.verify`,
+  the BDD steps), and without `--pdfx` a file claiming one is verified at it; the report names its level.
+- 47 `x4.*` checks and the 21 structure checks apply at the older levels, citing the older parts' clauses through
+  `checks.toml`'s `cite`; X-4 and X-5 expectations are unchanged.
+- Info identification, dates, title and Trapped, and the TrapNet rules: 12 checks, the four bases (x4-good identified
+  at each level, without XMP) and 13 negatives. Phase 1's done criterion holds: each base raises nothing at its level
+  beyond the rows still `todo` (reported as not evaluated).
+- Gates: `bin/rust/check.sh` green at 100%; Python green (966); Docker green (965); `bin/suites/pdfx.sh` 39/39.
+- Corpus preview (not phase 3's run): the 47 pdfToolbox-passed claiming samples are all detected at their claimed
+  level and raise no error from the checks written so far.
+- Departures: level names hyphenated (`x1a-2001`); the new rows went into `checks.toml` as `todo` in 1.1 so the levels
+  cannot pass early; `x3.output-intent.registry-name-color-org-2003` added for Q15.
 
 ### Phase 0 (decisions and groundwork), finished 2026-11-27 (after a stop)
 
