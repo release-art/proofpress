@@ -1978,7 +1978,14 @@ def _older_colour_fixtures() -> dict[str, pikepdf.Pdf]:
         "x1a-spot-rgb-alternate": _older("x1a-2003", base=_x4_painted(b"q /S cs 1 sc " + fill, {"S": spot_rgb})),
         "x1a-unused-default": _older(
             "x1a-2001",
-            base=_x4_painted(b"", {"DefaultRGB": lambda p: pikepdf.Array([name.CalRGB, pikepdf.Dictionary()])}),
+            base=_x4_painted(
+                b"",
+                {
+                    "DefaultRGB": lambda p: pikepdf.Array(
+                        [name.CalRGB, pikepdf.Dictionary(WhitePoint=[0.9505, 1, 1.089])]
+                    )
+                },
+            ),
         ),
     }
 

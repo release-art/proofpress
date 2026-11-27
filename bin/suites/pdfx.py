@@ -6,7 +6,8 @@ Without --set it runs the files named in proof-pdf-test-db/expectations/pdfx.tom
 that folder under samples/ (from samples/index.jsonl), and --all every folder; files marked malicious are always
 left out, since they belong in a sandbox. Each file runs in its own
 process, so a crash or a hang is an outcome, not the end of the run. Outcomes are ranked, worst first: crash, timeout,
-refused, read with gaps, accepted. A file in the expectations must fail exactly the expected checks among those the
+refused, read with gaps, accepted. A file in the expectations runs at the first of its `levels`, any other at --level. A
+file in the expectations must fail exactly the expected checks among those the
 engine evaluated; a check not yet implemented is not compared. Results go to rust/target/pdfx-corpus/, stamped with the
 engine version. Exits 1 on any crash, timeout or mismatch.
 """
@@ -75,7 +76,8 @@ def main() -> int:
 
     subprocess.run(["cargo", "build", "--release", "--example", "verify"], cwd=ROOT / "rust", check=True)
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
-        futures = {path: pool.submit(run, TESTDB / path, args.level, args.timeout) for path in files}
+        level = {path: (files[path] or {}).get("levels", [args.level])[0] for path in files}
+        futures = {path: pool.submit(run, TESTDB / path, level[path], args.timeout) for path in files}
         results = {path: future.result() for path, future in futures.items()}
 
     version = engine_version()

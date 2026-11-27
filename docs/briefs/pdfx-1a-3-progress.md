@@ -14,7 +14,7 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 
 ## Status
 
-- Phases 0 and 1 are done. Phase 2 is in progress: Phase 2 is done; phase 3 (fixtures, pdfToolbox comparison, corpus run, docs) is next.
+- Phases 0 and 1 are done. Phase 2 is in progress: **The plan is carried out.** Phases 0-3 are done (see the stage reports). What is left is the owner's (owner actions).
 
 ## Done
 
@@ -30,6 +30,10 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 | 2.3 | this commit | Cross-reference and object streams, filter lists, JBIG2, 16-bit images, optional content (7 checks, `checks/x13.rs`); 8 fixtures, `x13-structure-filters.feature` |
 | 2.4 | this commit | `/TR2`, file specifications, embedded files at X-1a:2001, trim inside crop and annotations at 2001/2002, viewer preferences, font embedding permission (7 checks); 7 fixtures, `x13-keys-boxes.feature` |
 | 2.5 | this commit | X-5 targets verified at the older level they claim (L-Q10); `x5g-target-x1a` now conforms |
+| 3.1 | (2.x commits) | One positive per level (`x1a-2001-good`, `x3-2002-good`, `x1a-2003-good`, `x3-2003-good`) and a one-defect negative per new check, built from x4-good |
+| 3.2 | this commit | pdfToolbox over the 62 older-level fixtures; one fixture of ours had a second defect (an invalid CalRGB), fixed; every other disagreement upheld by the oracle |
+| 3.3 | this commit; test-db `a2aef36a` | 83 claiming samples' expectations; `bin/suites/pdfx.sh` reads each file's level |
+| 3.4 | this commit | README (generated table, the levels), changelog, X5-Q9 superseded (2.5) |
 | 0.3 | test-db `156acfd5` | 88 claims in test-db, pdfToolbox passes 47; `docs/pdfx/x1a3-claims.csv` |
 
 ## Register coverage
@@ -41,10 +45,10 @@ content and 16-bit images from L-Q4, and the X-1a:2001 embedded-file warning) ar
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green, 2026-11-27, task 2.5 (100% lines, regions, functions) |
-| `bin/docker/test.sh` | green at the end of phase 1, 2026-11-27: 965 passed |
-| `bin/suites/pdfx.sh` | end of phase 1, 2026-11-27: 39 files, 39 accepted, 0 problems |
-| Python (ruff, pyright, pytest) | green, 2026-11-27, task 2.4: 966 passed |
+| `bin/rust/check.sh` | green, 2026-11-27, phase 3 (100% lines, regions, functions) |
+| `bin/docker/test.sh` | green at the end of phase 2, 2026-11-27: 965 passed |
+| `bin/suites/pdfx.sh` | phase 3, 2026-11-27: 122 files (39 X-4, 83 X-1a/X-3), 122 accepted, 0 problems |
+| Python (ruff, pyright, pytest) | green, 2026-11-27, phase 3: 966 passed |
 
 ## Corpus and oracle
 
@@ -59,8 +63,22 @@ Running the checks written so far over those 47 (task 2.2): all are detected at 
 `x13.output-intent.dest-profile-by-icc-name`, both without an embedded profile under `RegistryName
 http://www.color.org` but with an identifier that is no ICC reference name (an X-1a:2001 file naming "Coated FOGRA27
 (ISO 12647-2:2004)", an X-3:2002 file naming "X-3"). By 15930-1 and -3 6.x a profile is then required; pdfToolbox
-judges by the 2003 rule, where the registry name alone suffices. To classify with the oracle in task 3.3; two files
-are below the plan's "more than a few" line.
+judges by the 2003 rule, where the registry name alone suffices. Classified in task 3.3 with the oracle: the files do
+not conform to the part they claim.
+
+Task 3.2, 2026-11-27, pdfToolbox 17.1 ("Verify compliance with PDFX-1a" / "PDFX-3") over the 62 fixtures at the older
+levels: both tools pass the four bases. One fixture of ours carried a second defect (a CalRGB without `/WhitePoint`,
+which pdfToolbox rightly called invalid): fixed. pdfToolbox passes 13 fixtures we fail or warn on: 5 warnings
+(recommendations; its stock profiles raise none) and 8 errors, every one a 2001/2002-only rule or one pdfToolbox does
+not check (RegistryName with an ICC name, AToB1Tag, colorimetric data without a profile at X-3:2002, a version 4
+output profile, an RGB X-1a condition, the RegistryName spellings, 16-bit samples, an unparseable ModDate). It fails 4
+we pass or warn on: a page transparency group (Q19), always-on optional content and a font licence restricting
+embedding (our warnings), and plain PDF/X-1 (ours: not evaluated, so also a fail). The pdfx-oracle upheld all twelve
+questions put to it, none escalated.
+
+Task 3.3: over the 85 samples claiming the older levels (two more are refused: one encrypted, one pdfToolbox crashed on)
+our verdict agrees with pdfToolbox's on 83; the two above differ. Their expectations are in test-db
+`expectations/pdfx.toml`.
 
 ## Decisions taken
 
@@ -77,7 +95,9 @@ X-1a:2001 (stop questions).
 
 ## Owner actions
 
-- pdfToolbox's trial licence expires 2026-12-09; phase 3's comparison needs it.
+- Push the commits on `dev/crabify` (proofpress) and `main` (test-db) when ready; this run pushed nothing.
+- pdfToolbox's trial licence expires 2026-12-09; the comparison of phase 3 is done, so only a later re-run needs it.
+- Optional: an X-1a:2003 sample from a real job (none in test-db claims that level; only our built fixtures test it).
 
 ## Environment notes
 
@@ -89,6 +109,28 @@ X-1a:2001 (stop questions).
   and checks `git diff` on each before staging.
 
 ## Stage reports
+
+### Phase 3 (test material and comparison), finished 2026-11-27
+
+- Fixtures: four positives and 62 older-level fixtures in all, each negative with one defect (one corrected after
+  pdfToolbox showed a second); `expected.toml` and seven feature files cover them.
+- pdfToolbox and the corpus: see "Corpus and oracle". 83 of 85 verdicts agree; the rest, and every fixture disagreement,
+  classified with the oracle.
+- `bin/suites/pdfx.sh` now runs each expected file at its own level: 122 files, 0 problems.
+- Gates: `bin/rust/check.sh` green at 100%; Python 966 passed; Docker green at the end of phase 2 (965) and re-run after
+  this phase (see Gates).
+- Departures: none beyond those logged in the decision log.
+
+### Phase 2 (the new rules), finished 2026-11-27
+
+- 2.1 colour and output intent (14 checks), 2.2 transparency (3), 2.3 structure, filters, 16-bit images and optional
+  content (7), 2.4 the rest (7), 2.5 X-5 targets at the older levels. Every register row is `implemented` or `skip`.
+- 47 fixtures, each one defect, five feature files; every check has a pass and a fail fixture.
+- Gates: `bin/rust/check.sh` green at 100% after each task; Python green; Docker green (965); `bin/suites/pdfx.sh`
+  39/39 before the new expectations.
+- Corpus preview: the 47 pdfToolbox positives raise errors only on the two files classified in 3.3.
+- Departures: the hybrid `/XRefStm` alone is not judged (decision log); inline images are not judged by the filter and
+  depth rows.
 
 ### Phase 1 (levels and identification), finished 2026-11-27
 
