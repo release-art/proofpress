@@ -8,7 +8,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 
 | Piece | What it is |
 |---|---|
-| [`proof-pdf`](#proof-pdf) | CLI and library that hold a print PDF to PDF/X-4 and PDF/A. |
+| [`proof-pdf`](#proof-pdf) | CLI and library that hold a print PDF to PDF/X, print checks and, when asked, PDF/A. |
 | [`releaseart/lualatex`](#docker-images) | TeX Live 2025 with LuaLaTeX. |
 | [`releaseart/lualatex-python`](#docker-images) | Python, `lualatex`, Ghostscript and veraPDF: everything `proof-pdf` needs, without it. A base to `pip install` it on. |
 | [`releaseart/full`](#docker-images) | `lualatex` plus Ghostscript, veraPDF and `proof-pdf`. |
@@ -17,7 +17,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 
 `verify` runs four layers, each of which can be switched off:
 
-- **PDF/A** with [veraPDF](https://verapdf.org) (`--flavour 2b` by default; `--no-pdfa` to skip).
+- **PDF/A** with [veraPDF](https://verapdf.org), when asked (`--pdfa`; `--flavour 2b` by default).
 - **PDF/X**: every requirement of ISO 15930-7 (PDF/X-4, X-4p) and ISO 15930-8 (PDF/X-5g, X-5pg, X-5n) that a file can be
   judged on, from the output intent and metadata to fonts, colour, transparency and referenced files (`--pdfx x4` by
   default, another level with `--pdfx x4p|x5g|x5pg|x5n`, `--no-pdfx` to skip). The counts are under [Checks](#checks).
@@ -25,8 +25,8 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
   x1a-2001|x3-2002|x1a-2003|x3-2003`); without `--pdfx`, a file whose Info claims one of them is verified at it.
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
   For a book interior, `--binding-bleed-mm 0` (with `--binding left|right`, the bound edge of page 1; it alternates page by page) expects no bleed on the binding edge,
-  so the sheet is wider by the outer bleed only; the centring check follows the asymmetry. Equal bleed on every side behaves as before.
-- **Colour**: total ink coverage (`--max-tac`, 300% default; opt-in `--warn-tac N`, below it, warns when the peak is between N and the limit; the peak is measured per pixel on Ghostscript's separations, one plate per ink, so each spot colour counts once at its tint), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default; opt-in `--warn-dpi N` warns below N, `--max-dpi N` warns above N since it only grows the file, `--max-stretch-pct P` warns when an image's two axes differ by more than P percent, larger over smaller less one; none has a default, and `--warn-dpi` must exceed `--min-dpi`; each message gives the worst placement in mm from the page's bottom-left),
+  so the sheet is wider by the outer bleed only; the centring check follows the asymmetry.
+- **Colour**: total ink coverage, when asked (`--tac`; `--max-tac`, 300% default; opt-in `--warn-tac N`, below it, warns when the peak is between N and the limit; the peak is measured per pixel on Ghostscript's separations, one plate per ink, so each spot colour counts once at its tint), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default; opt-in `--warn-dpi N` warns below N, `--max-dpi N` warns above N since it only grows the file, `--max-stretch-pct P` warns when an image's two axes differ by more than P percent, larger over smaller less one; none has a default, and `--warn-dpi` must exceed `--min-dpi`; each message gives the worst placement in mm from the page's bottom-left),
   overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged,
   and **white that overprints is an error** (it adds no ink, so it vanishes on press). A page that uses transparency must blend
   in the output intent's colour space (a mismatch is an error, an undeclared space a warning).
@@ -62,6 +62,21 @@ proof-pdf verify card.pdf --json          # machine-readable findings, for CI
 proof-pdf preview card.pdf --dpi 150
 proof-pdf --version                       # version, plus the commit when built from an image
 ```
+
+Without Python, the Rust `proof-pdf` runs `verify` on its own (`inspect`, `preview`, `extract`, `crop`, `layout` and
+`texlog` need the Python package):
+
+```zsh
+brew install release-art/tap/proof-pdf     # macOS, Linux
+```
+
+```powershell
+scoop bucket add release-art https://github.com/release-art/scoop-bucket
+scoop install release-art/proof-pdf        # Windows
+```
+
+or download `proof-pdf-<version>-<target>` from a [GitHub release](https://github.com/release-art/proofpress/releases)
+(macOS arm64, Linux x86-64 and arm64, Windows x64), each with its Sigstore bundle.
 
 - Arguments are files or directories; a directory expands to every PDF beneath it, minus `--exclude` globs (relative to that directory).
 - `--exempt GLOB=reason` declares a file out of scope. It is still listed, with the reason, and never fails; the glob matches at any
@@ -326,7 +341,8 @@ bin/docker/test.sh                    # the whole suite inside the full image, i
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). To release, add the version to [CHANGELOG.md](CHANGELOG.md) and push a tag:
 `git tag v1.2.3 && git push origin v1.2.3`. The tag is the version; it publishes to PyPI (TestPyPI first), creates a GitHub
-Release and pushes both images.
+Release with the standalone downloads, points the Homebrew tap and the Scoop bucket at it (stable releases only) and
+pushes the images.
 
 ## Licence
 

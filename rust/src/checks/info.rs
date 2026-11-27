@@ -150,7 +150,7 @@ pub(super) fn version_value(doc: &Document, settings: &Settings) -> Vec<Finding>
     }
 }
 
-/// 15930-1 6.13 (Q13): Info `/GTS_PDFXConformance` is `PDF/X-1a:2001`. A file claiming plain PDF/X-1 (version
+/// 15930-1 6.13 (L-Q13): Info `/GTS_PDFXConformance` is `PDF/X-1a:2001`. A file claiming plain PDF/X-1 (version
 /// `PDF/X-1:2001` with no conformance, or `PDF/X-1:2001` as its conformance) is not evaluated (L-Q1).
 pub(super) fn conformance(doc: &Document, _: &Settings) -> Result<Vec<Finding>, String> {
     let version = text_entry(doc, b"GTS_PDFXVersion").text();

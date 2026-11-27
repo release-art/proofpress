@@ -1,4 +1,4 @@
-//! Print checks on text and line work (ported from the Python `text` module, under the parity gate): characters shown
+//! Print checks on text and line work: characters shown
 //! with the `.notdef` glyph, fonts that are not embedded (and Type 3 fonts, advisory), text below the profile's size
 //! floor, strokes below its width floor, and text reaching outside its safe area.
 //!

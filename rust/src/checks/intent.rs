@@ -226,7 +226,7 @@ pub(super) fn registry_name_url(doc: &Document, _: &Settings) -> Vec<Finding> {
         return Vec::new();
     };
     let url = match &doc.resolve(name).map(|o| &o.value) {
-        // An empty name names no registry, so it reads as absent (decision log, 2026-11-25).
+        // An empty name names no registry, so it reads as absent.
         Some(Value::String(bytes, _)) => {
             bytes.is_empty()
                 || bytes.as_slice() == COLOR_ORG
@@ -306,7 +306,7 @@ pub(super) fn profile_class(doc: &Document, _: &Settings) -> Vec<Finding> {
     )
 }
 
-/// 6.4.2.1: the profile is ICC version 2 or 4 (decision log, 2026-11-25: any minor version).
+/// 6.4.2.1: the profile is ICC version 2 or 4 (any minor version).
 pub(super) fn profile_version(doc: &Document, _: &Settings) -> Vec<Finding> {
     let Some(header) = profile(doc) else { return Vec::new() };
     let (major, minor) = header.version;
@@ -368,7 +368,7 @@ pub(super) fn identifier_registered(doc: &Document, _: &Settings) -> Vec<Finding
 
 /// 6.4.2.1: an ICC-registered condition names the ICC registry exactly. Checkable only where the file plainly meant
 /// that registry: a misspelt color.org URL with an ICC reference name fails. Another registry's URL may name the
-/// same condition (Fogra's for FOGRA39), and without `/RegistryName` a match is coincidental, so both pass (oracle).
+/// same condition (Fogra's for FOGRA39), and without `/RegistryName` a match is coincidental, so both pass.
 pub(super) fn registry_name_color_org(doc: &Document, _: &Settings) -> Vec<Finding> {
     let (Some(name), Some(id)) = (
         text_entry(doc, b"RegistryName"),
@@ -382,7 +382,7 @@ pub(super) fn registry_name_color_org(doc: &Document, _: &Settings) -> Vec<Findi
 }
 
 /// 6.4.2.1: with the ICC registry named, the identifier is one of its reference names, exactly. A warning, not the
-/// clause's error, by the owner's decision (2026-11-25): Adobe writes ECI profile names under color.org, and 14 Ghent
+/// clause's error, by docs/interpretations.md: Adobe writes ECI profile names under color.org, and 14 Ghent
 /// positives that pdfToolbox passes do. Other registries' lists are not held, so they are not judged.
 pub(super) fn identifier_in_registry(doc: &Document, _: &Settings) -> Vec<Finding> {
     let (Some(name), Some(id)) = (
@@ -420,7 +420,7 @@ fn when_older(
 }
 
 /// Whether the PDF/X intent names the ICC registry: `http://www.color.org` exactly, or at PDF/X-3:2003, whose text
-/// spells it with a final slash, either spelling (Q15).
+/// spells it with a final slash, either spelling (L-Q15).
 fn names_icc_registry(doc: &Document, settings: &Settings) -> bool {
     text_entry(doc, b"RegistryName").is_some_and(|name| {
         name.as_bytes() == COLOR_ORG || (settings.level == Level::X32003 && name == "http://www.color.org/")
@@ -488,7 +488,7 @@ pub(super) fn profile_atob1(doc: &Document, _: &Settings) -> Vec<Finding> {
     )
 }
 
-/// PDF/X-1a (15930-1 6.3.1, -4 6.2.1; Q16): the printing condition is CMYK.
+/// PDF/X-1a (15930-1 6.3.1, -4 6.2.1; L-Q16): the printing condition is CMYK.
 pub(super) fn cmyk(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let Some(header) = profile(doc) else { return Vec::new() };
     let message = format!(
@@ -527,7 +527,7 @@ pub(super) fn info(doc: &Document, _: &Settings) -> Vec<Finding> {
     when(missing, X3_OUTPUT_INTENT_INFO, "the PDF/X intent has no /Info", "6.2.2")
 }
 
-/// Q11: at the older levels the output profile is ICC version 2 (ICC.1:1998-09), any minor version.
+/// L-Q11: at the older levels the output profile is ICC version 2 (ICC.1:1998-09), any minor version.
 pub(super) fn older_profile_version(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let Some(header) = profile(doc) else { return Vec::new() };
     let (major, minor) = header.version;
@@ -541,7 +541,7 @@ pub(super) fn older_profile_version(doc: &Document, settings: &Settings) -> Vec<
     )
 }
 
-/// 15930-6 6.2.2 (Q15): an ICC-registered condition names the ICC registry, its URL with or without the final slash.
+/// 15930-6 6.2.2 (L-Q15): an ICC-registered condition names the ICC registry, its URL with or without the final slash.
 pub(super) fn registry_name_color_org_2003(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let (Some(name), Some(id)) = (
         text_entry(doc, b"RegistryName"),

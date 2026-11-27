@@ -1,5 +1,5 @@
-//! PDF functions (ISO 32000-2, 7.10), enough to turn a spot colour's tint into the colour it stands in for (ported from
-//! the Python `functions` module, under the parity gate): sampled (type 0, nearest sample), exponential (2), stitching
+//! PDF functions (ISO 32000-2, 7.10), enough to turn a spot colour's tint into the colour it stands in for:
+//! sampled (type 0, nearest sample), exponential (2), stitching
 //! (3) and PostScript calculator (4). Anything not understood, or that runs away, gives `None` rather than a wrong
 //! colour.
 
@@ -416,7 +416,7 @@ fn modulo(a: i64, b: i64) -> i64 {
     if r != 0 && (r < 0) != (b < 0) { r + b } else { r }
 }
 
-/// `count shift roll`, as the Python did it with slices: the top `count` items rotated by `shift`.
+/// `count shift roll`: the top `count` items rotated by `shift`.
 fn roll(stack: &mut Vec<Val>) -> Option<()> {
     let shift = stack.pop()?.int()?;
     let count = stack.pop()?.int()?;
@@ -435,7 +435,7 @@ fn roll(stack: &mut Vec<Val>) -> Option<()> {
 
 #[expect(
     clippy::float_cmp,
-    reason = "the calculator's eq and ne compare exactly, as PostScript and the Python did"
+    reason = "the calculator's eq and ne compare exactly, as PostScript does"
 )]
 fn binary(word: &[u8], lhs: Val, rhs: Val) -> Option<Val> {
     let (x1, x2) = (lhs.num(), rhs.num());

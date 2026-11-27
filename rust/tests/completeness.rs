@@ -1,4 +1,4 @@
-//! The completeness gate (pdfx-plan task 1.3): every check in `rust/checks.toml` is accounted for, and one marked
+//! The completeness gate: every check in `rust/checks.toml` is accounted for, and one marked
 //! `implemented` has a fixture that fails it and one that passes it in `tests/fixtures/pdfx/expected.toml`.
 //! Run with `--nocapture` to see the register coverage.
 

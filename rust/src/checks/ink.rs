@@ -1,4 +1,4 @@
-//! Print checks on the inks a page puts down (ported from the Python `colour` module, under the parity gate): overprint
+//! Print checks on the inks a page puts down: overprint
 //! used on anything but solid black text (advisory), white set to overprint (it vanishes on press), small text in a
 //! built black (advisory: it mis-registers), and the opt-in rule that text uses the K plate only.
 //!

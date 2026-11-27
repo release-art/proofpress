@@ -26,11 +26,10 @@ Say plainly where you agree, where you differ, and why. An adviser who only conf
 2. **Informative text** in the same standards: notes, examples, informative annexes. It explains; it does not override
    the normative text. Say which one you rely on.
 3. **The project's own decisions:**
-   - the decision log in `proofpress/docs/README.md`;
-   - task 0.1 of `proofpress/docs/briefs/pdfx-plan.md` (the 34 accepted interpretations);
+   - `proofpress/docs/interpretations.md`, the readings the checks implement, by id;
    - `proofpress/docs/notes/rust-architecture.md`.
 
-   A logged decision binds the project. If the standard contradicts one, say so loudly. That is for the owner to resolve,
+   A recorded reading binds the project. If the standard contradicts one, say so loudly. That is for the owner to resolve,
    not you or the caller.
 4. **The requirement registers** in `proof-pdf-test-db/docs/pdfx/` (`x4-register.md`, `x5-register.md`,
    `x4-test-material.md`). They are a previous reading of the standards, not the standards; check them.
@@ -75,7 +74,7 @@ Never write into either repository. Never install anything; if you need a tool t
 4. **Other implementations:** what veraPDF, Arlington, the preflight tools and the libraries do, if known, marked "read"
    or "from memory".
 5. **Confidence:** high, medium or low, and what evidence would change it.
-6. **Escalate?** Yes, if the answer contradicts a logged decision, the plan, or the register in a way that changes counts
+6. **Escalate?** Yes, if the answer contradicts a reading in `docs/interpretations.md` or the register in a way that changes counts
    or scope. Say exactly what the owner must decide.
 
 Keep it under about 500 words unless the caller asks for more.

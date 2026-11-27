@@ -1,4 +1,4 @@
-//! Mutation fuzzing on stable Rust (rust-port brief, phase 2): every fixture, damaged at random, must be answered
+//! Mutation fuzzing on stable Rust: every fixture, damaged at random, must be answered
 //! with a report, never a panic and never a hang. A panic inside a check is caught as the `internal` finding, so that
 //! finding fails the test too. Each case shrinks to a small set of edits when it fails.
 //!

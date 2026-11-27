@@ -1,5 +1,4 @@
-//! Print checks on the page boxes and the job's shape (ported from the Python `structure` module, under the parity
-//! gate): the finished size, its bleed and centring against the profile's geometry; the page count and a uniform page
+//! Print checks on the page boxes and the job's shape: the finished size, its bleed and centring against the profile's geometry; the page count and a uniform page
 //! size; and the printing condition the output intent names.
 //!
 //! The trim is the `/TrimBox` (falling back to the `/ArtBox` for the finished size, and to the `/MediaBox` for the

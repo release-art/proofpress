@@ -1,6 +1,7 @@
 # Notes for agents
 
-- Start with [`docs/README.md`](docs/README.md): the plans, the decision log and the open questions.
+- Start with [`docs/README.md`](docs/README.md). How the checks read unclear clauses is in
+  [`docs/interpretations.md`](docs/interpretations.md); a change to a reading goes there with its checks.
 - **Git is the user's.** Never run `git add`, `commit`, `stash`, `push` or any other git write; read-only `git status/diff/log` is
   fine. Leave work uncommitted, and do not ask about git.
 - **Private samples and standards** live in a sibling repository, `proof-pdf-test-db`, checked out at

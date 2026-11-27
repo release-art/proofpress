@@ -1,7 +1,7 @@
 //! PDF/X-4 (ISO 15930-7) 6.4.3.4, spot colours, and 6.20's blend modes.
 //!
 //! The `PrintingOrder` and `Solidities` rows read every object, as the clause states them for the whole file. The rest
-//! read the spaces that print elements use (X4-Q3), the same-name rule for Separations included (owner, 2026-11-25).
+//! read the spaces that print elements use (X4-Q3), the same-name rule for Separations included.
 
 use super::Settings;
 use std::collections::BTreeMap;
@@ -207,7 +207,7 @@ pub(super) fn confusing_names(doc: &Document, _: &Settings) -> Vec<Finding> {
     dedup(out)
 }
 
-/// Every `Separation` array print elements use (owner's decision, 2026-11-25: X4-Q3 governs 6.4.3.4 too): reached from
+/// Every `Separation` array print elements use (X4-Q3 governs 6.4.3.4 too): reached from
 /// the spaces of paints through `Indexed` and `Pattern` bases and `DeviceN` `/Colorants`, with its name, alternate,
 /// tint transform and where it was painted.
 fn separations(doc: &Document) -> Vec<(Vec<u8>, Object, Object, Vec<Location>)> {
@@ -318,7 +318,7 @@ fn same(doc: &Document, left: &Object, right: &Object, depth: usize) -> bool {
 }
 
 /// 6.4.3.4: every `Separation` array of one name that print elements use has the same alternate and tint transform,
-/// whatever the name, process inks included (oracle, 2026-11-25).
+/// whatever the name, process inks included.
 pub(super) fn consistent_definitions(doc: &Document, _: &Settings) -> Vec<Finding> {
     let used = separations(doc);
     let mut first: BTreeMap<&[u8], (&Object, &Object)> = BTreeMap::new();
@@ -354,7 +354,7 @@ fn mixing_hints(doc: &Document) -> Vec<(u32, &Dict)> {
         .collect()
 }
 
-/// 6.4.3.4 (decision log, 2026-11-25): all `/PrintingOrder` arrays agree: names that two arrays share come in the same
+/// 6.4.3.4: all `/PrintingOrder` arrays agree: names that two arrays share come in the same
 /// order in both.
 pub(super) fn printing_order(doc: &Document, _: &Settings) -> Vec<Finding> {
     let orders: Vec<(u32, Vec<&[u8]>)> = mixing_hints(doc)
@@ -384,7 +384,7 @@ pub(super) fn printing_order(doc: &Document, _: &Settings) -> Vec<Finding> {
 }
 
 /// The colours a `/Colorants` Separation and its `DeviceN` must stay within, as CIEDE2000 (6.4.3.4 says "consistent",
-/// not equal; oracle, 2026-11-26). Both sides go through the same 8-bit Lab conversion, which alone can part two
+/// not equal). Both sides go through the same 8-bit Lab conversion, which alone can part two
 /// identical colours by about one unit.
 const COLORANTS_DELTA_E: f64 = 2.0;
 /// The tints the two are compared at: full tint alone misses a different curve.
@@ -540,7 +540,7 @@ pub(super) fn colorants_match(doc: &Document, _: &Settings) -> Vec<Finding> {
             .is_some_and(|space| family::classify(doc, Some(space), None) != Family::Cmyk);
         let colorants = entry(doc, attributes, b"Colorants").and_then(Object::dict);
         // With a `None` colorant the transform may draw the look from the `None` components alone, as a duotone's
-        // lookup table does, so no colorant has a look of its own to compare (oracle, 2026-11-26).
+        // lookup table does, so no colorant has a look of its own to compare.
         if additive || names.contains(&b"None".as_slice()) {
             continue;
         }

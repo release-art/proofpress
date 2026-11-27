@@ -1,4 +1,4 @@
-//! Colours to CIE L*a*b* through ICC profiles, as the Python contrast check measured them through Pillow: 8-bit device
+//! Colours to CIE L*a*b* through ICC profiles: 8-bit device
 //! values (each component rounded to the nearest of 256 steps) through `LittleCMS`, relative colorimetric, into an 8-bit
 //! Lab image, so L* moves in steps of 100/255 and a* and b* in whole units.
 
@@ -223,7 +223,7 @@ mod tests {
             ([22.7233, 20.0904, -46.694], [23.0331, 14.973, -42.5619], 2.0373),
             ([90.9257, -0.5406, -0.9208], [88.6381, -0.8985, -0.7239], 1.5381),
             ([2.0776, 0.0795, -1.135], [0.9033, -0.0636, -0.5514], 0.9082),
-            // Hues more than 180 degrees apart, summing below and above 360: the Python's values.
+            // Hues more than 180 degrees apart, summing below and above 360: reference values.
             ([50.0, 10.0, 2.0], [50.0, -10.0, -4.0], 27.4573),
             ([50.0, 10.0, -1.0], [50.0, 1.0, 10.0], 14.9525),
         ];

@@ -3,7 +3,7 @@
 //! one has no `/Encoding`, and its program's `cmap` lists exactly one encoding subtable.
 //!
 //! A font is symbolic when its descriptor's `/Flags` has the Symbolic bit (bit 3, ISO 32000-1 9.8.2); without a
-//! descriptor or `/Flags` it is not. The fonts judged are those text runs use, `Tr 3` included (oracle, 2026-11-26). A
+//! descriptor or `/Flags` it is not. The fonts judged are those text runs use, `Tr 3` included. A
 //! program is read from `/FontFile2`, or from a `/FontFile3` of subtype `OpenType`; a font without one is left to
 //! 6.5.1 for its `cmap`.
 // ponytail: a font dictionary written directly in a resource dictionary, not as an object of its own, is not judged;
@@ -250,7 +250,7 @@ pub(super) fn embedded(doc: &Document, _: &Settings) -> Vec<Finding> {
 const WIDTH_TOLERANCE: f64 = 1.0;
 
 /// The codes shown in each font object, with the walk's metrics for the font and, per code, whether any appearance of
-/// it is outside render mode 3 (owner, 2026-11-26).
+/// it is outside render mode 3.
 type Shown = BTreeMap<u32, (Rc<Font>, BTreeMap<u32, bool>)>;
 
 fn shown(doc: &Document) -> Shown {

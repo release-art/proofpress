@@ -98,7 +98,7 @@ fn bits(doc: &Document, num: u32) -> Option<i64> {
     }
 }
 
-/// 15930-1 6.8 (Q18): a stream that is not an image is only Flate- or run-length-compressed; an image (an image `XObject`
+/// 15930-1 6.8 (L-Q18): a stream that is not an image is only Flate- or run-length-compressed; an image (an image `XObject`
 /// or a thumbnail) may also be DCT-encoded, and CCITT-encoded at 1 bit per sample. The ASCII encodings compress nothing
 /// and are allowed anywhere. Inline images are not judged here.
 pub(super) fn listed_2001(doc: &Document, _: &Settings) -> Vec<Finding> {
@@ -201,7 +201,7 @@ fn hides_print(doc: &Document, properties: &crate::document::Dict) -> bool {
     off_base || off_list || automatic || not_printed
 }
 
-/// L-Q4 (the oracle's judgement): optional content (PDF 1.5) that can hide something from print fails, as a reader of
+/// L-Q4: optional content (PDF 1.5) that can hide something from print fails, as a reader of
 /// the part's PDF version prints everything; present but always on, it is a warning.
 pub(super) fn optional_content(doc: &Document, settings: &Settings) -> (Vec<Finding>, Vec<Finding>) {
     let Some(properties) = doc

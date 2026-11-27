@@ -1,4 +1,4 @@
-//! Print checks on images' effective resolution (ported from the Python `resolution` module, under the parity gate):
+//! Print checks on images' effective resolution:
 //! below the profile's minimum fails, below its advisory level warns, above its ceiling warns (it only grows the file),
 //! and an image scaled unevenly past the profile's limit warns.
 //!

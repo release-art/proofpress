@@ -1,9 +1,5 @@
 # The Rust engine's architecture
 
-Agreed in discussion with the owner, 2026-11-09 to 2026-11-25. This is the shape of the code; the brief
-([`../briefs/rust-port.md`](../briefs/rust-port.md)) holds the plan, the stages and the module layout, and was brought in line with
-this note on 2026-11-25. The spikes (`spikes/crabify/`, in git history up to `e59b894`) are evidence of what is possible, not a design to inherit.
-
 Clause numbers are ISO 32000-2:2020 with Errata Collection 3, held in `proof-pdf-test-db` (`standards/iso/`).
 
 ## Tiers
@@ -50,7 +46,7 @@ Each tier publishes its events to listeners, called synchronously, in this order
 
 ```text
 tier N ──► first-order observers ──► side channel
-       └─► proxy (one per tier; absent or identity today)
+       └─► proxy (one per tier; absent or identity)
               └─► second-order readers ──► side channel
                     └─ tier N+1
 ```
@@ -58,8 +54,8 @@ tier N ──► first-order observers ──► side channel
 - **First-order observers** see the raw events and report what they find. A tier's validators live here, not in its parser.
 - **The proxy** may mute an event. A mute removes what the event covers: a whole subtree if the event is one, or a single event such
   as `DictStart`. The proxy must keep the stream balanced, muting the matching `DictEnd` too; an imbalance seen downstream is a proxy
-  bug, reported as an internal finding. All fixing logic for a tier lives in its one proxy. It is a slot for later: the project
-  validates and does not repair.
+  bug, reported as an internal finding. All fixing logic for a tier would live in its one proxy; the project validates and does
+  not repair, so no proxy mutes anything.
 - **Second-order readers** see what the proxy passed on. The next tier is one of them.
 - **Tier 5's cache holds objects as they came out of the proxy,** so a mute holds on the second read.
 - **Events are borrowed, not copied,** and listeners are compiled in, chosen per profile.
@@ -103,7 +99,7 @@ libraries:
   written, as qpdf does.
 - **Dictionaries keep their order,** as lopdf's `IndexMap` does: a key keeps the place where it first appeared.
   A dictionary of 16 or more entries also keeps a map from each key to its place, so a lookup does not scan it; the entries
-  change only through `Dict`'s own methods, which keep that map in step (decision log, 2026-11-27).
+  change only through `Dict`'s own methods, which keep that map in step.
 
 **Duplicate keys.** ISO 32000-2 7.3.7 forbids them but does not say which copy wins. The last one wins, which is also what qpdf 12
 does (it warns "last occurrence overrides earlier ones"). The copies it beat are kept, not lost: every dictionary, nested ones
@@ -121,7 +117,7 @@ gives `{K1: V6, K2: V5, K3: V3}`, with layer 0 `{K1: V4, K2: V2}` and layer 1 `{
 - **Inline-image keys are normalised** before layering, so `/W` and `/Width` are the same key; the raw spelling is kept.
 - **The entries in one dictionary, overridden ones included, count against a limit,** so a key repeated a million times cannot
   exhaust memory.
-- **Parity:** qpdf matches on which value wins and on escaped keys. It does not keep key order, so order is not compared.
+- **Against qpdf:** qpdf agrees on which value wins and on escaped keys. It does not keep key order, so order is not compared.
 
 **Strings and names.** ISO 32000-2 separates syntax from meaning: literal `(…)` and hex `<…>` mean the same bytes (7.3.4), and
 whether those bytes are a text, ASCII, byte or date string depends on the key they sit under (7.9.2), not on how they are written.
@@ -146,13 +142,12 @@ whether those bytes are a text, ASCII, byte or date string depends on the key th
 **Dangling references: null for meaning, a reason for reporting.** ISO 32000-2 7.3.10 says a reference to an undefined object is not
 an error and reads as null, and a null value means the key is absent (7.3.7). Lookups do exactly that. But resolution records why
 the result is null: the object is not in the xref or is beyond `/Size`, its entry is free, its generation does not match, the
-object's value is null, or the value is a literal `null`. qpdf 12 collapses all five into an absent key with no warning, which is
-how a `Do` on a missing image passes today (bug 3).
+object's value is null, or the value is a literal `null`. qpdf 12 collapses all five into an absent key with no warning.
 
 - A tier-5 observer reports each dangling reference once, as a **warning**, since the standard allows it but it usually means an
-  export or edit went wrong. If leftover references in unused places prove noisy, limit it to references reachable from pages.
+  export or edit went wrong.
 - A check that needs the object raises its own error, naming the reason ("`/Im0` points at object 99, which does not exist"), with
-  `caused_by` pointing at the warning. Bug 3's check fires on "nothing usable" whatever the reason; the reason only makes the
+  `caused_by` pointing at the warning. `xobject-missing` fires on "nothing usable" whatever the reason; the reason only makes the
   message precise.
 
 **Provenance: one type for every object, with where it came from.** qpdf, lopdf, PDFBox and Roslyn all use one type for parsed and
@@ -170,7 +165,7 @@ dictionary can hold a key a proxy inserted:
 - **Values with no source text are formatted by the writer:** a created real as the shortest text that reads back as the same f64; a
   created string in the form the writer picks (hex for binary-looking bytes, as qpdf does).
 - **Copied keeps its origin,** which pikepdf loses (its `copy_foreign` renumbers at once and keeps no link), so a finding in an
-  extracted file can point back to the page it was cut from. Objects are renumbered when written, as decided above.
+  extracted file can point back to the page it was cut from. Objects are renumbered when written.
 
 **Caches: filled at open, then frozen.** qpdf, PDFBox and MuPDF never share a document between threads; hayro-syntax does, with a
 lock-free `OnceLock` per slot. We need neither, because open already reads everything reachable:
@@ -180,7 +175,7 @@ lock-free `OnceLock` per slot. We need neither, because open already reads every
   panic on the same input, since re-entering a `OnceLock` from its own initialiser is an error.
 - **After open the table is immutable:** a plain `Vec` indexed by object number, `Sync` with no locks.
 - **Decoded stream data is cached on first request,** up to a byte budget per document (256 MiB), behind a `Mutex` that is not held
-  while decoding: profiling showed checks re-inflating the same ICC profile at every colour-space use (decision log, 2026-11-27).
+  while decoding.
   Past the budget a stream is decoded afresh each time, so memory stays bounded. Derived data (typed views, page summaries) may
   sit in a `OnceLock` each, as hayro does, since it needs nothing that is still loading.
 
@@ -243,7 +238,7 @@ does not understand, and gets files wrong because of it.
 | `caused_by` | Optional `EventId` of the cause, so a report can group one defect's consequences |
 | `page` | Derived from the chain |
 
-Settled in pdfx-plan task 1.4: the check catalogue, `Finding`, the per-check outcome and `Report` live in a base module,
+The check catalogue, `Finding`, the per-check outcome and `Report` live in a base module,
 `findings`, on top of `pipeline` and below every tier, since every tier raises findings. The JSON is schema 1; its shape is
 pinned by an `insta` snapshot (`rust/src/snapshots/`). A finding citing a clause its check does not declare stops a debug
 build, so tests catch it.
@@ -255,15 +250,14 @@ ran leaves no trace. "Skipped" is not used: JUnit and TAP both show it as passed
 
 **One verdict per file:** `pass`, `fail` or `refused`, exiting 0, 1 or 2. Beside it, `structure` is `sound` (tiers 1 to 4 found
 nothing), `damaged` (read with gaps) or `refused`. That answers a print shop's question, whether the file is broken or only the
-artwork, without a second pass/fail axis. JHOVE's well-formed and valid verdicts were considered and not taken: they confused more
-than they helped. Arlington's shape checks appear as findings.
+artwork, without a second pass/fail axis. Arlington's shape checks appear as findings.
 
 - Each check declares the clauses it may cite. A finding citing one outside its check's set is a bug, caught by a test. The README
   and `--list-checks` list each check's clauses from the declarations.
 - A check reused from X-4 at an older level (PDF/X-1a, X-3) keeps citing its ISO 15930-7 clause in code; its
   `checks.toml` entry maps each such clause to the older part's (`cite.x3-2002 = { "6.8" = "6.4" }`), and `verify`
   rewrites a finding's clause by that map at the end of the run. `build.rs` refuses an entry that applies at an older
-  level without mapping every ISO 15930-7 clause it has, so no finding there cites the X-4 text (pdfx-1a-3-plan 1.2).
+  level without mapping every ISO 15930-7 clause it has, so no finding there cites the X-4 text.
 - A list of clause numbers per standard held, extracted from the test-db Markdown copies, is committed here: numbers only, no titles
   or text. Declared clauses are validated against it.
 
@@ -279,8 +273,8 @@ than they helped. Arlington's shape checks appear as findings.
   gap.
 - **Cycles.** One set of ancestor object numbers covers forms, patterns, Type 3 glyphs, annotation appearances and soft masks. A
   cycle is an error and a gap. Nesting depth is a safety limit; exceeding it reports "not evaluated", never silently.
-- **A form without `/Resources` uses the page's resources,** as 7.8.3 says, with a warning. MuPDF does this; today's Python, the
-  spike, PDFBox and pdf.js use the enclosing form's resources, so nested forms without `/Resources` are a behaviour change.
+- **A form without `/Resources` uses the page's resources,** as 7.8.3 says, with a warning. MuPDF does the same; PDFBox and
+  pdf.js use the enclosing form's.
 - **`BX`/`EX`** keep a nesting counter. An unknown operator outside them is an error; inside, it is ignored and recorded. A pair left
   open at the end of the page is a finding.
 - **Several content streams on a page** are read each as its own buffer, with the operand stack and the `q`/`Q`, `BT`/`ET` and `BI`
@@ -300,12 +294,11 @@ and putting a proxy in between a matter of forwarding every method by hand.
 - Geometry: the CTM and a page-space bbox from true curve extrema, widened by half the line width for strokes.
 - The clip's id and bbox.
 - Fill and stroke colour separately: resolved space (family, spot names, profiled), components, pattern.
-- `OP`, `op` and `OPM` separately. Today's Python merges `OP` and `op`.
+- `OP`, `op` and `OPM` separately.
 - Opacity (`ca`, `CA`), blend mode, soft mask, transparency group.
 - For strokes, the line width as the minimum page-space width (the smallest singular value of the CTM, not the square root of its
   determinant) and the dash.
-- Optional-content membership and visibility. Hidden content is marked, not dropped as hayro drops it; today's Python does not
-  model optional content at all.
+- Optional-content membership and visibility. Hidden content is marked, not dropped.
 - Marked-content id and artifact.
 
 **Text comes per run,** as in MuPDF and hayro, with a borrowed slice of positioned glyphs (code, Unicode, origin, advance, `.notdef`).
@@ -319,13 +312,13 @@ modes 4 to 7 are clips too. A finding says when a clip was approximate.
 content is not ink. The blend-space check runs per group, not per page.
 
 **Text metrics start from widths only** (`/Widths`, `/W`, the standard 14 fonts), with boxes from `FontBBox` or ascent and descent.
-A Type 3 glyph's procedure is walked as a nested scope only when a listener asks for it. Font programs are parsed later, in a
+A Type 3 glyph's procedure is walked as a nested scope only when a listener asks for it. Font programs are parsed in a
 fonts helper, for glyph presence and width consistency.
 
 ## Checks, profiles and reports
 
 - **The check list is data:** a checked-in `checks.toml`, read at build time, generates the check table, the README's table and
-  `--list-checks` (text, and `--json`). Settled in pdfx-plan task 1.1: each check is a `&Check` constant (`X4_TRAPPED_PRESENT`)
+  `--list-checks` (text, and `--json`). Each check is a `&Check` constant (`X4_TRAPPED_PRESENT`)
   in a list `ALL`, with no generated branches, so the coverage gate has nothing to chase and a misspelt check does not compile. Each entry has an id (kebab-case, stable, never reused), `aliases` for old ids, a title, the
   clauses it may cite, a default severity, and its parameters, each with a type and no default unless the entry gives one with a
   reason and a clause.
@@ -333,10 +326,10 @@ fonts helper, for glyph presence and width consistency.
   later value winning, as ESLint merges (changing only a severity keeps the inherited parameters). Checks are named one by one, not
   by prefix.
 - **Errors at load name the profile and the key:** an unknown id, a check that is on but missing a parameter with no default, a value
-  of the wrong type. `--show-profile` prints the merged result, as ruff's `--show-settings` does. Today's flags become shorthand for
-  setting a check's parameter.
+  of the wrong type. `--show-profile` prints the merged result, as ruff's `--show-settings` does. Flags are shorthand for setting a
+  check's parameter.
 - **Our own versioned JSON stays the main output,** shaped so SARIF can be derived from it without loss: status to `kind`, severity
-  to `level`, the chain to logical locations, `caused_by` to related locations. `--format sarif` comes after the port. GitHub's code
+  to `level`, the chain to logical locations, `caused_by` to related locations. There is no `--format sarif` yet. GitHub's code
   scanning needs line numbers and ignores `kind`, so there the exit code and our JSON stay the real verdict.
 
 ## Limits
@@ -358,8 +351,7 @@ One `Limits` struct, one field per kind of structure, in one place:
 - **Cycles are not limits;** a visited set catches them, whatever the limits are.
 - **Decoding stops at its budget** (`Read::take(budget + 1)`). hayro-syntax decodes Flate with no bound.
 - **Configurable** with `--limit kind=value` and from Python; `--list-limits` prints them.
-- **Defaults are ours, measured on the corpus.** None is chosen yet. Figures from qpdf, PDFBox, MuPDF, lopdf and hayro are
-  references, not defaults.
+- **Defaults are ours,** chosen to pass every file in the corpus. Not every kind of structure has a limit yet.
 
 ## Boundaries
 
@@ -368,8 +360,7 @@ One `Limits` struct, one field per kind of structure, in one place:
   `except Exception` does not catch. The release profile keeps `panic = "unwind"`.
 - **Async.** `core.verify_file` stays `async def` and awaits `asyncio.to_thread`, and Rust releases the GIL inside
   (`Python::detach`). A cancel token, set when the task is cancelled, is polled between pages and while waiting on external tools.
-- **Wheels.** Per-version `cp315` wheels now, since `requires-python` is 3.15 only. `abi3t` (PEP 803) later, if the range widens or
-  free-threaded 3.15 matters; plain abi3 does not load on free-threaded CPython.
+- **Wheels.** Per-version `cp315` wheels, since `requires-python` is 3.15 only; plain abi3 does not load on free-threaded CPython.
 - **CLI.** Parse with clap's `try_parse`, so a usage error exits 64 rather than clap's own 2, which would read as "refused". `--help`
   and `--version` exit 0. With several files the worst code wins: refused, then timeout, then findings, then pass. A panic outside
   any check exits 70 (`EX_SOFTWARE`). The wheel's `proof-pdf` command calls the same clap code.
@@ -381,7 +372,7 @@ One `Limits` struct, one field per kind of structure, in one place:
 
 ## The writer
 
-Our own, on the object model, as the brief decided:
+Our own, on the object model:
 
 - **A full rewrite** with a classic xref table and no object streams.
 - **Parsed values copy their raw slices,** so a real keeps its text and a string its bytes. Created reals use Rust's shortest `f64`
@@ -391,12 +382,12 @@ Our own, on the object model, as the brief decided:
   `/Resources`, `/MediaBox` and `/Rotate`, drops `/Parent`, `/Annots` and `/StructParents`, and writes a dangling reference as `null`.
 - **Unused resources are pruned** with a tier-6 listener that records the names used; if a content stream is damaged, every resource
   is kept.
-- **Every output is read back** by our own parser and passed through `qpdf --check` in the parity gate.
+- **Every output is read back** by our own parser.
 - `pdf-writer` (typst) stores numbers as `f32` only, so it cannot be the copy path; it is fine for building test fixtures.
 
 ## Code conventions
 
-Agreed 2026-11-25, for the crate in `rust/`.
+For the crate in `rust/`.
 
 - **Public means "crosses the crate".** The crate is not published, and the Python module lives inside it, so it can use
   `pub(crate)` items. Only the CLI binary, the tests in `rust/tests/` and the docs are outside. Default to private or
@@ -411,40 +402,12 @@ Agreed 2026-11-25, for the crate in `rust/`.
   - `document` and `common` may use each other: a page needs rectangles, and rectangles are read from objects.
 - **Errors.** A problem in the input is damage and findings, returned as values, never an `Err`. `Result` is only for the
   environment (I/O, configuration, a missing tool), with one typed error enum; never `Result<_, String>`.
-- **British spelling in identifiers,** as in the Python code and the user-facing check ids: `colour_space`, not `color_space`.
-  Otherwise the two halves drift apart during the port.
+- **British spelling in identifiers,** as in the Python code and the user-facing check ids: `colour_space`, not `color_space`. The two halves read alike.
 - **No logging in the library.** Printing is denied by lint; everything observable goes through findings and the side channel.
-  Debug tracing can come later, behind a feature, if it is ever needed.
 - **Test fixtures.** Rust tests read the existing `tests/fixtures/pdfs/`, not a copy. Event streams and findings get snapshot
   tests (`insta`) once they exist. The corpus in `proof-pdf-test-db` stays out of CI.
 
-Settled in pdfx-plan task 1.7: PyO3 0.30's generated code compiles under `forbid(unsafe_code)`. One crate with a `python`
+PyO3 0.30's generated code compiles under `forbid(unsafe_code)`. One crate with a `python`
 feature, `crate-type = ["cdylib", "rlib"]`; maturin builds the extension as `proof_pdf._internal._core` (private, like every
 other non-public module), and the version is `rust/Cargo.toml`'s, set from the tag when releasing. The binding is tested in
 Rust, which links libpython, so it counts towards the coverage gate like everything else.
-
-## Taken from other tools
-
-From a survey on 2026-11-25. Direction agreed; details open.
-
-- **Shape checks from the Arlington PDF Model** (PDF Association): one TSV per object type with keys, types, required keys, values
-  and versions, derived from ISO 32000-2. A first-order observer on tier 5, driven by the data. Pin a version; check its licence first.
-- **`inspect` as recording listeners** on the same pipeline, as veraPDF does feature extraction, rather than a separate code path.
-- **More oracles for the parity gate:** the Arlington checker, and perhaps Galois's DaeDaLus PDF parser, next to qpdf.
-- Precedent for the proxy: qpdf's `TokenFilter` and MuPDF's filter processor, both muting or rewriting content in a chain. callas
-  pdfToolbox and Enfocus PitStop keep checks and fixups separate, as observers and the proxy are here.
-- A caution: Caradoc's strict mode refused incremental updates in 65% and object streams in 37% of 10,000 web files. We accept both;
-  strictness has to be measured on real files.
-
-## Open
-
-Every question raised in the discussion is settled. What remains needs measuring, not deciding:
-
-- Default values for each limit, from the corpus.
-- The Arlington model's licence, before it is pinned.
-
-## Ideas for later
-
-- **A repairing controller** that tells a tier how to carry on after damage, for example "continue this scope". It would sit beside
-  the tiers, and is out of scope while the project validates.
-- **An edit log of synthetic events** written into any file a proxy changes, as Enfocus's Certified PDF records each session.

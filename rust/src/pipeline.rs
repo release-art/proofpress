@@ -70,8 +70,8 @@ pub fn publish<E>(event: &E, observers: &mut [&mut dyn Listener<E>], readers: &m
 /// Every safety limit, one field per kind of structure (architecture note, "Limits"). Reaching one is damage, not a
 /// verdict: the scope becomes a gap, or the file is refused when the limit is file-wide.
 ///
-/// ponytail: the defaults are provisional, chosen to pass every file in the corpus; pdfx-plan task 2.3 measures them and
-/// adds the kinds not yet read (strings, names, images, graphs, content).
+/// ponytail: the defaults are chosen to pass every file in the corpus, not measured; strings, names, images, graphs and
+/// content have no limit yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
     /// Arrays and dictionaries nested inside one direct object.

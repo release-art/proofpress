@@ -90,7 +90,7 @@ pub(super) fn outside_bleed(doc: &Document, _: &Settings) -> Vec<Finding> {
 }
 
 /// 15930-1 6.19, -3 6.12: at the 2001 and 2002 levels only `TrapNet` annotations may lie inside the bleed box (or the
-/// trim or art box without one); `PrinterMark`, a PDF 1.4 type, is not exempt (Q20).
+/// trim or art box without one); `PrinterMark`, a PDF 1.4 type, is not exempt (L-Q20).
 pub(super) fn x13_outside_bleed(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let other = |s: &[u8]| s != b"TrapNet";
     overlapping_citing(

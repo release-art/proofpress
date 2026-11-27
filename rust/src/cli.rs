@@ -1,4 +1,4 @@
-//! The `proof-pdf` command line (brief stage 4): `verify` in Rust, with the Python command's options and reports.
+//! The `proof-pdf` command line: `verify` in Rust, with the Python command's options and reports.
 //!
 //! Exit codes: 0 pass, 1 findings, 2 a file refused or unreadable, 3 a tool timed out, 64 a usage error; `--help`
 //! and `--version` exit 0.

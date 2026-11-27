@@ -566,7 +566,7 @@ expect = { "x4.jpx.cmyk-as-device" = "profile-less CMYK JPEG 2000 with no /Color
 
 [x4-jpx-plain-jp2]
 levels = ["x4"]
-expect = { "x4.jpx.baseline" = "a plain JP2 file: no jpx or jpxb brand, no Reader Requirements box (6.27, T.801 M.9.2; owner's answer)" }
+expect = { "x4.jpx.baseline" = "a plain JP2 file: no jpx or jpxb brand, no Reader Requirements box (6.27, T.801 M.9.2)" }
 
 [x4-jpx-bare-codestream]
 levels = ["x4"]
@@ -590,7 +590,7 @@ expect = { "x4.image.jbig2-valid" = "a JBIG2 page information segment shorter th
 levels = ["x4"]
 expect = { "x4.pre-separated.absent" = "two pages painting only Cyan and only Magenta (6.1.2, X4-Q2)" }
 
-# proof-pdf's own print checks, ported from the Python under the parity gate. Each adds one defect to x4-good's page.
+# proof-pdf's own print checks. Each adds one defect to x4-good's page.
 
 [print-outside-media]
 levels = ["print"]
@@ -835,7 +835,7 @@ expect = { "x4.font.widths-consistent" = "/Widths 650 for P, 600 in the program 
 levels = ["x4"]
 expect = { "x4.font.embedded" = "an unembedded font in optional content that is off (6.5.1, 6.24)" }
 
-# 6.5.1's glyph presence skips a code shown only in render mode 3 (owner, 2026-11-26).
+# 6.5.1's glyph presence skips a code shown only in render mode 3.
 [x4-font-invisible-missing]
 levels = ["x4"]
 expect = {}
@@ -1203,7 +1203,7 @@ expect = { "x5.n-trapnet-pcm" = "a TrapNet appearance with /PCM /DeviceCMYK (7.1
 levels = ["x5n"]
 expect = { "x5.n-trapnet-separations" = "/SeparationColorNames lists Cyan alone (7.1)" }
 
-# ---- PDF/X-1a and PDF/X-3 (ISO 15930-1, -3, -4, -6; docs/briefs/pdfx-1a-3-plan.md). x4-good identified as each older
+# ---- PDF/X-1a and PDF/X-3 (ISO 15930-1, -3, -4, -6; docs/interpretations.md). x4-good identified as each older
 # level in Info, without its X-4 XMP: the base each older-level negative is built from.
 [x1a-2001-good]
 levels = ["x1a-2001"]
@@ -1247,7 +1247,7 @@ expect = { "x13.identity.version-value" = "Info /GTS_PDFXVersion names X-1a:2001
 
 [x1a-conformance-misprint]
 levels = ["x1a-2001"]
-expect = { "x1a.identity.conformance" = "Info /GTS_PDFXConformance is 6.13's misprint PDF/X-a1:2001 (Q13)" }
+expect = { "x1a.identity.conformance" = "Info /GTS_PDFXConformance is 6.13's misprint PDF/X-a1:2001 (L-Q13)" }
 
 [x1a-plain-x1]
 levels = ["x1a-2001"]
@@ -1302,7 +1302,7 @@ expect = { "x1a.output-intent.profile-atob1" = "the output profile has no AToB1T
 
 [x1a-intent-rgb]
 levels = ["x1a-2003"]
-expect = { "x1a.output-intent.cmyk" = "the output profile's data colour space is RGB (15930-4 6.2.1, Q16)" }
+expect = { "x1a.output-intent.cmyk" = "the output profile's data colour space is RGB (15930-4 6.2.1, L-Q16)" }
 
 [x1a-no-output-condition]
 levels = ["x1a-2001"]
@@ -1314,24 +1314,24 @@ expect = { "x3.output-intent.info" = "the PDF/X intent has no /Info (15930-3 6.2
 
 [x13-profile-v4]
 levels = ["x3-2003"]
-expect = { "x13.output-intent.profile-version" = "the output profile is ICC version 4 (Q11)" }
+expect = { "x13.output-intent.profile-version" = "the output profile is ICC version 4 (L-Q11)" }
 
 [x3-icc-v4]
 levels = ["x3-2003"]
-expect = { "x3.icc.profile-version" = "a print element's ICCBased profile is version 4 (Q11)" }
+expect = { "x3.icc.profile-version" = "a print element's ICCBased profile is version 4 (L-Q11)" }
 
 [x3-2003-registry-https]
 levels = ["x3-2003"]
 expect = { "x3.output-intent.registry-name-color-org-2003" = "FOGRA39 under /RegistryName https://www.color.org (15930-6 6.2.2)" }
 
-# The ICC registry URL with a final slash, as 15930-6 spells it: right at X-3:2003 (Q15), a variant at X-1a:2003.
+# The ICC registry URL with a final slash, as 15930-6 spells it: right at X-3:2003 (L-Q15), a variant at X-1a:2003.
 [x3-2003-registry-slash]
 levels = ["x3-2003"]
 expect = {}
 
 [x1a-2003-registry-slash]
 levels = ["x1a-2003"]
-expect = { "x4.output-intent.registry-name-color-org" = "FOGRA39 under http://www.color.org/, not exactly the URL 15930-4 6.2.2 gives (Q15)" }
+expect = { "x4.output-intent.registry-name-color-org" = "FOGRA39 under http://www.color.org/, not exactly the URL 15930-4 6.2.2 gives (L-Q15)" }
 
 [x1a-device-rgb]
 levels = ["x1a-2001"]
@@ -1339,7 +1339,7 @@ expect = { "x1a.colour.print-spaces" = "a DeviceRGB fill (15930-1 6.3.1)" }
 
 [x1a-default-cmyk]
 levels = ["x1a-2003"]
-expect = { "x1a.colour.print-spaces" = "a DefaultCMYK ICCBased space remaps a DeviceCMYK fill (15930-4 6.2.1, Q12)" }
+expect = { "x1a.colour.print-spaces" = "a DefaultCMYK ICCBased space remaps a DeviceCMYK fill (15930-4 6.2.1, L-Q12)" }
 
 [x1a-spot-rgb-alternate]
 levels = ["x1a-2003"]
@@ -1347,7 +1347,7 @@ expect = { "x1a.spot.alternate-cmyk-or-gray" = "a Separation whose alternate is 
 
 [x1a-unused-default]
 levels = ["x1a-2001"]
-expect = { "x1a.colour.no-default-space" = "the page holds a DefaultRGB space no print element uses (15930-1 6.3.1, Q12, a warning)" }
+expect = { "x1a.colour.no-default-space" = "the page holds a DefaultRGB space no print element uses (15930-1 6.3.1, L-Q12, a warning)" }
 
 # ---- Older levels: transparency (15930-4 and -6 6.16; L-Q3 at X-1a:2001 and X-3:2002; task 2.2).
 [x13-smask-extgstate]
@@ -1370,7 +1370,7 @@ expect = { "x13.transparency.extgstate-values" = "an ExtGState with /BM /Multipl
 levels = ["x3-2003"]
 expect = { "x13.transparency.no-group" = "a form XObject with a transparency group is drawn (15930-6 6.16)" }
 
-# The keys at their opaque values, and a page group (Q19): allowed.
+# The keys at their opaque values, and a page group (L-Q19): allowed.
 [x13-opaque-transparency-keys]
 levels = ["x1a-2001"]
 expect = {}
@@ -1388,7 +1388,7 @@ expect = { "x13.structure.xref-table" = "written with a cross-reference stream a
 levels = ["x1a-2001"]
 expect = { "x1a.filter.listed-2001" = "the page content is LZW-encoded (15930-1 6.8)" }
 
-# ASCII85 is an encoding, not compression: allowed at X-1a:2001 (Q18).
+# ASCII85 is an encoding, not compression: allowed at X-1a:2001 (L-Q18).
 [x1a-content-ascii85]
 levels = ["x1a-2001"]
 expect = {}
@@ -1420,11 +1420,11 @@ expect = { "x13.extgstate.no-tr2" = "an ExtGState with /TR2 /Default, which X-4 
 
 [x13-attachment]
 levels = ["x3-2003"]
-expect = { "x13.filespec.absent" = "an embedded file's file specification (15930-6 6.4, Q22)" }
+expect = { "x13.filespec.absent" = "an embedded file's file specification (15930-6 6.4, L-Q22)" }
 
 [x1a-attachment]
 levels = ["x1a-2001"]
-expect = { "x1a.filespec.embedded-file" = "an embedded file (Q22 at X-1a:2001, a warning)" }
+expect = { "x1a.filespec.embedded-file" = "an embedded file (L-Q22 at X-1a:2001, a warning)" }
 
 [x13-trim-outside-crop]
 levels = ["x3-2002"]
@@ -1432,7 +1432,7 @@ expect = { "x13.boxes.trim-within-crop" = "the TrimBox extends beyond the CropBo
 
 [x13-printermark-inside-bleed]
 levels = ["x1a-2001"]
-expect = { "x13.annot.outside-bleed-trapnet-only" = "a PrinterMark annotation inside the bleed box, not exempt at X-1a:2001 (15930-1 6.19, Q20)" }
+expect = { "x13.annot.outside-bleed-trapnet-only" = "a PrinterMark annotation inside the bleed box, not exempt at X-1a:2001 (15930-1 6.19, L-Q20)" }
 
 [x13-print-area-trim]
 levels = ["x1a-2003"]

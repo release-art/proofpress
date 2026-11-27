@@ -1,6 +1,6 @@
 Feature: PDF/X-1a and PDF/X-3, transparency
   ISO 15930-4 and 15930-6 6.16 ban soft masks, opacity, blend modes other than Normal and Compatible, and transparency
-  groups on forms; the owner's decision on L-Q3 bans the first three at X-1a:2001 and X-3:2002 (15930-3 Annex D).
+  groups on forms; L-Q3 bans the first three at X-1a:2001 and X-3:2002 (15930-3 Annex D).
 
   Scenario Outline: One defect raises its check and nothing else
     Given the fixture "<fixture>"

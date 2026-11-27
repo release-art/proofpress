@@ -1,4 +1,4 @@
-//! The contrast check (ported from the Python `contrast` module, under the parity gate): text whose lightness differs
+//! The contrast check: text whose lightness differs
 //! from its background by less than the profile's minimum L* difference fails.
 //!
 //! This is deliberately not WCAG, a screen model: for ink on a substrate the figure that means anything is the L*

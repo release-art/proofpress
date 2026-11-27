@@ -38,6 +38,9 @@ What existing users will notice, most important first (the entries below give th
 
 ### Added
 
+- Standalone `proof-pdf` downloads (the Rust `verify`, no Python needed) for macOS arm64, Linux x86-64 and arm64 and
+  Windows x64 on each GitHub release, signed with Sigstore, and installable with `brew install release-art/tap/proof-pdf`
+  or `scoop install release-art/proof-pdf`.
 - The README's check counts and its list of print checks are generated from `rust/checks.toml`, and a test fails while they are stale.
 
 ### Changed
@@ -101,9 +104,8 @@ What existing users will notice, most important first (the entries below give th
   - Sampled PDF functions interpolate between their samples (7.10.2) where the Python took the nearest one.
   - CMYK JPEG and JPEG 2000 images are decoded in the core (`zune-jpeg`, `hayro-jpeg2000`), and colours are converted
     to L\*a\*b\* with LittleCMS 2.20 (`lcms2`, linked statically).
-- The package now contains a compiled Rust core (`proof_pdf._internal._core`), the start of the port described in
-  `docs/briefs/rust-port.md`. It is built with maturin, so releases ship a wheel per platform (macOS arm64, Linux x86-64
-  and arm64, manylinux, Windows x64) and installing from source needs Rust. Nothing user-visible uses it yet.
+- The package contains a compiled Rust core (`proof_pdf._internal._core`), built with maturin, so releases ship a wheel
+  per platform (macOS arm64, Linux x86-64 and arm64, manylinux, Windows x64) and installing from source needs Rust.
 - Total ink (`tac`) counts each spot colour as one ink at its tint, measured with Ghostscript's `tiffsep` (one plate per
   ink) instead of `tiff32nc`, which converted spots to their CMYK alternate and dropped a spot overprinting process ink.
   Jobs with spot colours can read lower than before (a spot whose alternate was a CMYK mix), or higher (a spot

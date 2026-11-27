@@ -257,7 +257,7 @@ class TestOutsideMedia:
 
 
 class TestMissingXObjects:
-    """The brief's bug 3: a ``Do`` whose name resolves to nothing is a hole in the page, not a pass."""
+    """A ``Do`` whose name resolves to nothing is a hole in the page, not a pass."""
 
     @staticmethod
     def _check(tmp_path, xobject):

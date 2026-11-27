@@ -1,6 +1,7 @@
 name: Release
 
-# Push a tag v1.2.3: tests, then a wheel per platform and the sdist, then PyPI (via TestPyPI first), then a GitHub Release.
+# Push a tag v1.2.3: tests, then a wheel per platform, the sdist and a standalone `proof-pdf` per platform, then PyPI
+# (via TestPyPI first), then a GitHub Release with the standalone downloads, then the Homebrew tap and Scoop bucket.
 # The tag is the version: bin/rust/set-version.sh writes it into rust/Cargo.toml, which maturin reads. The same tag also
 # triggers the Docker publish in image.yml. Run it by hand for a dry run: everything but publishing, at the version given.
 on:
@@ -65,6 +66,28 @@ jobs:
         with:
           name: wheel-${{ matrix.target }}
           path: dist/*.whl
+      # The Rust command line alone (`verify`), for download without Python. Built by maturin as a binary-only wheel from
+      # rust/, which has no pyproject.toml, so the Linux build runs in the same manylinux container as the wheel's.
+      - uses: PyO3/maturin-action@v1
+        with:
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          target: ${{ matrix.target }}
+          working-directory: rust
+          args: --release --out ../bin-wheel --bindings bin --features cli
+          manylinux: auto
+      - name: Pack the program for download without pip, and run it
+        shell: bash
+        run: |
+          python bin/rust/archive.py bin-wheel/*.whl "${{ matrix.target }}" binaries
+          mkdir unpacked
+          python -m zipfile -e binaries/*.zip unpacked 2>/dev/null || tar -xzf binaries/*.tar.gz -C unpacked
+          program=$(echo unpacked/*/proof-pdf*)
+          test "$("$program" --version)" = "proof-pdf ${VERSION#v}"
+          "$program" verify tests/fixtures/pdfs/x4-good.pdf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: binaries/*
   sdist:
     needs: test
     runs-on: ubuntu-latest
@@ -89,11 +112,24 @@ jobs:
     permissions:
       id-token: write # PyPI trusted publishing + Sigstore
       contents: write # the GitHub Release
+    outputs:
+      prerelease: ${{ steps.ver.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6
+      # dist/ is what PyPI gets; the standalone downloads stay apart in binaries/.
       - uses: actions/download-artifact@v4
         with:
+          pattern: wheel-*
           path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          path: binaries
           merge-multiple: true
       # The Sigstore action pip-installs its own tooling into whatever `python` is on PATH; its dependency pydantic-core
       # has no 3.15 wheels yet and fails to build from source. The wheel we ship is already built, so sign under 3.13.
@@ -106,11 +142,12 @@ jobs:
           inputs: |
             ./dist/*.whl
             ./dist/*.tar.gz
+            ./binaries/*
       - name: Move Sigstore bundles out of dist/
         # twine check dist/* rejects *.sigstore.json.
         run: |
           mkdir -p signatures
-          mv dist/*.sigstore.json signatures/
+          mv dist/*.sigstore.json binaries/*.sigstore.json signatures/
       - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -118,6 +155,15 @@ jobs:
           attestations: false # the PyPI step below makes the real ones
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Is it a prerelease
+        # PEP 440 pre-release suffixes at the end of the version (aN, bN, rcN, .devN).
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+(\.[0-9]+)+((a|b|c|rc|alpha|beta|pre|preview)[0-9]+|\.dev[0-9]+)$ ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Extract release notes from CHANGELOG
         id: changelog
         uses: mindsers/changelog-reader-action@v2
@@ -131,9 +177,63 @@ jobs:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.changes || format('Release {0}. See [CHANGELOG.md](CHANGELOG.md).', github.ref_name) }}
-          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'dev') }}
+          prerelease: ${{ steps.ver.outputs.prerelease == 'true' }}
           files: |
             dist/*.whl
             dist/*.tar.gz
+            binaries/*
             signatures/*.sigstore.json
           fail_on_unmatched_files: true
+
+  package-managers:
+    # Point the Homebrew tap and the Scoop bucket at this release, committed by the Release.art workflow bot (a GitHub
+    # App installed on both with Contents: read and write). Stable releases only.
+    needs: publish
+    if: needs.publish.outputs.prerelease == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { repo: homebrew-tap, file: Formula/proof-pdf.rb, generator: bin/homebrew-formula.py }
+          - { repo: scoop-bucket, file: bucket/proof-pdf.json, generator: bin/scoop-manifest.py }
+    name: ${{ matrix.repo }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/create-github-app-token@v3
+        id: bot
+        with:
+          app-id: ${{ vars.RELEASE_ART_WORKFLOW_APP_ID }}
+          private-key: ${{ secrets.RELEASE_ART_WORKFLOW_APP_PK }}
+          owner: release-art
+          repositories: ${{ matrix.repo }}
+          permission-contents: write
+      - uses: actions/checkout@v6
+        with:
+          repository: release-art/${{ matrix.repo }}
+          token: ${{ steps.bot.outputs.token }}
+          path: package-repo
+      - name: Write the package definition from this release's archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$(dirname "package-repo/${{ matrix.file }}")"
+          python ${{ matrix.generator }} "$GITHUB_REF_NAME" > "package-repo/${{ matrix.file }}"
+      - name: Commit and push as the workflow bot
+        working-directory: package-repo
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          BOT: ${{ steps.bot.outputs.app-slug }}[bot]
+          FILE: ${{ matrix.file }}
+        run: |
+          git add "$FILE"
+          if git diff --cached --quiet; then
+            echo "$FILE already points at ${GITHUB_REF_NAME}."
+            exit 0
+          fi
+          git config user.name "$BOT"
+          git config user.email "$(gh api "/users/$BOT" --jq .id)+$BOT@users.noreply.github.com"
+          git commit -m "proof-pdf ${GITHUB_REF_NAME#v}"
+          git push

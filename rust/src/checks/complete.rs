@@ -1,5 +1,4 @@
-//! PDF/X-4 (ISO 15930-7) 6.3, complete exchange: every resource a print element uses is in the file (oracle,
-//! 2026-11-26). Two ways one is not:
+//! PDF/X-4 (ISO 15930-7) 6.3, complete exchange: every resource a print element uses is in the file. Two ways one is not:
 //!
 //! - content names a resource its resources do not define (ISO 32000-1 7.8.3): an `XObject` (`Do`), a font (`Tf`), a
 //!   colour space (`cs`, `CS`, an inline image's `/ColorSpace`; device names are not resources), a pattern (`scn`,

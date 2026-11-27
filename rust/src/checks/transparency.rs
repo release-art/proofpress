@@ -1,7 +1,7 @@
-//! Transparency at PDF/X-1a and PDF/X-3: banned outright by 15930-4 and -6 6.16, and by the owner's decision (L-Q3)
+//! Transparency at PDF/X-1a and PDF/X-3: banned outright by 15930-4 and -6 6.16, and by L-Q3
 //! at X-1a:2001 and X-3:2002 too, which a PDF 1.3 reader would print opaque (15930-3 Annex D). What a page uses is
 //! judged, as tier 7 reports it: soft masks, constant opacity and blend modes from the `ExtGState`s it sets, soft-masked
-//! images it draws, and transparency groups on the forms it draws (a page's own group is allowed, Q19).
+//! images it draws, and transparency groups on the forms it draws (a page's own group is allowed, L-Q19).
 
 use super::Settings;
 use super::info::per_level;

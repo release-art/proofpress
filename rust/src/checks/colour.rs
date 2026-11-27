@@ -266,7 +266,7 @@ const X1A_SPACES: [&[u8]; 9] = [
 ];
 
 /// PDF/X-1a: print elements, and the bases of their `Indexed` and `Pattern` spaces, use only CMYK, gray, separation
-/// and `DeviceN` colour; a device space a `Default` space remaps uses that space instead, and fails (Q12). Alternates are
+/// and `DeviceN` colour; a device space a `Default` space remaps uses that space instead, and fails (L-Q12). Alternates are
 /// `x1a.spot.alternate-cmyk-or-gray`'s.
 pub(super) fn x1a_print_spaces(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
@@ -286,7 +286,7 @@ pub(super) fn x1a_print_spaces(doc: &Document, settings: &Settings) -> Vec<Findi
     distinct(out)
 }
 
-/// PDF/X-1a (Q12, a warning by the oracle's judgement): a page whose resources hold a `Default` colour space that
+/// PDF/X-1a (L-Q12, a warning): a page whose resources hold a `Default` colour space that
 /// remaps none of its print elements. Only page resources are read; a form's own are not.
 pub(super) fn x1a_unused_default(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let used = uses(doc);
@@ -374,7 +374,7 @@ pub(super) fn x3_dest_profile_for_colour(doc: &Document, settings: &Settings) ->
     distinct(out)
 }
 
-/// PDF/X-3 (Q11): every ICC profile a print element uses is version 2 (ICC.1:1998-09), any minor version.
+/// PDF/X-3 (L-Q11): every ICC profile a print element uses is version 2 (ICC.1:1998-09), any minor version.
 pub(super) fn x3_profile_version(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for IccLeaf { num, data, frames, .. } in icc_leaves(doc) {
@@ -392,7 +392,7 @@ pub(super) fn x3_profile_version(doc: &Document, settings: &Settings) -> Vec<Fin
     distinct(out)
 }
 
-/// 6.4.3.3: every ICC profile used is version 2 or 4 (decision log, 2026-11-25).
+/// 6.4.3.3: every ICC profile used is version 2 or 4 (docs/interpretations.md).
 pub(super) fn profile_version(doc: &Document, _: &Settings) -> Vec<Finding> {
     let mut out = Vec::new();
     for IccLeaf { num, data, frames, .. } in icc_leaves(doc) {
@@ -455,7 +455,7 @@ pub(super) fn not_intent_profile(doc: &Document, _: &Settings) -> Vec<Finding> {
 
 /// 6.4.3.3 at the level being verified. At a level built on PDF/X-4p the intent's profile is the external one, compared by identity;
 /// without it, a profile whose MD5 is the `/CheckSum` is the intent's, and none is when the intent is not CMYK
-/// (pdfx-oracle, 2026-11-26). Otherwise it is not evaluated.
+///. Otherwise it is not evaluated.
 pub(super) fn not_intent_profile_at_level(doc: &Document, settings: &Settings) -> Result<Vec<Finding>, String> {
     if !x4p::external_profile_level(settings.level) {
         return Ok(not_intent_profile(doc, settings));

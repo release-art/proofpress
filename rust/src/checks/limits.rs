@@ -1,9 +1,9 @@
-//! PDF/X-4 (ISO 15930-7) 6.25, the architectural limits of the PDF 1.6 Reference's Table C.1 (decision X4-Q14), for the
+//! PDF/X-4 (ISO 15930-7) 6.25, the architectural limits of the PDF 1.6 Reference's Table C.1 (X4-Q14), for the
 //! values a file is written in: integers within 32 bits, reals within 3.403e38 in magnitude (one nearer to 0 than
 //! 1.175e-38 just reads as 0), names of at most 127 bytes and, inside content streams, strings of at most 32,767 bytes.
 //! Names and strings are measured as decoded; dictionary keys are names too.
 //!
-//! And for what the file does (oracle, 2026-11-26): graphics states nested at most 28 deep, counting each `q` and each
+//! And for what the file does: graphics states nested at most 28 deep, counting each `q` and each
 //! form or tiling pattern being drawn (the PDF 1.6 Reference saves the state for those as if by `q`); at most 32
 //! components in every `DeviceN` space in the file; and no CID above 65,535 in an embedded `CMap`, which is where every
 //! CID a code can select comes from. Type 3 glyph procedures and annotation appearances are not walked, so their levels

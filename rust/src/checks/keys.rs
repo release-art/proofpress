@@ -194,7 +194,7 @@ fn is_filespec(n: &Node<'_>) -> bool {
     n.name(b"Type") == Some(b"Filespec") || n.under(b"FS") || n.under(b"AF")
 }
 
-/// 15930-3 6.15, -4 and -6 6.4 (Q22): no file specifications at all, as dictionaries or as strings under `/FS`.
+/// 15930-3 6.15, -4 and -6 6.4 (L-Q22): no file specifications at all, as dictionaries or as strings under `/FS`.
 /// Those of OPI, reference `XObject`s, external streams and actions are their own rows' too.
 pub(super) fn filespec_absent(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let mut out = each(doc, X13_FILESPEC_ABSENT, "6.15", &|n| {
@@ -216,14 +216,14 @@ pub(super) fn filespec_absent(doc: &Document, settings: &Settings) -> Vec<Findin
         .collect()
 }
 
-/// 15930-1 (Q22, a warning by the oracle's judgement): an X-1a:2001 file embeds no files.
+/// 15930-1 (L-Q22, a warning): an X-1a:2001 file embeds no files.
 pub(super) fn x1a_embedded_file(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X1A_FILESPEC_EMBEDDED_FILE, "6.5", &|n| {
         when(is_filespec(n) && n.dict.get(b"EF").is_some(), "an embedded file")
     })
 }
 
-/// 15930-4 and -6 6.17 (Q21): when any page has a `/BleedBox`, the viewer preferences' areas are `MediaBox` or
+/// 15930-4 and -6 6.17 (L-Q21): when any page has a `/BleedBox`, the viewer preferences' areas are `MediaBox` or
 /// `BleedBox`; without one, any value.
 pub(super) fn x13_viewer_areas(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let Some(prefs) = catalog_dict(doc, b"ViewerPreferences") else {

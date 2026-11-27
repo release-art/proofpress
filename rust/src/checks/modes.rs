@@ -1,4 +1,4 @@
-//! Print checks on the job's colour mode (ported from the Python `colour` module, under the parity gate): the blend
+//! Print checks on the job's colour mode: the blend
 //! space transparency needs, spot inks on the allowed list, artwork in the job's colour family (RGB artwork in a CMYK
 //! job, CMYK in an RGB job), and embedded ICC profiles that are sound and agree with each other and the output intent.
 //!

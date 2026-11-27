@@ -13,7 +13,7 @@ bin/test.sh                           # pytest with coverage
   `rustup` too; the toolchain is the one pinned in `rust/rust-toolchain.toml`. Rebuild after changing Rust with
   `pdm install` again.
 - Code is formatted and linted with ruff, type-checked with pyright (0 errors), and runs on Python 3.15.
-- The Rust core lives in `rust/`, the port described in `docs/briefs/rust-port.md`. Install `rustup` (the toolchain version is
+- The Rust core lives in `rust/`. Install `rustup` (the toolchain version is
   pinned in `rust/rust-toolchain.toml`) and `cargo-nextest`, `cargo-llvm-cov` and `cargo-deny`, then run `bin/rust/check.sh`
   (`--fix` formats first). The `python` feature's tests link libpython 3.15, found through `PYO3_PYTHON` (pdm's
   `.venv` by default). It runs rustfmt, clippy with the pedantic set denied, `cargo doc`, cargo-deny (licences,
@@ -49,7 +49,9 @@ bin/test.sh                           # pytest with coverage
   The colour samples beside them are LaTeX (`tests/fixtures/samples/*.tex`, built by its `build.py` into the same
   `tests/fixtures/pdfs/`); see the README there. Both builders leave each other's files alone.
 - PDF/X rules are checks in `rust/checks.toml` and code in `rust/src/checks/`; a clause is only filled in from the
-  standard itself.
+  standard itself. Each negative fixture carries one defect. Where a clause is unclear, the reading goes in
+  `docs/interpretations.md` under an id the code cites (`X4-Q3`); a changed expectation is either our bug, a file that
+  does not conform, or a changed reading there.
 - Calibration against the free Ghent and Altona test suites: `bin/suites/fetch.sh` downloads them (they may not be
   redistributed, so they are never committed) and `pdm run pytest tests/test_proof_pdf/test_suites.py` checks each file
   raises exactly the checks in `tests/fixtures/suites/expected.toml`. The tests skip without the files; CI runs them by

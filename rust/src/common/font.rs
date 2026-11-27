@@ -209,7 +209,7 @@ fn adobe_latin(doc: &Document, source: &Dict) -> bool {
     string(b"Registry") == Some(b"Adobe") && string(b"Ordering").is_some_and(|o| ADOBE_LATIN.contains(&o))
 }
 
-/// The `/ToUnicode` `CMap` of `font`, read as the Python inventory read it: every `bfchar` block, then every `bfrange`
+/// The `/ToUnicode` `CMap` of `font`: every `bfchar` block, then every `bfrange`
 /// block, later mappings winning; destinations are UTF-16BE, decoded with U+FFFD for what does not decode. A `CMap`
 /// with a malformed entry gives no mappings at all.
 fn unicode(doc: &Document, font: &Dict) -> BTreeMap<u32, String> {

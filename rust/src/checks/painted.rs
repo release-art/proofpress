@@ -1,5 +1,4 @@
-//! Print checks on what each page paints and where (ported from the Python `structure` module, under the parity
-//! gate): a `Do` that names no `XObject` leaves a hole where the artwork should be (ISO 32000-2 7.8.3), an object
+//! Print checks on what each page paints and where: a `Do` that names no `XObject` leaves a hole where the artwork should be (ISO 32000-2 7.8.3), an object
 //! painted wholly off the media box never prints but ships in the file, artwork that reaches the trim must run on to
 //! the bleed edge, and nothing may be painted beyond the bleed.
 //!

@@ -1,11 +1,11 @@
-//! The gray-job check (ported from the Python `colour` module, under the parity gate): in a gray job, everything is
+//! The gray-job check: in a gray job, everything is
 //! painted in the gray family and the output intent is not RGB (nor CMYK, unless K-only CMYK is allowed); spot inks,
 //! which have no gray value, are a warning.
 //!
 //! With K-only CMYK allowed, `DeviceCMYK` counts as gray when it uses the K plate alone: a colour by its components, an
 //! image `XObject` by decoding its samples once. ICC-based and indexed CMYK, CMYK shadings and patterns, and inline
 //! CMYK images do not count, since a K-only value there does not mean gray, or cannot be read. A shading's or image's
-//! own spot inks are read without the resources, as the Python did.
+//! own spot inks are read without the resources.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -157,8 +157,7 @@ fn number(object: &Object) -> Option<f64> {
 }
 
 /// The highest cyan, magenta and yellow ink in a `DeviceCMYK` image's 8-bit samples after its `/Decode`; `None` when
-/// they cannot be read, as the Python could not: other than 8 bits, a mask with an image filter (Pillow then gives
-/// RGBA), an image filter other than a CMYK JPEG or JPEG 2000, run-length data, or a `/Decode` that is not a plain or
+/// they cannot be read: other than 8 bits, a mask with an image filter, an image filter other than a CMYK JPEG or JPEG 2000, run-length data, or a `/Decode` that is not a plain or
 /// inverted mapping.
 fn cmy_ink(doc: &Document, num: u32) -> Option<[u8; 3]> {
     // The walk found the image as a stream, so its dictionary is there.

@@ -128,7 +128,7 @@ class TestOffendingFiles:
         [("spot-ink", "150", False), ("spot-overprint", "150", True), ("spot-overprint", "200", False)],
     )
     def test_a_spot_counts_as_one_ink_and_adds_when_it_overprints(self, runner, name, limit, fails):
-        """The brief's bug 4: one plate per spot at its tint, never its CMYK alternate (decided 2026-11-07)."""
+        """One plate per spot at its tint, never its CMYK alternate."""
         code, [record] = _verify(
             runner, PDFS / f"{name}.pdf", *A6, "--no-pdfa", "--max-tac", limit, "--allow-spot", "PANTONE 185 C"
         )

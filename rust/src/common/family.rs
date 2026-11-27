@@ -1,5 +1,4 @@
-//! Colour spaces reduced to the family a print check cares about: gray, RGB, CMYK or other (ported from the Python
-//! `spaces` module, under the parity gate).
+//! Colour spaces reduced to the family a print check cares about: gray, RGB, CMYK or other.
 //!
 //! A space named in the resources is looked up there, `Indexed` is looked through to its base, and an `ICCBased` space
 //! goes by its profile's data colour space, or by `/N` when the profile cannot be read. `Separation` and `DeviceN` are

@@ -1415,7 +1415,7 @@ def _x4_font_fixtures() -> dict[str, pikepdf.Pdf]:
         "x4-limit-devicen": _x4_painted(
             b"", {"S": _device_n([f"Ink{i}" for i in range(33)], Colorants=pikepdf.Dictionary())}
         ),
-        # A positive: a code with no glyph, shown only in render mode 3 (owner, 2026-11-26).
+        # A positive: a code with no glyph, shown only in render mode 3.
         "x4-font-invisible-missing": _x4_page(b"BT 3 Tr /F1 12 Tf 100 100 Td (\\351) Tj ET"),
     }
 
