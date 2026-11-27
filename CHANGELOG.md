@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The checks and every command's PDF work now run in a Rust core; pikepdf and Pillow are no longer dependencies.
+What existing users will notice, most important first (the entries below give the details):
+
+- **PDF/A (veraPDF) and total ink (Ghostscript) are opt-in**, with `--pdfa` and `--tac` (`Profile.pdfa`,
+  `Profile.tac`), so a bare `verify` needs no external tool. A CI job that relies on either must now turn it on.
+- **The whole of PDF/X is checked**, not only the page boxes, `/Trapped` and identity: PDF/X-4 by default, another
+  level with `--pdfx x4p|x5g|x5pg|x5n`, none with `--no-pdfx`. The PDF/X findings have new ids, `x4.*` and `x5.*`;
+  the four old ones (`pdfx-intent`, `trapped`, `pdfx-xmp`, `trimbox`) are recorded as aliases in `rust/checks.toml`.
+- **`/Trapped` is judged in the XMP** (`pdf:Trapped`), where ISO 15930-7 6.9 puts it; an Info `/Trapped` must agree.
+- **Damaged files are read strictly.** A file that pikepdf repaired silently now fails, with the reason; an encrypted
+  file fails, even with an empty password. A damaged object or stream no longer stops the whole file: the rest is
+  checked, and the checks that needed the damaged part report "not evaluated", which fails the file.
+- **Each check reports a status** (pass, fail, not evaluated) in the JSON, which also gains a per-check summary.
+- **A form XObject without `/Resources` uses the page's resources** (ISO 32000-2 7.8.3), not the enclosing form's,
+  so nested forms can resolve names differently.
+- **Previews are rendered by `hayro`** instead of Ghostscript, so pixels shift slightly on colour-managed files.
+- **`crop_page`, `extract_pdf` and `preview` raise the core's `UnreadablePdfError`** for a file they cannot read, never
+  a `pikepdf.PdfError`.
+- **Total ink counts each spot colour as one ink**, so jobs with spots can read lower (or, where a spot overprints
+  process ink, higher) than before.
+
 ### Added
 
 - The README's check counts and its list of print checks are generated from `rust/checks.toml`, and a test fails while they are stale.
