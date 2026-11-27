@@ -95,10 +95,10 @@ Generated from `rust/checks.toml`; every check, with its clauses, is in [rust/CH
 | PDF/X-5g | 159 | 0 | 25 |
 | PDF/X-5pg | 169 | 0 | 25 |
 | PDF/X-5n | 159 | 0 | 24 |
-| PDF/X-1a:2001 | 0 | 32 | 0 |
-| PDF/X-3:2002 | 0 | 28 | 0 |
-| PDF/X-1a:2003 | 0 | 30 | 0 |
-| PDF/X-3:2003 | 0 | 27 | 0 |
+| PDF/X-1a:2001 | 49 | 32 | 3 |
+| PDF/X-3:2002 | 55 | 28 | 3 |
+| PDF/X-1a:2003 | 61 | 30 | 3 |
+| PDF/X-3:2003 | 64 | 28 | 3 |
 | Print checks | 54 | 0 | 4 |
 
 The print checks:

@@ -7,76 +7,108 @@
 [[check]]
 id = "x4.pdf-reference.conforms"
 title = "Valid PDF as the PDF 1.6 Reference defines it"
-clauses = ["iso-15930-7:6.1.1", "iso-15930-7:B"]
+clauses = ["iso-15930-7:6.1.1", "iso-15930-7:B", "iso-15930-1:A", "iso-15930-1:6.2", "iso-15930-3:A", "iso-15930-3:6.1", "iso-15930-4:A", "iso-15930-4:6.1", "iso-15930-6:A", "iso-15930-6:6.1"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.1.1" = "6.2", "B" = "A" }
+cite.x3-2002 = { "6.1.1" = "6.1", "B" = "A" }
+cite.x1a-2003 = { "6.1.1" = "6.1", "B" = "A" }
+cite.x3-2003 = { "6.1.1" = "6.1", "B" = "A" }
 
 [[check]]
 id = "x4.pre-separated.absent"
 title = "Pages are not pre-separated plates"
-clauses = ["iso-15930-7:6.1.2"]
+clauses = ["iso-15930-7:6.1.2", "iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.1.2" = "6.2" }
+cite.x3-2002 = { "6.1.2" = "6.1" }
+cite.x1a-2003 = { "6.1.2" = "6.1" }
+cite.x3-2003 = { "6.1.2" = "6.1" }
 
 [[check]]
 id = "x4.complete.resources-inside"
 title = "Every resource a print element needs is in the file"
-clauses = ["iso-15930-7:6.3"]
+clauses = ["iso-15930-7:6.3", "iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.3" = "6.2" }
+cite.x3-2002 = { "6.3" = "6.1" }
+cite.x1a-2003 = { "6.3" = "6.1" }
+cite.x3-2003 = { "6.3" = "6.1" }
 
 [[check]]
 id = "x4.complete.single-condition"
 title = "All print data is prepared for one printing condition"
-clauses = ["iso-15930-7:6.3", "iso-15930-7:6.4.1"]
+clauses = ["iso-15930-7:6.3", "iso-15930-7:6.4.1", "iso-15930-1:6.2", "iso-15930-1:6.3.1", "iso-15930-3:6.1", "iso-15930-3:6.2.1", "iso-15930-4:6.1", "iso-15930-4:6.2.1", "iso-15930-6:6.1", "iso-15930-6:6.2.1"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "skip"
 reason = "Intent, not a property of the file: the colour rows are its checkable part"
+cite.x1a-2001 = { "6.3" = "6.2", "6.4.1" = "6.3.1" }
+cite.x3-2002 = { "6.3" = "6.1", "6.4.1" = "6.2.1" }
+cite.x1a-2003 = { "6.3" = "6.1", "6.4.1" = "6.2.1" }
+cite.x3-2003 = { "6.3" = "6.1", "6.4.1" = "6.2.1" }
 
 [[check]]
 id = "x4.output-intent.channels"
 title = "The printing condition has 1, 3 or 4 channels"
-clauses = ["iso-15930-7:6.4.1"]
+clauses = ["iso-15930-7:6.4.1", "iso-15930-3:6.2.1", "iso-15930-6:6.2.1"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x3-2002", "x3-2003"]
 status = "implemented"
+cite.x3-2002 = { "6.4.1" = "6.2.1" }
+cite.x3-2003 = { "6.4.1" = "6.2.1" }
 
 [[check]]
 id = "x4.output-intent.present"
 aliases = ["pdfx-intent"]
 title = "A GTS_PDFX output intent exists"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-1:6.3.2", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.4.2.1" = "6.3.2" }
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.output-intent.unique"
 title = "Only one output intent is GTS_PDFX"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-1:6.3.2", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.4.2.1" = "6.3.2" }
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.output-intent.identifier-present"
 title = "The PDF/X intent names its condition identifier"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-1:6.3.2", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.4.2.1" = "6.3.2" }
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.output-intent.identifier-text-string"
 title = "The condition identifier is a text string"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.output-intent.identifier-registered"
@@ -89,26 +121,33 @@ status = "implemented"
 [[check]]
 id = "x4.output-intent.registry-name-color-org"
 title = "An ICC-registered condition gives the ICC registry"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-4:6.2.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.output-intent.identifier-in-registry"
 title = "The identifier exists in the named registry"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.output-intent.registry-name-url"
 title = "A non-ICC registry name is a URL"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-1:6.3.2", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.4.2.1" = "6.3.2" }
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.output-intent.dest-profile-present"
@@ -129,10 +168,13 @@ status = "implemented"
 [[check]]
 id = "x4.output-intent.profile-class-prtr"
 title = "The intent profile is an output-device profile"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.output-intent.profile-version"
@@ -145,18 +187,22 @@ status = "implemented"
 [[check]]
 id = "x4.output-intent.output-condition"
 title = "The PDF/X intent describes its condition for people"
-clauses = ["iso-15930-7:6.4.2.1"]
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
 
 [[check]]
 id = "x4.colour.device-space-matches-intent"
 title = "Device colour matches the output intent's family"
-clauses = ["iso-15930-7:6.4.3.2", "iso-15930-7:6.4.2.3"]
+clauses = ["iso-15930-7:6.4.3.2", "iso-15930-7:6.4.2.3", "iso-15930-3:6.2", "iso-15930-6:6.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x3-2002", "x3-2003"]
 status = "implemented"
+cite.x3-2002 = { "6.4.3.2" = "6.2", "6.4.2.3" = "6.2" }
+cite.x3-2003 = { "6.4.3.2" = "6.2", "6.4.2.3" = "6.2" }
 
 [[check]]
 id = "x4.icc.profile-version"
@@ -258,26 +304,36 @@ reason = "Whether a value was chosen with care cannot be read from the file"
 [[check]]
 id = "x4.spot.alternate-space-restricted"
 title = "Spot alternate spaces follow the colour rules"
-clauses = ["iso-15930-7:6.4.3.4"]
+clauses = ["iso-15930-7:6.4.3.4", "iso-15930-3:6.2.7", "iso-15930-6:6.2.7"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x3-2002", "x3-2003"]
 status = "implemented"
+cite.x3-2002 = { "6.4.3.4" = "6.2.7" }
+cite.x3-2003 = { "6.4.3.4" = "6.2.7" }
 
 [[check]]
 id = "x4.font.embedded"
 title = "Fonts used for text are embedded"
-clauses = ["iso-15930-7:6.5.1", "iso-15930-7:6.24"]
+clauses = ["iso-15930-7:6.5.1", "iso-15930-7:6.24", "iso-15930-1:6.4", "iso-15930-3:6.3", "iso-15930-4:6.3", "iso-15930-6:6.3"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.5.1" = "6.4", "6.24" = "6.4" }
+cite.x3-2002 = { "6.5.1" = "6.3", "6.24" = "6.3" }
+cite.x1a-2003 = { "6.5.1" = "6.3", "6.24" = "6.3" }
+cite.x3-2003 = { "6.5.1" = "6.3", "6.24" = "6.3" }
 
 [[check]]
 id = "x4.font.glyphs-present"
 title = "Embedded fonts have every glyph they show"
-clauses = ["iso-15930-7:6.5.1"]
+clauses = ["iso-15930-7:6.5.1", "iso-15930-1:6.4", "iso-15930-3:6.3", "iso-15930-4:6.3", "iso-15930-6:6.3"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.5.1" = "6.4" }
+cite.x3-2002 = { "6.5.1" = "6.3" }
+cite.x1a-2003 = { "6.5.1" = "6.3" }
+cite.x3-2003 = { "6.5.1" = "6.3" }
 
 [[check]]
 id = "x4.font.no-notdef"
@@ -354,18 +410,24 @@ status = "implemented"
 [[check]]
 id = "x4.xobject.no-opi"
 title = "XObjects carry no OPI"
-clauses = ["iso-15930-7:6.7"]
+clauses = ["iso-15930-7:6.7", "iso-15930-1:6.5", "iso-15930-3:6.15", "iso-15930-4:6.4", "iso-15930-6:6.4"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.7" = "6.5" }
+cite.x3-2002 = { "6.7" = "6.15" }
+cite.x1a-2003 = { "6.7" = "6.4" }
+cite.x3-2003 = { "6.7" = "6.4" }
 
 [[check]]
 id = "x4.xobject.no-ref"
 title = "Form XObjects are not reference XObjects"
-clauses = ["iso-15930-7:6.7"]
+clauses = ["iso-15930-7:6.7", "iso-15930-4:6.4", "iso-15930-6:6.4"]
 severity = "error"
-applies = ["x4", "x4p", "x5n"]
+applies = ["x4", "x4p", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.7" = "6.4" }
+cite.x3-2003 = { "6.7" = "6.4" }
 
 [[check]]
 id = "x4.filespec.embedded"
@@ -378,18 +440,25 @@ status = "implemented"
 [[check]]
 id = "x4.stream.no-external-f"
 title = "No stream points at external data"
-clauses = ["iso-15930-7:6.7"]
+clauses = ["iso-15930-7:6.7", "iso-15930-1:6.2", "iso-15930-3:6.15", "iso-15930-4:6.4", "iso-15930-6:6.4"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.7" = "6.2" }
+cite.x3-2002 = { "6.7" = "6.15" }
+cite.x1a-2003 = { "6.7" = "6.4" }
+cite.x3-2003 = { "6.7" = "6.4" }
 
 [[check]]
 id = "x4.filter.no-lzw"
 title = "LZW compression is not used"
-clauses = ["iso-15930-7:6.8"]
+clauses = ["iso-15930-7:6.8", "iso-15930-3:6.4", "iso-15930-4:6.5", "iso-15930-6:6.5"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x3-2002 = { "6.8" = "6.4" }
+cite.x1a-2003 = { "6.8" = "6.5" }
+cite.x3-2003 = { "6.8" = "6.5" }
 
 [[check]]
 id = "x4.filter.no-crypt"
@@ -468,18 +537,24 @@ reason = "Whether a file is really trapped cannot be read from it"
 [[check]]
 id = "x4.trapnet.font-fauxing-empty"
 title = "TrapNet font fauxing is absent or empty"
-clauses = ["iso-15930-7:6.9"]
+clauses = ["iso-15930-7:6.9", "iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.9" = "6.9" }
+cite.x3-2002 = { "6.9" = "6.5" }
+cite.x1a-2003 = { "6.9" = "6.6" }
+cite.x3-2003 = { "6.9" = "6.6" }
 
 [[check]]
 id = "x4.trapnet.pcm-matches-intent"
 title = "TrapNet process colour model matches the intent"
-clauses = ["iso-15930-7:6.9"]
+clauses = ["iso-15930-7:6.9", "iso-15930-3:6.5", "iso-15930-6:6.6"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x3-2002", "x3-2003"]
 status = "implemented"
+cite.x3-2002 = { "6.9" = "6.5" }
+cite.x3-2003 = { "6.9" = "6.6" }
 
 [[check]]
 id = "x4.xmp.present"
@@ -636,10 +711,14 @@ status = "implemented"
 [[check]]
 id = "x4.trailer.id"
 title = "The trailer has a file ID"
-clauses = ["iso-15930-7:6.10.4"]
+clauses = ["iso-15930-7:6.10.4", "iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.10.4" = "6.13" }
+cite.x3-2002 = { "6.10.4" = "6.6" }
+cite.x1a-2003 = { "6.10.4" = "6.7" }
+cite.x3-2003 = { "6.10.4" = "6.7" }
 
 [[check]]
 id = "x4.xmp.well-formed"
@@ -686,66 +765,94 @@ status = "implemented"
 id = "x4.boxes.trim-or-art"
 aliases = ["trimbox"]
 title = "Each page has a TrimBox or an ArtBox"
-clauses = ["iso-15930-7:6.12"]
+clauses = ["iso-15930-7:6.12", "iso-15930-1:6.14", "iso-15930-3:6.7", "iso-15930-4:6.8", "iso-15930-6:6.8"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.12" = "6.14" }
+cite.x3-2002 = { "6.12" = "6.7" }
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
 
 [[check]]
 id = "x4.boxes.not-both"
 title = "No page has both TrimBox and ArtBox"
-clauses = ["iso-15930-7:6.12"]
+clauses = ["iso-15930-7:6.12", "iso-15930-1:6.14", "iso-15930-3:6.7", "iso-15930-4:6.8", "iso-15930-6:6.8"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.12" = "6.14" }
+cite.x3-2002 = { "6.12" = "6.7" }
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
 
 [[check]]
 id = "x4.boxes.within-bleed"
 title = "The trim or art box lies within the BleedBox"
-clauses = ["iso-15930-7:6.12"]
+clauses = ["iso-15930-7:6.12", "iso-15930-1:6.14", "iso-15930-3:6.7", "iso-15930-4:6.8", "iso-15930-6:6.8"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.12" = "6.14" }
+cite.x3-2002 = { "6.12" = "6.7" }
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
 
 [[check]]
 id = "x4.boxes.within-crop"
 title = "Page boxes lie within the CropBox"
-clauses = ["iso-15930-7:6.12"]
+clauses = ["iso-15930-7:6.12", "iso-15930-4:6.8", "iso-15930-6:6.8"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
 
 [[check]]
 id = "x4.boxes.within-media"
 title = "Page boxes lie within the MediaBox"
-clauses = ["iso-15930-7:6.12"]
+clauses = ["iso-15930-7:6.12", "iso-15930-4:6.8", "iso-15930-6:6.8"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
 
 [[check]]
 id = "x4.boxes.prefer-trim"
 title = "TrimBox is used rather than ArtBox"
-clauses = ["iso-15930-7:6.12"]
+clauses = ["iso-15930-7:6.12", "iso-15930-1:6.14", "iso-15930-3:6.7", "iso-15930-4:6.8", "iso-15930-6:6.8"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.12" = "6.14" }
+cite.x3-2002 = { "6.12" = "6.7" }
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
 
 [[check]]
 id = "x4.extgstate.no-tr"
 title = "Graphics states have no transfer function"
-clauses = ["iso-15930-7:6.13"]
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
 
 [[check]]
 id = "x4.extgstate.no-htp"
 title = "Graphics states have no halftone phase"
-clauses = ["iso-15930-7:6.13"]
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
 
 [[check]]
 id = "x4.extgstate.tr2-default"
@@ -758,50 +865,72 @@ status = "implemented"
 [[check]]
 id = "x4.halftone.transfer-function"
 title = "Halftones carry transfer functions only where required"
-clauses = ["iso-15930-7:6.13"]
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
 
 [[check]]
 id = "x4.halftone.type-1-or-5"
 title = "Halftones are type 1 or 5"
-clauses = ["iso-15930-7:6.13"]
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
 
 [[check]]
 id = "x4.halftone.no-name"
 title = "Halftones have no name"
-clauses = ["iso-15930-7:6.13"]
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
 
 [[check]]
 id = "x4.xobject.no-postscript"
 title = "No PostScript XObjects"
-clauses = ["iso-15930-7:6.14"]
+clauses = ["iso-15930-7:6.14", "iso-15930-1:6.16", "iso-15930-3:6.9", "iso-15930-4:6.10", "iso-15930-6:6.10"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.14" = "6.16" }
+cite.x3-2002 = { "6.14" = "6.9" }
+cite.x1a-2003 = { "6.14" = "6.10" }
+cite.x3-2003 = { "6.14" = "6.10" }
 
 [[check]]
 id = "x4.xobject.no-subtype2-ps"
 title = "No form XObject is PostScript underneath"
-clauses = ["iso-15930-7:6.14"]
+clauses = ["iso-15930-7:6.14", "iso-15930-4:6.10", "iso-15930-6:6.10"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.14" = "6.10" }
+cite.x3-2003 = { "6.14" = "6.10" }
 
 [[check]]
 id = "x4.encrypt.absent"
 title = "The file is not encrypted"
-clauses = ["iso-15930-7:6.15"]
+clauses = ["iso-15930-7:6.15", "iso-15930-1:6.17", "iso-15930-3:6.10", "iso-15930-4:6.11", "iso-15930-6:6.11"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.15" = "6.17" }
+cite.x3-2002 = { "6.15" = "6.10" }
+cite.x1a-2003 = { "6.15" = "6.11" }
+cite.x3-2003 = { "6.15" = "6.11" }
 
 [[check]]
 id = "x4.perms.ur-only"
@@ -814,67 +943,95 @@ status = "implemented"
 [[check]]
 id = "x4.image.no-default-for-printing"
 title = "No image alternate is the default for printing"
-clauses = ["iso-15930-7:6.16"]
+clauses = ["iso-15930-7:6.16", "iso-15930-1:6.18", "iso-15930-3:6.11", "iso-15930-4:6.12", "iso-15930-6:6.12"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.16" = "6.18" }
+cite.x3-2002 = { "6.16" = "6.11" }
+cite.x1a-2003 = { "6.16" = "6.12" }
+cite.x3-2003 = { "6.16" = "6.12" }
 
 [[check]]
 id = "x4.image.alternates-same-content"
 title = "Image alternates show the same picture"
-clauses = ["iso-15930-7:6.16"]
+clauses = ["iso-15930-7:6.16", "iso-15930-1:6.18", "iso-15930-3:6.11", "iso-15930-4:6.12", "iso-15930-6:6.12"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "skip"
 reason = "Whether two images show the same area of one master image, at another resolution or in another colour space, needs a similarity judgement, not a reading of the file"
+cite.x1a-2001 = { "6.16" = "6.18" }
+cite.x3-2002 = { "6.16" = "6.11" }
+cite.x1a-2003 = { "6.16" = "6.12" }
+cite.x3-2003 = { "6.16" = "6.12" }
 
 [[check]]
 id = "x4.annot.outside-bleed"
 title = "Annotations lie outside the bleed"
-clauses = ["iso-15930-7:6.17"]
+clauses = ["iso-15930-7:6.17", "iso-15930-4:6.13", "iso-15930-6:6.13"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.17" = "6.13" }
+cite.x3-2003 = { "6.17" = "6.13" }
 
 [[check]]
 id = "x4.annot.printermark-outside-trim"
 title = "Printer's marks lie outside the trim"
-clauses = ["iso-15930-7:6.17"]
+clauses = ["iso-15930-7:6.17", "iso-15930-4:6.13", "iso-15930-6:6.13"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2003 = { "6.17" = "6.13" }
+cite.x3-2003 = { "6.17" = "6.13" }
 
 [[check]]
 id = "x4.actions.absent"
 title = "The file has no actions"
-clauses = ["iso-15930-7:6.18", "iso-15930-7:6.2"]
+clauses = ["iso-15930-7:6.18", "iso-15930-7:6.2", "iso-15930-1:6.20", "iso-15930-3:6.13", "iso-15930-4:6.14", "iso-15930-6:6.14"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.18" = "6.20", "6.2" = "6.20" }
+cite.x3-2002 = { "6.18" = "6.13", "6.2" = "6.13" }
+cite.x1a-2003 = { "6.18" = "6.14", "6.2" = "6.14" }
+cite.x3-2003 = { "6.18" = "6.14", "6.2" = "6.14" }
 
 [[check]]
 id = "x4.javascript.absent"
 title = "The file has no JavaScript"
-clauses = ["iso-15930-7:6.18", "iso-15930-7:6.2"]
+clauses = ["iso-15930-7:6.18", "iso-15930-7:6.2", "iso-15930-1:6.20", "iso-15930-3:6.13", "iso-15930-4:6.14", "iso-15930-6:6.14"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.18" = "6.20", "6.2" = "6.20" }
+cite.x3-2002 = { "6.18" = "6.13", "6.2" = "6.13" }
+cite.x1a-2003 = { "6.18" = "6.14", "6.2" = "6.14" }
+cite.x3-2003 = { "6.18" = "6.14", "6.2" = "6.14" }
 
 [[check]]
 id = "x4.content.known-operators"
 title = "Content uses only PDF 1.6 operators"
-clauses = ["iso-15930-7:6.19", "iso-15930-7:B"]
+clauses = ["iso-15930-7:6.19", "iso-15930-7:B", "iso-15930-1:A", "iso-15930-1:6.21", "iso-15930-3:A", "iso-15930-3:6.14", "iso-15930-4:A", "iso-15930-4:6.15", "iso-15930-6:A", "iso-15930-6:6.15"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.19" = "6.21", "B" = "A" }
+cite.x3-2002 = { "6.19" = "6.14", "B" = "A" }
+cite.x1a-2003 = { "6.19" = "6.15", "B" = "A" }
+cite.x3-2003 = { "6.19" = "6.15", "B" = "A" }
 
 [[check]]
 id = "x4.content.no-bx-ex"
 title = "Content avoids BX and EX"
-clauses = ["iso-15930-7:6.19"]
+clauses = ["iso-15930-7:6.19", "iso-15930-1:6.21", "iso-15930-3:6.14", "iso-15930-4:6.15", "iso-15930-6:6.15"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
 status = "implemented"
+cite.x1a-2001 = { "6.19" = "6.21" }
+cite.x3-2002 = { "6.19" = "6.14" }
+cite.x1a-2003 = { "6.19" = "6.15" }
+cite.x3-2003 = { "6.19" = "6.15" }
 
 [[check]]
 id = "x4.transparency.group-cs-restricted"
@@ -1895,7 +2052,7 @@ id = "internal"
 title = "The engine itself failed on this file"
 clauses = []
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "skip"
 reason = "Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it"
 
@@ -1906,7 +2063,7 @@ id = "file.header"
 title = "The file starts with a %PDF- header in its first 1024 bytes"
 clauses = ["iso-32000-2:7.5.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1914,7 +2071,7 @@ id = "file.header-offset"
 title = "The header is at the very start of the file"
 clauses = ["iso-32000-2:7.5.2"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1922,7 +2079,7 @@ id = "file.startxref"
 title = "The file ends with startxref and the offset of its cross-reference"
 clauses = ["iso-32000-2:7.5.5"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1930,7 +2087,7 @@ id = "file.xref"
 title = "Every cross-reference section can be read"
 clauses = ["iso-32000-2:7.5.4", "iso-32000-2:7.5.8"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1938,7 +2095,7 @@ id = "file.trailer"
 title = "The trailer names the document catalog"
 clauses = ["iso-32000-2:7.5.5"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1946,7 +2103,7 @@ id = "file.encrypted"
 title = "The file is not encrypted"
 clauses = ["iso-32000-2:7.6"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1954,7 +2111,7 @@ id = "file.eof"
 title = "The file ends with %%EOF and nothing after it"
 clauses = ["iso-32000-2:7.5.5"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1962,7 +2119,7 @@ id = "file.limit"
 title = "The file stays within proof-pdf's safety limits"
 clauses = []
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1970,7 +2127,7 @@ id = "syntax.hex-digits"
 title = "Hex strings have an even number of digits"
 clauses = ["iso-32000-2:7.3.4.3"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1978,7 +2135,7 @@ id = "syntax.octal-escape"
 title = "Octal escapes in strings stay within one byte"
 clauses = ["iso-32000-2:7.3.4.2"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1986,7 +2143,7 @@ id = "syntax.name-escape"
 title = "Escapes in names are two hex digits, never 00"
 clauses = ["iso-32000-2:7.3.5"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -1996,7 +2153,7 @@ clauses = ["iso-32000-2:7.3.7"]
 # A warning, though 7.3.7 says "shall not": LuaLaTeX's pdfx package writes catalog keys twice in files that print
 # correctly; qpdf warns, and pdfToolbox does not object (decision of 2026-11-25).
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -2004,7 +2161,7 @@ id = "stream.eol"
 title = "Stream data is followed by an end of line before endstream"
 clauses = ["iso-32000-2:7.3.8.1"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -2012,7 +2169,7 @@ id = "stream.filter"
 title = "Every stream names filters ISO 32000 defines"
 clauses = ["iso-32000-2:7.4.1"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -2020,7 +2177,7 @@ id = "content.damaged"
 title = "Every content stream can be read to its end"
 clauses = ["iso-32000-2:7.8.2", "iso-32000-2:8.9.7"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -2028,7 +2185,7 @@ id = "content.operator"
 title = "Undefined operators appear only inside BX and EX"
 clauses = ["iso-32000-2:7.8.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -2036,7 +2193,7 @@ id = "content.compatibility"
 title = "BX and EX pair up"
 clauses = ["iso-32000-2:7.8.2"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -2044,7 +2201,7 @@ id = "page.media-box"
 title = "Every page has a MediaBox, its own or inherited"
 clauses = ["iso-32000-2:7.7.3.3"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -2052,7 +2209,7 @@ id = "object.damaged"
 title = "Every object reachable from the trailer can be read"
 clauses = ["iso-32000-2:7.3", "iso-32000-2:7.3.8.1", "iso-32000-2:7.3.10", "iso-32000-2:7.5.7"]
 severity = "error"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 [[check]]
@@ -2060,7 +2217,7 @@ id = "object.dangling-reference"
 title = "References point at objects that exist"
 clauses = ["iso-32000-2:7.3.10"]
 severity = "warning"
-applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
 status = "implemented"
 
 # PDF/X-1a:2001, X-3:2002, X-1a:2003 and X-3:2003 (ISO 15930-1, -3, -4, -6): the rules that differ from X-4, from
@@ -2400,4 +2557,12 @@ title = "Viewer-preference areas are MediaBox or BleedBox when a page has a Blee
 clauses = ["iso-15930-4:6.17", "iso-15930-6:6.17"]
 severity = "error"
 applies = ["x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x3.output-intent.registry-name-color-org-2003"
+title = "An ICC-registered condition names the ICC registry, with or without the final slash"
+clauses = ["iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x3-2003"]
 status = "todo"

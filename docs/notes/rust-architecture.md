@@ -260,6 +260,10 @@ than they helped. Arlington's shape checks appear as findings.
 
 - Each check declares the clauses it may cite. A finding citing one outside its check's set is a bug, caught by a test. The README
   and `--list-checks` list each check's clauses from the declarations.
+- A check reused from X-4 at an older level (PDF/X-1a, X-3) keeps citing its ISO 15930-7 clause in code; its
+  `checks.toml` entry maps each such clause to the older part's (`cite.x3-2002 = { "6.8" = "6.4" }`), and `verify`
+  rewrites a finding's clause by that map at the end of the run. `build.rs` refuses an entry that applies at an older
+  level without mapping every ISO 15930-7 clause it has, so no finding there cites the X-4 text (pdfx-1a-3-plan 1.2).
 - A list of clause numbers per standard held, extracted from the test-db Markdown copies, is committed here: numbers only, no titles
   or text. Declared clauses are validated against it.
 

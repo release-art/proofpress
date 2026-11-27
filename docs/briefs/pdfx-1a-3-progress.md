@@ -23,18 +23,19 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 | 0.1 | test-db `156acfd5` | `docs/pdfx/x1a3-register.md`: 85 file-rule rows, 48 mapped to `x4.*` checks, 37 new |
 | 0.2 | this commit; test-db register §4 | L-Q1, Q2, Q4-Q10 and Q11-Q22 settled with the oracle (decision log); L-Q3, Q17 and Q22 at X-1a:2001 escalated, then answered by the owner |
 | 1.1 | this commit | Levels `x1a-2001`, `x3-2002`, `x1a-2003`, `x3-2003`; detection of a claimed older level; the report's `level`; the 42 new rows as `todo`; clause lists for 15930-1, -3, -4, -6 |
+| 1.2 | this commit | 47 `x4.*` checks and the 21 structure checks applied at the older levels; `cite` maps their clauses; X-4 and X-5 expectations unchanged |
 | 0.3 | test-db `156acfd5` | 88 claims in test-db, pdfToolbox passes 47; `docs/pdfx/x1a3-claims.csv` |
 
 ## Register coverage
 
-Task 1.1: the 42 new ids (the register's 37 new rows, with the output-intent and ICC version rows split, optional
-content and 16-bit images from L-Q4, and the X-1a:2001 embedded-file warning) are in `checks.toml` as `todo`.
+Task 1.2: 47 `x4.*` rows reused (45 implemented, 2 skip), plus the structure checks. Task 1.1: the 42 new ids (the register's 37 new rows, with the output-intent and ICC version rows split, optional
+content and 16-bit images from L-Q4, and the X-1a:2001 embedded-file warning) are in `checks.toml` as `todo`; task 1.2 added `x3.output-intent.registry-name-color-org-2003` (Q15).
 
 ## Gates
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green, 2026-11-27, task 1.1 (100% lines, regions, functions) |
+| `bin/rust/check.sh` | green, 2026-11-27, task 1.2 (100% lines, regions, functions) |
 | Python (ruff, pyright, pytest) | green, 2026-11-27, task 1.1: 966 passed |
 
 ## Corpus and oracle

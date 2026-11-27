@@ -35,7 +35,7 @@ mod x5g;
 
 use crate::document::Document;
 use crate::findings::{
-    self as f, Check, CheckResult, FILE_ENCRYPTED, Finding, INTERNAL, Level, Outcome, Report, Severity, Status,
+    self as f, Check, CheckResult, Clause, FILE_ENCRYPTED, Finding, INTERNAL, Level, Outcome, Report, Severity, Status,
     Structure, X4_ENCRYPT_ABSENT, X4_FILTER_NO_CRYPT, X4_FILTER_NO_LZW, X4_FILTER_STANDARD_ONLY, X4_LIMITS_OBJECTS,
     X4_NAMES_HEX_ESCAPED, X4_NAMES_UTF8, X4_PDF_REFERENCE_CONFORMS, X4_PERMS_UR_ONLY,
 };
@@ -577,7 +577,19 @@ fn verify_chain(
         }
     };
     report.level = level.title();
+    for finding in &mut report.findings {
+        finding.clause = cited_at(finding.check, finding.clause, level);
+    }
     report
+}
+
+/// The clause a finding of `check` citing `clause` cites at `level`: at an older level, a reused X-4 check's ISO 15930-7
+/// clause becomes that level's own (`rust/checks.toml`'s `cite`).
+fn cited_at(check: &Check, clause: Option<&'static Clause>, level: Level) -> Option<&'static Clause> {
+    let x4 = clause.filter(|c| c.standard == "iso-15930-7");
+    x4.and_then(|c| check.cites.iter().find(|(l, n, _)| *l == level && *n == c.number))
+        .map(|(_, _, to)| to)
+        .or(clause)
 }
 
 /// The report, with the checks judged from tiers 1 to 5's findings added: `x4.encrypt.absent` fails on an encrypted
@@ -757,8 +769,30 @@ mod tests {
     }
 
     #[test]
+    fn a_reused_check_cites_the_older_levels_own_clause() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/fixtures/pdfs/x4-lzw.pdf"
+        ))
+        .unwrap();
+        let cited = |level: Level| {
+            let report = verify("x4-lzw.pdf", &bytes, level);
+            let lzw = report.findings.iter().find(|f| f.check == X4_FILTER_NO_LZW).unwrap();
+            lzw.clause.map(|c| (c.standard, c.number))
+        };
+        assert_eq!(cited(Level::X4), Some(("iso-15930-7", "6.8")));
+        assert_eq!(cited(Level::X32002), Some(("iso-15930-3", "6.4")));
+        assert_eq!(cited(Level::X32003), Some(("iso-15930-6", "6.5")));
+        // A clause outside ISO 15930-7, or none, is left alone.
+        let other = f::FILE_HEADER.clauses.first();
+        assert_eq!(cited_at(f::FILE_HEADER, other, Level::X32003), other);
+        assert_eq!(cited_at(X4_FILTER_NO_LZW, None, Level::X32003), None);
+    }
+
+    #[test]
     fn a_check_still_to_be_written_is_not_evaluated() {
         static TODO: Check = Check {
+            cites: &[],
             id: "x5.example",
             aliases: &[],
             title: "An example",

@@ -10,7 +10,7 @@
     reason = "a build script fails the build by panicking"
 )]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
@@ -37,7 +37,19 @@ struct Entry {
     reason: Option<String>,
     /// The external program whose verdict an implemented check reports, run by the command line, not the core.
     tool: Option<String>,
+    /// For an X-4 check reused at an older level: per level, the clause of that level's standard each of its ISO 15930-7
+    /// clauses becomes (`cite.x1a-2001 = { "6.17" = "6.19" }`).
+    #[serde(default)]
+    cite: BTreeMap<String, BTreeMap<String, String>>,
 }
+
+/// The older levels and the standard each is defined by: a check reused from X-4 cites that standard's clause there.
+const OLDER: &[(&str, &str)] = &[
+    ("x1a-2001", "iso-15930-1"),
+    ("x3-2002", "iso-15930-3"),
+    ("x1a-2003", "iso-15930-4"),
+    ("x3-2003", "iso-15930-6"),
+];
 
 const SEVERITIES: &[&str] = &["error", "warning"];
 const LEVELS: &[&str] = &[
@@ -119,6 +131,7 @@ fn validate(checks: &[Entry], known: &BTreeSet<String>) -> Vec<String> {
             ("implemented" | "todo", Some(_)) => problems.push(format!("{id}: only a skip has a reason")),
             (other, _) => problems.push(format!("{id}: status {other:?} is not implemented, todo or skip")),
         }
+        problems.extend(citations(c));
         match &c.tool {
             Some(tool) if !TOOLS.contains(&tool.as_str()) => {
                 problems.push(format!("{id}: tool {tool:?} is not one of {TOOLS:?}"));
@@ -127,6 +140,51 @@ fn validate(checks: &[Entry], known: &BTreeSet<String>) -> Vec<String> {
                 problems.push(format!("{id}: only an implemented check names a tool"));
             }
             _ => {}
+        }
+    }
+    problems
+}
+
+/// What is wrong with a check's `cite` table: each level it names is an older level the check applies to, each source
+/// is one of its ISO 15930-7 clause numbers and each target one of its clauses in that level's standard; and every
+/// older level it applies to maps every ISO 15930-7 clause it has, so no finding there cites the X-4 text.
+fn citations(c: &Entry) -> Vec<String> {
+    let id = &c.id;
+    let x4: BTreeSet<&str> = c
+        .clauses
+        .iter()
+        .filter_map(|cl| cl.strip_prefix("iso-15930-7:"))
+        .collect();
+    let mut problems = Vec::new();
+    for (level, standard) in OLDER {
+        let map = c.cite.get(*level);
+        if c.applies.iter().any(|a| a == level) {
+            let missing: Vec<&&str> = x4
+                .iter()
+                .filter(|n| !map.is_some_and(|m| m.contains_key(**n)))
+                .collect();
+            if !missing.is_empty() {
+                problems.push(format!("{id}: cite.{level} must map ISO 15930-7 clause(s) {missing:?}"));
+            }
+        } else if map.is_some() {
+            problems.push(format!("{id}: cite.{level} names a level the check does not apply to"));
+        }
+        for (from, to) in map.into_iter().flatten() {
+            if !x4.contains(from.as_str()) {
+                problems.push(format!(
+                    "{id}: cite.{level} maps {from:?}, not one of its ISO 15930-7 clauses"
+                ));
+            }
+            if !c.clauses.contains(&format!("{standard}:{to}")) {
+                problems.push(format!(
+                    "{id}: cite.{level} cites {standard}:{to}, which its clauses do not list"
+                ));
+            }
+        }
+    }
+    for level in c.cite.keys() {
+        if !OLDER.iter().any(|(l, _)| l == level) {
+            problems.push(format!("{id}: cite.{level} is not an older level"));
         }
     }
     problems
@@ -166,6 +224,17 @@ fn code(checks: &[Entry]) -> String {
             })
             .collect();
         let applies: Vec<String> = c.applies.iter().map(|a| format!("Level::{}", variant(a))).collect();
+        let cites: Vec<String> = OLDER
+            .iter()
+            .flat_map(|(level, standard)| {
+                c.cite.get(*level).into_iter().flatten().map(move |(from, to)| {
+                    format!(
+                        "(Level::{}, {from:?}, Clause {{ standard: {standard:?}, number: {to:?} }})",
+                        variant(level)
+                    )
+                })
+            })
+            .collect();
         let status = match (c.status.as_str(), &c.reason) {
             ("skip", Some(reason)) => format!("Status::Skip({reason:?})"),
             (status, _) => format!("Status::{}", variant(status)),
@@ -173,7 +242,7 @@ fn code(checks: &[Entry]) -> String {
         let _ = writeln!(
             out,
             "/// The `{id}` check.\npub const {name}: &Check = &Check {{\n    id: {id:?},\n    aliases: &{aliases:?},\n    title: {title:?},\n    \
-             clauses: &[{clauses}],\n    severity: Severity::{severity},\n    applies: &[{applies}],\n    status: {status},\n    tool: {tool:?},\n}};\n",
+             clauses: &[{clauses}],\n    severity: Severity::{severity},\n    applies: &[{applies}],\n    cites: &[{cites}],\n    status: {status},\n    tool: {tool:?},\n}};\n",
             title = c.title,
             name = constant(&c.id),
             id = c.id,
@@ -181,6 +250,7 @@ fn code(checks: &[Entry]) -> String {
             clauses = clauses.join(", "),
             severity = variant(&c.severity),
             applies = applies.join(", "),
+            cites = cites.join(", "),
             tool = c.tool,
         );
     }

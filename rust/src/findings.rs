@@ -138,6 +138,9 @@ pub struct Check {
     pub severity: Severity,
     /// The levels whose profiles include it.
     pub applies: &'static [Level],
+    /// For an X-4 check reused at an older level: the level, an ISO 15930-7 clause number the check cites, and the
+    /// clause of that level's standard a finding cites instead.
+    pub cites: &'static [(Level, &'static str, Clause)],
     /// Whether it is checked yet.
     pub status: Status,
     /// The external program whose verdict it reports (`veraPDF`, `Ghostscript`), run by the command line; `None` for
