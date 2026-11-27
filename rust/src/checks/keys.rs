@@ -3,15 +3,16 @@
 //! viewer preferences (6.21), alternate presentations (6.22) and XFA (6.26).
 
 use super::Settings;
+use super::info::per_level;
 use super::walk::{Node, dicts};
 use crate::document::{Dict, Document, Object, Value};
 use crate::findings::{
-    Check, Finding, Location, X4_ACROFORM_NO_XFA, X4_ACTIONS_ABSENT, X4_EXTGSTATE_NO_HTP, X4_EXTGSTATE_NO_TR,
-    X4_EXTGSTATE_TR2_DEFAULT, X4_FILESPEC_EMBEDDED, X4_HALFTONE_NO_NAME, X4_HALFTONE_TRANSFER_FUNCTION,
-    X4_HALFTONE_TYPE_1_OR_5, X4_IMAGE_NO_DEFAULT_FOR_PRINTING, X4_JAVASCRIPT_ABSENT,
+    Check, Finding, Location, X1A_FILESPEC_EMBEDDED_FILE, X4_ACROFORM_NO_XFA, X4_ACTIONS_ABSENT, X4_EXTGSTATE_NO_HTP,
+    X4_EXTGSTATE_NO_TR, X4_EXTGSTATE_TR2_DEFAULT, X4_FILESPEC_EMBEDDED, X4_HALFTONE_NO_NAME,
+    X4_HALFTONE_TRANSFER_FUNCTION, X4_HALFTONE_TYPE_1_OR_5, X4_IMAGE_NO_DEFAULT_FOR_PRINTING, X4_JAVASCRIPT_ABSENT,
     X4_NAMES_NO_ALTERNATE_PRESENTATIONS, X4_PAGE_NO_PRES_STEPS, X4_STREAM_NO_EXTERNAL_F, X4_VIEWER_PREFS_AREAS,
     X4_XOBJECT_NO_OPI, X4_XOBJECT_NO_POSTSCRIPT, X4_XOBJECT_NO_REF, X4_XOBJECT_NO_SUBTYPE2_PS,
-    X5_G_REF_FILESPEC_EXTERNAL,
+    X5_G_REF_FILESPEC_EXTERNAL, X13_EXTGSTATE_NO_TR2, X13_FILESPEC_ABSENT, X13_VIEWER_PREFS_AREAS,
 };
 
 /// The action types of ISO 32000-1, 12.6.4, Table 198, and the obsolete `SetState` and `NOP` of PDF 1.2 (PDF 1.6
@@ -176,6 +177,75 @@ pub(super) fn no_htp(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_EXTGSTATE_NO_HTP, "6.13", &|n| {
         when(ext_gstate(n) && n.dict.get(b"HTP").is_some(), "an ExtGState with /HTP")
     })
+}
+
+/// The older levels ban `/TR2` outright (15930-1 6.15, -3 6.8, -4 and -6 6.9), where X-4 allows `/Default`.
+pub(super) fn no_tr2(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    each(doc, X13_EXTGSTATE_NO_TR2, "6.15", &|n| {
+        when(ext_gstate(n) && n.dict.get(b"TR2").is_some(), "an ExtGState with /TR2")
+    })
+    .into_iter()
+    .map(|f| per_level(f, settings, ["6.15", "6.8", "6.9", "6.9"]))
+    .collect()
+}
+
+/// Whether a dictionary is a file specification: `/Type /Filespec`, or the value of `/FS` or `/AF`.
+fn is_filespec(n: &Node<'_>) -> bool {
+    n.name(b"Type") == Some(b"Filespec") || n.under(b"FS") || n.under(b"AF")
+}
+
+/// 15930-3 6.15, -4 and -6 6.4 (Q22): no file specifications at all, as dictionaries or as strings under `/FS`.
+/// Those of OPI, reference `XObject`s, external streams and actions are their own rows' too.
+pub(super) fn filespec_absent(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let mut out = each(doc, X13_FILESPEC_ABSENT, "6.15", &|n| {
+        when(is_filespec(n), "a file specification")
+    });
+    for node in dicts(doc) {
+        let value = node.dict.get(b"FS").and_then(|v| doc.resolve(v));
+        if matches!(value.map(|v| &v.value), Some(Value::String(..))) {
+            out.push(finding(
+                X13_FILESPEC_ABSENT,
+                node.num,
+                "a file specification that is a string",
+                "6.15",
+            ));
+        }
+    }
+    out.into_iter()
+        .map(|f| per_level(f, settings, ["", "6.15", "6.4", "6.4"]))
+        .collect()
+}
+
+/// 15930-1 (Q22, a warning by the oracle's judgement): an X-1a:2001 file embeds no files.
+pub(super) fn x1a_embedded_file(doc: &Document, _: &Settings) -> Vec<Finding> {
+    each(doc, X1A_FILESPEC_EMBEDDED_FILE, "6.5", &|n| {
+        when(is_filespec(n) && n.dict.get(b"EF").is_some(), "an embedded file")
+    })
+}
+
+/// 15930-4 and -6 6.17 (Q21): when any page has a `/BleedBox`, the viewer preferences' areas are `MediaBox` or
+/// `BleedBox`; without one, any value.
+pub(super) fn x13_viewer_areas(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let Some(prefs) = catalog_dict(doc, b"ViewerPreferences") else {
+        return Vec::new();
+    };
+    if !doc.pages().iter().any(|p| p.dict.get(b"BleedBox").is_some()) {
+        return Vec::new();
+    }
+    [b"ViewArea".as_slice(), b"ViewClip", b"PrintArea", b"PrintClip"]
+        .into_iter()
+        .filter_map(|key| {
+            let value = prefs.get(key).and_then(|v| doc.resolve(v))?;
+            (!matches!(value.name(), Some(b"MediaBox" | b"BleedBox"))).then(|| {
+                let key = String::from_utf8_lossy(key);
+                let finding = Finding::new(
+                    X13_VIEWER_PREFS_AREAS,
+                    format!("ViewerPreferences /{key} is not MediaBox or BleedBox, and a page has a BleedBox"),
+                );
+                per_level(finding, settings, ["", "", "6.17", "6.17"])
+            })
+        })
+        .collect()
 }
 
 pub(super) fn tr2_default(doc: &Document, _: &Settings) -> Vec<Finding> {
@@ -493,5 +563,62 @@ mod tests {
             0,
             "a catalog that is not a dictionary"
         );
+    }
+
+    /// What `run` cites at `level` on one page with `page`'s entries, the catalog's `catalog` and objects `more`.
+    fn older_cites(
+        run: fn(&Document, &Settings) -> Vec<Finding>,
+        level: Level,
+        page: &str,
+        catalog: &str,
+        more: &[(u32, Vec<u8>)],
+    ) -> Vec<String> {
+        let doc = crate::checks::test_doc::paged(&[(page, "")], catalog, more);
+        run(&doc, &level.into())
+            .into_iter()
+            .map(|f| f.clause.map_or_default(|c| format!("{}:{}", c.standard, c.number)))
+            .collect()
+    }
+
+    #[test]
+    fn rows_of_the_older_levels() {
+        let tr2 = "/Resources << /ExtGState << /G << /Type /ExtGState /TR2 /Default >> >> >>";
+        assert_eq!(older_cites(no_tr2, Level::X32002, tr2, "", &[]), ["iso-15930-3:6.8"]);
+        let annot = "/Annots [<< /Type /Annot /Subtype /FileAttachment /Rect [0 0 1 1] /FS (notes.txt) >>]";
+        assert_eq!(
+            older_cites(filespec_absent, Level::X1a2003, annot, "", &[]),
+            ["iso-15930-4:6.4"]
+        );
+        let embedded = "/Names << /EmbeddedFiles << /Names [(a) << /Type /Filespec /F (a) /EF << /F 9 0 R >> >>] >> >>";
+        let data = (9, b"<< /Length 1 >>\nstream\nx\nendstream".to_vec());
+        assert_eq!(
+            older_cites(
+                filespec_absent,
+                Level::X32003,
+                "",
+                embedded,
+                std::slice::from_ref(&data)
+            ),
+            ["iso-15930-6:6.4"]
+        );
+        assert_eq!(
+            older_cites(x1a_embedded_file, Level::X1a2001, "", embedded, &[data]),
+            ["iso-15930-1:6.5"]
+        );
+        let bleed = "/BleedBox [0 0 1 1]";
+        let prefs = |value: &str| format!("/ViewerPreferences << /PrintArea /{value} /ViewArea 7 0 R >>");
+        assert_eq!(
+            older_cites(x13_viewer_areas, Level::X32003, bleed, &prefs("CropBox"), &[]),
+            ["iso-15930-6:6.17"]
+        );
+        assert_eq!(
+            older_cites(x13_viewer_areas, Level::X32003, bleed, &prefs("BleedBox"), &[]),
+            [""; 0]
+        );
+        assert_eq!(
+            older_cites(x13_viewer_areas, Level::X1a2003, "", &prefs("CropBox"), &[]),
+            [""; 0]
+        );
+        assert_eq!(older_cites(x13_viewer_areas, Level::X1a2003, bleed, "", &[]), [""; 0]);
     }
 }

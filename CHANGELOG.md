@@ -15,13 +15,13 @@ What existing users will notice, most important first (the entries below give th
 - **The whole of PDF/X is checked**, not only the page boxes, `/Trapped` and identity: PDF/X-4 by default, another
   level with `--pdfx x4p|x5g|x5pg|x5n`, none with `--no-pdfx`. The PDF/X findings have new ids, `x4.*` and `x5.*`;
   the four old ones (`pdfx-intent`, `trapped`, `pdfx-xmp`, `trimbox`) are recorded as aliases in `rust/checks.toml`.
-- **PDF/X-1a and PDF/X-3 levels (in progress):** `--pdfx x1a-2001|x3-2002|x1a-2003|x3-2003` (`Profile.pdfx_level`),
-  and without `--pdfx` a file whose Info claims one of these levels is verified at it (the JSON report's new `level`
-  says which; the text report adds "as PDF/X-3:2002" and the summary says "PDF/X as claimed"). Their checks are
-  being written; until then those levels report them as not evaluated. Written so far: the X-4 rules these levels
-  share, identification, dates, title and `/Trapped` in the Info dictionary, and the output intent and colour
-  rules, transparency, and the file structure, filters, image depth and optional content these older PDF versions
-  allow (`x13.*`, `x1a.*`, `x3.*`).
+- **PDF/X-1a and PDF/X-3 levels:** `--pdfx x1a-2001|x3-2002|x1a-2003|x3-2003` (`Profile.pdfx_level`), and without
+  `--pdfx` a file whose Info claims one of these levels is verified at it (the JSON report's new `level` says which;
+  the text report adds "as PDF/X-3:2002" and the summary says "PDF/X as claimed"). Every rule of ISO 15930-1, -3, -4
+  and -6 is checked or recorded as not checkable: the X-4 rules these levels share, and their own (`x13.*`, `x1a.*`,
+  `x3.*`) on Info identification and `/Trapped`, the output intent and colour, transparency, the file structure,
+  filters, image depth and optional content of these older PDF versions, file specifications, page boxes,
+  annotations, viewer preferences and font licences.
 - **`/Trapped` is judged in the XMP** (`pdf:Trapped`), where ISO 15930-7 6.9 puts it; an Info `/Trapped` must agree.
 - **Damaged files are read strictly.** A file that pikepdf repaired silently now fails, with the reason; an encrypted
   file fails, even with an empty password. A damaged object or stream no longer stops the whole file: the rest is

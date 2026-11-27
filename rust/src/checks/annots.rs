@@ -12,7 +12,7 @@ use crate::document::{Dict, Document, Object, Page};
 use crate::findings::{
     Check, Finding, Location, X1A_TRAPNET_PCM_CMYK, X4_ANNOT_OUTSIDE_BLEED, X4_ANNOT_PRINTERMARK_OUTSIDE_TRIM,
     X4_TRAPNET_FONT_FAUXING_EMPTY, X4_TRAPNET_PCM_MATCHES_INTENT, X4_TRAPPED_TRAPNET_IMPLIES_TRUE, X5_N_TRAPNET_PCM,
-    X5_N_TRAPNET_SEPARATIONS, X13_TRAPPED_TRAPNET_IMPLIES_TRUE,
+    X5_N_TRAPNET_SEPARATIONS, X13_ANNOT_OUTSIDE_BLEED_TRAPNET_ONLY, X13_TRAPPED_TRAPNET_IMPLIES_TRUE,
 };
 
 /// Every annotation dictionary with its page's index and the page.
@@ -59,6 +59,17 @@ fn first_box<'a>(doc: &Document, page: &Page<'_>, keys: &[&'a str]) -> Option<(&
 
 /// Annotations of `which` kind whose `/Rect` overlaps the first of `boxes` the page has.
 fn overlapping(doc: &Document, check: &'static Check, which: &dyn Fn(&[u8]) -> bool, boxes: &[&str]) -> Vec<Finding> {
+    overlapping_citing(doc, check, which, boxes, "6.17")
+}
+
+/// [`overlapping`], citing `clause`.
+fn overlapping_citing(
+    doc: &Document,
+    check: &'static Check,
+    which: &dyn Fn(&[u8]) -> bool,
+    boxes: &[&str],
+    clause: &str,
+) -> Vec<Finding> {
     let pages = doc.pages();
     annotations(doc, &pages)
         .into_iter()
@@ -68,7 +79,7 @@ fn overlapping(doc: &Document, check: &'static Check, which: &dyn Fn(&[u8]) -> b
             let area = rect(doc, annot.get(b"Rect")?)?;
             let kind = String::from_utf8_lossy(subtype(annot)).into_owned();
             (!apart(&area, &bound))
-                .then(|| on_page(check, i, &format!("a {kind} annotation overlaps the {name}"), "6.17"))
+                .then(|| on_page(check, i, &format!("a {kind} annotation overlaps the {name}"), clause))
         })
         .collect()
 }
@@ -76,6 +87,22 @@ fn overlapping(doc: &Document, check: &'static Check, which: &dyn Fn(&[u8]) -> b
 pub(super) fn outside_bleed(doc: &Document, _: &Settings) -> Vec<Finding> {
     let other = |s: &[u8]| s != b"TrapNet" && s != b"PrinterMark";
     overlapping(doc, X4_ANNOT_OUTSIDE_BLEED, &other, &["BleedBox", "TrimBox", "ArtBox"])
+}
+
+/// 15930-1 6.19, -3 6.12: at the 2001 and 2002 levels only `TrapNet` annotations may lie inside the bleed box (or the
+/// trim or art box without one); `PrinterMark`, a PDF 1.4 type, is not exempt (Q20).
+pub(super) fn x13_outside_bleed(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let other = |s: &[u8]| s != b"TrapNet";
+    overlapping_citing(
+        doc,
+        X13_ANNOT_OUTSIDE_BLEED_TRAPNET_ONLY,
+        &other,
+        &["BleedBox", "TrimBox", "ArtBox"],
+        "6.19",
+    )
+    .into_iter()
+    .map(|f| info::per_level(f, settings, ["6.19", "6.12", "", ""]))
+    .collect()
 }
 
 pub(super) fn printermark_outside_trim(doc: &Document, _: &Settings) -> Vec<Finding> {
@@ -399,5 +426,17 @@ mod tests {
             found(x5n_separations),
             ["page 1: a TrapNet appearance's /SeparationColorNames lacks Orange"]
         );
+    }
+
+    #[test]
+    fn printer_marks_are_not_exempt_at_the_2001_and_2002_levels() {
+        let page = "/TrimBox [10 10 90 90] /Annots [<< /Subtype /PrinterMark /Rect [20 20 30 30] >> \
+            << /Subtype /TrapNet /Rect [20 20 30 30] >>]";
+        let doc = crate::checks::test_doc::paged(&[(page, "")], "", &[]);
+        let cited: Vec<_> = x13_outside_bleed(&doc, &Level::X1a2001.into())
+            .into_iter()
+            .map(|f| f.clause.map(|c| format!("{}:{}", c.standard, c.number)))
+            .collect();
+        assert_eq!(cited, [Some("iso-15930-1:6.19".to_owned())]);
     }
 }

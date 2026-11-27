@@ -14,6 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use super::Settings;
+use super::info::per_level;
 use super::painted::page_of;
 use crate::common::font::Font;
 use crate::common::glyphs::{self, Look};
@@ -24,6 +25,7 @@ use crate::findings::{
     Check, Finding, Location, X4_FONT_EMBEDDED, X4_FONT_GLYPHS_PRESENT, X4_FONT_NO_NOTDEF,
     X4_FONT_TRUETYPE_NONSYMBOLIC_ENCODING, X4_FONT_TRUETYPE_NONSYMBOLIC_NO_DIFFERENCES,
     X4_FONT_TRUETYPE_SYMBOLIC_NO_ENCODING, X4_FONT_TRUETYPE_SYMBOLIC_ONE_CMAP, X4_FONT_WIDTHS_CONSISTENT,
+    X13_FONT_EMBEDDING_PERMITTED,
 };
 use crate::graphics::{self, Event, Kind};
 
@@ -180,6 +182,39 @@ fn program(doc: &Document, descriptor: &Dict) -> Option<Vec<u8>> {
         return None;
     };
     doc.stream_data(num)
+}
+
+/// Every font descriptor in the file, with its object number.
+fn descriptors(doc: &Document) -> Vec<(u32, &Dict)> {
+    doc.objects()
+        .filter_map(|(num, object, ..)| Some((num, object.dict()?)))
+        .filter(|(_, d)| d.get(b"Type").and_then(Object::name) == Some(b"FontDescriptor"))
+        .collect()
+}
+
+/// The older levels (15930-1 6.4, -3, -4 and -6 6.3): only fonts whose licence lets them be embedded are used. A
+/// TrueType or OpenType program whose `OS/2` `fsType` asks for restricted-licence embedding (bit 1 alone among the
+/// permission bits) warns: an agreement with the font's owner may still allow it, and the file cannot show one.
+pub(super) fn embedding_permitted(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    descriptors(doc)
+        .into_iter()
+        .filter_map(|(num, descriptor)| {
+            let data = program(doc, descriptor)?;
+            let os2 = sfnt::table(&data, *b"OS/2")?;
+            let fs_type = os2
+                .get(8..)
+                .and_then(<[u8]>::first_chunk::<2>)
+                .map(|b| u16::from_be_bytes(*b))?;
+            (fs_type & 0x000F == 0x0002).then(|| {
+                let finding = Finding::new(
+                    X13_FONT_EMBEDDING_PERMITTED,
+                    format!("object {num}: the font program's licence restricts embedding (OS/2 fsType {fs_type})"),
+                )
+                .at(vec![Location::Object(num, 0)]);
+                per_level(finding, settings, ["6.4", "6.3", "6.3", "6.3"])
+            })
+        })
+        .collect()
 }
 
 /// 6.5.1: a font that text uses is embedded, unless every run in it is in render mode 3 (invisible). A Type 3 font's
@@ -496,6 +531,46 @@ mod tests {
                 "TrueType font F (object 17) is symbolic and its program's cmap has 2 encoding subtables, not one",
                 "TrueType font F (object 18) is symbolic and its program has no cmap table that can be read",
             ]
+        );
+    }
+
+    #[test]
+    fn a_program_whose_licence_restricts_embedding() {
+        let os2 = |fs_type: u16| {
+            let mut table = vec![0u8; 8];
+            table.extend(fs_type.to_be_bytes());
+            program(&[(b"OS/2", &table)])
+        };
+        let font = |n: u32, file: u32| {
+            (
+                n,
+                format!("<< /Type /FontDescriptor /FontName /F{n} /FontFile2 {file} 0 R >>").into_bytes(),
+            )
+        };
+        let objects = vec![
+            font(10, 20),
+            font(11, 21),
+            font(12, 22),
+            (20, stream("", &os2(2))),
+            (21, stream("", &os2(8))),
+            (22, stream("", b"junk")),
+            (13, b"<< /Type /FontDescriptor /FontName /F13 >>".to_vec()),
+            font(14, 24),
+            (24, stream("", &program(&[(b"OS/2", &[0u8; 9])]))),
+            (15, b"7".to_vec()),
+        ];
+        let page = "/Resources << /X << /A 10 0 R /B 11 0 R /C 12 0 R /D 13 0 R /E 14 0 R /F 15 0 R >> >>";
+        let doc = paged(&[(page, "")], "", &objects);
+        let found: Vec<_> = embedding_permitted(&doc, &Level::X1a2003.into())
+            .into_iter()
+            .map(|f| (f.message, f.clause.map(|c| c.standard)))
+            .collect();
+        assert_eq!(
+            found,
+            [(
+                "object 10: the font program's licence restricts embedding (OS/2 fsType 2)".to_owned(),
+                Some("iso-15930-4")
+            )]
         );
     }
 }

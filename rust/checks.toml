@@ -2341,7 +2341,7 @@ title = "Embedded fonts permit embedding"
 clauses = ["iso-15930-1:6.4", "iso-15930-3:6.3", "iso-15930-4:6.3", "iso-15930-6:6.3"]
 severity = "warning"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.filespec.absent"
@@ -2349,7 +2349,7 @@ title = "No file specifications"
 clauses = ["iso-15930-3:6.15", "iso-15930-4:6.4", "iso-15930-6:6.4"]
 severity = "error"
 applies = ["x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.filespec.embedded-file"
@@ -2357,7 +2357,7 @@ title = "No embedded files"
 clauses = ["iso-15930-1:6.2", "iso-15930-1:6.5"]
 severity = "warning"
 applies = ["x1a-2001"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.filter.listed-2001"
@@ -2509,7 +2509,7 @@ title = "TrimBox or ArtBox lies inside the CropBox"
 clauses = ["iso-15930-1:6.14", "iso-15930-3:6.7"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.extgstate.no-tr2"
@@ -2517,7 +2517,7 @@ title = "No ExtGState has /TR2"
 clauses = ["iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.annot.outside-bleed-trapnet-only"
@@ -2525,7 +2525,7 @@ title = "Every annotation but TrapNet lies outside the bleed"
 clauses = ["iso-15930-1:6.19", "iso-15930-3:6.12"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.transparency.smask"
@@ -2557,7 +2557,7 @@ title = "Viewer-preference areas are MediaBox or BleedBox when a page has a Blee
 clauses = ["iso-15930-4:6.17", "iso-15930-6:6.17"]
 severity = "error"
 applies = ["x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x3.output-intent.registry-name-color-org-2003"

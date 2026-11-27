@@ -14,7 +14,7 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 
 ## Status
 
-- Phases 0 and 1 are done. Phase 2 is in progress: 2.1 (colour), 2.2 (transparency) and 2.3 (structure, filters, L-Q2, L-Q4) are done; next is 2.4 (the rest).
+- Phases 0 and 1 are done. Phase 2 is in progress: 2.1-2.4 are done (every register row is `implemented` or `skip`); next is 2.5 (X-5 targets at these levels).
 
 ## Done
 
@@ -28,21 +28,22 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 | 2.1 | this commit | Output intent and print-element colour at the older levels (14 checks); 18 fixtures, `x13-colour.feature` |
 | 2.2 | this commit | Transparency at the older levels (3 checks, `checks/transparency.rs`); 7 fixtures, `x13-transparency.feature` |
 | 2.3 | this commit | Cross-reference and object streams, filter lists, JBIG2, 16-bit images, optional content (7 checks, `checks/x13.rs`); 8 fixtures, `x13-structure-filters.feature` |
+| 2.4 | this commit | `/TR2`, file specifications, embedded files at X-1a:2001, trim inside crop and annotations at 2001/2002, viewer preferences, font embedding permission (7 checks); 7 fixtures, `x13-keys-boxes.feature` |
 | 0.3 | test-db `156acfd5` | 88 claims in test-db, pdfToolbox passes 47; `docs/pdfx/x1a3-claims.csv` |
 
 ## Register coverage
 
-Task 2.3: 7 more (8 `todo` left). Task 2.2: 3 more. Task 2.1: 14 more implemented. Task 1.3: 12 new rows implemented. Task 1.2: 47 `x4.*` rows reused (45 implemented, 2 skip), plus the structure checks. Task 1.1: the 42 new ids (the register's 37 new rows, with the output-intent and ICC version rows split, optional
+Task 2.4: the last 7; no `todo` row is left. Task 2.3: 7 more. Task 2.2: 3 more. Task 2.1: 14 more implemented. Task 1.3: 12 new rows implemented. Task 1.2: 47 `x4.*` rows reused (45 implemented, 2 skip), plus the structure checks. Task 1.1: the 42 new ids (the register's 37 new rows, with the output-intent and ICC version rows split, optional
 content and 16-bit images from L-Q4, and the X-1a:2001 embedded-file warning) are in `checks.toml` as `todo`; task 1.2 added `x3.output-intent.registry-name-color-org-2003` (Q15).
 
 ## Gates
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green, 2026-11-27, task 2.3 (100% lines, regions, functions) |
+| `bin/rust/check.sh` | green, 2026-11-27, task 2.4 (100% lines, regions, functions) |
 | `bin/docker/test.sh` | green at the end of phase 1, 2026-11-27: 965 passed |
 | `bin/suites/pdfx.sh` | end of phase 1, 2026-11-27: 39 files, 39 accepted, 0 problems |
-| Python (ruff, pyright, pytest) | green, 2026-11-27, task 2.3: 966 passed |
+| Python (ruff, pyright, pytest) | green, 2026-11-27, task 2.4: 966 passed |
 
 ## Corpus and oracle
 

@@ -21,9 +21,8 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 - **PDF/X**: every requirement of ISO 15930-7 (PDF/X-4, X-4p) and ISO 15930-8 (PDF/X-5g, X-5pg, X-5n) that a file can be
   judged on, from the output intent and metadata to fonts, colour, transparency and referenced files (`--pdfx x4` by
   default, another level with `--pdfx x4p|x5g|x5pg|x5n`, `--no-pdfx` to skip). The counts are under [Checks](#checks).
-  PDF/X-1a:2001, X-3:2002, X-1a:2003 and X-3:2003 (ISO 15930-1, -3, -4, -6) are being added (`--pdfx
-  x1a-2001|x3-2002|x1a-2003|x3-2003`); without `--pdfx`, a file whose Info claims one of them is verified at it. Until
-  their checks are written, those levels report the missing ones as not evaluated, so no file passes them yet.
+  PDF/X-1a:2001, X-3:2002, X-1a:2003 and X-3:2003 (ISO 15930-1, -3, -4, -6) are checked too (`--pdfx
+  x1a-2001|x3-2002|x1a-2003|x3-2003`); without `--pdfx`, a file whose Info claims one of them is verified at it.
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
   For a book interior, `--binding-bleed-mm 0` (with `--binding left|right`, the bound edge of page 1; it alternates page by page) expects no bleed on the binding edge,
   so the sheet is wider by the outer bleed only; the centring check follows the asymmetry. Equal bleed on every side behaves as before.
@@ -95,10 +94,10 @@ Generated from `rust/checks.toml`; every check, with its clauses, is in [rust/CH
 | PDF/X-5g | 159 | 0 | 25 |
 | PDF/X-5pg | 169 | 0 | 25 |
 | PDF/X-5n | 159 | 0 | 24 |
-| PDF/X-1a:2001 | 76 | 5 | 3 |
-| PDF/X-3:2002 | 78 | 5 | 3 |
-| PDF/X-1a:2003 | 87 | 4 | 3 |
-| PDF/X-3:2003 | 88 | 4 | 3 |
+| PDF/X-1a:2001 | 81 | 0 | 3 |
+| PDF/X-3:2002 | 83 | 0 | 3 |
+| PDF/X-1a:2003 | 91 | 0 | 3 |
+| PDF/X-3:2003 | 92 | 0 | 3 |
 | Print checks | 54 | 0 | 4 |
 
 The print checks:

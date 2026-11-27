@@ -386,10 +386,11 @@ X4_XMP = f"""<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <?xpacket end="w"?>""".encode()
 
 
-def _truetype(*, one_cmap: bool = False, cmap: tuple[int, int, int] | None = None) -> bytes:
+def _truetype(*, one_cmap: bool = False, cmap: tuple[int, int, int] | None = None, fs_type: int | None = None) -> bytes:
     """A TrueType font of our own: every printable ASCII character is a 600-unit box (space is empty), 1000 units/em.
     Its ``cmap`` has fontTools' two subtables, (0, 3) and (3, 1), or with ``one_cmap`` only the (3, 1) one, or with
-    ``cmap`` (platform, encoding, offset) one subtable mapping each character's code plus the offset."""
+    ``cmap`` (platform, encoding, offset) one subtable mapping each character's code plus the offset; ``fs_type`` sets
+    the OS/2 embedding permissions."""
     from fontTools.fontBuilder import FontBuilder
     from fontTools.pens.ttGlyphPen import TTGlyphPen
 
@@ -428,7 +429,8 @@ def _truetype(*, one_cmap: bool = False, cmap: tuple[int, int, int] | None = Non
             "psName": "ProofBox",
         }
     )
-    fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200)
+    os2 = {"fsType": fs_type} if fs_type is not None else {}
+    fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200, **os2)
     fb.setupPost()
     fb.updateHead(created=0, modified=0)  # a build timestamp would make every build differ
     out = io.BytesIO()
@@ -893,7 +895,11 @@ def _jpeg_cmyk() -> bytes:
 
 
 def _x4_truetype(
-    *, flags: int = 32, encoding: object = pikepdf.Name.WinAnsiEncoding, one_cmap: bool = False
+    *,
+    flags: int = 32,
+    encoding: object = pikepdf.Name.WinAnsiEncoding,
+    one_cmap: bool = False,
+    fs_type: int | None = None,
 ) -> pikepdf.Pdf:
     """x4-good with its TrueType font's descriptor /Flags, /Encoding (``None`` for none) and program changed."""
     pdf = _x4_good()
@@ -903,7 +909,7 @@ def _x4_truetype(
         del font["/Encoding"]
     else:
         font.Encoding = encoding
-    program = _truetype(one_cmap=one_cmap)
+    program = _truetype(one_cmap=one_cmap, fs_type=fs_type)
     font.FontDescriptor.FontFile2.write(zlib.compress(program), filter=pikepdf.Name.FlateDecode)
     font.FontDescriptor.FontFile2.Length1 = len(program)
     return pdf
@@ -2065,6 +2071,44 @@ def _older_filter_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+def _older_key_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of the older levels' remaining rows (expected.toml says what each raises)."""
+    name, text = pikepdf.Name, pikepdf.String
+    fill = b"q /GS gs 0 0 0 1 k 0 0 10 10 re f Q"
+    tr2 = pikepdf.Dictionary(Type=name.ExtGState, TR2=name.Default)
+    inside = [100.0, 100.0, 120.0, 120.0]  # inside x4-good's trim and bleed boxes
+
+    def attachment(pdf: pikepdf.Pdf) -> pikepdf.Pdf:
+        data = pdf.make_stream(b"notes", Type=name.EmbeddedFile)
+        spec = pikepdf.Dictionary(Type=name.Filespec, F=text("notes.txt"), EF=pikepdf.Dictionary(F=data))
+        names = pikepdf.Array([text("notes.txt"), pdf.make_indirect(spec)])
+        pdf.Root["/Names"] = pikepdf.Dictionary(EmbeddedFiles=pikepdf.Dictionary(Names=names))
+        return pdf
+
+    def changed(level: str, change: Callable[[pikepdf.Pdf], None]) -> pikepdf.Pdf:
+        pdf = _older(level)
+        change(pdf)
+        return pdf
+
+    def crop(pdf: pikepdf.Pdf) -> None:
+        trim = [float(v) for v in pdf.pages[0].obj.TrimBox]
+        pdf.pages[0].obj["/CropBox"] = [trim[0] + 1, trim[1] + 1, trim[2], trim[3]]
+
+    def prefs(pdf: pikepdf.Pdf) -> None:
+        pdf.Root["/ViewerPreferences"] = pikepdf.Dictionary(PrintArea=name.TrimBox)
+
+    return {
+        "x13-tr2-default": _older("x1a-2001", base=_x4_painted(fill, {}, tr2)),
+        "x13-attachment": _older("x3-2003", base=attachment(_x4_good())),
+        "x1a-attachment": _older("x1a-2001", base=attachment(_x4_good())),
+        "x13-trim-outside-crop": changed("x3-2002", crop),
+        "x13-printermark-inside-bleed": changed("x1a-2001", lambda p: _with_annot(p, "PrinterMark", inside)),
+        "x13-print-area-trim": changed("x1a-2003", prefs),
+        # OS/2 fsType 2: restricted-licence embedding.
+        "x13-font-restricted": _older("x3-2002", base=_x4_truetype(fs_type=2)),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -2159,6 +2203,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_older_colour_fixtures(),
         **_older_transparency_fixtures(),
         **_older_filter_fixtures(),
+        **_older_key_fixtures(),
         **_x5_targets(),
         **_x5n_fixtures(),
         **_print_fixtures(),

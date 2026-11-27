@@ -1412,3 +1412,32 @@ expect = { "x13.oc.hides-print" = "optional content whose default configuration 
 [x13-oc-on]
 levels = ["x3-2003"]
 expect = { "x13.oc.present" = "optional content, always on (L-Q4, a warning)" }
+
+# ---- Older levels: the remaining rows (task 2.4).
+[x13-tr2-default]
+levels = ["x1a-2001"]
+expect = { "x13.extgstate.no-tr2" = "an ExtGState with /TR2 /Default, which X-4 allows (15930-1 6.15)" }
+
+[x13-attachment]
+levels = ["x3-2003"]
+expect = { "x13.filespec.absent" = "an embedded file's file specification (15930-6 6.4, Q22)" }
+
+[x1a-attachment]
+levels = ["x1a-2001"]
+expect = { "x1a.filespec.embedded-file" = "an embedded file (Q22 at X-1a:2001, a warning)" }
+
+[x13-trim-outside-crop]
+levels = ["x3-2002"]
+expect = { "x13.boxes.trim-within-crop" = "the TrimBox extends beyond the CropBox (15930-3 6.7); the BleedBox does too, which 6.7 does not judge" }
+
+[x13-printermark-inside-bleed]
+levels = ["x1a-2001"]
+expect = { "x13.annot.outside-bleed-trapnet-only" = "a PrinterMark annotation inside the bleed box, not exempt at X-1a:2001 (15930-1 6.19, Q20)" }
+
+[x13-print-area-trim]
+levels = ["x1a-2003"]
+expect = { "x13.viewer-prefs.areas" = "PrintArea /TrimBox while the page has a BleedBox (15930-4 6.17)" }
+
+[x13-font-restricted]
+levels = ["x3-2002"]
+expect = { "x13.font.embedding-permitted" = "the TrueType program's OS/2 fsType asks for restricted-licence embedding (15930-3 6.3, a warning)" }
