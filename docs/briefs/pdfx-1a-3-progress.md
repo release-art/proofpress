@@ -5,41 +5,23 @@ the prompt in [`pdfx-1a-3-run.md`](pdfx-1a-3-run.md). A fresh session resumes fr
 
 ## Stop questions
 
-**Open, 2026-11-27 (end of task 0.2): two of the plan's re-plan points triggered.**
-
-1. **The oracle escalated L-Q3** (transparency in X-1a:2001 and X-3:2002). Neither part has a transparency clause.
-   15930-3's informative Annex D says a file with transparency keys is still X-3 compliant, yet recommends that
-   verifiers treat non-null transparency as needing correction; the 2003 parts' clause 5 lets 2003 readers accept the
-   older files only when they meet 6.16; pdfToolbox fails them. Options: (a) **fail** (error) at both levels, citing
-   clause 5 and the data-structure clause, plus Annex D at X-3:2002; (b) **warn** at both; (c) fail at X-3:2002 (Annex D
-   asks for it) and warn at X-1a:2001. Recommendation: (a), so a file a 2003 reader may refuse and pdfToolbox fails is
-   not passed. What counts as transparency is Annex D.2's list (ExtGState `BM`, `CA`, `ca`, `SMask`, image `SMask`);
-   form groups alone are not judged at these two levels.
-2. **The register has more new rows than the plan assumed:** 37 of 85 file-rule rows (44 %; 38 % counted per level)
-   are new rather than mapped to `x4.*` checks, against the stop line of a third. Most are small: Info keys
-   (identification, dates, title, Trapped: 10 rows on one helper), conditional output-intent rows (8), variants of
-   existing geometry and graphics-state checks (5), filter lists (4), transparency key bans (3). The colour rows
-   (`x1a.colour.print-spaces`, `x3.output-intent.dest-profile-for-colour`) reuse the existing colour walk. Options:
-   (a) **carry on with the plan as written**, accepting about a third more work in phase 2 (by judgement, 3–4 days of
-   agent time instead of 2–3); (b) re-plan, e.g. drop X-1a:2003 (no sample claims it) or the 2001/2002 editions.
-   Recommendation: (a).
-3. Lower priority, can be answered later: **Q17**, must a font used only in render mode 3 be embedded (we propose no,
-   as X-4 says; the oracle agrees as a judgement); **Q22 at X-1a:2001**, an embedded file (attachment) in an X-1a:2001
-   file: the oracle would warn.
-
-Once answered, the run continues with phase 1 (task 1.1), carrying the answers into the decision log and the register.
+Answered 2026-11-27 (end of phase 0), by the owner through the session that started the run: "Accept both".
+- L-Q3: (a), transparency (15930-3 Annex D.2's keys) is an error at X-1a:2001 and X-3:2002; form groups alone are not
+  judged there.
+- Carry on with the plan as written, all four levels, accepting the 44 % new rows.
+- Q17 and Q22 at X-1a:2001 were not answered; the proposed defaults are taken (render-mode-3 fonts need no embedding;
+  an embedded file at X-1a:2001 is a warning).
 
 ## Status
 
-- **Stopped at the end of phase 0** for the stop questions above. Tasks 0.1, 0.2 (all but the escalated questions) and
-  0.3 are done.
+- Phase 0 is done (the stop questions are answered). Phase 1 is in progress, from task 1.1.
 
 ## Done
 
 | Task | Commit | Note |
 |---|---|---|
 | 0.1 | test-db `156acfd5` | `docs/pdfx/x1a3-register.md`: 85 file-rule rows, 48 mapped to `x4.*` checks, 37 new |
-| 0.2 | this commit; test-db register §4 | L-Q1, Q2, Q4-Q10 and Q11-Q22 settled with the oracle (decision log); L-Q3, Q17 and Q22 at X-1a:2001 escalated |
+| 0.2 | this commit; test-db register §4 | L-Q1, Q2, Q4-Q10 and Q11-Q22 settled with the oracle (decision log); L-Q3, Q17 and Q22 at X-1a:2001 escalated, then answered by the owner |
 | 0.3 | test-db `156acfd5` | 88 claims in test-db, pdfToolbox passes 47; `docs/pdfx/x1a3-claims.csv` |
 
 ## Register coverage
@@ -85,7 +67,7 @@ X-1a:2001 (stop questions).
 
 ## Stage reports
 
-### Phase 0 (decisions and groundwork), stopped 2026-11-27
+### Phase 0 (decisions and groundwork), finished 2026-11-27 (after a stop)
 
 - The register (test-db `docs/pdfx/x1a3-register.md`): 85 file-rule rows across the four parts, 48 mapped to existing
   checks (161 row-level pairs), 37 new (100 pairs); edition quirks (15930-1's misprinted conformance value, the
