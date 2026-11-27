@@ -10,7 +10,6 @@ import pytest
 from PIL import ImageCms
 
 from proof_pdf import core
-from proof_pdf._internal import spaces
 from proof_pdf.models import ColourMode, Finding, Profile, Severity
 
 from .conftest import core_run, ported_findings
@@ -122,64 +121,6 @@ class TestOverprint:
 
 
 class TestColourSpaces:
-    @pytest.mark.parametrize(
-        ("space", "expected"),
-        [
-            pytest.param(pikepdf.Name.DeviceRGB, "rgb", id="device-rgb"),
-            pytest.param(pikepdf.Name.DeviceCMYK, "cmyk", id="device-cmyk"),
-            pytest.param(pikepdf.Name.DeviceGray, "gray", id="device-gray"),
-            pytest.param(pikepdf.Name.CalRGB, "rgb", id="cal-rgb"),
-        ],
-    )
-    def test_device_spaces(self, space, expected):
-        assert spaces.classify_colour_space(space, None) == expected
-
-    @pytest.mark.parametrize(("components", "expected"), [(1, "gray"), (3, "rgb"), (4, "cmyk"), (7, "other")])
-    def test_icc_based_classified_by_component_count(self, components, expected):
-        pdf = pikepdf.new()
-        icc = pdf.make_stream(b"")
-        icc["/N"] = components
-        space = pikepdf.Array([pikepdf.Name("/ICCBased"), pdf.make_indirect(icc)])
-        assert spaces.classify_colour_space(space, None) == expected
-
-    @pytest.mark.parametrize(("signature", "expected"), [(b"RGB ", "rgb"), (b"Lab ", "other"), (b"CMYK", "cmyk")])
-    def test_icc_based_trusts_the_profile_header_over_the_component_count(self, signature, expected):
-        """A Lab profile has three components too (the Altona suite has them); it is not RGB."""
-        pdf = pikepdf.new()
-        icc = pdf.make_stream(bytes(16) + signature + bytes(8))
-        icc["/N"] = 4 if signature == b"CMYK" else 3
-        space = pikepdf.Array([pikepdf.Name("/ICCBased"), pdf.make_indirect(icc)])
-        assert spaces.classify_colour_space(space, None) == expected
-
-    def test_separation_alternate_is_not_the_artwork_space(self):
-        """A spot colour whose alternate is RGB is a correct print construct.
-
-        This is the exact shape in www.release.art's business card (its /&Scodix
-        spot ink); classifying the alternate would fail a known-good file.
-        """
-        space = pikepdf.Array(
-            [pikepdf.Name("/Separation"), pikepdf.Name("/&Scodix"), pikepdf.Name.DeviceRGB, pikepdf.Dictionary()]
-        )
-        assert spaces.classify_colour_space(space, None) == "other"
-
-    def test_devicen_alternate_is_also_ignored(self):
-        space = pikepdf.Array([pikepdf.Name("/DeviceN"), pikepdf.Array([]), pikepdf.Name.DeviceRGB])
-        assert spaces.classify_colour_space(space, None) == "other"
-
-    def test_indexed_looks_through_to_its_base(self):
-        space = pikepdf.Array([pikepdf.Name("/Indexed"), pikepdf.Name.DeviceRGB, 255, b"\x00"])
-        assert spaces.classify_colour_space(space, None) == "rgb"
-
-    def test_named_space_resolves_through_resources(self, make_content_pdf):
-        path = make_content_pdf(b"", font=False, colorspaces={"/CS0": pikepdf.Name.DeviceRGB})
-        with pikepdf.open(path) as pdf:
-            resources = pdf.pages[0].obj.get("/Resources")
-            assert spaces.classify_colour_space(pikepdf.Name("/CS0"), resources) == "rgb"
-
-    def test_unknown_space_is_other(self):
-        assert spaces.classify_colour_space(None, None) == "other"
-        assert spaces.classify_colour_space(pikepdf.Name("/Nonsense"), None) == "other"
-
     def test_rgb_image_is_an_error(self, tmp_path, make_image):
         path = tmp_path / "rgb.pdf"
         pdf = pikepdf.new()

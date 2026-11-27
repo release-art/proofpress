@@ -26,25 +26,14 @@ import re
 import shutil
 import typing
 
-import pikepdf
-
 from ._internal import (
     _core,
-    contrast,
     interactive,
-    spots,
     tables as table_finder,
     tagged as tagged_reader,
     xmp,
 )
-from ._internal.paint import Fill
 from ._internal.previews import build as build_previews
-from ._internal.spaces import (
-    CMYK,
-    GRAY,
-    RGB,
-    reachable as _objects,
-)
 from ._internal.vector import INVISIBLE, Group, Label, Shape, artwork
 from .inventory import inspect_pdf
 from .layout import Figure, Layout, Line, Table, analyse
@@ -71,7 +60,7 @@ SPACE_EM = 0.15
 
 _FONT_FILES = {"FontFile": ".t1", "FontFile2": ".ttf", "FontFile3": ".cff"}
 _SUBSET_PREFIX = re.compile(r"^[A-Z]{6}\+")
-_ERRORS = (pikepdf.PdfError, NotImplementedError, ValueError, OSError, TypeError, KeyError, IndexError)
+_ERRORS = (NotImplementedError, ValueError, OSError, TypeError, KeyError, IndexError)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -194,9 +183,9 @@ def extract_pdf(
     With *previews*, also render ``previews/index.html``, a review page of the pages with every asset boxed on them.
     It runs its own event loop, so call it from a thread when already inside one.
 
-    Raises :class:`pikepdf.PdfError` for a file that will not open, and
-    :class:`proof_pdf.inventory.UnreadablePdfError` for one the core refuses to read (damaged beyond its objects, or
-    encrypted). An asset that cannot be recovered is listed in :attr:`Extraction.failures` and the rest carry on.
+    Raises :class:`proof_pdf.inventory.UnreadablePdfError` for a file the core refuses to read (damaged beyond its
+    objects, or encrypted). An asset that cannot be recovered is listed in :attr:`Extraction.failures` and the rest
+    carry on.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     failures: list[str] = []
@@ -205,43 +194,45 @@ def extract_pdf(
     core = _CoreFacts(json.loads(raw), blobs)
     # What the core could not read is missing from everything below, so say so.
     failures += [f"reading the file: {problem}" for problem in core.facts["damage"]]
-    with pikepdf.open(path) as pdf:
-        tagged = tagged_reader.from_core(core.facts["structure"])
-        recovered = _Recovery(pdf, out_dir, failures, vector_text, tagged, core, data)
-        for facts, page in zip(core.facts["pages"], pdf.pages, strict=False):
-            recovered.page(facts, page, "images" in kinds, "vector" in kinds, gap_pt, max_fraction)
-        if "images" in kinds:
-            recovered.unplaced_images()
-        if "fonts" in kinds:
-            recovered.fonts(core)
-        intents = recovered.profiles(core) if "icc" in kinds else []
-        lines = _lines(recovered.text)
-        spot_colours = _spot_colours(pdf, recovered.pages)
-        boxes = _merge_boxes(recovered.boxes)
-        tables = _tables(lines, boxes, recovered.pages)
-        layout = analyse(lines, _figures(recovered.assets), recovered.pages, tables)
-        result = Extraction(
-            path=str(path),
-            out_dir=str(out_dir),
-            pages=recovered.pages,
-            metadata=_metadata(core, out_dir, failures),
-            output_intents=intents,
-            assets=recovered.assets,
-            text=recovered.text,
-            lines=lines,
-            boxes=boxes,
-            layout=layout,
-            palette=_palette(boxes, layout, spot_colours, recovered.artwork_colours),
-            spot_colours=spot_colours,
-            structure=_structure(tagged, recovered.text, recovered.marked_boxes),
-            interactive=interactive.from_core(core.facts["interactive"], core.blobs, out_dir, failures),
-            inventory=inspect_pdf(path, with_contrast=False).to_dict(),
-            notes=_notes(recovered.text),
-            failures=failures,
-        )
+    tagged = tagged_reader.from_core(core.facts["structure"])
+    recovered = _Recovery(out_dir, failures, vector_text, tagged, core, data)
+    for facts in core.facts["pages"]:
+        recovered.page(facts, "images" in kinds, "vector" in kinds, gap_pt, max_fraction)
+    if "images" in kinds:
+        recovered.unplaced_images()
+    if "fonts" in kinds:
+        recovered.fonts(core)
+    intents = recovered.profiles(core) if "icc" in kinds else []
+    lines = _lines(recovered.text)
+    spot_colours = _spot_colours(core.facts["spot_colours"], recovered.pages)
+    boxes = _merge_boxes(recovered.boxes)
+    tables = _tables(lines, boxes, recovered.pages)
+    layout = analyse(lines, _figures(recovered.assets), recovered.pages, tables)
+    result = Extraction(
+        path=str(path),
+        out_dir=str(out_dir),
+        pages=recovered.pages,
+        metadata=_metadata(core, out_dir, failures),
+        output_intents=intents,
+        assets=recovered.assets,
+        text=recovered.text,
+        lines=lines,
+        boxes=boxes,
+        layout=layout,
+        palette=_palette(boxes, layout, spot_colours, recovered.artwork_colours),
+        spot_colours=spot_colours,
+        structure=_structure(tagged, recovered.text, recovered.marked_boxes),
+        interactive=interactive.from_core(core.facts["interactive"], core.blobs, out_dir, failures),
+        inventory=inspect_pdf(path, with_contrast=False).to_dict(),
+        notes=_notes(recovered.text),
+        failures=failures,
+    )
     if previews:
         shutil.rmtree(out_dir / "previews", ignore_errors=True)  # ours, and stale pages would be listed as current
-        result.previews, problems = asyncio.run(build_previews(result.to_dict(), path, out_dir, dpi=preview_dpi))
+        images = {asset.file: key[1] for key, asset in recovered.by_key.items() if key[0] == "image"}
+        result.previews, problems = asyncio.run(
+            build_previews(result.to_dict(), path, images, out_dir, dpi=preview_dpi)
+        )
         failures += problems
     (out_dir / "document.json").write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return result
@@ -250,7 +241,6 @@ def extract_pdf(
 class _Recovery:
     def __init__(
         self,
-        pdf: pikepdf.Pdf,
         out_dir: pathlib.Path,
         failures: list[str],
         vector_text: bool = True,
@@ -258,7 +248,7 @@ class _Recovery:
         core: "_CoreFacts | None" = None,
         data: bytes = b"",
     ) -> None:
-        self.pdf, self.out, self.failures = pdf, out_dir, failures
+        self.out, self.failures = out_dir, failures
         self.vector_text = vector_text
         self.tagged = tagged
         self.marked_boxes: list[tuple[int, int, tuple[float, float, float, float]]] = []  # (page, MCID, box) of figures
@@ -267,7 +257,7 @@ class _Recovery:
         self.boxes: list[Box] = []
         self.artwork_colours: dict[str, float] = {}  # colour -> area of the vector artwork painted in it
         self.pages: list[dict[str, typing.Any]] = []
-        self._by_key: dict[typing.Any, Asset] = {}  # the same image or artwork placed again adds a placement
+        self.by_key: dict[typing.Any, Asset] = {}  # the same image or artwork placed again adds a placement
         self._masks: set[int] = set()  # soft masks' object numbers, saved beside the image they belong to
         self.core = core
         self.data = data
@@ -292,10 +282,9 @@ class _Recovery:
         self._spot_inks: dict[str, list[str]] = core.facts["spot_inks"] if core else {}
         self._font_pages: dict[str, set[int]] = {}
 
-    def page(  # noqa: PLR0913 -- the page's facts, its walk, and the options of both
+    def page(
         self,
         facts: dict[str, typing.Any],
-        page: pikepdf.Page,
         images: bool,
         vector: bool,
         gap_pt: float,
@@ -375,12 +364,12 @@ class _Recovery:
     def _add(
         self, key: typing.Any, make: collections.abc.Callable[[], Asset | None], placement: Placement | None = None
     ) -> Asset | None:
-        asset = self._by_key.get(key)
+        asset = self.by_key.get(key)
         if asset is None:
             asset = make()
             if asset is None:
                 return None
-            self._by_key[key] = asset
+            self.by_key[key] = asset
             self.assets.append(asset)
         if placement is not None:
             asset.placements.append(placement)
@@ -726,7 +715,7 @@ def _figures(assets: list[Asset]) -> list[Figure]:
     ]
 
 
-_CONTENT_COLOURS = {"g": GRAY, "G": GRAY, "rg": RGB, "RG": RGB, "k": CMYK, "K": CMYK}
+_CONTENT_COLOURS = {"g": 1, "G": 1, "rg": 3, "RG": 3, "k": 4, "K": 4}  # the operator and its components
 
 
 def _describe(raw: str | None) -> str | None:
@@ -737,12 +726,22 @@ def _describe(raw: str | None) -> str | None:
         name, _, tint = raw.removeprefix("spot ").rpartition(" ")
         return f"spot {name} {round(float(tint) * 100)}%" if name else raw
     operator, *operands = raw.split()
-    family = _CONTENT_COLOURS.get(operator)
+    components = _CONTENT_COLOURS.get(operator)
     try:
-        values = tuple(float(v) for v in operands)
+        values = [float(v) for v in operands]
     except ValueError:
         return raw
-    return contrast.describe(Fill(family, values)) if family else raw
+    if components is None:
+        return raw
+    if len(values) < components:
+        return "a spot or pattern colour"
+    if components == 4:
+        c, m, y, k = (round(v * 100) for v in values[:4])
+        return f"C{c} M{m} Y{y} K{k}"
+    if components == 1:
+        return f"gray {round(values[0] * 100)}%"
+    r, g, b = (round(v * 255) for v in values[:3])
+    return f"RGB({r},{g},{b})"
 
 
 def _structure(
@@ -807,15 +806,13 @@ def _tables(lines: list[Line], boxes: list[Box], pages: list[dict[str, typing.An
     return found
 
 
-def _spot_colours(pdf: pikepdf.Pdf, pages: list[dict[str, typing.Any]]) -> list[dict[str, typing.Any]]:
+def _spot_colours(
+    found: list[dict[str, typing.Any]], pages: list[dict[str, typing.Any]]
+) -> list[dict[str, typing.Any]]:
+    """The core's spot colours (``alternate`` is that space's components at full tint, e.g. CMYK 0..1 or Lab), each
+    with the pages that select it."""
     return [
-        {
-            "names": list(spot.names),
-            "alternate_space": spot.alternate_space,
-            "alternate": spot.alternate,  # components of that space at full tint, e.g. CMYK 0..1 or Lab
-            "pages": [p["number"] for p in pages if set(spot.names) & set(p["spot_inks"])],
-        }
-        for spot in spots.find(_objects(pdf))
+        {**spot, "pages": [p["number"] for p in pages if set(spot["names"]) & set(p["spot_inks"])]} for spot in found
     ]
 
 

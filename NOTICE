@@ -2,8 +2,6 @@ proof-pdf
 Copyright 2026 Ilja Orlovs. Licensed under the Apache License, Version 2.0.
 
 Python dependencies (installed by pip)
-  pikepdf   MPL-2.0   (bundles qpdf, Apache-2.0)
-  Pillow    MIT-CMU
   Typer     MIT
 
 External programs, run as separate processes and never linked or bundled in the

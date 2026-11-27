@@ -207,8 +207,8 @@ linked to its thumbnail below, so a whole archive job can be reviewed by eye. Te
 cannot be read from the PDF; `document.json` says so in `notes` and keeps the font codes. Mind who owns the artwork you
 recover.
 
-The library offers the same as data: `proof_pdf.inventory.inspect_pdf(path)` returns plain dataclasses, `proof_pdf.extract.extract_pdf(path, out_dir)` writes the assets and returns what it found, and the checks are
-functions over an opened `pikepdf.Pdf`.
+The library offers the same as data: `proof_pdf.inventory.inspect_pdf(path)` returns plain dataclasses, `proof_pdf.extract.extract_pdf(path, out_dir)` writes the assets and returns what it found, and
+`await proof_pdf.core.verify_file(path, profile)` runs the checks and returns a report.
 
 ## Docker images
 

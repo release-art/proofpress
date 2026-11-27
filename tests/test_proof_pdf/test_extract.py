@@ -8,7 +8,7 @@ import pytest
 import typer.testing
 
 from proof_pdf import cli, extract
-from proof_pdf._internal import fonts, xmp
+from proof_pdf._internal import xmp
 
 PDFS = pathlib.Path(__file__).parents[1] / "fixtures" / "pdfs"
 
@@ -71,14 +71,6 @@ class TestText:
         [run] = extract.extract_pdf(PDFS / "cyan-text.pdf", tmp_path).text
         assert (run.text, run.font, run.page) == ("cyan", "Helvetica", 1)
         assert run.size_pt > 0 and run.colour and run.width > 0
-
-    def test_to_unicode_maps_chars_and_ranges(self):
-        pdf = pikepdf.new()
-        cmap = pdf.make_stream(
-            b"1 beginbfchar <0003> <0020> endbfchar "
-            b"2 beginbfrange <0010> <0012> <0041> <0020> <0021> [<0061> <0062>] endbfrange",
-        )
-        assert fonts._to_unicode(cmap) == {3: " ", 0x10: "A", 0x11: "B", 0x12: "C", 0x20: "a", 0x21: "b"}
 
 
 class TestDocument:
@@ -414,21 +406,6 @@ def _fn(**entries) -> pikepdf.Dictionary:
 
 
 class TestSpotColours:
-    def test_functions_give_the_alternate_of_a_tint(self):
-        from proof_pdf._internal import functions
-
-        pdf = pikepdf.new()
-        exponential = _fn(FunctionType=2, C0=[0, 0, 0, 0], C1=[0, 0.2, 0.8, 0.1], N=1)
-        calculator = pdf.make_stream(b"{ dup 0.4 mul exch 0.2 mul 0 0 }")
-        calculator.update(_fn(FunctionType=4, Range=[0, 1] * 4))
-        sampled = pdf.make_stream(bytes([0, 0, 255, 128]))
-        sampled.update(_fn(FunctionType=0, Size=[2], BitsPerSample=8, Range=[0, 1, 0, 1]))
-        assert functions.evaluate(exponential, [1.0]) == pytest.approx([0, 0.2, 0.8, 0.1])
-        assert functions.evaluate(exponential, [0.5]) == pytest.approx([0, 0.1, 0.4, 0.05])
-        assert functions.evaluate(calculator, [1.0]) == pytest.approx([0.4, 0.2, 0, 0])
-        assert functions.evaluate(sampled, [1.0]) == pytest.approx([1.0, 128 / 255])
-        assert functions.evaluate(_fn(FunctionType=9), [1.0]) is None
-
     def test_a_separation_is_named_with_its_alternate_and_shows_in_the_palette(self, tmp_path):
         pdf = pikepdf.new()
         page = pdf.add_blank_page(page_size=(300, 200))

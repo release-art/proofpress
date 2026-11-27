@@ -34,14 +34,15 @@ record it as not conforming to that one rule).
 
 ## Status
 
-- **Phase 9** (the writer and the other commands): the writer, `crop`, `inspect` and `preview` are done; `extract`
-  is under way, moved to the core in slices, each parity-checked against the Python as it stood before the slice
+- **Phase 9** (the writer and the other commands): the writer, `crop`, `inspect`, `preview` and `extract` are done,
+  and pikepdf and Pillow have left the runtime dependencies. `extract` moved to the core in slices, each parity-checked
+  against the Python as it stood before the slice
   (`document.json` and every written file; vector PDFs compared without their random `/ID`) and committed alone:
   A, pages, document information and XMP, font programs, ICC profiles and output intents (`extract.rs`,
   `_core.extract`); B, images and their soft masks (decoded samples to PNG or TIFF, JPEG, JPEG 2000 and CCITT copied);
   C, the page walk's text runs (with `/ToUnicode`) and spot colours; D, the structure tree and interactive features;
-  E, vector artwork (on the writer); F, image thumbnails without Pillow, then pikepdf and Pillow leave the runtime
-  dependencies. The Python keeps the layout analysis and the assembly of `document.json`. `layout` and `texlog` stay Python (decision log, 2026-11-26). Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
+  E, vector artwork (on the writer); F, spot colours and image thumbnails, after which pikepdf and Pillow left the
+  runtime dependencies. The Python keeps the layout analysis and the assembly of `document.json`. `layout` and `texlog` stay Python (decision log, 2026-11-26). Phase 8 (PDF/X-5) finished 2026-11-26; see its stage report. Every PDF/X-4, X-4p
   and X-5 row is implemented or skip. Phase 7 (file sets and PDF/X-4p) finished 2026-11-26; see its stage report. The
   owner said to carry on past the PDF/X-4 milestone (phase 6, finished 2026-11-26).
 
@@ -121,6 +122,7 @@ record it as not conforming to that one rule).
 | 9 (part) | the extract B commit | `extract/image.rs` (feature `extract`): images copied (JPEG, JPEG 2000, CCITT in a TIFF) or decoded to PNG or Deflate TIFF, JBIG2 with `hayro-jbig2`, soft masks as files of their own; extract no longer uses `pikepdf.PdfImage` |
 | 9 (part) | the extract C commit | The page walk carries marked content (MCID, artifact), each text run's text (`/ToUnicode`, Adobe Latin CIDs, Latin-1), direction, scale and spacing, and an image's object number; extract reads text runs, image placements and spot inks from it, and lists undecodable content in `failures` |
 | 9 (part) | the extract D and E commit | `extract/tagged.rs` (the structure tree with the role map and layout attributes), `extract/interactive.rs` (fields, links, annotations, outline, page labels, layers, attachments) and `extract/vector.rs` (every painted path with its state, and pieces written as one-page PDFs on the writer, `_core.vector_pieces`); extract no longer reads these with pikepdf, and the 41 files whose pieces pikepdf's `copy_foreign` refused now extract |
+| 9 (part) | the extract F commit | Spot colour spaces read by the core; image thumbnails rendered from the image drawn alone (`_core.vector_pieces` with `image`); pikepdf and Pillow leave the runtime dependencies; the Python modules the core replaced are deleted with their module-only tests |
 
 ## Register coverage
 
@@ -476,6 +478,14 @@ Oracle consultations:
   moves to the core. The commit also carries slice F's core side (spot colour spaces in `_core.extract`, an image
   drawn alone by `_core.vector_pieces` for thumbnails), written in the same files while the run went and unused until
   slice F.
+
+- Phase 9, `extract` slice F (spot colours, image thumbnails, pikepdf and Pillow out of the runtime), against the
+  Python as at `92275fd`, on the fixtures, Ghent, Altona, GWG, the generated set, PDF 2.0, iText and pdf.js (2,127
+  files): 1,993 identical; 126 failing on both sides as before; 7 damaged pdf.js files that pikepdf could not open
+  (a looping page tree, no `/Root`) and the core reads; one spot colour whose `Domain [0 2]` sampled function the core
+  interpolates (ISO 32000-2 7.10.2, as decided in task 4.3) where the Python took the nearest sample. Thumbnails were
+  checked with pikepdf and Pillow made unimportable: the review page builds and each image's thumbnail is at most
+  360 pixels on its longest side.
 
 ## Owner requests
 

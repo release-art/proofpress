@@ -1,4 +1,4 @@
-"""The artwork-bleed check, and the clip tracking it relies on."""
+"""The artwork-bleed check, and the clip tracking it relies on (the walk's own clip tests are in the core)."""
 
 import asyncio
 import dataclasses
@@ -8,7 +8,6 @@ import re
 import pikepdf
 import pytest
 
-from proof_pdf._internal import paint
 from proof_pdf.models import PageGeometry, Severity
 
 from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W, core_run, ported_findings
@@ -136,18 +135,6 @@ class TestClipping:
     def test_a_non_rectangular_clip_counts_as_its_extent(self, tmp_path):
         triangle = b"%f %f m %f %f l %f %f l h W n " % (T, T, TR, T, TR, TT)
         assert len(_check(_pdf(tmp_path, b"q " + triangle + b"0.9 g " + FULL + b"Q"))) == 1
-
-    def test_visible_is_the_bbox_cut_to_the_clip_and_the_bbox_is_unchanged(self, tmp_path):
-        path = _pdf(tmp_path, b"q 10 10 50 50 re W n 0 0 100 100 re f Q 0 0 100 100 re f")
-        with pikepdf.open(path) as pdf:
-            clipped, free = paint.paint_events(pdf.pages[0])
-        assert clipped.bbox == (0, 0, 100, 100) and clipped.visible == (10, 10, 60, 60)
-        assert free.visible == free.bbox
-
-    def test_a_fully_clipped_object_has_nothing_visible(self, tmp_path):
-        with pikepdf.open(_pdf(tmp_path, b"q 0 0 10 10 re W* n 50 50 5 5 re f Q")) as pdf:
-            [only] = paint.paint_events(pdf.pages[0])
-        assert only.visible is None and only.bbox is not None
 
 
 class TestScope:

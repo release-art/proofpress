@@ -21,7 +21,6 @@ import pathlib
 import sys
 import typing
 
-import pikepdf
 import typer
 
 from . import core, crop, extract, inventory, preview, texlog
@@ -233,7 +232,7 @@ def extract_cmd(
                 previews=previews,
                 preview_dpi=preview_dpi,
             )
-        except (pikepdf.PdfError, pikepdf.PasswordError, inventory.UnreadablePdfError) as exc:
+        except inventory.UnreadablePdfError as exc:
             typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             failed = True
             continue

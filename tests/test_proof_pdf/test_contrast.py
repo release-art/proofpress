@@ -1,14 +1,11 @@
-"""L* contrast measured through ICC profiles: the model, the background rules and the findings."""
+"""The contrast check's findings: L* contrast measured through ICC profiles (the model and the background rules are
+tested in the core, ``checks/contrast.rs``)."""
 
-import io
 import pathlib
 
 import pikepdf
 import pytest
-from PIL import ImageCms
 
-from proof_pdf._internal import contrast
-from proof_pdf._internal.paint import Fill
 from proof_pdf.models import Severity
 
 from ._samples import build
@@ -42,110 +39,8 @@ def _text(colour: bytes, at: bytes = b"100 100 Td") -> bytes:
     return b"BT /F1 20 Tf " + colour + b" " + at + b" (A) Tj ET"
 
 
-def _model() -> contrast.ColourModel:
-    return contrast.ColourModel(cmyk=None)
-
-
 CMYK_PROFILE = build.cmyk_profile()
 needs_cmyk_profile = pytest.mark.skipif(CMYK_PROFILE is None, reason="no CMYK ICC profile on this machine")
-
-
-class TestColourModel:
-    def test_srgb_black_and_white_are_the_ends_of_the_scale(self):
-        model = _model()
-        black, white = model.lab(Fill("rgb", (0.0, 0.0, 0.0))), model.lab(Fill("rgb", (1.0, 1.0, 1.0)))
-        assert black is not None and black[0] == pytest.approx(0, abs=0.6)
-        assert white is not None and white[0] == pytest.approx(100, abs=0.6)
-
-    def test_mid_gray_is_where_srgb_puts_it(self):
-        lab = _model().lab(Fill("gray", (0.5,)))
-        assert lab is not None and lab[0] == pytest.approx(53.4, abs=1.0)  # sRGB 50% gray: L* ~ 53.4
-
-    def test_without_a_cmyk_profile_the_paper_is_white_rgb(self):
-        assert _model().paper == Fill("rgb", (1.0, 1.0, 1.0))
-
-    def test_cmyk_ink_needs_a_cmyk_profile(self):
-        with pytest.raises(contrast.NoProfileError):
-            _model().lab(Fill("cmyk", (0.0, 0.0, 0.0, 1.0)))
-
-    def test_spots_and_patterns_have_no_lab(self):
-        assert _model().lab(Fill("other")) is None
-
-    @needs_cmyk_profile
-    def test_a_cmyk_profile_measures_ink_on_paper(self):
-        model = contrast.ColourModel.for_pdf(pikepdf.new(), CMYK_PROFILE)
-        paper, black, mid = (model.lab(Fill("cmyk", v)) for v in [(0, 0, 0, 0), (0, 0, 0, 1.0), (0, 0, 0, 0.5)])
-        assert paper and black and mid
-        assert paper[0] > 90 and black[0] < 25
-        assert black[0] < mid[0] < paper[0]
-        assert model.paper == Fill("cmyk", (0.0, 0.0, 0.0, 0.0))
-
-    @needs_cmyk_profile
-    def test_gray_text_is_the_k_plate_when_there_is_a_cmyk_profile(self):
-        model = contrast.ColourModel.for_pdf(pikepdf.new(), CMYK_PROFILE)
-        gray, k = model.lab(Fill("gray", (0.0,))), model.lab(Fill("cmyk", (0, 0, 0, 1.0)))
-        assert gray == k
-
-    def test_the_output_intent_profile_is_used_when_there_is_one(self):
-        pdf = pikepdf.new()
-        srgb = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB"))
-        buffer = io.BytesIO(srgb.tobytes())
-        stream = pdf.make_stream(buffer.getvalue())
-        stream["/N"] = 3
-        intent = pikepdf.Dictionary(S=pikepdf.Name.GTS_PDFX, DestOutputProfile=pdf.make_indirect(stream))
-        pdf.Root["/OutputIntents"] = pikepdf.Array([intent])
-        assert contrast.ColourModel.for_pdf(pdf).lab(Fill("rgb", (1.0, 1.0, 1.0))) is not None
-
-
-class TestBackgrounds:
-    def _pairs(self, tmp_path, stream, **kw):
-        with _page(tmp_path, stream, **kw) as pdf:
-            return contrast.measure(pdf, _model())
-
-    def test_text_on_bare_paper_is_measured_against_the_paper(self, tmp_path):
-        [pair] = self._pairs(tmp_path, _text(b"0 g"))
-        assert pair.on_paper and pair.delta_l == pytest.approx(100, abs=1.0) and pair.runs == 1
-
-    def test_a_filled_rectangle_under_the_text_is_its_background(self, tmp_path):
-        stream = b"0.9 g 50 50 150 150 re f " + _text(b"0.2 g")
-        [pair] = self._pairs(tmp_path, stream)
-        assert not pair.on_paper and pair.ground == Fill("gray", (0.9,))
-        assert pair.delta_l is not None and 60 < pair.delta_l < 80
-
-    def test_the_last_painted_shape_is_on_top(self, tmp_path):
-        stream = b"0.9 g 50 50 150 150 re f 0.5 g 90 90 60 60 re f " + _text(b"0 g")
-        [pair] = self._pairs(tmp_path, stream)
-        assert pair.ground == Fill("gray", (0.5,))
-
-    def test_a_shape_the_text_is_not_over_does_not_count(self, tmp_path):
-        stream = b"0.5 g 200 200 50 50 re f " + _text(b"0 g")
-        [pair] = self._pairs(tmp_path, stream)
-        assert pair.on_paper
-
-    def test_a_shape_painted_after_the_text_does_not_count(self, tmp_path):
-        [pair] = self._pairs(tmp_path, _text(b"0 g") + b" 0.5 g 50 50 150 150 re f")
-        assert pair.on_paper
-
-    def test_text_over_an_image_is_unmeasured_not_passed(self, tmp_path):
-        def image(pdf):
-            stream = pdf.make_stream(b"\x80")
-            stream["/Type"], stream["/Subtype"] = pikepdf.Name.XObject, pikepdf.Name.Image
-            stream["/Width"], stream["/Height"], stream["/BitsPerComponent"] = 1, 1, 8
-            stream["/ColorSpace"] = pikepdf.Name.DeviceGray
-            return pdf.make_indirect(stream)
-
-        stream = b"q 200 0 0 200 0 0 cm /Im1 Do Q " + _text(b"0 g")
-        [pair] = self._pairs(tmp_path, stream, xobjects={"Im1": image})
-        assert pair.ground is None and pair.delta_l is None
-
-    def test_pairs_group_by_colour_pair_and_count_runs(self, tmp_path):
-        stream = _text(b"0 g") + _text(b"0 g", b"100 150 Td") + _text(b"0.5 g", b"100 200 Td")
-        pairs = self._pairs(tmp_path, stream)
-        assert sorted(p.runs for p in pairs) == [1, 2]
-
-    def test_ciede2000_is_reported_beside_l_star(self, tmp_path):
-        [pair] = self._pairs(tmp_path, _text(b"0 g"))
-        assert pair.delta_e is not None and pair.delta_e > 50
 
 
 class TestFindings:

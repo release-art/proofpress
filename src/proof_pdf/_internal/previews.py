@@ -13,8 +13,6 @@ import logging
 import pathlib
 import typing
 
-from PIL import Image
-
 from . import _core
 
 logger = logging.getLogger(__name__)
@@ -63,41 +61,62 @@ for (const page of document.querySelectorAll('.page'))
 
 
 async def build(
-    document: dict[str, typing.Any], pdf_path: pathlib.Path, out_dir: pathlib.Path, *, dpi: int
+    document: dict[str, typing.Any],
+    pdf_path: pathlib.Path,
+    images: dict[str, int],
+    out_dir: pathlib.Path,
+    *,
+    dpi: int,
 ) -> tuple[str, list[str]]:
     """Write ``previews/`` under *out_dir*; return ``(index path relative to out_dir, problems)``.
 
-    *document* is ``Extraction.to_dict()``. Raises :class:`proof_pdf.preview.UnreadablePdfError` when the pages cannot
-    be rendered; a thumbnail that cannot be made is a problem in the list, and the page still builds without it.
+    *document* is ``Extraction.to_dict()``, and *images* the object number of each image asset, by its file. Raises
+    :class:`proof_pdf.preview.UnreadablePdfError` when the pages cannot be rendered; a thumbnail that cannot be made is
+    a problem in the list, and the page still builds without it.
     """
     from .. import preview  # noqa: PLC0415 -- preview imports from _internal; a module-level import would be a cycle
 
     folder = out_dir / "previews"
     pages = await preview.preview_file(pdf_path, folder, dpi=dpi, guides=False, safe_mm=None)
     problems: list[str] = []
-    thumbs = await _thumbnails(document["assets"], out_dir, folder, problems)
+    thumbs = await _thumbnails(document["assets"], pdf_path.read_bytes(), images, out_dir, folder, problems)
     (folder / "index.html").write_text(_page(document, [p.name for p in pages], thumbs), encoding="utf-8")
     return "previews/index.html", problems
 
 
-async def _thumbnails(
-    assets: list[dict], out_dir: pathlib.Path, folder: pathlib.Path, problems: list[str]
+async def _thumbnails(  # noqa: PLR0913 -- the assets, where they came from and where they go
+    assets: list[dict],
+    data: bytes,
+    images: dict[str, int],
+    out_dir: pathlib.Path,
+    folder: pathlib.Path,
+    problems: list[str],
 ) -> dict[int, str]:
-    """Thumbnail PNGs for the images and vector pieces, by asset index; path relative to the previews folder."""
+    """Thumbnail PNGs for the images and vector pieces, by asset index; path relative to the previews folder.
+
+    An image is drawn alone on a page no larger than a thumbnail, then rendered, so it looks as it does on the page:
+    its decode array, colour space, mask and all."""
     found: dict[int, str] = {}
     slots = asyncio.Semaphore(_JOBS)
+    placed = [a for a in assets if a["kind"] == "image" and a["file"] in images]
+    try:
+        pdfs = await asyncio.to_thread(_image_pdfs, data, images, placed)
+        alone = dict(zip((a["file"] for a in placed), pdfs, strict=True))
+    except (ValueError, _core.UnreadablePdfError) as exc:
+        problems.append(f"preview of the images: {exc}")
+        alone = {}
 
     async def one(index: int, asset: dict) -> None:
         source = out_dir / asset["file"]
         target = folder / asset["kind"] / f"{source.stem}.png"
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
-            if asset["kind"] == "image":
-                await asyncio.to_thread(_image_thumbnail, source, target)
-            else:
-                async with slots:
+            async with slots:
+                if asset["kind"] == "image":
+                    await asyncio.to_thread(_image_thumbnail, alone[asset["file"]], target)
+                else:
                     await asyncio.to_thread(_vector_thumbnail, source, target, asset["placements"][0])
-        except (OSError, ValueError, _core.UnreadablePdfError) as exc:
+        except (OSError, ValueError, KeyError, _core.UnreadablePdfError) as exc:
             problems.append(f"preview of {asset['file']}: {exc}")
             return
         found[index] = f"{asset['kind']}/{target.name}"
@@ -106,11 +125,21 @@ async def _thumbnails(
     return found
 
 
-def _image_thumbnail(source: pathlib.Path, target: pathlib.Path) -> None:
-    with Image.open(source) as opened:
-        picture = opened.convert("RGBA" if "A" in opened.getbands() or opened.mode == "P" else "RGB")
-    picture.thumbnail((THUMB_PX, THUMB_PX))
-    picture.save(target)
+def _image_pdfs(data: bytes, images: dict[str, int], assets: list[dict]) -> list[bytes]:
+    """Each image asset alone on a one-page PDF, its pixel size or smaller, the longest side at most THUMB_PX."""
+    requests = []
+    for asset in assets:
+        width, height = asset["details"]["pixels"]
+        scale = min(1.0, THUMB_PX / max(width, height, 1))
+        bbox = [0, 0, width * scale, height * scale]
+        requests.append({"page": 0, "bbox": bbox, "shapes": [], "labels": [], "image": images[asset["file"]]})
+    raw, blobs = _core.vector_pieces(data, json.dumps(requests))
+    return [blobs[piece["pdf"]] for piece in json.loads(raw)]
+
+
+def _image_thumbnail(pdf: bytes, target: pathlib.Path) -> None:
+    [png] = _core.render(pdf, 72.0)
+    target.write_bytes(png)
 
 
 def _vector_thumbnail(source: pathlib.Path, target: pathlib.Path, placement: dict) -> None:
