@@ -237,7 +237,7 @@ pub(super) fn embedded(doc: &Document, _: &Settings) -> Vec<Finding> {
     }
     runs.into_iter()
         .map(|((page, name), count)| {
-            let message = format!("font {name} is not embedded, and {count} run(s) show text in it visibly");
+            let message = format!("font {name} is not embedded but {count} visible text run(s) use it");
             Finding::new(X4_FONT_EMBEDDED, message)
                 .citing("6.5.1")
                 .at(vec![Location::Page(page)])
@@ -414,7 +414,7 @@ mod tests {
         let msg = |page, runs| {
             (
                 Some(page),
-                format!("font Helvetica is not embedded, and {runs} run(s) show text in it visibly"),
+                format!("font Helvetica is not embedded but {runs} visible text run(s) use it"),
             )
         };
         assert_eq!(found, [msg(1, 3), msg(2, 1)]);

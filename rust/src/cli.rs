@@ -80,7 +80,9 @@ fn configure(o: &mut Verify, path: Option<&std::path::Path>, profile: Option<&st
     let here = std::env::current_dir().unwrap_or_default();
     let Some(path) = path.map(std::path::Path::to_owned).or_else(|| config::find(&here)) else {
         return match profile {
-            Some(_) => Err(Usage("--profile needs a config file, and none was found".to_owned())),
+            Some(_) => Err(Usage(
+                "--profile needs a config file and none was found; pass --config or add proof-pdf.toml".to_owned(),
+            )),
             None => Ok(o.output.show_profile.then(String::new)),
         };
     };
@@ -193,7 +195,9 @@ mod tests {
             "{out}"
         );
         assert!(
-            out.ends_with("FAIL -- 1 of 2 file(s) failed: PDF/X as claimed, geometry, colour, missing glyphs, fonts\n"),
+            out.ends_with(
+                "FAIL -- 1 of 2 file(s) failed; checked: PDF/X as claimed, geometry, colour, missing glyphs, fonts\n"
+            ),
             "{out}"
         );
         let (code, out, _) = cli(&["verify", &fixture("x4-good"), "--exempt", "x4-good.pdf=a proof copy"]);
@@ -310,12 +314,7 @@ mod tests {
             "--no-fonts",
             "--no-missing-glyphs",
         ]);
-        assert!(
-            gray.1.contains("passed: PDF/X as claimed, colour\n")
-                || gray.1.contains("failed: PDF/X as claimed, colour\n"),
-            "{}",
-            gray.1
-        );
+        assert!(gray.1.contains("; checked: PDF/X as claimed, colour\n"), "{}", gray.1);
     }
 
     #[test]

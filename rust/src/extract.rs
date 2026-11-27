@@ -818,7 +818,7 @@ mod tests {
         assert_eq!(recovered.blobs, [b"true".to_vec(), b"OTTO".to_vec()]);
         assert_eq!(
             got["damage"],
-            json!(["object.damaged: object 9 cannot be read (MisplacedKeyword)"])
+            json!(["object.damaged: object 9 cannot be read: a keyword where a value should be"])
         );
     }
 

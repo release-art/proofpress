@@ -609,7 +609,7 @@ fn verify_chain(
             let mut checks = Vec::new();
             for (id, code) in enabled {
                 let outcome = if structure == Structure::Damaged {
-                    Outcome::NotEvaluated("objects it would read could not be read".into())
+                    Outcome::NotEvaluated("some objects it needs could not be read".into())
                 } else {
                     let unjudged = std::cell::RefCell::new(None);
                     let or_note = |result: Result<Vec<Finding>, String>| {

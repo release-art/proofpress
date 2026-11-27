@@ -161,7 +161,7 @@ pub(super) fn conformance(doc: &Document, _: &Settings) -> Result<Vec<Finding>, 
         Text::Other => false,
     };
     if version.as_deref() == Some("PDF/X-1:2001") && plain {
-        return Err("the file claims plain PDF/X-1, which is not evaluated".into());
+        return Err("the file claims plain PDF/X-1, not PDF/X-1a".into());
     }
     let what = match value {
         Text::Is(v) if v == "PDF/X-1a:2001" => return Ok(Vec::new()),
@@ -242,7 +242,7 @@ pub(super) fn mod_date_agrees(doc: &Document, settings: &Settings) -> Vec<Findin
         (Some(a), Some(b)) if !a.same_instant(&b) => vec![per_level(
             Finding::new(
                 X13_XMP_MOD_DATE_AGREES,
-                format!("XMP xmp:ModifyDate {xmp:?} is not Info /ModDate {info:?}"),
+                format!("XMP xmp:ModifyDate {xmp:?} does not match Info /ModDate {info:?}"),
             ),
             settings,
             IDENTIFICATION,

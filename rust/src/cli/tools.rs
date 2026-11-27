@@ -107,6 +107,14 @@ fn run(program: &str, args: &[OsString], timeout: Duration) -> Result<Ran, Failu
     })
 }
 
+/// How a run that gave no verdict ended: its exit code, or the signal that stopped it.
+fn exited(status: ExitStatus) -> String {
+    status.code().map_or_else(
+        || format!("was stopped ({status})"),
+        |code| format!("exited with code {code}"),
+    )
+}
+
 fn seconds(timeout: Duration) -> String {
     format!("{:.0}s", timeout.as_secs_f64())
 }
@@ -121,14 +129,13 @@ pub(crate) fn verapdf(program: &str, flavour: &str, path: &Path, timeout: Durati
         .collect();
     match run(program, &args, timeout) {
         Err(Failure::Missing) => fail(
-            format!("veraPDF not found ({program}) -- cannot confirm PDF/A-{flavour}"),
+            format!(
+                "veraPDF not found ({program}), so PDF/A-{flavour} is not confirmed; install it, set --verapdf, or drop --pdfa"
+            ),
             false,
         ),
         Err(Failure::TimedOut) => fail(
-            format!(
-                "veraPDF could not validate the file: timed out after {}",
-                seconds(timeout)
-            ),
+            format!("veraPDF timed out after {}; raise --timeout", seconds(timeout)),
             true,
         ),
         Err(Failure::Broken(why)) => fail(format!("veraPDF could not validate the file: {why}"), false),
@@ -136,7 +143,7 @@ pub(crate) fn verapdf(program: &str, flavour: &str, path: &Path, timeout: Durati
         Ok(ran) if !matches!(ran.status.code(), Some(0 | 1)) => {
             let said = useful(&ran.stderr);
             let why = if said.is_empty() {
-                format!("veraPDF exited {}", ran.status)
+                format!("it {}", exited(ran.status))
             } else {
                 said
             };
@@ -145,7 +152,7 @@ pub(crate) fn verapdf(program: &str, flavour: &str, path: &Path, timeout: Durati
         Ok(ran) => match serde_json::from_str::<serde_json::Value>(&ran.stdout) {
             Ok(report) => Verdict::from(verapdf_findings(&report, flavour)),
             Err(e) => fail(
-                format!("veraPDF could not validate the file: veraPDF emitted unreadable JSON: {e}"),
+                format!("veraPDF could not validate the file: its report is unreadable JSON: {e}"),
                 false,
             ),
         },
@@ -272,26 +279,24 @@ pub(crate) fn peak_ink(program: &str, path: &Path, max: f64, warn: Option<f64>, 
     .collect();
     let verdict = match run(program, &args, timeout) {
         Err(Failure::Missing) => fail(
-            format!("Ghostscript not found ({program}) -- cannot measure ink coverage"),
+            format!(
+                "Ghostscript not found ({program}), so peak ink is not measured; install it, set --gs, or drop --tac"
+            ),
             false,
         ),
         Err(Failure::TimedOut) => fail(
-            format!(
-                "Ghostscript could not rasterise the file: timed out after {}",
-                seconds(timeout)
-            ),
+            format!("Ghostscript timed out after {}; raise --timeout", seconds(timeout)),
             true,
         ),
         Err(Failure::Broken(why)) => fail(format!("Ghostscript could not rasterise the file: {why}"), false),
         Ok(ran) if !ran.status.success() => {
             let said = ran.stderr.trim();
-            fail(
-                format!(
-                    "Ghostscript could not rasterise the file: {}",
-                    if said.is_empty() { "ghostscript failed" } else { said }
-                ),
-                false,
-            )
+            let why = if said.is_empty() {
+                format!("it {}", exited(ran.status))
+            } else {
+                said.to_owned()
+            };
+            fail(format!("Ghostscript could not rasterise the file: {why}"), false)
         }
         Ok(_) => match peaks(&dir) {
             Ok(peaks) => Verdict::from(ink_findings(&peaks, max, warn)),
@@ -418,7 +423,9 @@ mod tests {
         let missing = verapdf("/nonexistent/verapdf", "2b", pdf, SECOND);
         assert_eq!(
             messages(&missing),
-            ["veraPDF not found (/nonexistent/verapdf) -- cannot confirm PDF/A-2b"]
+            [
+                "veraPDF not found (/nonexistent/verapdf), so PDF/A-2b is not confirmed; install it, set --verapdf, or drop --pdfa"
+            ]
         );
         let broken = verapdf(dir.to_str().unwrap(), "2b", pdf, SECOND);
         assert!(messages(&broken)[0].starts_with("veraPDF could not validate the file: "));
@@ -430,7 +437,10 @@ mod tests {
             messages(&noisy),
             ["veraPDF could not validate the file: x.pdf does not appear to be a valid PDF."]
         );
-        assert!(messages(&said("exit 3"))[0].contains("veraPDF exited"));
+        assert_eq!(
+            messages(&said("exit 3")),
+            ["veraPDF could not validate the file: it exited with code 3"]
+        );
         assert!(messages(&said("echo nonsense"))[0].contains("unreadable JSON"));
         let slow = said("sleep 5");
         assert!(slow.timed_out);
@@ -440,7 +450,7 @@ mod tests {
             pdf,
             Duration::from_millis(50),
         );
-        assert!(slow.timed_out && messages(&slow)[0].ends_with("timed out after 0s"));
+        assert!(slow.timed_out && messages(&slow)[0] == "veraPDF timed out after 0s; raise --timeout");
         let report = |json: &str| said(&format!("cat <<'EOF'\n{json}\nEOF\nexit 1"));
         assert_eq!(messages(&report("{}")), ["veraPDF returned no validation result"]);
         assert_eq!(
@@ -527,7 +537,7 @@ mod tests {
         );
         assert_eq!(
             said("exit 1"),
-            ["Ghostscript could not rasterise the file: ghostscript failed"]
+            ["Ghostscript could not rasterise the file: it exited with code 1"]
         );
         let bad = "for a in \"$@\"; do case \"$a\" in -sOutputFile=*) out=\"${a#-sOutputFile=}\";; esac; done\n\
                    echo junk > \"$(dirname \"$out\")/page-001(Black).tif\"";
@@ -571,7 +581,9 @@ mod tests {
         assert!(said(&truncated)[0].starts_with("Ghostscript could not rasterise the file: "));
         assert_eq!(
             messages(&peak_ink("/nonexistent/gs", pdf, 300.0, None, SECOND)),
-            ["Ghostscript not found (/nonexistent/gs) -- cannot measure ink coverage"]
+            [
+                "Ghostscript not found (/nonexistent/gs), so peak ink is not measured; install it, set --gs, or drop --tac"
+            ]
         );
         assert!(
             peak_ink(dir.to_str().unwrap(), pdf, 300.0, None, SECOND).findings[0]

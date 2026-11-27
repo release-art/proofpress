@@ -23,9 +23,7 @@ fn on_page_citing(check: &'static Check, index: usize, page: &Page<'_>, message:
     if page.num != 0 {
         chain.push(Location::Object(page.num, 0));
     }
-    Finding::new(check, format!("page {number}: {message}"))
-        .citing(clause)
-        .at(chain)
+    Finding::new(check, message).citing(clause).at(chain)
 }
 
 /// Each page with its index, run through `judge`.
@@ -76,7 +74,7 @@ pub(super) fn trim_or_art(doc: &Document, _: &Settings) -> Vec<Finding> {
                 X4_BOXES_TRIM_OR_ART,
                 i,
                 page,
-                "neither a TrimBox nor an ArtBox",
+                "the page has neither a TrimBox nor an ArtBox, so its finished size is not defined",
             )]
         } else {
             Vec::new()
@@ -87,7 +85,12 @@ pub(super) fn trim_or_art(doc: &Document, _: &Settings) -> Vec<Finding> {
 pub(super) fn not_both(doc: &Document, _: &Settings) -> Vec<Finding> {
     per_page(doc, &|i, page| {
         if page.get(b"TrimBox").is_some() && page.get(b"ArtBox").is_some() {
-            vec![on_page(X4_BOXES_NOT_BOTH, i, page, "both a TrimBox and an ArtBox")]
+            vec![on_page(
+                X4_BOXES_NOT_BOTH,
+                i,
+                page,
+                "the page has both a TrimBox and an ArtBox",
+            )]
         } else {
             Vec::new()
         }
@@ -102,7 +105,7 @@ pub(super) fn prefer_trim(doc: &Document, _: &Settings) -> Vec<Finding> {
                 X4_BOXES_PREFER_TRIM,
                 i,
                 page,
-                "an ArtBox where a TrimBox is recommended",
+                "the page has an ArtBox where a TrimBox is recommended",
             )]
         } else {
             Vec::new()
@@ -221,10 +224,7 @@ mod tests {
             .collect();
         assert_eq!(
             cited,
-            [(
-                "page 1: the TrimBox extends beyond the CropBox".to_owned(),
-                Some("iso-15930-3")
-            )]
+            [("the TrimBox extends beyond the CropBox".to_owned(), Some("iso-15930-3"))]
         );
     }
 }

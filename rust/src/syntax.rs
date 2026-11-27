@@ -342,6 +342,23 @@ impl<'a> Parser<'a> {
     }
 }
 
+/// Why reading stopped, in words for a finding.
+pub(crate) const fn describe(reason: Reason) -> &'static str {
+    match reason {
+        Reason::Lexical(LexReason::UnterminatedLiteral) => "a literal string is never closed",
+        Reason::Lexical(LexReason::UnterminatedHex) => "a hex string has no closing >",
+        Reason::Lexical(LexReason::BadHexDigit) => "a hex string holds a character that is not a hex digit",
+        Reason::Lexical(LexReason::UnexpectedDelimiter) => "a ) or > where a value should start",
+        Reason::Lexical(LexReason::IntegerOverflow) => "an integer too large to read",
+        Reason::Unbalanced => "a ] or >> that closes nothing, or closes the other kind",
+        Reason::BadKey => "a dictionary key that is not a name, or has no value",
+        Reason::MisplacedKeyword => "a keyword where a value should be",
+        Reason::Brace => "a { or } outside a PostScript calculator function",
+        Reason::TooDeep => "arrays or dictionaries nested deeper than the limit",
+        Reason::RawPastEnd => "binary data that runs past the end",
+    }
+}
+
 /// The finding for a byte-level note, located by `chain` and the note's own offset.
 pub(crate) fn note_finding(note: &Note, mut chain: Vec<Location>) -> Finding {
     let (finding, at) = match *note {

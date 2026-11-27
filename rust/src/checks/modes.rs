@@ -237,8 +237,7 @@ pub(super) fn colour_space(doc: &Document, settings: &Settings) -> Vec<Finding> 
     for (number, page) in pages(doc) {
         let (images, colours, _) = painted_in(&page, Family::Rgb);
         for name in images {
-            let message =
-                format!("image {name} is in an RGB colour space -- it must be converted to CMYK for a FOGRA51 press");
+            let message = format!("image {name} is RGB in a CMYK job -- convert it to CMYK");
             out.push(on_page(COLOUR_SPACE, number, message));
         }
         if !colours.is_empty() {
@@ -584,7 +583,7 @@ fn consistency(
             return Some(Finding::new(
                 ICC_PROFILE,
                 format!(
-                    "a CMYK ICCBased colour space uses the output intent's own profile {} -- PDF/X-4 requires DeviceCMYK for colour already in the printing condition (ISO 15930-7, 6.4.3.3)",
+                    "a CMYK ICCBased colour space uses the output intent's own profile {} -- use DeviceCMYK, as PDF/X-4 6.4.3.3 requires",
                     repr(same)
                 ),
             ));
@@ -792,13 +791,12 @@ mod tests {
                 (
                     Severity::Error,
                     Some(1),
-                    "image (inline) is in an RGB colour space -- it must be converted to CMYK for a FOGRA51 press"
-                        .to_owned()
+                    "image (inline) is RGB in a CMYK job -- convert it to CMYK".to_owned()
                 ),
                 (
                     Severity::Error,
                     Some(1),
-                    "image /I is in an RGB colour space -- it must be converted to CMYK for a FOGRA51 press".to_owned()
+                    "image /I is RGB in a CMYK job -- convert it to CMYK".to_owned()
                 ),
                 (
                     Severity::Error,
@@ -887,7 +885,7 @@ mod tests {
         .into();
         let cmyk = "/OutputIntents [<< /DestOutputProfile 20 0 R >>]";
         let mut want = fixed.clone();
-        want.insert("a CMYK ICCBased colour space uses the output intent's own profile 'Coated' -- PDF/X-4 requires DeviceCMYK for colour already in the printing condition (ISO 15930-7, 6.4.3.3)".to_owned());
+        want.insert("a CMYK ICCBased colour space uses the output intent's own profile 'Coated' -- use DeviceCMYK, as PDF/X-4 6.4.3.3 requires".to_owned());
         assert_eq!(messages(cmyk, ColourMode::Cmyk), want);
         let mut want = fixed.clone();
         want.insert("the RGB job mixes 3 RGB profiles: Adobe RGB, Display, sRGB".to_owned());

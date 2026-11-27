@@ -105,7 +105,7 @@ fn faults(
 fn finding(found: &[String], at: Vec<Location>) -> Option<Finding> {
     let first = found.first()?;
     let message = format!(
-        "{} name(s) not written as 6.6 recommends, the first {first}",
+        "{} name(s) are not UTF-8 with #xx escapes as recommended; the first {first}",
         found.len()
     );
     Some(Finding {
@@ -178,8 +178,8 @@ mod tests {
         assert_eq!(
             found,
             [
-                warn("3 name(s) not written as 6.6 recommends, the first /Caf#e9 is not UTF-8"),
-                warn("2 name(s) not written as 6.6 recommends, the first /X\u{fffd} is not UTF-8"),
+                warn("3 name(s) are not UTF-8 with #xx escapes as recommended; the first /Caf#e9 is not UTF-8"),
+                warn("2 name(s) are not UTF-8 with #xx escapes as recommended; the first /X\u{fffd} is not UTF-8"),
             ]
         );
     }

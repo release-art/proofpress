@@ -74,7 +74,7 @@ pub(super) fn outside_media(doc: &Document, _: &Settings) -> Vec<Finding> {
         .map(|(page, count)| {
             Finding::new(
                 OUTSIDE_MEDIA,
-                format!("{count} object(s) are painted entirely outside the MediaBox: hidden content"),
+                format!("{count} object(s) are painted entirely outside the MediaBox: hidden content that still ships in the file"),
             )
             .at(vec![Location::Page(page)])
         })
@@ -226,7 +226,7 @@ pub(super) fn artwork_bleed(doc: &Document, _: &Settings) -> Vec<Finding> {
         }
         let total = short.iter().flat_map(BTreeMap::keys).collect::<BTreeSet<_>>().len();
         let message = format!(
-            "{total} object(s) stop short of the bleed edge ({}) -- artwork must run to the bleed edge",
+            "{total} object(s) stop short of the bleed edge ({}) -- extend them to the bleed edge",
             parts.join("; ")
         );
         out.push(Finding::new(ARTWORK_BLEED, message).at(here));
@@ -257,7 +257,7 @@ pub(super) fn outside_bleed(doc: &Document, settings: &Settings) -> Vec<Finding>
             continue;
         };
         if rotated(page) {
-            let message = "content outside the bleed not checked: the page is rotated";
+            let message = "content outside the bleed not checked: the page is rotated with /Rotate";
             out.push(warning(Finding::new(OUTSIDE_BLEED, message).at(here)));
             continue;
         }
@@ -353,7 +353,8 @@ mod tests {
             found(media, off),
             [(
                 1,
-                "4 object(s) are painted entirely outside the MediaBox: hidden content".to_owned()
+                "4 object(s) are painted entirely outside the MediaBox: hidden content that still ships in the file"
+                    .to_owned()
             )],
             "the fifth reaches onto the page"
         );
@@ -420,12 +421,12 @@ mod tests {
                 (
                     Severity::Error,
                     Some(1),
-                    "1 object(s) stop short of the bleed edge (left: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed; bottom: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed; right: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed) -- artwork must run to the bleed edge".to_owned()
+                    "1 object(s) stop short of the bleed edge (left: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed; bottom: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed; right: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed) -- extend them to the bleed edge".to_owned()
                 ),
                 (
                     Severity::Error,
                     Some(3),
-                    "1 object(s) stop short of the bleed edge (left: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed; bottom: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed; right: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed) -- artwork must run to the bleed edge".to_owned()
+                    "1 object(s) stop short of the bleed edge (left: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed; bottom: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed; right: 1 object(s) reach the trim but extend only 0.0 mm of the 3.5 mm bleed) -- extend them to the bleed edge".to_owned()
                 ),
                 (
                     Severity::Warning,
@@ -481,7 +482,7 @@ mod tests {
                 (
                     Severity::Warning,
                     Some(3),
-                    "content outside the bleed not checked: the page is rotated".to_owned()
+                    "content outside the bleed not checked: the page is rotated with /Rotate".to_owned()
                 ),
                 (
                     Severity::Warning,

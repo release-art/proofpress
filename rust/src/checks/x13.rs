@@ -167,7 +167,11 @@ pub(super) fn bit_depth(doc: &Document, settings: &Settings) -> Vec<Finding> {
         .filter_map(|num| Some((num, bits(doc, num)?)))
         .filter(|(_, b)| !matches!(b, 1 | 2 | 4 | 8))
         .map(|(num, b)| {
-            let finding = Finding::new(X13_IMAGE_BIT_DEPTH, format!("image {num} has {b} bits per sample")).at(at(num));
+            let finding = Finding::new(
+                X13_IMAGE_BIT_DEPTH,
+                format!("image {num} has {b} bits per sample, not 1, 2, 4 or 8"),
+            )
+            .at(at(num));
             per_level(finding, settings, STRUCTURE)
         })
         .collect()
@@ -223,7 +227,7 @@ pub(super) fn optional_content(doc: &Document, settings: &Settings) -> (Vec<Find
             Vec::new(),
         )
     } else {
-        let message = "the file has optional content, always on";
+        let message = "the file has optional content, though none of it hides anything from print";
         (
             Vec::new(),
             vec![per_level(Finding::new(X13_OC_PRESENT, message), settings, STRUCTURE)],
@@ -321,7 +325,10 @@ mod tests {
             &[(10, stream("/Subtype /Image /BitsPerComponent 16")), more[4].clone()],
             "",
         );
-        assert_eq!(messages(bit_depth(&depth, &x1a)), ["image 10 has 16 bits per sample"]);
+        assert_eq!(
+            messages(bit_depth(&depth, &x1a)),
+            ["image 10 has 16 bits per sample, not 1, 2, 4 or 8"]
+        );
         let refs = "/Resources << /XObject << /A 10 0 R /B 11 0 R >> >>";
         let listed_ok = open(
             "",

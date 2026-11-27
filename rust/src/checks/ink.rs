@@ -124,7 +124,7 @@ pub(super) fn overprint(doc: &Document, _: &Settings) -> Vec<Finding> {
         paints
             .iter()
             .any(|(kind, _, ink)| ink.overprint && !(matches!(kind, Kind::Text(_)) && is_full_k(&ink.fill)))
-            .then(|| "overprint is enabled -- confirm it is intentional, not knockout".to_owned())
+            .then(|| "overprint is set on something other than black text; check it is intended".to_owned())
     })
 }
 
@@ -139,7 +139,7 @@ pub(super) fn white_overprint(doc: &Document, _: &Settings) -> Vec<Finding> {
             })
             .count();
         (whites > 0).then(|| {
-            format!("{whites} white object(s) are set to overprint and will disappear on press: white must knock out")
+            format!("{whites} white object(s) set to overprint will disappear on press; set them to knock out")
         })
     })
 }
@@ -158,7 +158,7 @@ pub(super) fn rich_black(doc: &Document, settings: &Settings) -> Vec<Finding> {
             .map(|(_, _, ink)| ink.size)
             .reduce(f64::min)?;
         Some(format!(
-            "text as small as {smallest:.1}pt is set in rich black -- use process black to avoid mis-registration"
+            "text as small as {smallest:.1}pt is set in rich black and will blur if the plates mis-register; use K only"
         ))
     })
 }
@@ -174,14 +174,15 @@ pub(super) fn k_only_text(doc: &Document, _: &Settings) -> Vec<Finding> {
             .collect();
         let first = bad.first()?;
         let more = if bad.len() > 1 {
-            format!(" (and {} more runs)", bad.len() - 1)
+            format!(
+                " (and {} more {})",
+                bad.len() - 1,
+                if bad.len() == 2 { "run" } else { "runs" }
+            )
         } else {
             String::new()
         };
-        Some(format!(
-            "text is painted in {}{more} -- text ink must be K only",
-            describe(first)
-        ))
+        Some(format!("text is painted in {}{more}, not K only", describe(first)))
     })
 }
 
@@ -238,26 +239,19 @@ mod tests {
             [
                 (
                     2,
-                    "overprint is enabled -- confirm it is intentional, not knockout".to_owned()
+                    "overprint is set on something other than black text; check it is intended".to_owned()
                 ),
                 (
                     2,
-                    "2 white object(s) are set to overprint and will disappear on press: white must knock out"
+                    "2 white object(s) set to overprint will disappear on press; set them to knock out".to_owned()
+                ),
+                (
+                    2,
+                    "text as small as 5.0pt is set in rich black and will blur if the plates mis-register; use K only"
                         .to_owned()
                 ),
-                (
-                    2,
-                    "text as small as 5.0pt is set in rich black -- use process black to avoid mis-registration"
-                        .to_owned()
-                ),
-                (
-                    2,
-                    "text is painted in RGB (and 2 more runs) -- text ink must be K only".to_owned()
-                ),
-                (
-                    3,
-                    "text is painted in C100 M0 Y0 K0 -- text ink must be K only".to_owned()
-                ),
+                (2, "text is painted in RGB (and 2 more runs), not K only".to_owned()),
+                (3, "text is painted in C100 M0 Y0 K0, not K only".to_owned()),
             ]
         );
     }

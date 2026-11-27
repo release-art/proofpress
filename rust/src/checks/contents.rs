@@ -120,7 +120,7 @@ pub(crate) fn damaged(doc: &Document, _: &Settings) -> Vec<Finding> {
         }
         for (at, problem) in &read.content.problems {
             let (what, clause) = match problem {
-                Problem::Syntax(_) => ("content that cannot be read on".to_owned(), "7.8.2"),
+                Problem::Syntax(_) => ("content that cannot be parsed".to_owned(), "7.8.2"),
                 Problem::InlineEnd => ("an inline image whose end cannot be determined".to_owned(), "8.9.7"),
                 Problem::InlineLength { given, measured } => (
                     format!("an inline image whose /L is {given} but whose data is {measured} bytes"),
@@ -130,7 +130,12 @@ pub(crate) fn damaged(doc: &Document, _: &Settings) -> Vec<Finding> {
                 Problem::NoEi => ("an inline image not followed by EI".to_owned(), "8.9.7"),
                 Problem::UnknownOperator(_) | Problem::Compatibility => continue,
             };
-            out.push(read.finding(CONTENT_DAMAGED, *at, format!("{what}; the rest is not read"), clause));
+            out.push(read.finding(
+                CONTENT_DAMAGED,
+                *at,
+                format!("{what}; the rest of the stream is not checked"),
+                clause,
+            ));
         }
     }
     out
@@ -192,7 +197,12 @@ pub(super) fn no_bx_ex(doc: &Document, _: &Settings) -> Vec<Finding> {
             if let Item::Op(op) = item
                 && op.name == b"BX"
             {
-                out.push(read.finding(X4_CONTENT_NO_BX_EX, op.at, "a BX/EX section".to_owned(), "6.19"));
+                out.push(read.finding(
+                    X4_CONTENT_NO_BX_EX,
+                    op.at,
+                    "a BX/EX section, which PDF/X recommends against".to_owned(),
+                    "6.19",
+                ));
             }
         }
     }
@@ -203,15 +213,11 @@ pub(super) fn no_bx_ex(doc: &Document, _: &Settings) -> Vec<Finding> {
 fn intent(value: Option<&Object>, place: &str, located: Vec<Location>) -> Option<Finding> {
     let value = value?;
     let known = value.name().is_some_and(|n| INTENTS.contains(&n));
-    let shown = value.name().map_or_else(|| "not a name".to_owned(), name);
-    (!known).then(|| {
-        Finding::new(
-            X4_INTENT_KNOWN_VALUES,
-            format!("{place} names the rendering intent {shown}"),
-        )
-        .citing("6.23")
-        .at(located)
-    })
+    let message = value.name().map_or_else(
+        || format!("{place} is not a name"),
+        |n| format!("{place} is /{}, not one of the four rendering intents", name(n)),
+    );
+    (!known).then(|| Finding::new(X4_INTENT_KNOWN_VALUES, message).citing("6.23").at(located))
 }
 
 /// 6.23 and 6.13: every rendering intent is one of the four: the `ri` operator, an inline image's `/Intent`, an
@@ -221,8 +227,14 @@ pub(super) fn known_intents(doc: &Document, _: &Settings) -> Vec<Finding> {
     for read in contents(doc) {
         for item in &read.content.items {
             let found = match item {
-                Item::Op(op) if op.name == b"ri" => intent(op.operands.last(), "ri", read.at(op.at)),
-                Item::Image(image) => intent(image.dict.get(b"Intent"), "an inline image", read.at(image.at)),
+                Item::Op(op) if op.name == b"ri" => {
+                    intent(op.operands.last(), "an ri operator's intent", read.at(op.at))
+                }
+                Item::Image(image) => intent(
+                    image.dict.get(b"Intent"),
+                    "an inline image's /Intent",
+                    read.at(image.at),
+                ),
                 Item::Op(_) => None,
             };
             out.extend(found);
@@ -295,8 +307,8 @@ mod tests {
         assert_eq!(
             intents,
             [
-                "ri names the rendering intent Vivid",
-                "ri names the rendering intent Vivid"
+                "an ri operator's intent is /Vivid, not one of the four rendering intents",
+                "an ri operator's intent is /Vivid, not one of the four rendering intents"
             ]
         );
     }
@@ -369,8 +381,8 @@ mod tests {
         assert_eq!(
             got.iter().map(|(_, m)| m.as_str()).collect::<Vec<_>>(),
             [
-                "an inline image whose end cannot be determined; the rest is not read",
-                "an ExtGState's /RI names the rendering intent not a name"
+                "an inline image whose end cannot be determined; the rest of the stream is not checked",
+                "an ExtGState's /RI is not a name"
             ]
         );
         let doc = Document::open(
@@ -437,7 +449,7 @@ mod tests {
             ("<< >>", "BI 5 ID a EI"),
             ("<< >>", &image("/G", "", "ab")),
         ]);
-        let unknown = "an inline image whose end cannot be determined; the rest is not read";
+        let unknown = "an inline image whose end cannot be determined; the rest of the stream is not checked";
         assert_eq!(
             messages,
             [
@@ -448,9 +460,9 @@ mod tests {
                 unknown,
                 unknown,
                 unknown,
-                "an inline image whose /L is 3 but whose data is 1 bytes; the rest is not read",
-                "an inline image dictionary that is malformed; the rest is not read",
-                "an inline image not followed by EI; the rest is not read",
+                "an inline image whose /L is 3 but whose data is 1 bytes; the rest of the stream is not checked",
+                "an inline image dictionary that is malformed; the rest of the stream is not checked",
+                "an inline image not followed by EI; the rest of the stream is not checked",
             ]
         );
     }

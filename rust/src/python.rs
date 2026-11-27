@@ -17,7 +17,7 @@ use crate::findings::Level;
 #[pyo3(signature = (file, data, level, params = "{}"))]
 fn verify(py: Python<'_>, file: &str, data: &[u8], level: &str, params: &str) -> PyResult<String> {
     let level = Level::from_name(level).ok_or_else(|| value_error(format_args!("unknown level {level:?}")))?;
-    let params = serde_json::from_str(params).map_err(|e| value_error(format_args!("bad params: {e}")))?;
+    let params = serde_json::from_str(params).map_err(|e| value_error(format_args!("params is not valid: {e}")))?;
     let settings = checks::Settings {
         level,
         params,
@@ -171,7 +171,7 @@ mod tests {
             let error = verify
                 .call1(("x.pdf", b"".as_slice(), "print", r#"{"nope": 1}"#))
                 .unwrap_err();
-            assert!(error.to_string().contains("bad params"), "{error}");
+            assert!(error.to_string().contains("params is not valid"), "{error}");
         });
     }
 

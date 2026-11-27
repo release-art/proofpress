@@ -50,7 +50,7 @@ pub fn render(bytes: &[u8], dpi: f64, guides: Option<Guides>) -> Result<Vec<Vec<
     let pdf = Pdf::new(bytes.to_vec()).map_err(|e| {
         let why = match e {
             LoadPdfError::Decryption(_) => "its encryption cannot be opened",
-            LoadPdfError::Invalid => "it is not a PDF hayro can read",
+            LoadPdfError::Invalid => "the renderer cannot read it",
         };
         RenderError::Unreadable(format!("the file cannot be rendered: {why}"))
     })?;
@@ -79,7 +79,11 @@ fn guarded<T>(number: usize, render: impl FnOnce() -> T) -> Result<T, RenderErro
             .map(ToString::to_string)
             .or_else(|| panic.downcast_ref::<String>().cloned())
             .unwrap_or_default();
-        RenderError::Unreadable(format!("page {number} cannot be rendered: hayro failed: {reason}"))
+        RenderError::Unreadable(if reason.is_empty() {
+            format!("page {number} cannot be rendered")
+        } else {
+            format!("page {number} cannot be rendered: {reason}")
+        })
     })
 }
 
@@ -352,17 +356,17 @@ mod tests {
         let failed = |number, panic: fn() -> ()| guarded(number, panic).unwrap_err();
         assert_eq!(
             failed(2, || panic!("bad glyph")),
-            RenderError::Unreadable("page 2 cannot be rendered: hayro failed: bad glyph".to_owned())
+            RenderError::Unreadable("page 2 cannot be rendered: bad glyph".to_owned())
         );
         let owned = || std::panic::panic_any(format!("index {}", 9));
         assert_eq!(
             failed(1, owned),
-            RenderError::Unreadable("page 1 cannot be rendered: hayro failed: index 9".to_owned())
+            RenderError::Unreadable("page 1 cannot be rendered: index 9".to_owned())
         );
         let silent = || std::panic::panic_any(7);
         assert_eq!(
             failed(1, silent),
-            RenderError::Unreadable("page 1 cannot be rendered: hayro failed: ".to_owned())
+            RenderError::Unreadable("page 1 cannot be rendered".to_owned())
         );
         assert_eq!(guarded(1, || 5), Ok(5));
     }

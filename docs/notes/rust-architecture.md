@@ -350,7 +350,7 @@ One `Limits` struct, one field per kind of structure, in one place:
   `limit.<kind>`, so the checks inside report "not evaluated". Only file-level limits (objects, xref chain) refuse the file.
 - **Cycles are not limits;** a visited set catches them, whatever the limits are.
 - **Decoding stops at its budget** (`Read::take(budget + 1)`). hayro-syntax decodes Flate with no bound.
-- **Configurable** with `--limit kind=value` and from Python; `--list-limits` prints them.
+- **Not configurable:** the defaults are built in (`Limits::default`).
 - **Defaults are ours,** chosen to pass every file in the corpus. Not every kind of structure has a limit yet.
 
 ## Boundaries

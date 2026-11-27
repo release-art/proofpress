@@ -7,9 +7,9 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// Verify and proof print PDFs (PDF/X-4, PDF/A and the print checks).
 #[derive(Debug, Parser)]
-#[command(name = "proof-pdf", version, about)]
+#[command(name = "proof-pdf", version)]
 pub(crate) struct Cli {
-    /// Defaults file (default: the nearest proof-pdf.toml, or [tool.proof-pdf] in pyproject.toml).
+    /// Config file (default: the nearest proof-pdf.toml, or [tool.proof-pdf] in pyproject.toml).
     #[arg(long, global = true, env = "PROOF_PDF_CONFIG")]
     pub(crate) config: Option<PathBuf>,
     /// Read no config file, even one nearby.
@@ -156,7 +156,7 @@ pub(crate) struct Inks {
     /// Fail, rather than warn, on RGB vector fills.
     #[arg(long)]
     pub(crate) strict_cmyk: bool,
-    /// With --colour-mode gray, also accept `DeviceCMYK` that uses only the K plate.
+    /// With --colour-mode gray, also accept device CMYK that uses only the K plate.
     #[arg(long)]
     pub(crate) allow_k_only: bool,
     /// Rich-black cutoff, in points [default: 12].
@@ -246,10 +246,10 @@ pub(crate) struct Sizes {
 /// How the reports are written.
 #[derive(Debug, Default, Args)]
 pub(crate) struct Output {
-    /// Emit machine-readable reports instead of text.
+    /// Write JSON reports instead of text.
     #[arg(long)]
     pub(crate) json: bool,
-    /// Exit code only, for CI.
+    /// Print nothing; report by exit code only (for CI).
     #[arg(long)]
     pub(crate) quiet: bool,
     /// Print the settings the config file and profile give, and exit.

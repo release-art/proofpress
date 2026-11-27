@@ -165,7 +165,7 @@ fn baseline_problems(h: &Jpx) -> Vec<String> {
         at(b"jp2h").zip(at(b"jp2c")).is_some_and(|(head, code)| head > code),
     );
     problem(
-        "fragment table or data reference boxes, which are not followed, so the codestream's place is not verified",
+        "fragment table or data reference boxes, so where the codestream is cannot be checked",
         h.order.iter().any(|k| k == b"ftbl" || k == b"cref"),
     );
     out
@@ -185,7 +185,7 @@ pub(super) fn cmyk_as_device(doc: &Document, settings: &Settings) -> Vec<Finding
     if intent.is_none_or(|i| i == *b"CMYK") {
         return Vec::new();
     }
-    device_cmyk(doc, X4_JPX_CMYK_AS_DEVICE, "6.27", "under a non-CMYK intent")
+    device_cmyk(doc, X4_JPX_CMYK_AS_DEVICE, "6.27", "under a non-CMYK output intent")
 }
 
 /// A finding from `check` for each JPEG 2000 image whose CMYK data has no profile and no `/ColorSpace`, so reads as
@@ -196,7 +196,7 @@ pub(super) fn device_cmyk(doc: &Document, check: &'static Check, clause: &str, w
         let cmyk = h.colours.iter().any(|c| c.enumerated == Some(CMYK));
         let profiled = h.colours.iter().any(|c| matches!(c.method, 2 | 3));
         (cmyk && !profiled && !spaced)
-            .then(|| format!("CMYK data with no profile and no /ColorSpace, so DeviceCMYK, {why}"))
+            .then(|| format!("CMYK data with no profile and no /ColorSpace, so read as DeviceCMYK, {why}"))
     })
 }
 
@@ -374,7 +374,7 @@ mod tests {
                 "the codestream needs more than the baseline's capabilities",
                 "no baseline colour specification (ICC, or an enumerated space it lists) with an approximation of 3 or less",
                 "the JP2 Header box comes after the codestream",
-                "fragment table or data reference boxes, which are not followed, so the codestream's place is not verified",
+                "fragment table or data reference boxes, so where the codestream is cannot be checked",
             ]
         );
         let extended = |rsiz: u16, colour: &[u8]| {

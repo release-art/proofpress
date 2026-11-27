@@ -39,13 +39,21 @@ class TestVerifyFile:
     async def test_missing_verapdf_fails_rather_than_skips(self, make_pdf):
         report = await core.verify_file(make_pdf(), Profile(pdfx=False, pdfa=True), verapdf_bin="/nonexistent/vera")
         assert [(f.check, f.message) for f in report.errors] == [
-            ("pdfa", "veraPDF not found (/nonexistent/vera) -- cannot confirm PDF/A-2b")
+            (
+                "pdfa",
+                "veraPDF not found (/nonexistent/vera), so PDF/A-2b is not confirmed; "
+                "install it, set --verapdf, or drop --pdfa",
+            )
         ]
 
     async def test_missing_ghostscript_fails_rather_than_skips(self, make_pdf):
         report = await core.verify_file(make_pdf(), Profile(pdfx=False, tac=True), gs_bin="/nonexistent/gs")
         assert [(f.check, f.message) for f in report.errors] == [
-            ("tac", "Ghostscript not found (/nonexistent/gs) -- cannot measure ink coverage")
+            (
+                "tac",
+                "Ghostscript not found (/nonexistent/gs), so peak ink is not measured; "
+                "install it, set --gs, or drop --tac",
+            )
         ]
 
     @pytest.mark.skipif(os.name != "posix", reason="the stand-in tool is a shell script")

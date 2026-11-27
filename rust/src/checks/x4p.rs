@@ -85,7 +85,7 @@ pub(super) fn external(doc: &Document, settings: &Settings) -> External {
         return External::NotLookedFor("the file is verified alone, without its external profile".into());
     };
     let Some(reference) = reference(doc) else {
-        return External::NotLookedFor("the PDF/X intent has no /DestOutputProfileRef".into());
+        return External::NotLookedFor("the PDF/X output intent has no /DestOutputProfileRef".into());
     };
     let Some(checksum) = string(doc, reference, b"CheckSum").filter(|c| c.len() == 16) else {
         return External::NotLookedFor("without a 16-byte /CheckSum no profile can be confirmed".into());

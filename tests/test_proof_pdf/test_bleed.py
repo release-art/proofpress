@@ -61,7 +61,7 @@ class TestCoverage:
         [finding] = _check(_pdf(tmp_path, b"0.9 g " + _rect(*rect)))
         assert finding.check == "artwork-bleed" and finding.severity is Severity.ERROR and finding.page == 1
         assert f"{side}: 1 object(s)" in finding.message and "0.0 mm of the 3.0 mm" in finding.message
-        assert "artwork must run to the bleed edge" in finding.message
+        assert "extend them to the bleed edge" in finding.message
 
     def test_partial_bleed_reports_how_far_it_got(self, tmp_path):
         [finding] = _check(_pdf(tmp_path, b"0.9 g " + _rect(T - 1.2 * MM, 0, MEDIA_W, MEDIA_H)))

@@ -235,7 +235,7 @@ fn measure(doc: &Document, proof_profile: Option<&[u8]>) -> (Vec<ContrastFact>, 
     if proof_profile.is_some_and(|p| !Model::readable(p)) {
         return (
             Vec::new(),
-            Some("the proof profile is not an ICC profile LittleCMS can read".to_owned()),
+            Some("the proof profile cannot be read as an ICC profile".to_owned()),
         );
     }
     let profiles = proof_profile.map_or_else(|| contrast::intent_profiles(doc), |p| vec![p.to_vec()]);
@@ -430,7 +430,7 @@ mod tests {
         let broken = of(&pages, "", Some(b"not a profile"), true);
         assert_eq!(
             broken["contrast_error"],
-            json!("the proof profile is not an ICC profile LittleCMS can read")
+            json!("the proof profile cannot be read as an ICC profile")
         );
     }
 

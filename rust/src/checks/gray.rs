@@ -46,7 +46,11 @@ pub(super) fn gray_only(doc: &Document, settings: &Settings) -> Vec<Finding> {
         }
         if !colours.is_empty() {
             let first: Vec<&str> = colours.iter().take(3).map(String::as_str).collect();
-            let message = format!("artwork is painted outside the gray family ({}...)", first.join(", "));
+            let more = if colours.len() > 3 { ", ..." } else { "" };
+            let message = format!(
+                "artwork is painted in colours other than gray: {}{more}",
+                first.join(", ")
+            );
             out.push(on_page(GRAY_ONLY, number, message));
         }
         if !spots.is_empty() {
@@ -421,7 +425,7 @@ mod tests {
             messages(&[page], true),
             [
                 "image (inline) is ICC-based or indexed CMYK, which is not treated as K-only",
-                "artwork is painted outside the gray family (RGB, shading /Nope, shading /Sh1...)",
+                "artwork is painted in colours other than gray: RGB, shading /Nope, shading /Sh1",
                 "spot colour(s) Silver have no gray value",
             ]
         );
@@ -447,7 +451,7 @@ mod tests {
         let colours: Vec<&str> = colours.iter().map(String::as_str).collect();
         let k_only = messages(&colours, true);
         let strict = messages(&colours, false);
-        let artwork = |what: &str| format!("artwork is painted outside the gray family ({what}...)");
+        let artwork = |what: &str| format!("artwork is painted in colours other than gray: {what}");
         assert_eq!(
             k_only,
             [

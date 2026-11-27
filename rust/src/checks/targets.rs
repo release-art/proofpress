@@ -375,7 +375,7 @@ fn identity(target: &Target, opened: &Opened) -> Identity {
     if differ(ids(0)) {
         Identity::Other("its first /ID differs from the reference's")
     } else if differ_text(field("documentID", 0)) {
-        Identity::Other("its xmpMM:DocumentID differs from the proxy's stRef:documentID")
+        Identity::Other("its xmpMM:DocumentID differs from the form XObject's stRef:documentID")
     } else if differ(ids(1)) || differ_text(field("versionID", 1)) || differ_text(field("renditionClass", 2)) {
         Identity::OtherVersion
     } else {
@@ -893,7 +893,7 @@ mod tests {
             Err("t.pdf is nested more than 0 references deep".into())
         );
         let identity = messages(target_identity(&doc, &settings, &set)).unwrap();
-        let why = "its xmpMM:DocumentID differs from the proxy's stRef:documentID";
+        let why = "its xmpMM:DocumentID differs from the form XObject's stRef:documentID";
         assert_eq!(
             identity,
             [format!("object 20: t.pdf is not the file the reference names: {why}")]

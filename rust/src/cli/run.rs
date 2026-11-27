@@ -334,7 +334,7 @@ pub(crate) fn verify(path: &Path, plan: &Plan, exemptions: &[(GlobMatcher, Strin
     let bytes = match std::fs::read(path) {
         Ok(bytes) => bytes,
         Err(e) => {
-            let unreadable = Some(format!("cannot read the file: {e}"));
+            let unreadable = Some(format!("cannot read the file: {}", io_message(&e)));
             return FileReport {
                 path: path.to_owned(),
                 exempt: None,
@@ -378,6 +378,14 @@ pub(crate) fn verify(path: &Path, plan: &Plan, exemptions: &[(GlobMatcher, Strin
         unreadable: None,
         timed_out,
     }
+}
+
+/// An I/O error's message without the "(os error N)" the OS's own words already say.
+pub(crate) fn io_message(e: &std::io::Error) -> String {
+    let text = e.to_string();
+    e.raw_os_error()
+        .and_then(|code| text.strip_suffix(&format!(" (os error {code})")))
+        .map_or_else(|| text.clone(), str::to_owned)
 }
 
 fn combined(name: &str, bytes: &[u8], plan: &Plan) -> Report {

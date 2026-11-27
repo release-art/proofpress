@@ -46,7 +46,7 @@ fn apart(a: &Rect, b: &Rect) -> bool {
 
 fn on_page(check: &'static Check, index: usize, message: &str, clause: &str) -> Finding {
     let number = u32::try_from(index + 1).unwrap_or(u32::MAX);
-    Finding::new(check, format!("page {number}: {message}"))
+    Finding::new(check, message)
         .citing(clause)
         .at(vec![Location::Page(number)])
 }
@@ -420,11 +420,11 @@ mod tests {
         };
         assert_eq!(
             found(x5n_pcm),
-            ["page 1: a TrapNet appearance with /PCM /DeviceCMYK, not /DeviceN"]
+            ["a TrapNet appearance with /PCM /DeviceCMYK, not /DeviceN"]
         );
         assert_eq!(
             found(x5n_separations),
-            ["page 1: a TrapNet appearance's /SeparationColorNames lacks Orange"]
+            ["a TrapNet appearance's /SeparationColorNames lacks Orange"]
         );
     }
 

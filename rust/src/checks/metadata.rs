@@ -357,16 +357,27 @@ fn version_is(doc: &Document, check: &'static Check, want: &str, clause: &str) -
     };
     match value.text() {
         Some(v) if v == want => Vec::new(),
-        other => vec![
-            Finding::new(
-                check,
-                format!(
-                    "pdfxid:GTS_PDFXVersion is {:?}, not {want:?}",
-                    other.unwrap_or("not text")
-                ),
-            )
-            .citing(clause),
-        ],
+        other => {
+            // A level this tool also verifies: say which --pdfx value checks it.
+            let hint = match other {
+                Some("PDF/X-4") => "; verify with --pdfx x4",
+                Some("PDF/X-4p") => "; verify with --pdfx x4p",
+                Some("PDF/X-5g") => "; verify with --pdfx x5g",
+                Some("PDF/X-5pg") => "; verify with --pdfx x5pg",
+                Some("PDF/X-5n") => "; verify with --pdfx x5n",
+                _ => "",
+            };
+            vec![
+                Finding::new(
+                    check,
+                    format!(
+                        "pdfxid:GTS_PDFXVersion is {:?}, not {want:?}{hint}",
+                        other.unwrap_or("not text")
+                    ),
+                )
+                .citing(clause),
+            ]
+        }
     }
 }
 
@@ -382,7 +393,10 @@ pub(super) fn pdfxid_only_version(doc: &Document, _: &Settings) -> Vec<Finding> 
         .map(|p| {
             Finding::new(
                 X4_IDENTITY_PDFXID_ONLY_VERSION,
-                format!("pdfxid:{} is not allowed", p.name),
+                format!(
+                    "pdfxid:{} is not allowed: the pdfxid namespace holds only GTS_PDFXVersion",
+                    p.name
+                ),
             )
             .citing("6.11")
         })
@@ -712,7 +726,9 @@ pub(super) fn unlisted_not_predefined(doc: &Document, _: &Settings) -> Vec<Findi
         .map(|key| {
             Finding::new(
                 X4_INFO_UNLISTED_NOT_IN_PREDEFINED_SCHEMA,
-                format!("Info /{key}, which Table 3 does not list, is written into a predefined XMP schema"),
+                format!(
+                    "Info /{key} is copied into a predefined XMP schema; custom entries need a schema of their own"
+                ),
             )
             .citing("6.10.2")
         })
@@ -837,7 +853,7 @@ mod tests {
             .collect();
         assert_eq!(
             found,
-            ["Info /Company, which Table 3 does not list, is written into a predefined XMP schema"]
+            ["Info /Company is copied into a predefined XMP schema; custom entries need a schema of their own"]
         );
         assert_eq!(
             unlisted_not_predefined(&open("5", b"", info, "[]"), &Level::X4.into()),
@@ -860,6 +876,10 @@ mod tests {
         let doc = open("2 0 R", &packet(FULL), INFO, "[(a) (b)]");
         assert_eq!(ids(&doc), ["x4.identity.version-value"]);
         assert_eq!(version_value(&doc, &Level::X4p.into()), []);
+        assert_eq!(
+            version_value(&doc, &Level::X4.into())[0].message,
+            r#"pdfxid:GTS_PDFXVersion is "PDF/X-4p", not "PDF/X-4"; verify with --pdfx x4p"#
+        );
     }
 
     #[test]

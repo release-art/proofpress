@@ -38,7 +38,7 @@ class TestVerifyCommand:
     def test_a_conforming_file_exits_zero(self, runner):
         result = _verify(runner, GOOD)
         assert result.exit_code == 0
-        assert "OK -- all 1 file(s) passed: PDF/X as claimed" in result.stdout
+        assert "OK -- all 1 file(s) passed; checked: PDF/X as claimed" in result.stdout
 
     def test_an_error_exits_one_and_names_the_check(self, runner):
         result = _verify(runner, PDFS / "x4-limit-nesting.pdf")
@@ -278,3 +278,14 @@ class TestVersion:
     def test_unknown_revision_is_not_shown(self, runner, monkeypatch):
         monkeypatch.setenv("PROOFPRESS_REVISION", "unknown")
         assert "commit" not in runner.invoke(cli.pdf_app, ["--version"]).output
+
+
+class TestMissingFiles:
+    @pytest.mark.parametrize("command", ["inspect", "texlog"])
+    def test_a_missing_file_is_one_line_not_a_traceback(self, runner, tmp_path, command):
+        missing = tmp_path / ("gone.pdf" if command == "inspect" else "gone.log")
+        result = runner.invoke(cli.pdf_app, [command, str(missing)])
+        assert result.exit_code == 1
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        assert "No such file or directory" in result.output
+        assert "Traceback" not in result.output

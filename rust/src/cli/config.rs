@@ -28,7 +28,7 @@ use clap::ValueEnum;
 use toml::{Table, Value};
 
 use super::args::Verify;
-use super::run::Usage;
+use super::run::{Usage, io_message};
 
 const NAME: &str = "proof-pdf.toml";
 const SCHEMA: i64 = 1;
@@ -48,7 +48,8 @@ pub(crate) fn find(start: &Path) -> Option<PathBuf> {
 }
 
 fn read(path: &Path) -> Result<Table, Usage> {
-    let text = std::fs::read_to_string(path).map_err(|e| Usage(format!("cannot read {}: {e}", path.display())))?;
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| Usage(format!("cannot read {}: {}", path.display(), io_message(&e))))?;
     text.parse::<Table>()
         .map_err(|e| Usage(format!("cannot read {}: {e}", path.display())))
 }
@@ -70,7 +71,7 @@ pub(crate) fn load(path: &Path, profile: Option<&str>) -> Result<Table, Usage> {
         None | Some(Value::Integer(SCHEMA)) => {}
         Some(other) => {
             return Err(Usage(format!(
-                "{at}: schema {other} is not one this proof-pdf reads (1)"
+                "{at}: schema {other} is not supported; this proof-pdf reads schema {SCHEMA}"
             )));
         }
     }
@@ -96,10 +97,12 @@ pub(crate) fn load(path: &Path, profile: Option<&str>) -> Result<Table, Usage> {
         }
         let Some(own) = profiles.get(name).and_then(Value::as_table) else {
             let known: Vec<&str> = profiles.keys().map(String::as_str).collect();
-            return Err(Usage(format!(
-                "{at} has no profile {name:?} (profiles: {})",
-                known.join(", ")
-            )));
+            let known = if known.is_empty() {
+                "it defines none".to_owned()
+            } else {
+                format!("profiles: {}", known.join(", "))
+            };
+            return Err(Usage(format!("{at} has no profile {name:?} ({known})")));
         };
         chain.push(name);
         next = own.get("extends").and_then(Value::as_str);
@@ -318,7 +321,9 @@ mod tests {
             load(&file, profile)
         };
         assert!(load_text("schema = 1\n[preview]\ndpi = 1\n", None).unwrap().is_empty());
-        assert!(error(load_text("schema = 2\n", None)).contains("schema 2 is not one"));
+        assert!(
+            error(load_text("schema = 2\n", None)).contains("schema 2 is not supported; this proof-pdf reads schema 1")
+        );
         assert!(error(load_text("[nonsense]\n", None)).contains("[nonsense] is not a command"));
         assert!(error(load_text("verify = 1\n", None)).contains("[verify] is not a table"));
         let profiles = "[verify]\nbleed-mm = 3\nflavour = '2b'\n\
@@ -335,7 +340,7 @@ mod tests {
         assert!(error(load_text(profiles, Some("nope"))).contains("profiles: base, deluxe, flat, loop, typo"));
         assert!(error(load_text(profiles, Some("typo"))).contains("has no setting \"verfy\""));
         assert!(error(load_text(profiles, Some("flat"))).contains("is not a table"));
-        assert!(error(load_text("[profiles]\n", Some("x"))).contains("(profiles: )"));
+        assert!(error(load_text("[profiles]\n", Some("x"))).contains("has no profile \"x\" (it defines none)"));
     }
 
     #[test]

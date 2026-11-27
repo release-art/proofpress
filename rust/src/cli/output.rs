@@ -42,6 +42,9 @@ impl Style {
     }
 }
 
+/// The most unjudged checks named one by one; more are counted.
+const MAX_LISTED: usize = 10;
+
 /// Each file's report, then the summary.
 pub(crate) fn text(reports: &[FileReport], o: &Verify, plan: &Plan, style: &Style) -> String {
     let mut lines = Vec::new();
@@ -80,7 +83,13 @@ pub(crate) fn text(reports: &[FileReport], o: &Verify, plan: &Plan, style: &Styl
         }
         for (reason, ids) in unjudged(report) {
             let mark = style.paint("31", "x");
-            lines.push(format!("      {mark} not evaluated, {reason}: {}", ids.join(", ")));
+            // A refused file leaves every check unjudged; a list of them all says nothing the reason does not.
+            let which = if ids.len() > MAX_LISTED {
+                format!("{} checks", ids.len())
+            } else {
+                ids.join(", ")
+            };
+            lines.push(format!("      {mark} not evaluated, {reason}: {which}"));
         }
     }
     lines.push(String::new());
@@ -199,7 +208,7 @@ fn summary(reports: &[FileReport], o: &Verify, plan: &Plan, style: &Style) -> St
     let exempt = reports.iter().filter(|r| r.exempt.is_some()).count();
     let checked = reports.len() - exempt;
     if failed > 0 {
-        let line = format!("FAIL -- {failed} of {checked} file(s) failed: {layers}");
+        let line = format!("FAIL -- {failed} of {checked} file(s) failed; checked: {layers}");
         return style.paint("31", &line);
     }
     let warnings: usize = reports
@@ -218,7 +227,7 @@ fn summary(reports: &[FileReport], o: &Verify, plan: &Plan, style: &Style) -> St
     } else {
         format!(" ({})", notes.join(", "))
     };
-    let line = format!("OK -- all {checked} file(s) passed: {layers}{note}");
+    let line = format!("OK -- all {checked} file(s) passed{note}; checked: {layers}");
     style.paint("32", &line)
 }
 

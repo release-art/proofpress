@@ -52,7 +52,7 @@ def load_profile(
     profile = profile or os.environ.get("PROOF_PDF_PROFILE") or None
     path = path or _config.find_config(pathlib.Path.cwd())
     if path is None and profile:
-        raise ConfigError("a profile needs a config file, and none was found")
+        raise ConfigError("a profile needs a config file, and none was found; pass path or add proof-pdf.toml")
     table: dict[str, typing.Any] = {}
     if path is not None:
         argv = ["proof-pdf", "--config", str(path), *(["--profile", profile] if profile else []), "verify"]

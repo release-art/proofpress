@@ -128,7 +128,7 @@ class TestProfiles:
             config.default_map(_write(tmp_path, self.TEXT), "nope", COMMANDS)
 
     def test_a_profile_with_no_profiles_table_says_none(self, tmp_path):
-        with pytest.raises(config.ConfigError, match="profiles: none"):
+        with pytest.raises(config.ConfigError, match="it defines none"):
             config.default_map(_write(tmp_path, "[preview]\n"), "x", COMMANDS)
 
 
@@ -160,7 +160,7 @@ class TestRustCommandTables:
         assert config.default_map(path, None, COMMANDS) == {"texlog": {"max_overfull_pt": 2}}
 
     def test_a_higher_schema_is_refused(self, tmp_path):
-        with pytest.raises(config.ConfigError, match="schema other than 1"):
+        with pytest.raises(config.ConfigError, match="schema 2 is not supported"):
             config.default_map(_write(tmp_path, "schema = 2\n"), None, COMMANDS)
 
     def test_profiles_extend_one_another_ancestor_first(self, tmp_path):

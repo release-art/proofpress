@@ -192,7 +192,7 @@ pub(super) fn resources_inside(doc: &Document, _: &Settings) -> Vec<Finding> {
         let (missing, at) = undefined(doc, &slices, resources.unwrap_or(&empty));
         if let (Some(name), Some(at)) = (missing.first(), at) {
             let message = format!(
-                "{} resource name(s) its resources do not define, the first {name}",
+                "{} resource name(s) used but not defined in /Resources, the first {name}",
                 missing.len()
             );
             let mut chain = vec![owner];
@@ -322,8 +322,8 @@ mod tests {
         assert_eq!(
             messages(&doc),
             [
-                "9 resource name(s) its resources do not define, the first /Pat (Pattern)",
-                "1 resource name(s) its resources do not define, the first /Y (XObject)",
+                "9 resource name(s) used but not defined in /Resources, the first /Pat (Pattern)",
+                "1 resource name(s) used but not defined in /Resources, the first /Y (XObject)",
             ]
         );
     }

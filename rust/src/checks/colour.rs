@@ -146,7 +146,7 @@ fn device_rule(
                     "a print element"
                 };
                 let message = format!(
-                    "{what} uses {} under a {intent_name} output intent",
+                    "{what} uses {} but the output intent is {intent_name}",
                     String::from_utf8_lossy(device)
                 );
                 out.push(finding(check, message, &frames));
@@ -198,10 +198,14 @@ pub(super) fn group_spaces(doc: &Document, settings: &Settings) -> Vec<Finding> 
                 .and_then(|d| icc::header(&d))
                 .map(|h| h.version.0);
             if bad_device || version.is_some_and(|v| !matches!(v, 2 | 4)) {
-                let message = format!(
-                    "a transparency group's /CS uses {}, which 6.4.3 does not allow here",
-                    String::from_utf8_lossy(family)
-                );
+                let message = match intent.filter(|_| bad_device) {
+                    Some(intent) => format!(
+                        "a transparency group's /CS uses {} but the output intent is {}",
+                        String::from_utf8_lossy(family),
+                        String::from_utf8_lossy(&intent).trim_end()
+                    ),
+                    None => "a transparency group's /CS uses an ICC profile that is not version 2 or 4".to_owned(),
+                };
                 out.push(
                     Finding::new(X4_TRANSPARENCY_GROUP_CS_RESTRICTED, message)
                         .citing("6.20")
@@ -276,8 +280,11 @@ pub(super) fn x1a_print_spaces(doc: &Document, settings: &Settings) -> Vec<Findi
         for leaf in found.iter().filter(|l| l.via != Via::Alternate) {
             let space = family(leaf.space);
             if !X1A_SPACES.contains(&space) {
-                let how = if used.defaulted { ", by a Default space," } else { "" };
-                let message = format!("a print element uses{how} {}", String::from_utf8_lossy(space));
+                let how = if used.defaulted { " through a Default space" } else { "" };
+                let message = format!(
+                    "a print element uses {}{how}, not CMYK, gray or spot colour",
+                    String::from_utf8_lossy(space)
+                );
                 let finding = Finding::new(X1A_COLOUR_PRINT_SPACES, message).at(frames.clone());
                 out.push(per_level(finding, settings, ["6.3.1", "", "6.2.1", ""]));
             }
@@ -309,7 +316,7 @@ pub(super) fn x1a_unused_default(doc: &Document, settings: &Settings) -> Vec<Fin
             .iter()
             .any(|(u, frames)| u.defaulted && frames.contains(&Location::Page(number)));
         if defaults > 0 && !remapped {
-            let message = format!("page {number} has a Default colour space that remaps nothing");
+            let message = "a Default colour space in the page's resources remaps no colour on the page".to_owned();
             let finding = Finding::new(X1A_COLOUR_NO_DEFAULT_SPACE, message).at(vec![Location::Page(number)]);
             out.push(per_level(finding, settings, ["6.3.1", "", "6.2.1", ""]));
         }
@@ -332,7 +339,7 @@ pub(super) fn x1a_alternates(doc: &Document, settings: &Settings) -> Vec<Finding
             let space = alternate.map_or(&b""[..], family);
             if !matches!(space, b"DeviceGray" | b"DeviceCMYK") {
                 let message = format!(
-                    "a {} space has the alternate {}",
+                    "a {} space has the alternate {}, not DeviceCMYK or DeviceGray",
                     String::from_utf8_lossy(family(leaf.space)),
                     String::from_utf8_lossy(space)
                 );
@@ -363,7 +370,7 @@ pub(super) fn x3_dest_profile_for_colour(doc: &Document, settings: &Settings) ->
             let foreign = device && condition.is_some_and(|c| !device_allowed(space, c));
             if colorimetric || foreign {
                 let message = format!(
-                    "a print element uses {} while the PDF/X intent embeds no /DestOutputProfile",
+                    "a print element uses {} while the PDF/X output intent embeds no /DestOutputProfile",
                     String::from_utf8_lossy(space)
                 );
                 let finding = Finding::new(X3_OUTPUT_INTENT_DEST_PROFILE_FOR_COLOUR, message).at(frames.clone());
@@ -430,7 +437,7 @@ pub(super) fn overprint_mode(doc: &Document, settings: &Settings) -> Vec<Finding
     {
         let painted = matches!(used.role, Role::Fill | Role::Stroke | Role::ImageMask);
         if channels == 4 && via != Via::Alternate && painted && used.overprint && used.opm != 0 && !used.defaulted {
-            let message = format!("a four-colour ICCBased paint overprints with OPM {}", used.opm);
+            let message = format!("a four-colour ICCBased colour overprints with /OPM {}, not 0", used.opm);
             out.push(
                 Finding::new(X4_ICC_OVERPRINT_MODE_ZERO, message)
                     .citing("6.4.3.3")
@@ -566,7 +573,7 @@ pub(super) fn pre_separated(doc: &Document, _: &Settings) -> Vec<Finding> {
         .map(|n| String::from_utf8_lossy(n).into_owned())
         .collect();
     let message = format!(
-        "every page paints a single colorant, and they differ: {}",
+        "the file looks pre-separated: every page paints one colorant, and the pages differ ({})",
         names.join(", ")
     );
     vec![Finding::new(X4_PRE_SEPARATED_ABSENT, message).citing("6.1.2")]
@@ -797,7 +804,7 @@ mod tests {
         assert_eq!(groups("[/ICCBased 8 0 R]"), Vec::<String>::new());
         assert_eq!(
             groups("[/ICCBased 7 0 R]"),
-            ["a transparency group's /CS uses ICCBased, which 6.4.3 does not allow here"]
+            ["a transparency group's /CS uses an ICC profile that is not version 2 or 4"]
         );
         assert_eq!(
             groups("[/ICCBased << /N 4 >>]"),
@@ -807,7 +814,7 @@ mod tests {
         assert_eq!(groups("[/ICCBased]"), Vec::<String>::new());
         assert_eq!(
             groups("/DeviceRGB"),
-            ["a transparency group's /CS uses DeviceRGB, which 6.4.3 does not allow here"]
+            ["a transparency group's /CS uses DeviceRGB but the output intent is CMYK"]
         );
         assert_eq!(groups("/Lab"), Vec::<String>::new());
     }
@@ -850,11 +857,11 @@ mod tests {
         };
         assert_eq!(
             separated(&["/C cs f", "/N cs f", "0 g f /G cs f"]),
-            ["every page paints a single colorant, and they differ: Cyan, Gray, Spot"]
+            ["the file looks pre-separated: every page paints one colorant, and the pages differ (Cyan, Gray, Spot)"]
         );
         assert_eq!(
             separated(&["/I cs f", "/N cs f"]),
-            ["every page paints a single colorant, and they differ: Cyan, Spot"],
+            ["the file looks pre-separated: every page paints one colorant, and the pages differ (Cyan, Spot)"],
             "an Indexed base"
         );
         assert_eq!(

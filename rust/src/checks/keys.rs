@@ -81,7 +81,7 @@ pub(super) fn no_opi(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_XOBJECT_NO_OPI, "6.7", &|n| {
         when(
             (xobject(n, b"Image") || xobject(n, b"Form")) && n.dict.get(b"OPI").is_some(),
-            "an XObject with /OPI",
+            "an XObject with /OPI, which links to artwork outside the file",
         )
     })
 }
@@ -90,14 +90,17 @@ pub(super) fn no_ref(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_XOBJECT_NO_REF, "6.7", &|n| {
         when(
             xobject(n, b"Form") && n.dict.get(b"Ref").is_some(),
-            "a form XObject with /Ref",
+            "a form XObject with /Ref, which imports a page from another file",
         )
     })
 }
 
 pub(super) fn no_external_f(doc: &Document, _: &Settings) -> Vec<Finding> {
     each(doc, X4_STREAM_NO_EXTERNAL_F, "6.7", &|n| {
-        when(n.stream && n.dict.get(b"F").is_some(), "a stream with /F")
+        when(
+            n.stream && n.dict.get(b"F").is_some(),
+            "a stream with /F, whose data is in another file",
+        )
     })
 }
 
@@ -140,7 +143,7 @@ fn filespec_rule(
         let filespec = n.name(b"Type") == Some(b"Filespec") || n.under(b"FS") || n.under(b"AF");
         when(
             filespec && !exempt(n) && n.dict.get(b"EF").is_none(),
-            "a file specification without /EF",
+            "a file specification without /EF, so its file is not embedded",
         )
     });
     for node in dicts(doc) {
@@ -158,7 +161,7 @@ fn filespec_rule(
                 finding(
                     check,
                     node.num,
-                    "a file specification that is a string, with no /EF",
+                    "a file specification that is a string, so its file is not embedded",
                     clause,
                 )
             }));
@@ -433,7 +436,7 @@ pub(super) fn no_pres_steps(doc: &Document, _: &Settings) -> Vec<Finding> {
         .filter(|(_, p)| p.dict.get(b"PresSteps").is_some())
         .map(|(i, _)| {
             let number = u32::try_from(i + 1).unwrap_or(u32::MAX);
-            Finding::new(X4_PAGE_NO_PRES_STEPS, format!("page {number} has /PresSteps"))
+            Finding::new(X4_PAGE_NO_PRES_STEPS, "the page has /PresSteps")
                 .citing("6.22")
                 .at(vec![Location::Page(number)])
         })

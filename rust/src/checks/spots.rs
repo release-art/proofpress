@@ -331,7 +331,7 @@ pub(super) fn consistent_definitions(doc: &Document, _: &Settings) -> Vec<Findin
             Some((a, t)) if same(doc, a, alternate, 0) && same(doc, t, tint, 0) => {}
             Some(_) => {
                 let message = format!(
-                    "the spot {} is defined with another alternate or tint transform",
+                    "the spot {} has another alternate or tint transform than where it is first used",
                     text(name)
                 );
                 out.push(
@@ -595,7 +595,10 @@ pub(super) fn solidities(doc: &Document, _: &Settings) -> Vec<Finding> {
                 continue;
             };
             if seen.get(ink).is_some_and(|v| !equal(*v, value)) {
-                let message = format!("the ink {} has another /Solidities value than earlier", text(ink));
+                let message = format!(
+                    "the ink {} has another /Solidities value than an earlier /MixingHints gives it",
+                    text(ink)
+                );
                 out.push(
                     Finding::new(X4_SPOT_SOLIDITIES_CONSISTENT, message)
                         .citing("6.4.3.4")

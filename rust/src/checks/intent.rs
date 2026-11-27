@@ -187,7 +187,7 @@ pub(super) fn unique(doc: &Document, _: &Settings) -> Vec<Finding> {
     when(
         count > 1,
         X4_OUTPUT_INTENT_UNIQUE,
-        &format!("{count} output intents have /S /GTS_PDFX"),
+        &format!("{count} output intents have /S /GTS_PDFX, not one"),
         "6.4.2.1",
     )
 }
@@ -392,7 +392,7 @@ pub(super) fn identifier_in_registry(doc: &Document, _: &Settings) -> Vec<Findin
         return Vec::new();
     };
     let unlisted = registry(&name) != Registry::Other && !ICC_REGISTRY.contains(&id.as_str());
-    let message = format!("{id:?} is not a reference name in the ICC registry that /RegistryName names");
+    let message = format!("/OutputConditionIdentifier {id:?} is not a name in the ICC registry");
     when(unlisted, X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY, &message, "6.4.2.1")
 }
 
@@ -433,7 +433,9 @@ pub(super) fn icc_name_needs_registry(doc: &Document, settings: &Settings) -> Ve
         return Vec::new();
     };
     let failed = ICC_REGISTRY.contains(&id.as_str()) && !names_icc_registry(doc, settings);
-    let message = format!("{id:?} is an ICC registry name, but /RegistryName is not \"http://www.color.org\"");
+    let message = format!(
+        "/OutputConditionIdentifier {id:?} is an ICC registry name, but /RegistryName is not \"http://www.color.org\""
+    );
     when_older(
         failed,
         X13_OUTPUT_INTENT_ICC_NAME_NEEDS_REGISTRY,
@@ -451,7 +453,7 @@ pub(super) fn has_profile(doc: &Document) -> bool {
 /// 15930-4 and -6 6.2.2: without the ICC `RegistryName` the profile is embedded.
 pub(super) fn dest_profile_by_registry(doc: &Document, settings: &Settings) -> Vec<Finding> {
     let failed = the_intent(doc).is_some() && !names_icc_registry(doc, settings) && !has_profile(doc);
-    let message = "the PDF/X intent names no ICC registry condition and embeds no /DestOutputProfile";
+    let message = "the PDF/X output intent names no ICC registry condition and embeds no /DestOutputProfile";
     when_older(
         failed,
         X13_OUTPUT_INTENT_DEST_PROFILE_BY_REGISTRY,
@@ -466,7 +468,7 @@ pub(super) fn dest_profile_by_icc_name(doc: &Document, settings: &Settings) -> V
     let unregistered =
         text_entry(doc, b"OutputConditionIdentifier").is_none_or(|id| !ICC_REGISTRY.contains(&id.as_str()));
     let failed = the_intent(doc).is_some() && unregistered && !has_profile(doc);
-    let message = "the identifier is no ICC registry name and the PDF/X intent embeds no /DestOutputProfile";
+    let message = "/OutputConditionIdentifier is not in the ICC registry and the PDF/X output intent embeds no /DestOutputProfile";
     when_older(
         failed,
         X13_OUTPUT_INTENT_DEST_PROFILE_BY_ICC_NAME,
@@ -512,7 +514,8 @@ pub(super) fn output_condition_unregistered(doc: &Document, _: &Settings) -> Vec
     let unregistered =
         text_entry(doc, b"OutputConditionIdentifier").is_none_or(|id| !ICC_REGISTRY.contains(&id.as_str()));
     let failed = unregistered && intent.get(b"OutputCondition").is_none();
-    let message = "the identifier is no ICC registry name and the PDF/X intent has no /OutputCondition";
+    let message =
+        "/OutputConditionIdentifier is not in the ICC registry and the PDF/X output intent has no /OutputCondition";
     when(
         failed,
         X1A_OUTPUT_INTENT_OUTPUT_CONDITION_UNREGISTERED,
@@ -524,7 +527,12 @@ pub(super) fn output_condition_unregistered(doc: &Document, _: &Settings) -> Vec
 /// 15930-3 6.2.2 recommends the PDF/X intent's `/Info`.
 pub(super) fn info(doc: &Document, _: &Settings) -> Vec<Finding> {
     let missing = the_intent(doc).is_some_and(|i| i.get(b"Info").is_none());
-    when(missing, X3_OUTPUT_INTENT_INFO, "the PDF/X intent has no /Info", "6.2.2")
+    when(
+        missing,
+        X3_OUTPUT_INTENT_INFO,
+        "the PDF/X output intent has no /Info",
+        "6.2.2",
+    )
 }
 
 /// L-Q11: at the older levels the output profile is ICC version 2 (ICC.1:1998-09), any minor version.

@@ -585,7 +585,11 @@ pub(crate) fn note_finding(note: &FileNote) -> Finding {
 /// The finding for a damaged object.
 pub(crate) fn damage_finding(num: u32, damage: &ObjectDamage) -> Finding {
     let (what, at, clause) = match damage {
-        ObjectDamage::Syntax(d) => (format!("cannot be read ({:?})", d.reason), Some(d.at), "7.3"),
+        ObjectDamage::Syntax(d) => (
+            format!("cannot be read: {}", syntax::describe(d.reason)),
+            Some(d.at),
+            "7.3",
+        ),
         ObjectDamage::Header(at) => ("does not start with its own `n g obj`".to_owned(), Some(*at), "7.3.10"),
         ObjectDamage::NoEndobj(at) => ("is not followed by endobj".to_owned(), Some(*at), "7.3.10"),
         ObjectDamage::Length(at) => (

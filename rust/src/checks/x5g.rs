@@ -115,7 +115,14 @@ pub(super) fn proxy_metadata(doc: &Document, _: &Settings) -> Vec<Finding> {
     proxies(doc)
         .into_iter()
         .filter(|p| metadata(doc, p.form).is_none())
-        .map(|p| at(X5_G_PROXY_METADATA, p.num, "the proxy has no /Metadata stream", "8.3"))
+        .map(|p| {
+            at(
+                X5_G_PROXY_METADATA,
+                p.num,
+                "the form XObject has no /Metadata stream",
+                "8.3",
+            )
+        })
         .collect()
 }
 
@@ -159,7 +166,7 @@ pub(super) fn proxy_rendition_of(doc: &Document, _: &Settings) -> Vec<Finding> {
                 out.push(at(
                     X5_G_PROXY_RENDITION_OF,
                     proxy.num,
-                    format!("the proxy's XMP has {why}"),
+                    format!("the form XObject's metadata has {why}"),
                     "8.3",
                 ));
                 continue;
@@ -266,10 +273,10 @@ mod tests {
                 "object 22: /Ref has no /ID of two strings",
                 "object 23: /Ref has no /ID of two strings",
                 "object 24: /Ref has no /ID of two strings",
-                "object 21: the proxy has no /Metadata stream",
-                "object 22: the proxy's XMP has no xmpMM:RenditionOf",
-                "object 23: the proxy's XMP has no xmpMM:RenditionOf",
-                "object 24: the proxy's XMP has no xmpMM:RenditionOf",
+                "object 21: the form XObject has no /Metadata stream",
+                "object 22: the form XObject's metadata has no xmpMM:RenditionOf",
+                "object 23: the form XObject's metadata has no xmpMM:RenditionOf",
+                "object 24: the form XObject's metadata has no xmpMM:RenditionOf",
             ]
         );
     }
@@ -280,11 +287,11 @@ mod tests {
         let flat = xmp("<xmpMM:RenditionOf>text</xmpMM:RenditionOf>");
         assert_eq!(
             found(&[&proxy], &flat),
-            ["object 20: the proxy's XMP has an xmpMM:RenditionOf that is not a structure"]
+            ["object 20: the form XObject's metadata has an xmpMM:RenditionOf that is not a structure"]
         );
         assert_eq!(
             found(&[&proxy], b"<not xmp"),
-            ["object 20: the proxy's XMP has XMP that cannot be read"]
+            ["object 20: the form XObject's metadata has XMP that cannot be read"]
         );
         let nested = xmp(
             r#"<xmpMM:RenditionOf rdf:parseType="Resource"><stRef:documentID rdf:parseType="Resource"><stRef:x>1</stRef:x></stRef:documentID><stRef:versionID>1</stRef:versionID></xmpMM:RenditionOf>"#,

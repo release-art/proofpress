@@ -68,7 +68,7 @@ def _main(
         typer.Option(
             "--config",
             envvar="PROOF_PDF_CONFIG",
-            help="Defaults file (default: the nearest proof-pdf.toml, or [tool.proof-pdf] in pyproject.toml).",
+            help="Config file (default: the nearest proof-pdf.toml, or \\[tool.proof-pdf] in pyproject.toml).",
         ),
     ] = None,
     profile: typing.Annotated[
@@ -80,7 +80,9 @@ def _main(
     path = config or config_file.find_config(pathlib.Path.cwd())
     if path is None:
         if profile:
-            raise typer.BadParameter("--profile needs a config file, and none was found", param_hint="--profile")
+            raise typer.BadParameter(
+                "no config file found; pass --config or add a proof-pdf.toml", param_hint="--profile"
+            )
         return
     commands = getattr(ctx.command, "commands", {})
     try:
@@ -102,7 +104,7 @@ ExcludeOpt = typing.Annotated[
     list[str] | None,
     typer.Option("--exclude", help="Glob, relative to a directory argument, of PDFs to skip. Repeatable."),
 ]
-QuietOpt = typing.Annotated[bool, typer.Option("--quiet", help="Exit code only, for CI.")]
+QuietOpt = typing.Annotated[bool, typer.Option("--quiet", help="Print nothing; report by exit code only (for CI).")]
 # Previews no longer run Ghostscript; the options stay, hidden, so existing commands and config files keep working.
 UnusedGsOpt = typing.Annotated[
     str | None, typer.Option("--gs", hidden=True, help="Not used: previews are rendered in-process.")
@@ -164,6 +166,8 @@ def inspect_cmd(
             typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             failed = True
             continue
+        except OSError as exc:
+            raise _os_failure(exc) from exc
         records.append(facts.to_dict())
         if not as_json:
             _print_inventory(facts)
@@ -236,6 +240,8 @@ def extract_cmd(
             typer.secho(f"FAIL -- cannot open {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             failed = True
             continue
+        except OSError as exc:
+            raise _os_failure(exc) from exc
         if not quiet:
             _print_extraction(target, dst, result)
     raise typer.Exit(1 if failed else 0)
@@ -272,6 +278,8 @@ def crop_cmd(
     except crop.UnreadablePdfError as exc:
         typer.secho(f"FAIL -- cannot open {_rel(file)}: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from exc
+    except OSError as exc:
+        raise _os_failure(exc) from exc
     typer.echo(f"wrote {_rel(target)}")
 
 
@@ -294,14 +302,19 @@ def texlog_cmd(
             "--max-overfull-pt", help="Fail an overfull \\hbox wider than this (pt). Otherwise only a warning."
         ),
     ] = None,
-    as_json: typing.Annotated[bool, typer.Option("--json", help="Emit machine-readable findings.")] = False,
+    as_json: typing.Annotated[bool, typer.Option("--json", help="Emit the findings as JSON.")] = False,
     quiet: QuietOpt = False,
 ) -> None:
     """Lint a LaTeX log: dropped characters, TeX errors, undefined references, substituted fonts, overfull boxes."""
     if not logs:
         typer.echo("no logs to lint", err=True)
         raise typer.Exit(1)
-    reports = [FileReport(path=log, findings=texlog.check_log(log, max_overfull_pt=max_overfull_pt)) for log in logs]
+    try:
+        reports = [
+            FileReport(path=log, findings=texlog.check_log(log, max_overfull_pt=max_overfull_pt)) for log in logs
+        ]
+    except OSError as exc:
+        raise _os_failure(exc) from exc
     if as_json:
         typer.echo(json.dumps([_as_record(r) for r in reports], indent=2))
     elif not quiet:
@@ -326,7 +339,7 @@ def preview_cmd(
     ] = True,
     safe_mm: typing.Annotated[
         float | None,
-        typer.Option("--safe", help="Also draw a safe-area guide this far inside the trim edge, in mm. No default."),
+        typer.Option("--safe", help="Also draw a safe-area guide this far inside the trim edge, in mm."),
     ] = None,
     out: typing.Annotated[
         pathlib.Path | None,
@@ -348,8 +361,10 @@ def preview_cmd(
         try:
             pngs = asyncio.run(preview.preview_file(target, dst, dpi=dpi, guides=guides, safe_mm=safe_mm))
         except (preview.UnreadablePdfError, ValueError) as exc:
-            typer.secho(f"FAIL -- cannot render {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
+            typer.secho(f"FAIL -- {_rel(target)}: {exc}", fg=typer.colors.RED, err=True)
             raise typer.Exit(1) from exc
+        except OSError as exc:
+            raise _os_failure(exc) from exc
         written += pngs
         if not quiet:
             for png in pngs:
@@ -383,6 +398,13 @@ def _print_inventory(facts: inventory.Inventory) -> None:
         typer.echo(f"  contrast {pair.text} on {pair.background}: {measure} ({pair.runs} run(s))")
     if facts.contrast_error:
         typer.echo(f"  contrast: not measured ({facts.contrast_error})")
+
+
+def _os_failure(exc: OSError) -> typer.Exit:
+    """Report a file that cannot be read or written in one line, and return the exit that ends the run."""
+    where = f"{_rel(pathlib.Path(exc.filename))}: " if exc.filename else ""
+    typer.secho(f"FAIL -- {where}{exc.strerror or exc}", fg=typer.colors.RED, err=True)
+    return typer.Exit(1)
 
 
 def _rel(path: pathlib.Path) -> str:

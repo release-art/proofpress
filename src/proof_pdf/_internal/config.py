@@ -63,8 +63,8 @@ def default_map(
     table = _tool_table(path) if path.name == _PYPROJECT else _read(path)
     if table is None:
         raise ConfigError(f"{path} has no [tool.proof-pdf] table")
-    if table.pop("schema", SCHEMA) != SCHEMA:
-        raise ConfigError(f"{path}: a schema other than {SCHEMA} is not one this proof-pdf reads")
+    if (schema := table.pop("schema", SCHEMA)) != SCHEMA:
+        raise ConfigError(f"{path}: schema {schema} is not supported; this proof-pdf reads schema {SCHEMA}")
     profiles = table.pop("profiles", {})
     selected = _select(profiles, profile, path)
     result: dict[str, dict[str, typing.Any]] = {}
@@ -81,7 +81,9 @@ def default_map(
 def _read(path: pathlib.Path) -> dict[str, typing.Any]:
     try:
         return tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+    except OSError as exc:
+        raise ConfigError(f"cannot read {path}: {exc.strerror or exc}") from exc
+    except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"cannot read {path}: {exc}") from exc
 
 
@@ -100,8 +102,9 @@ def _select(profiles: object, name: str | None, path: pathlib.Path) -> dict[str,
     chain: list[dict[str, typing.Any]] = []
     while name is not None:
         if not isinstance(profiles, dict) or name not in profiles:
-            known = ", ".join(sorted(profiles)) if isinstance(profiles, dict) and profiles else "none"
-            raise ConfigError(f"{path} has no profile {name!r} (profiles: {known})")
+            known = ", ".join(sorted(profiles)) if isinstance(profiles, dict) and profiles else ""
+            listed = f"profiles: {known}" if known else "it defines none"
+            raise ConfigError(f"{path} has no profile {name!r} ({listed})")
         if any(profile is profiles[name] for profile in chain):
             raise ConfigError(f"{path}: profile {name!r} extends itself")
         chain.append(profiles[name])
