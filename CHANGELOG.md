@@ -21,7 +21,8 @@ What existing users will notice, most important first (the entries below give th
   and -6 is checked or recorded as not checkable: the X-4 rules these levels share, and their own (`x13.*`, `x1a.*`,
   `x3.*`) on Info identification and `/Trapped`, the output intent and colour, transparency, the file structure,
   filters, image depth and optional content of these older PDF versions, file specifications, page boxes,
-  annotations, viewer preferences and font licences.
+  annotations, viewer preferences and font licences. A PDF/X-5 target claiming one of these levels is verified at it,
+  no longer reported as not evaluated.
 - **`/Trapped` is judged in the XMP** (`pdf:Trapped`), where ISO 15930-7 6.9 puts it; an Info `/Trapped` must agree.
 - **Damaged files are read strictly.** A file that pikepdf repaired silently now fails, with the reason; an encrypted
   file fails, even with an empty password. A damaged object or stream no longer stops the whole file: the rest is

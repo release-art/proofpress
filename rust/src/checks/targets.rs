@@ -105,7 +105,7 @@ struct Condition {
 #[derive(Clone)]
 enum Verified {
     Report(Box<Report>),
-    /// Its level is one this engine does not hold (X-1a, X-3; X5-Q9), or none 8.2 allows.
+    /// Its level is none 8.2 allows, or it claims none.
     Not(String),
     /// It loops back to a file already being verified.
     Cycle,
@@ -234,9 +234,6 @@ fn open(path: &Path, data: &[u8], settings: &Settings, limits: &Limits, chain: &
                 )))
             }
             None => Verified::Not(match &claim {
-                Some(c) if ALLOWED.contains(&c.as_str()) => {
-                    format!("{c} is not checked here, since its standard is not held")
-                }
                 Some(c) => format!("{c} is not a level a target may have"),
                 None => "it claims no PDF/X level".into(),
             }),
@@ -261,9 +258,13 @@ fn open(path: &Path, data: &[u8], settings: &Settings, limits: &Limits, chain: &
     }))
 }
 
-/// The level a claim is verified at, when this engine holds it.
+/// The level a claim is verified at: every level 8.2 allows a target (L-Q10).
 fn level(claim: &str) -> Option<Level> {
     match claim {
+        "PDF/X-1a:2001" => Some(Level::X1a2001),
+        "PDF/X-3:2002" => Some(Level::X32002),
+        "PDF/X-1a:2003" => Some(Level::X1a2003),
+        "PDF/X-3:2003" => Some(Level::X32003),
         "PDF/X-4" => Some(Level::X4),
         "PDF/X-4p" => Some(Level::X4p),
         "PDF/X-5g" => Some(Level::X5g),
@@ -778,7 +779,9 @@ mod tests {
         assert_eq!(identity[2], "object 29: the reference's /F names no file");
         assert_eq!(identity[3], "object 32: the reference's /F names no file");
         let conforms = messages(conforms(&doc, &settings, &set)).unwrap();
-        assert_eq!(conforms.len(), 3, "{conforms:?}");
+        // The X-3:2002 stub is verified at its level too (L-Q10), and fails it like the other stubs.
+        assert_eq!(conforms.len(), 4, "{conforms:?}");
+        assert!(conforms[3].contains("does not conform to PDF/X-3:2002"), "{conforms:?}");
         let levels = messages(conformance_level(&doc, &settings, &set)).unwrap();
         assert_eq!(
             levels.last().map(String::as_str),
@@ -786,6 +789,13 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn every_level_a_target_may_claim_is_verified() {
+        let levels: Vec<_> = ALLOWED.iter().map(|c| level(c)).collect();
+        assert!(levels.iter().all(Option::is_some), "{levels:?}");
+        assert_eq!(level("PDF/X-2"), None);
     }
 
     #[test]

@@ -14,7 +14,7 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 
 ## Status
 
-- Phases 0 and 1 are done. Phase 2 is in progress: 2.1-2.4 are done (every register row is `implemented` or `skip`); next is 2.5 (X-5 targets at these levels).
+- Phases 0 and 1 are done. Phase 2 is in progress: Phase 2 is done; phase 3 (fixtures, pdfToolbox comparison, corpus run, docs) is next.
 
 ## Done
 
@@ -29,6 +29,7 @@ Answered 2026-11-27 (end of phase 0), by the owner through the session that star
 | 2.2 | this commit | Transparency at the older levels (3 checks, `checks/transparency.rs`); 7 fixtures, `x13-transparency.feature` |
 | 2.3 | this commit | Cross-reference and object streams, filter lists, JBIG2, 16-bit images, optional content (7 checks, `checks/x13.rs`); 8 fixtures, `x13-structure-filters.feature` |
 | 2.4 | this commit | `/TR2`, file specifications, embedded files at X-1a:2001, trim inside crop and annotations at 2001/2002, viewer preferences, font embedding permission (7 checks); 7 fixtures, `x13-keys-boxes.feature` |
+| 2.5 | this commit | X-5 targets verified at the older level they claim (L-Q10); `x5g-target-x1a` now conforms |
 | 0.3 | test-db `156acfd5` | 88 claims in test-db, pdfToolbox passes 47; `docs/pdfx/x1a3-claims.csv` |
 
 ## Register coverage
@@ -40,7 +41,7 @@ content and 16-bit images from L-Q4, and the X-1a:2001 embedded-file warning) ar
 
 | Gate | Last result |
 |---|---|
-| `bin/rust/check.sh` | green, 2026-11-27, task 2.4 (100% lines, regions, functions) |
+| `bin/rust/check.sh` | green, 2026-11-27, task 2.5 (100% lines, regions, functions) |
 | `bin/docker/test.sh` | green at the end of phase 1, 2026-11-27: 965 passed |
 | `bin/suites/pdfx.sh` | end of phase 1, 2026-11-27: 39 files, 39 accepted, 0 problems |
 | Python (ruff, pyright, pytest) | green, 2026-11-27, task 2.4: 966 passed |

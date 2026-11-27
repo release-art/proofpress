@@ -1053,7 +1053,7 @@ expect = { "x5.g-same-printing-condition" = "the target's intent names FOGRA39 (
 [x5g-target-x1a]
 levels = ["x5g"]
 expect = { "x5.g-target-xmp-ids" = "an X-1a target without xmpMM:DocumentID, VersionID or RenditionClass (8.3)" }
-unjudged = { "x5.g-target-conforms" = "an X-1a target: its standard is not held (X5-Q9)" }
+# Verified at X-1a:2001 since L-Q10 (2026-11-27), where it conforms; before, not evaluated (X5-Q9).
 
 [x5g-target-x2]
 levels = ["x5g"]
