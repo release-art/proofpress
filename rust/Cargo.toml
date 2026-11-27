@@ -1,0 +1,100 @@
+[package]
+name = "proof-pdf"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.100"
+license = "Apache-2.0"
+description = "The Rust core of proof-pdf: a strict PDF reader and the print checks"
+repository = "https://github.com/release-art/proofpress"
+publish = false
+
+[lib]
+# cdylib for the Python extension (maturin, with the python feature), rlib for the tests and the command line.
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "proof-pdf"
+required-features = ["cli"]
+
+[features]
+# The Python module proof_pdf._core, built by maturin.
+python = ["dep:pyo3", "dep:serde_json", "cli", "preview", "extract"]
+# The proof-pdf command line (src/cli.rs, src/bin/proof-pdf.rs).
+# What `extract` recovers (src/extract.rs), with images written as PNG and TIFF.
+extract = ["dep:hayro-jbig2", "dep:png", "dep:serde_json", "dep:tiff", "tiff/deflate"]
+# Page previews rendered by hayro (src/preview.rs).
+preview = ["dep:hayro"]
+cli = ["dep:clap", "dep:globset", "dep:process-wrap", "dep:serde_json", "dep:tiff", "dep:toml"]
+
+[dependencies]
+clap = { version = "4.6", features = ["derive", "env"], optional = true }
+globset = { version = "0.4.22", optional = true }
+hayro = { version = "0.9.0", optional = true }
+hayro-ccitt = "0.5.0"
+hayro-cmap = "0.1.1"
+hayro-jbig2 = { version = "0.4.0", optional = true }
+hayro-jpeg2000 = { version = "0.5.0", default-features = false, features = ["std"] }
+lcms2 = { version = "6.3.0", features = ["static"] }
+md5 = "0.8.1"
+miniz_oxide = "0.9.1"
+png = { version = "0.18.1", optional = true }
+process-wrap = { version = "11", default-features = false, features = ["std", "process-group", "job-object", "kill-on-drop"], optional = true }
+pyo3 = { version = "0.30.1", optional = true }
+read-fonts = { version = "0.47.0", features = ["type1"] }
+roxmltree = "0.21.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", optional = true }
+tiff = { version = "0.11", default-features = false, optional = true }
+toml = { version = "1", optional = true }
+zune-jpeg = "0.5.15"
+
+[dev-dependencies]
+cucumber = "0.23.0"
+futures = "0.3.34"
+insta = { version = "1.49.0", features = ["json"] }
+mockall = "0.15.0"
+pretty_assertions = "1.4.1"
+proptest = "1.12.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+toml = "1.2.3"
+
+# Gherkin scenarios in tests/features. cucumber brings its own harness, which cargo-nextest cannot list, so the target is
+# left out of `cargo test` and run explicitly by bin/rust/check.sh.
+[[test]]
+name = "bdd"
+harness = false
+test = false
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+unreachable_pub = "deny"
+unused_qualifications = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+# A malformed PDF produces a finding, never a panic (house rule), so nothing in the library may panic on input.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+[lints.rustdoc]
+broken_intra_doc_links = "deny"
+
+[profile.release]
+# An overflow on hostile input panics (and becomes an internal finding) instead of wrapping into a wrong answer.
+overflow-checks = true
+
+[build-dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.2.3"
+

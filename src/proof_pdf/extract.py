@@ -19,7 +19,6 @@ import collections
 import collections.abc
 import dataclasses
 import hashlib
-import io
 import json
 import logging
 import pathlib
@@ -27,29 +26,15 @@ import re
 import shutil
 import typing
 
-import pikepdf
-from PIL import ImageCms
-
 from ._internal import (
-    contrast,
+    _core,
     interactive,
-    spots,
-    structure,
     tables as table_finder,
     tagged as tagged_reader,
     xmp,
 )
-from ._internal.paint import Fill, Paint, Walker
 from ._internal.previews import build as build_previews
-from ._internal.spaces import (
-    CMYK,
-    GRAY,
-    RGB,
-    classify_colour_space,
-    output_intents,
-    reachable as _objects,
-)
-from ._internal.vector import INVISIBLE, Group, artwork
+from ._internal.vector import INVISIBLE, Group, Label, Shape, artwork
 from .inventory import inspect_pdf
 from .layout import Figure, Layout, Line, Table, analyse
 
@@ -73,10 +58,21 @@ JOIN_PT = 0.5
 LINE_GAP_EM = 0.5
 SPACE_EM = 0.15
 
-_FONT_FILES = {"/FontFile": ".t1", "/FontFile2": ".ttf", "/FontFile3": ".cff"}
-_OPENTYPE = "/OpenType"
+_FONT_FILES = {"FontFile": ".t1", "FontFile2": ".ttf", "FontFile3": ".cff"}
 _SUBSET_PREFIX = re.compile(r"^[A-Z]{6}\+")
-_ERRORS = (pikepdf.PdfError, NotImplementedError, ValueError, OSError, TypeError, KeyError, IndexError)
+_ERRORS = (NotImplementedError, ValueError, OSError, TypeError, KeyError, IndexError)
+
+
+@dataclasses.dataclass(frozen=True)
+class _CoreFacts:
+    """What the Rust core read (``_core.extract``): the facts, and the recovered files' bytes they index."""
+
+    facts: dict[str, typing.Any]
+    blobs: list[bytes]
+
+    def blob(self, ref: dict[str, typing.Any]) -> bytes | str:
+        """The bytes a blob reference names, or the reason they could not be read."""
+        return self.blobs[ref["data"]] if "data" in ref else ref["error"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -176,7 +172,6 @@ def extract_pdf(
     vector_text: bool = True,
     previews: bool = False,
     preview_dpi: int = DEFAULT_PREVIEW_DPI,
-    gs_bin: str = "gs",
 ) -> Extraction:
     """Write *path*'s assets of the given *kinds* into *out_dir* with ``document.json``, and return what was found.
 
@@ -185,53 +180,58 @@ def extract_pdf(
     With *vector_text*, text lying on a piece of vector artwork is drawn into the piece (and listed in its ``text``)
     as well as being recovered as text; without it the pieces are the drawn shapes alone.
 
-    With *previews*, also render ``previews/index.html``, a review page of the pages with every asset boxed on them,
-    which needs Ghostscript and raises :class:`proof_pdf.preview.GhostscriptError` without it. It runs its own event
-    loop, so call it from a thread when already inside one.
+    With *previews*, also render ``previews/index.html``, a review page of the pages with every asset boxed on them.
+    It runs its own event loop, so call it from a thread when already inside one.
 
-    Raises :class:`pikepdf.PdfError` for a file that will not open. An asset that cannot be recovered is listed in
-    :attr:`Extraction.failures` and the rest carry on.
+    Raises :class:`proof_pdf.inventory.UnreadablePdfError` for a file the core refuses to read (damaged beyond its
+    objects, or encrypted). An asset that cannot be recovered is listed in :attr:`Extraction.failures` and the rest
+    carry on.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     failures: list[str] = []
-    with pikepdf.open(path) as pdf:
-        tagged = tagged_reader.read(pdf)
-        recovered = _Recovery(pdf, out_dir, failures, vector_text, tagged)
-        for number, page in enumerate(pdf.pages, start=1):
-            recovered.page(number, page, "images" in kinds, "vector" in kinds, gap_pt, max_fraction)
-        if "images" in kinds:
-            recovered.unplaced_images()
-        if "fonts" in kinds:
-            recovered.fonts()
-        intents = recovered.profiles() if "icc" in kinds else []
-        lines = _lines(recovered.text)
-        spot_colours = _spot_colours(pdf, recovered.pages)
-        boxes = _merge_boxes(recovered.boxes)
-        tables = _tables(lines, boxes, recovered.pages)
-        layout = analyse(lines, _figures(recovered.assets), recovered.pages, tables)
-        result = Extraction(
-            path=str(path),
-            out_dir=str(out_dir),
-            pages=recovered.pages,
-            metadata=_metadata(pdf, out_dir, failures),
-            output_intents=intents,
-            assets=recovered.assets,
-            text=recovered.text,
-            lines=lines,
-            boxes=boxes,
-            layout=layout,
-            palette=_palette(boxes, layout, spot_colours, recovered.artwork_colours),
-            spot_colours=spot_colours,
-            structure=_structure(tagged, recovered.text, recovered.marked_boxes),
-            interactive=interactive.collect(pdf, out_dir, failures),
-            inventory=inspect_pdf(path, with_contrast=False).to_dict(),
-            notes=_notes(recovered.text),
-            failures=failures,
-        )
+    data = path.read_bytes()
+    raw, blobs = _core.extract(data, "images" in kinds, "vector" in kinds)
+    core = _CoreFacts(json.loads(raw), blobs)
+    # What the core could not read is missing from everything below, so say so.
+    failures += [f"reading the file: {problem}" for problem in core.facts["damage"]]
+    tagged = tagged_reader.from_core(core.facts["structure"])
+    recovered = _Recovery(out_dir, failures, vector_text, tagged, core, data)
+    for facts in core.facts["pages"]:
+        recovered.page(facts, "images" in kinds, "vector" in kinds, gap_pt, max_fraction)
+    if "images" in kinds:
+        recovered.unplaced_images()
+    if "fonts" in kinds:
+        recovered.fonts(core)
+    intents = recovered.profiles(core) if "icc" in kinds else []
+    lines = _lines(recovered.text)
+    spot_colours = _spot_colours(core.facts["spot_colours"], recovered.pages)
+    boxes = _merge_boxes(recovered.boxes)
+    tables = _tables(lines, boxes, recovered.pages)
+    layout = analyse(lines, _figures(recovered.assets), recovered.pages, tables)
+    result = Extraction(
+        path=str(path),
+        out_dir=str(out_dir),
+        pages=recovered.pages,
+        metadata=_metadata(core, out_dir, failures),
+        output_intents=intents,
+        assets=recovered.assets,
+        text=recovered.text,
+        lines=lines,
+        boxes=boxes,
+        layout=layout,
+        palette=_palette(boxes, layout, spot_colours, recovered.artwork_colours),
+        spot_colours=spot_colours,
+        structure=_structure(tagged, recovered.text, recovered.marked_boxes),
+        interactive=interactive.from_core(core.facts["interactive"], core.blobs, out_dir, failures),
+        inventory=inspect_pdf(path, with_contrast=False).to_dict(),
+        notes=_notes(recovered.text),
+        failures=failures,
+    )
     if previews:
         shutil.rmtree(out_dir / "previews", ignore_errors=True)  # ours, and stale pages would be listed as current
+        images = {asset.file: key[1] for key, asset in recovered.by_key.items() if key[0] == "image"}
         result.previews, problems = asyncio.run(
-            build_previews(result.to_dict(), path, out_dir, dpi=preview_dpi, gs_bin=gs_bin)
+            build_previews(result.to_dict(), path, images, out_dir, dpi=preview_dpi)
         )
         failures += problems
     (out_dir / "document.json").write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
@@ -241,13 +241,14 @@ def extract_pdf(
 class _Recovery:
     def __init__(
         self,
-        pdf: pikepdf.Pdf,
         out_dir: pathlib.Path,
         failures: list[str],
         vector_text: bool = True,
         tagged: tagged_reader.Tagged | None = None,
+        core: "_CoreFacts | None" = None,
+        data: bytes = b"",
     ) -> None:
-        self.pdf, self.out, self.failures = pdf, out_dir, failures
+        self.out, self.failures = out_dir, failures
         self.vector_text = vector_text
         self.tagged = tagged
         self.marked_boxes: list[tuple[int, int, tuple[float, float, float, float]]] = []  # (page, MCID, box) of figures
@@ -256,65 +257,95 @@ class _Recovery:
         self.boxes: list[Box] = []
         self.artwork_colours: dict[str, float] = {}  # colour -> area of the vector artwork painted in it
         self.pages: list[dict[str, typing.Any]] = []
-        self._by_key: dict[typing.Any, Asset] = {}  # the same image or artwork placed again adds a placement
-        self._masks: set[tuple[int, int]] = set()  # soft masks, saved beside the image they belong to
+        self.by_key: dict[typing.Any, Asset] = {}  # the same image or artwork placed again adds a placement
+        self._masks: set[int] = set()  # soft masks' object numbers, saved beside the image they belong to
+        self.core = core
+        self.data = data
+        self._images = {image["num"]: image for image in core.facts["images"]} if core else {}
+        self._paints: dict[int, list[dict[str, typing.Any]]] = {}
+        for index, paint in enumerate(core.facts["paints"] if core else []):
+            self._paints.setdefault(paint["page"], []).append({**paint, "index": index})
+        self._shapes: dict[int, list[Shape]] = {}
+        for shape in core.facts["shapes"] if core else []:
+            self._shapes.setdefault(shape["page"], []).append(
+                Shape(
+                    tuple((op, tuple(operands)) for op, operands in shape["path"]),
+                    tuple(shape["ctm"]),
+                    tuple(shape["bbox"]),
+                    shape["index"],
+                    shape["mcid"],
+                    shape["width"],
+                    shape["fill"],
+                    shape["stroke"],
+                )
+            )
+        self._spot_inks: dict[str, list[str]] = core.facts["spot_inks"] if core else {}
         self._font_pages: dict[str, set[int]] = {}
 
-    def page(self, number: int, page: pikepdf.Page, images: bool, vector: bool, gap_pt: float, fraction: float) -> None:
-        media = structure.media_box(page.obj)
+    def page(
+        self,
+        facts: dict[str, typing.Any],
+        images: bool,
+        vector: bool,
+        gap_pt: float,
+        fraction: float,
+    ) -> None:
+        number, media = facts["number"], facts["media_pt"]
         self.pages.append(
             {
                 "number": number,
-                "rotate": int(page.obj.get("/Rotate", 0)),
+                "rotate": facts["rotate"],
                 "width_pt": media[2] - media[0] if media else None,
                 "height_pt": media[3] - media[1] if media else None,
                 "media_pt": media,
-                **{
-                    f"{key}_pt": structure.own_box(page.obj, f"{key.capitalize()}Box")
-                    for key in ("crop", "bleed", "trim", "art")
-                },
+                **{f"{key}_pt": facts[f"{key}_pt"] for key in ("crop", "bleed", "trim", "art")},
             }
         )
-        walker = Walker()
-        texts: list[Paint] = []
-        for event in walker.walk(page):
-            if event.bbox is None:
+        for paint in self._paints.get(number, []):
+            if paint["bbox"] is None:
                 continue
-            x0, y0, x1, y1 = event.bbox
-            if event.kind == "text" and event.glyphs and event.font is not None and (event.text or "x").strip():
-                self.text.append(self._text_run(number, event))
-                self._font_pages.setdefault(event.font.name, set()).add(number)
-                texts.append(event)
-            elif event.kind == "image" and images and event.xobject is not None:
-                placement = Placement(number, x0, y0, x1 - x0, y1 - y0, list(event.matrix) if event.matrix else None)
-                self._image(number, typing.cast(pikepdf.Stream, event.xobject), placement, event)
-        self.pages[-1]["spot_inks"] = sorted(walker.spots)
+            x0, y0, x1, y1 = paint["bbox"]
+            if paint["kind"] == "text" and paint["glyphs"] and (paint["text"] or "x").strip():
+                self.text.append(self._text_run(number, paint))
+                self._font_pages.setdefault(paint["font"], set()).add(number)
+            elif paint["kind"] == "image" and images:
+                placement = Placement(number, x0, y0, x1 - x0, y1 - y0, paint["matrix"])
+                self._image(number, paint["image"], placement, paint)
+        self.pages[-1]["spot_inks"] = sorted(self._spot_inks.get(str(number), []))
         if vector:
-            self._vector(number, page, gap_pt, fraction, texts if self.vector_text else [])
+            labels = [
+                Label(tuple(p["bbox"]), p["tf_size"], p["index"], p["text"])
+                for p in self._paints.get(number, [])
+                if p["kind"] == "text"
+                and p["bbox"] is not None
+                and p["glyphs"]
+                and (p["text"] or "x").strip()
+                and p["render_mode"] != INVISIBLE
+            ]
+            self._vector(number, media, gap_pt, fraction, labels if self.vector_text else [])
 
-    def _text_run(self, number: int, event: Paint) -> TextRun:
-        assert event.bbox is not None and event.font is not None
-        x0, y0, x1, y1 = event.bbox
-        element = self.tagged.at(number, event.mcid) if self.tagged else None
+    def _text_run(self, number: int, paint: dict[str, typing.Any]) -> TextRun:
+        x0, y0, x1, y1 = paint["bbox"]
+        element = self.tagged.at(number, paint["mcid"]) if self.tagged else None
         return TextRun(
             number,
-            event.text,
-            list(event.codes) if event.text is None else None,
+            paint["text"],
+            paint["codes"],
             x0,
             y0,
             x1 - x0,
             y1 - y0,
-            event.font.name,
-            event.size,
-            contrast.describe(event.fill),
-            round(event.rotation, 2),
-            round(event.h_scale, 4),
-            round(event.char_spacing, 4),
-            event.render_mode == INVISIBLE,
-            event.mcid,
+            paint["font"],
+            paint["size"],
+            paint["colour"],
+            round(paint["rotation"], 2),
+            round(paint["h_scale"], 4),
+            round(paint["char_spacing"], 4),
+            paint["render_mode"] == INVISIBLE,
+            paint["mcid"],
             self.tagged.elements[element.block].role if element and self.tagged else None,
             element.block if element else None,
-            event.artifact,
+            paint["artifact"],
         )
 
     def _annotate(
@@ -333,70 +364,59 @@ class _Recovery:
     def _add(
         self, key: typing.Any, make: collections.abc.Callable[[], Asset | None], placement: Placement | None = None
     ) -> Asset | None:
-        asset = self._by_key.get(key)
+        asset = self.by_key.get(key)
         if asset is None:
             asset = make()
             if asset is None:
                 return None
-            self._by_key[key] = asset
+            self.by_key[key] = asset
             self.assets.append(asset)
         if placement is not None:
             asset.placements.append(placement)
         return asset
 
-    def _image(self, number: int, obj: pikepdf.Stream, placement: Placement, event: Paint) -> None:
-        objnum = obj.objgen[0]
-        key = ("image", obj.objgen if objnum else id(obj))
-        asset = self._add(key, lambda: self._write_image(number, obj, objnum or len(self.assets)), placement)
-        self._annotate(asset, number, [event.mcid], event.artifact)
-        if event.mcid is not None and event.bbox is not None:
-            self.marked_boxes.append((number, event.mcid, event.bbox))
+    def _image(self, number: int, num: int, placement: Placement, paint: dict[str, typing.Any]) -> None:
+        asset = self._add(("image", num), lambda: self._write_image(number, num, num), placement)
+        self._annotate(asset, number, [paint["mcid"]], paint["artifact"])
+        if paint["mcid"] is not None:
+            self.marked_boxes.append((number, paint["mcid"], tuple(paint["bbox"])))
 
     def unplaced_images(self) -> None:
         """Images stored in the file that no page paints (left over in a form or resource dictionary)."""
-        for obj in _objects(self.pdf):
-            if (
-                isinstance(obj, pikepdf.Stream)
-                and str(obj.get("/Subtype")) == "/Image"
-                and obj.objgen not in self._masks | {(0, 0)}
-            ):
-                self._add(("image", obj.objgen), lambda obj=obj: self._write_image(0, obj, obj.objgen[0]))
+        for num in self._images:
+            if num not in self._masks:
+                self._add(("image", num), lambda num=num: self._write_image(0, num, num))
 
-    def _write_image(self, number: int, obj: pikepdf.Stream, serial: int) -> Asset | None:
-        stem = self.out / "images" / f"{f'p{number:03d}' if number else 'unplaced'}-im{serial}"
-        try:
-            stem.parent.mkdir(exist_ok=True)
-            image = pikepdf.PdfImage(obj)
-            written = pathlib.Path(image.extract_to(fileprefix=str(stem)))
-            mask = obj.get("/SMask")
-            if mask is not None:
-                self._masks.add(mask.objgen)
-                pikepdf.PdfImage(typing.cast(pikepdf.Stream, mask)).as_pil_image().save(
-                    stem.with_name(stem.name + ".mask.png")
-                )
-        except _ERRORS as exc:
-            self.failures.append(f"page {number}: image {serial}: {exc}")
+    def _write_image(self, number: int, num: int, serial: int) -> Asset | None:
+        """Write the image the core wrote out as object *num*, and its soft mask beside it."""
+        image = self._images.get(num)
+        data = self.core.blob(image["data"]) if image and self.core else "it cannot be read"
+        if isinstance(data, str) or image is None or self.core is None:
+            self.failures.append(f"page {number}: image {serial}: {data}")
             return None
+        stem = self.out / "images" / f"{f'p{number:03d}' if number else 'unplaced'}-im{serial}"
+        stem.parent.mkdir(exist_ok=True)
+        written = stem.with_name(f"{stem.name}.{image['extension']}")
+        written.write_bytes(data)
+        if image["mask"] is not None:
+            mask_num, extension, blob = image["mask"]
+            self._masks.add(mask_num)
+            mask = self.core.blob(blob)
+            if isinstance(mask, str):
+                self.failures.append(f"page {number}: image {serial}: soft mask: {mask}")
+            else:
+                stem.with_name(f"{stem.name}.mask.{extension}").write_bytes(mask)
         return Asset(
             "image",
             written.relative_to(self.out).as_posix(),
             [],
-            {
-                "pixels": [int(obj.get("/Width", 0)), int(obj.get("/Height", 0))],
-                "colour_space": classify_colour_space(obj.get("/ColorSpace"), None),
-                "bits": int(obj.get("/BitsPerComponent", 0)),
-                "filters": _filters(obj),
-                "stencil": bool(obj.get("/ImageMask", False)),
-                "soft_mask": mask is not None,
-            },
+            {key: image[key] for key in ("pixels", "colour_space", "bits", "filters", "stencil", "soft_mask")},
         )
 
-    def _vector(self, number: int, page: pikepdf.Page, gap_pt: float, fraction: float, texts: list[Paint]) -> None:
-        try:
-            found, boxes = artwork(page, gap_pt=gap_pt, max_fraction=fraction, texts=texts)
-        except _ERRORS as exc:
-            self.failures.append(f"page {number}: vector artwork: {exc}")
-            return
+    def _vector(
+        self, number: int, media: list[float] | None, gap_pt: float, fraction: float, labels: list[Label]
+    ) -> None:
+        found, boxes = artwork(media, self._shapes.get(number, []), gap_pt=gap_pt, max_fraction=fraction, labels=labels)
         for box in boxes:
             x0, y0, x1, y1 = box.bbox
             self.boxes.append(
@@ -415,14 +435,15 @@ class _Recovery:
                     _describe(box.stroke),
                 )
             )
-        for index, group in enumerate(found, start=1):
+        raw, blobs = _core.vector_pieces(self.data, json.dumps([group.request(number) for group in found]))
+        for index, (group, piece) in enumerate(zip(found, json.loads(raw), strict=True), start=1):
             self._note_colours(group)
             x0, y0, x1, y1 = group.bbox
-            try:
-                digest, data = group.render()
-            except _ERRORS as exc:
-                self.failures.append(f"page {number}: vector group at ({x0:.1f}, {y0:.1f}): {exc}")
-                continue
+            # The digest is of the content and the resources it names, so the same artwork gives the same digest
+            # wherever it sits, and artwork sharing a resource keeps one digest while a different one never collides.
+            keys = repr(sorted(tuple(key) for key in piece["keys"])).encode()
+            digest = hashlib.sha1(blobs[piece["content"]] + keys).hexdigest()
+            data = blobs[piece["pdf"]]
             asset = self._add(
                 ("vector", digest),
                 lambda data=data, digest=digest, group=group, name=f"p{number:03d}-v{index:02d}": self._write_vector(
@@ -448,95 +469,72 @@ class _Recovery:
             "vector", target.relative_to(self.out).as_posix(), [], {"shapes": shapes, "digest": digest, "text": text}
         )
 
-    def fonts(self) -> None:
-        for obj in _objects(self.pdf):
-            if not isinstance(obj, pikepdf.Dictionary) or str(obj.get("/Type")) != "/FontDescriptor":
+    def fonts(self, core: "_CoreFacts") -> None:
+        for font in core.facts["fonts"]:
+            full = (font["font_name"] or "unnamed").lstrip("/")
+            name = _SUBSET_PREFIX.sub("", full)
+            kind = font["subtype"] or ""
+            suffix = _FONT_FILES[font["key"]]
+            if font["key"] == "FontFile3":
+                suffix = ".otf" if kind == "OpenType" else ".cff"
+            program = core.blob(font["program"])
+            if isinstance(program, str):
+                self.failures.append(f"font {full}: {program}")
                 continue
-            for key, suffix in _FONT_FILES.items():
-                program = obj.get(key)
-                if program is None:
-                    continue
-                full = str(obj.get("/FontName", "unnamed")).lstrip("/")
-                name = _SUBSET_PREFIX.sub("", full)
-                kind = str(program.get("/Subtype", "")).lstrip("/")
-                if key == "/FontFile3":
-                    suffix = ".otf" if f"/{kind}" == _OPENTYPE else ".cff"
-                self._add(
-                    ("font", program.objgen),
-                    lambda program=program, full=full, name=name, kind=kind, suffix=suffix, d=obj: self._write_font(
-                        program, full, name, kind, suffix, _descriptor_facts(d, name)
-                    ),
-                )
-        for asset in self.assets:
-            if asset.kind == "font":  # a font has no position; the pages that set text in it go in the details
-                asset.details["pages"] = sorted(self._font_pages.get(asset.details["name"], ()))
-
-    def _write_font(
-        self, program: pikepdf.Object, full: str, name: str, kind: str, suffix: str, descriptor: dict[str, typing.Any]
-    ) -> Asset | None:
-        target = self.out / "fonts" / f"{_slug(full)}{suffix}"
-        try:
+            target = self.out / "fonts" / f"{_slug(full)}{suffix}"
             target.parent.mkdir(exist_ok=True)
-            target.write_bytes(bytes(program.read_bytes()))
-        except _ERRORS as exc:
-            self.failures.append(f"font {full}: {exc}")
-            return None
-        return Asset(
-            "font",
-            target.relative_to(self.out).as_posix(),
-            [],
-            {
+            target.write_bytes(program)
+            details = {
                 "name": name,
                 "full_name": full,
                 "subset": full != name,
                 "program": kind or suffix.lstrip("."),
-                "descriptor": descriptor,
-            },
-        )
+                "descriptor": _descriptor_facts(font["descriptor"], name),
+            }
+            self.assets.append(Asset("font", target.relative_to(self.out).as_posix(), [], details))
+        for asset in self.assets:
+            if asset.kind == "font":  # a font has no position; the pages that set text in it go in the details
+                asset.details["pages"] = sorted(self._font_pages.get(asset.details["name"], ()))
 
-    def profiles(self) -> list[dict[str, typing.Any]]:
+    def profiles(self, core: "_CoreFacts") -> list[dict[str, typing.Any]]:
         """Write every ICC profile (output intents and ICCBased spaces); return the output intents."""
         written: dict[str, dict[str, typing.Any]] = {}
-
-        def save(stream: pikepdf.Object, role: str) -> dict[str, typing.Any] | None:
-            try:
-                data = bytes(stream.read_bytes())
-            except _ERRORS as exc:
-                self.failures.append(f"ICC profile: {exc}")
-                return None
+        saved: list[dict[str, typing.Any] | None] = []
+        for profile in core.facts["profiles"]:
+            data = core.blob(profile["data"])
+            if isinstance(data, str):
+                self.failures.append(f"ICC profile: {data}")
+                saved.append(None)
+                continue
             digest = hashlib.sha1(data).hexdigest()
             if digest not in written:
-                description = _profile_description(data)
+                description = profile["description"]
                 target = self.out / "icc" / f"{_slug(description or 'profile')}-{digest[:8]}.icc"
                 target.parent.mkdir(exist_ok=True)
                 target.write_bytes(data)
                 written[digest] = {
                     "file": target.relative_to(self.out).as_posix(),
                     "description": description,
-                    "components": int(stream.get("/N", 0)),
+                    "components": int(profile["components"] or 0),
                     "roles": [],
                 }
                 self.assets.append(Asset("icc", written[digest]["file"], [], written[digest]))
-            if role not in written[digest]["roles"]:
-                written[digest]["roles"].append(role)
-            return written[digest]
-
+            if profile["role"] not in written[digest]["roles"]:
+                written[digest]["roles"].append(profile["role"])
+            saved.append(written[digest])
         intents = []
-        for intent in output_intents(self.pdf):
-            profile = intent.get("/DestOutputProfile")
-            saved = save(profile, "output intent") if profile is not None else None
+        for intent in core.facts["output_intents"]:
+            index = intent["profile"]
+            entry = saved[index] if index is not None else None
             intents.append(
                 {
-                    "subtype": str(intent.get("/S", "")).lstrip("/"),
-                    "output_condition_identifier": _text(intent.get("/OutputConditionIdentifier")),
-                    "output_condition": _text(intent.get("/OutputCondition")),
-                    "registry": _text(intent.get("/RegistryName")),
-                    "profile": saved["file"] if saved else None,
+                    "subtype": intent["subtype"] or "",
+                    "output_condition_identifier": intent["output_condition_identifier"],
+                    "output_condition": intent["output_condition"],
+                    "registry": intent["registry"],
+                    "profile": entry["file"] if entry else None,
                 }
             )
-        for obj in _objects(self.pdf):
-            if isinstance(obj, pikepdf.Array) and len(obj) == 2 and str(obj[0]) == "/ICCBased":
-                save(obj[1], "colour space")
         return intents
 
 
@@ -649,26 +647,26 @@ _BOLD_WORDS = re.compile(r"bold|black|heavy|demi|semibold", re.IGNORECASE)
 _ITALIC_WORDS = re.compile(r"italic|oblique|slanted", re.IGNORECASE)
 
 
-def _descriptor_facts(descriptor: pikepdf.Object, name: str) -> dict[str, typing.Any]:
+def _descriptor_facts(descriptor: dict[str, typing.Any], name: str) -> dict[str, typing.Any]:
     """What a font descriptor says about the face: its flags, weight, slant and metrics (1000-unit em), with bold and
     italic worked out from the flags, the numbers and, failing those, the name."""
-    flags = int(descriptor.get("/Flags", 0))
+    flags = int(descriptor["flags"] or 0)
     named = [label for bit, label in _FONT_FLAGS.items() if flags & (1 << (bit - 1))]
-    weight, angle = descriptor.get("/FontWeight"), float(descriptor.get("/ItalicAngle", 0) or 0)
+    weight, angle = descriptor["weight"], float(descriptor["italic_angle"] or 0)
     facts: dict[str, typing.Any] = {
-        "family": _text(descriptor.get("/FontFamily")),
+        "family": descriptor["family"],
         "weight": int(weight) if weight is not None else None,
-        "stretch": _text(descriptor.get("/FontStretch")),
+        "stretch": descriptor["stretch"],
         "italic_angle": angle,
         "flags": named,
         "bold": "force-bold" in named or (weight is not None and int(weight) >= 700) or bool(_BOLD_WORDS.search(name)),
         "italic": "italic" in named or angle != 0 or bool(_ITALIC_WORDS.search(name)),
-        "ascent": _number(descriptor.get("/Ascent")),
-        "descent": _number(descriptor.get("/Descent")),
-        "cap_height": _number(descriptor.get("/CapHeight")),
-        "x_height": _number(descriptor.get("/XHeight")),
-        "stem_v": _number(descriptor.get("/StemV")),
-        "bbox": [float(v) for v in descriptor["/FontBBox"]] if "/FontBBox" in descriptor else None,
+        "ascent": descriptor["ascent"],
+        "descent": descriptor["descent"],
+        "cap_height": descriptor["cap_height"],
+        "x_height": descriptor["x_height"],
+        "stem_v": descriptor["stem_v"],
+        "bbox": descriptor["bbox"],
     }
     return {k: v for k, v in facts.items() if v is not None}
 
@@ -680,22 +678,22 @@ def _number(value: typing.Any) -> float | None:
         return None
 
 
-def _metadata(pdf: pikepdf.Pdf, out_dir: pathlib.Path, failures: list[str]) -> dict[str, typing.Any]:
+def _metadata(core: "_CoreFacts", out_dir: pathlib.Path, failures: list[str]) -> dict[str, typing.Any]:
     """The document info, and the XMP packet both saved as ``xmp.xml`` and decoded (long values, such as embedded
     thumbnails, are left in the file and named in the data)."""
-    info = {str(k).lstrip("/"): str(v) for k, v in pdf.docinfo.items()}
-    packet = pdf.Root.get("/Metadata")
     decoded: dict[str, typing.Any] | None = None
     saved = None
-    if packet is not None:
+    if core.facts["xmp"] is not None:
+        data = core.blob(core.facts["xmp"])
         try:
-            data = bytes(packet.read_bytes())
+            if isinstance(data, str):
+                raise ValueError(data)
             (out_dir / "xmp.xml").write_bytes(data)
             saved = "xmp.xml"
             decoded = _elide(xmp.parse(data))
         except (*_ERRORS, ValueError) as exc:
             failures.append(f"XMP metadata: {exc}")
-    return {"pdf_version": pdf.pdf_version, "info": info, "xmp": decoded, "xmp_file": saved}
+    return {"pdf_version": core.facts["pdf_version"], "info": core.facts["info"], "xmp": decoded, "xmp_file": saved}
 
 
 def _elide(value: typing.Any) -> typing.Any:
@@ -717,7 +715,7 @@ def _figures(assets: list[Asset]) -> list[Figure]:
     ]
 
 
-_CONTENT_COLOURS = {"g": GRAY, "G": GRAY, "rg": RGB, "RG": RGB, "k": CMYK, "K": CMYK}
+_CONTENT_COLOURS = {"g": 1, "G": 1, "rg": 3, "RG": 3, "k": 4, "K": 4}  # the operator and its components
 
 
 def _describe(raw: str | None) -> str | None:
@@ -728,12 +726,22 @@ def _describe(raw: str | None) -> str | None:
         name, _, tint = raw.removeprefix("spot ").rpartition(" ")
         return f"spot {name} {round(float(tint) * 100)}%" if name else raw
     operator, *operands = raw.split()
-    family = _CONTENT_COLOURS.get(operator)
+    components = _CONTENT_COLOURS.get(operator)
     try:
-        values = tuple(float(v) for v in operands)
+        values = [float(v) for v in operands]
     except ValueError:
         return raw
-    return contrast.describe(Fill(family, values)) if family else raw
+    if components is None:
+        return raw
+    if len(values) < components:
+        return "a spot or pattern colour"
+    if components == 4:
+        c, m, y, k = (round(v * 100) for v in values[:4])
+        return f"C{c} M{m} Y{y} K{k}"
+    if components == 1:
+        return f"gray {round(values[0] * 100)}%"
+    r, g, b = (round(v * 255) for v in values[:3])
+    return f"RGB({r},{g},{b})"
 
 
 def _structure(
@@ -798,15 +806,13 @@ def _tables(lines: list[Line], boxes: list[Box], pages: list[dict[str, typing.An
     return found
 
 
-def _spot_colours(pdf: pikepdf.Pdf, pages: list[dict[str, typing.Any]]) -> list[dict[str, typing.Any]]:
+def _spot_colours(
+    found: list[dict[str, typing.Any]], pages: list[dict[str, typing.Any]]
+) -> list[dict[str, typing.Any]]:
+    """The core's spot colours (``alternate`` is that space's components at full tint, e.g. CMYK 0..1 or Lab), each
+    with the pages that select it."""
     return [
-        {
-            "names": list(spot.names),
-            "alternate_space": spot.alternate_space,
-            "alternate": spot.alternate,  # components of that space at full tint, e.g. CMYK 0..1 or Lab
-            "pages": [p["number"] for p in pages if set(spot.names) & set(p["spot_inks"])],
-        }
-        for spot in spots.find(_objects(pdf))
+        {**spot, "pages": [p["number"] for p in pages if set(spot["names"]) & set(p["spot_inks"])]} for spot in found
     ]
 
 
@@ -837,24 +843,6 @@ def _palette(
         for colour, used in uses.items()
     ]
     return sorted(palette, key=lambda e: (-e["panel_area_pt2"] - e["artwork_area_pt2"], -e["text_chars"]))
-
-
-def _filters(obj: pikepdf.Object) -> list[str]:
-    value = obj.get("/Filter")
-    if value is None:
-        return []
-    return [str(f).lstrip("/") for f in (value if isinstance(value, pikepdf.Array) else [value])]
-
-
-def _profile_description(data: bytes) -> str | None:
-    try:
-        return ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(data))).strip() or None
-    except ImageCms.PyCMSError, OSError, ValueError, TypeError:
-        return None
-
-
-def _text(value: pikepdf.Object | None) -> str | None:
-    return None if value is None else str(value)
 
 
 def _slug(name: str) -> str:

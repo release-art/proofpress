@@ -1,14 +1,16 @@
-"""The artwork-bleed check, and the clip tracking it relies on."""
+"""The artwork-bleed check, and the clip tracking it relies on (the walk's own clip tests are in the core)."""
 
+import asyncio
+import dataclasses
 import pathlib
+import re
 
 import pikepdf
 import pytest
 
-from proof_pdf._internal import paint, structure
 from proof_pdf.models import PageGeometry, Severity
 
-from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W
+from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W, core_findings, core_run
 
 T = BLEED  # the trim's lower-left corner, in points
 TR, TT = BLEED + TRIM_W, BLEED + TRIM_H  # and its upper-right
@@ -32,7 +34,7 @@ def _pdf(tmp_path, stream: bytes, *, boxes=None, rotate: int = 0, make_form=None
 
 def _check(path):
     with pikepdf.open(path) as pdf:
-        return structure.check_artwork_bleed(pdf)
+        return core_findings(pdf, {"artwork-bleed"})
 
 
 def _rect(x0, y0, x1, y1, op=b"f") -> bytes:
@@ -59,7 +61,7 @@ class TestCoverage:
         [finding] = _check(_pdf(tmp_path, b"0.9 g " + _rect(*rect)))
         assert finding.check == "artwork-bleed" and finding.severity is Severity.ERROR and finding.page == 1
         assert f"{side}: 1 object(s)" in finding.message and "0.0 mm of the 3.0 mm" in finding.message
-        assert "artwork must run to the bleed edge" in finding.message
+        assert "extend them to the bleed edge" in finding.message
 
     def test_partial_bleed_reports_how_far_it_got(self, tmp_path):
         [finding] = _check(_pdf(tmp_path, b"0.9 g " + _rect(T - 1.2 * MM, 0, MEDIA_W, MEDIA_H)))
@@ -134,18 +136,6 @@ class TestClipping:
         triangle = b"%f %f m %f %f l %f %f l h W n " % (T, T, TR, T, TR, TT)
         assert len(_check(_pdf(tmp_path, b"q " + triangle + b"0.9 g " + FULL + b"Q"))) == 1
 
-    def test_visible_is_the_bbox_cut_to_the_clip_and_the_bbox_is_unchanged(self, tmp_path):
-        path = _pdf(tmp_path, b"q 10 10 50 50 re W n 0 0 100 100 re f Q 0 0 100 100 re f")
-        with pikepdf.open(path) as pdf:
-            clipped, free = paint.paint_events(pdf.pages[0])
-        assert clipped.bbox == (0, 0, 100, 100) and clipped.visible == (10, 10, 60, 60)
-        assert free.visible == free.bbox
-
-    def test_a_fully_clipped_object_has_nothing_visible(self, tmp_path):
-        with pikepdf.open(_pdf(tmp_path, b"q 0 0 10 10 re W* n 50 50 5 5 re f Q")) as pdf:
-            [only] = paint.paint_events(pdf.pages[0])
-        assert only.visible is None and only.bbox is not None
-
 
 class TestScope:
     def test_no_trimbox_is_skipped(self, tmp_path):
@@ -174,7 +164,9 @@ MARK = b"0.25 w 0 G 5 40 m 30 40 l S "  # a crop mark in the margin, left of the
 def _outside(path, bleed_mm=None):
     geometry = PageGeometry(220, 320, bleed_mm) if bleed_mm else None
     with pikepdf.open(path) as pdf:
-        return structure.check_outside_bleed(pdf, geometry)
+        return core_findings(
+            pdf, {"outside-bleed"}, geometry=dataclasses.asdict(geometry) if geometry is not None else None
+        )
 
 
 class TestOutsideBleed:
@@ -231,16 +223,15 @@ class TestOutsideBleed:
         from proof_pdf.models import Profile
 
         path = _pdf(tmp_path, MARK, boxes=SHEET)
-        findings, _ = core._check_pdf(path, Profile(pdfx=False, no_marks=True))
-        assert "outside-bleed" in {f.check for f in findings}
-        findings, _ = core._check_pdf(path, Profile(pdfx=False))
-        assert "outside-bleed" not in {f.check for f in findings}
+        report = asyncio.run(core.verify_file(path, Profile(pdfx=False, no_marks=True)))
+        assert "outside-bleed" in {f.check for f in report.findings}
+        report = asyncio.run(core.verify_file(path, Profile(pdfx=False)))
+        assert "outside-bleed" not in {f.check for f in report.findings}
 
 
 class TestOutsideMedia:
     def _media(self, path):
-        with pikepdf.open(path) as pdf:
-            return structure.check_outside_media(pdf)
+        return [f for f in core_run(path) if f.check == "outside-media"]
 
     def test_an_object_wholly_beyond_the_page_is_a_warning(self, tmp_path):
         [finding] = self._media(_pdf(tmp_path, b"BT /F1 6 Tf 400 380 Td (hidden) Tj ET", boxes=SHEET))
@@ -261,5 +252,64 @@ class TestOutsideMedia:
         from proof_pdf.models import Profile
 
         path = _pdf(tmp_path, b"BT /F1 6 Tf 400 380 Td (hidden) Tj ET", boxes=SHEET)
-        findings, _ = core._check_pdf(path, Profile(pdfx=False))
-        assert "outside-media" in {f.check for f in findings}
+        report = asyncio.run(core.verify_file(path, Profile(pdfx=False)))
+        assert "outside-media" in {f.check for f in report.findings}
+
+
+class TestMissingXObjects:
+    """A ``Do`` whose name resolves to nothing is a hole in the page, not a pass."""
+
+    @staticmethod
+    def _check(tmp_path, xobject):
+        pdf = pikepdf.new()
+        pdf.add_blank_page()
+        pdf.pages[0].Contents = pdf.make_stream(b"q 10 0 0 10 0 0 cm /Im0 Do Q")
+        if xobject is not None:
+            pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=xobject(pdf)))
+        path = tmp_path / "xobject.pdf"
+        pdf.save(path)
+        return [f for f in core_run(path) if f.check == "xobject-missing"]
+
+    @pytest.mark.parametrize(
+        "xobject",
+        [
+            None,  # no /XObject dictionary at all
+            lambda pdf: pikepdf.Dictionary(),  # a dictionary, not a stream
+        ],
+        ids=["no-resource", "not-a-stream"],
+    )
+    def test_a_name_with_nothing_behind_it_fails(self, tmp_path, xobject):
+        [finding] = self._check(tmp_path, xobject)
+        assert (finding.check, finding.severity, finding.page) == ("xobject-missing", Severity.ERROR, 1)
+        assert "/Im0" in finding.message
+
+    def test_a_reference_to_an_object_that_does_not_exist_fails(self, tmp_path):
+        image = lambda pdf: pdf.make_stream(b"\x80", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image)  # noqa: E731
+        pdf = pikepdf.new()
+        pdf.add_blank_page()
+        pdf.pages[0].Contents = pdf.make_stream(b"/Im0 Do")
+        pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=pdf.make_indirect(image(pdf))))
+        path = tmp_path / "dangling.pdf"
+        pdf.save(path, qdf=True)
+        # Point /Im0 at an object number the file does not have, as veraPDFHiResWrongObjectID.pdf does, keeping the
+        # reference's length so the cross-reference offsets stay right.
+        data, count = re.subn(rb"/Im0 (\d+) 0 R", lambda m: b"/Im0 " + b"9" * len(m[1]) + b" 0 R", path.read_bytes())
+        assert count == 1
+        path.write_bytes(data)
+        [finding] = [f for f in core_run(path) if f.check == "xobject-missing"]
+        assert finding.check == "xobject-missing"
+
+    def test_a_real_image_passes(self, tmp_path):
+        image = lambda pdf: pdf.make_stream(b"\x80", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image)  # noqa: E731
+        assert self._check(tmp_path, image) == []
+
+    def test_a_file_the_core_cannot_read_fails_rather_than_passes(self, tmp_path):
+        path = tmp_path / "junk.pdf"
+        path.write_bytes(b"%PDF-1.4 not a PDF")
+        findings = core_run(path)
+        unjudged = [f for f in findings if not f.check.startswith("file.")]
+        assert "outside-media" in {f.check for f in unjudged}
+        assert {(f.severity, f.message) for f in unjudged} == {
+            (Severity.ERROR, "could not be checked: the file was refused")
+        }
+        assert any(f.check.startswith("file.") for f in findings), "the reason the file was refused"

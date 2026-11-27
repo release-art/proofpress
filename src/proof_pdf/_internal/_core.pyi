@@ -1,0 +1,50 @@
+"""The Rust core (rust/src/python.rs), built by maturin. Private: the public modules wrap it."""
+
+def verify(file: str, data: bytes, level: str, params: str = "{}") -> str:
+    """Verify ``data``, the bytes of ``file``, at a level (``x4``, ``x4p``, ``x5g``, ``x5pg``, ``x5n`` or ``print``).
+
+    ``params`` is a JSON object of the print checks' parameters by name (``small_text_pt``); any left out keep their
+    defaults. Returns the report as JSON, schema 1. Raises ``ValueError`` for an unknown level or a bad parameter.
+    """
+
+def run(argv: list[str], colour: bool = False) -> tuple[int, str, str]:
+    """Run the ``proof-pdf`` command line on ``argv`` (program name first); return its exit code, stdout and stderr.
+
+    ``colour`` styles the text output for a terminal.
+    """
+
+class UnreadablePdfError(Exception):
+    """A PDF that cannot be read: its structure is too damaged, or it is encrypted."""
+
+def crop(data: bytes, page: int, bounds: tuple[float, float, float, float], pad: float = 0.0) -> bytes:
+    """Cut ``bounds`` (x0, y0, x1, y1 in points, either corner order, widened by ``pad``) of page ``page`` (from 1) of
+    the PDF ``data`` out as a one-page PDF. Raises ``ValueError`` for a missing page or a box that misses it, and
+    ``UnreadablePdfError`` for a file that cannot be read.
+    """
+
+def inspect(data: bytes, proof_profile: bytes | None = None, with_contrast: bool = True) -> str:
+    """What is in the PDF ``data``, as JSON (the fields of ``proof_pdf.inventory.Inventory`` but ``path``), contrast
+    measured through ``proof_profile`` (an ICC profile's bytes) or else the output intents' profiles. Raises
+    ``UnreadablePdfError`` for a file that cannot be read.
+    """
+
+def render(data: bytes, dpi: float, guides: bool = False, safe_mm: float | None = None) -> list[bytes]:
+    """Each page of the PDF ``data`` as PNG bytes at ``dpi``, with the trim and bleed guides (and a safe-area guide
+    ``safe_mm`` inside the trim, when given) drawn when ``guides`` is true. Raises ``UnreadablePdfError`` for a file
+    that cannot be read, and ``ValueError`` for a page too large to render at ``dpi``.
+    """
+
+def extract(data: bytes, images: bool = False, vector: bool = False) -> tuple[str, list[bytes]]:
+    """What ``extract`` recovers from the PDF ``data``: page boxes, document information and XMP, font programs, ICC
+    profiles, output intents, the page walk's text runs and placed images, the structure tree and interactive
+    features; with ``images`` every image written out, with ``vector`` every painted path. JSON, with the recovered
+    files' bytes the JSON indexes. Raises ``UnreadablePdfError`` for a file that cannot be read.
+    """
+
+def vector_pieces(data: bytes, requests: str) -> tuple[str, list[bytes]]:
+    """The pieces of vector artwork the JSON ``requests`` asks for (page, box, shape indices and text-run indices, as
+    ``extract`` reported them; or an ``image`` object number alone, filling the box, for a thumbnail), each
+    written out as a one-page PDF: JSON naming each piece's content stream, resources and PDF among the bytes
+    returned with it. Raises ``UnreadablePdfError`` for a file that cannot be read and ``ValueError`` for requests
+    that are not of the right shape.
+    """

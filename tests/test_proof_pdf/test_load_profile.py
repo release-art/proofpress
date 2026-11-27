@@ -97,3 +97,19 @@ def test_gray_mode_and_allow_k_only_come_from_the_file(tmp_path, monkeypatch):
     path.write_text('[verify]\ncolour-mode = "gray"\nallow-k-only = true\n')
     loaded = proof_pdf.load_profile(path).profile
     assert loaded.colour_mode == "gray" and loaded.allow_k_only is True
+
+
+def test_a_pdfx_level_is_kept_and_reaches_the_command(tmp_path, monkeypatch):
+    from proof_pdf import core
+
+    monkeypatch.delenv("PROOF_PDF_CONFIG", raising=False)
+    monkeypatch.delenv("PROOF_PDF_PROFILE", raising=False)
+    path = tmp_path / "proof-pdf.toml"
+    path.write_text('[verify]\npdfx = "x3-2002"\n')
+    profile = proof_pdf.load_profile(path).profile
+    assert profile.pdfx is True and profile.pdfx_level == "x3-2002"
+    args = core.arguments(profile)
+    assert args[args.index("--pdfx") + 1] == "x3-2002"
+    # Without a level the core verifies at the level the file claims, else PDF/X-4; off, no level is passed.
+    assert "--pdfx" not in core.arguments(Profile())
+    assert "--pdfx" not in core.arguments(Profile(pdfx=False, pdfx_level="x4"))

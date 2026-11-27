@@ -20,12 +20,58 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.15"
+      # pdm builds the Rust extension with maturin, which runs cargo from the root: make the pinned toolchain the default.
+      - run: rustup toolchain install && rustup default "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+        working-directory: rust
       - run: python -m pip install pdm
       - run: pdm install --with dev
       - run: pdm run ruff check src tests
       - run: pdm run ruff format --check src tests
       - run: pdm run pyright
       - run: pdm run pytest
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # The python feature's tests link libpython 3.15.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.15"
+      - run: echo "PYO3_PYTHON=$(which python)" >> "$GITHUB_ENV"
+      - run: rustup toolchain install # the version pinned in rust/rust-toolchain.toml
+        working-directory: rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov,cargo-deny
+      - run: bin/rust/check.sh
+        env:
+          NEXTEST_PROFILE: ci
+
+  windows:
+    # The Rust core's tests, and a wheel that installs and runs, on Windows x64.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.15"
+      - run: echo "PYO3_PYTHON=$(which python)" >> "$GITHUB_ENV"
+      - run: rustup toolchain install && rustup default "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+        working-directory: rust
+      - run: cargo test --all-features
+        working-directory: rust
+      - run: python -m pip install maturin pefile && maturin build --release --out dist
+      - run: bin/rust/check-wheel.sh dist/*.whl
+      - run: |
+          python -m venv clean && clean/Scripts/pip install dist/*.whl
+          clean/Scripts/proof-pdf --version
 
   suites:
     # Opt-in: runs the Ghent/Altona calibration over files fetched at run time (they cannot be committed).
@@ -40,6 +86,8 @@ jobs:
         with:
           python-version: "3.15"
       - run: sudo apt-get update && sudo apt-get install -y ghostscript
+      - run: rustup toolchain install && rustup default "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+        working-directory: rust
       - run: python -m pip install pdm
       - run: pdm install --with dev
       - run: bin/suites/fetch.sh

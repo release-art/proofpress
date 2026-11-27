@@ -8,7 +8,7 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 
 | Piece | What it is |
 |---|---|
-| [`proof-pdf`](#proof-pdf) | CLI and library that hold a print PDF to PDF/X-4 and PDF/A. |
+| [`proof-pdf`](#proof-pdf) | CLI and library that hold a print PDF to PDF/X, print checks and, when asked, PDF/A. |
 | [`releaseart/lualatex`](#docker-images) | TeX Live 2025 with LuaLaTeX. |
 | [`releaseart/lualatex-python`](#docker-images) | Python, `lualatex`, Ghostscript and veraPDF: everything `proof-pdf` needs, without it. A base to `pip install` it on. |
 | [`releaseart/full`](#docker-images) | `lualatex` plus Ghostscript, veraPDF and `proof-pdf`. |
@@ -17,25 +17,29 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 
 `verify` runs four layers, each of which can be switched off:
 
-- **PDF/A** with [veraPDF](https://verapdf.org) (`--flavour 2b` by default; `--no-pdfa` to skip).
-- **PDF/X-4 structure**: page boxes, `/Trapped`, the `GTS_PDFX` output intent and the XMP version key (`--no-pdfx`). The rules live in
-  `proof_pdf/_internal/pdfx/x4.py`.
+- **PDF/A** with [veraPDF](https://verapdf.org), when asked (`--pdfa`; `--flavour 2b` by default).
+- **PDF/X**: every requirement of ISO 15930-7 (PDF/X-4, X-4p) and ISO 15930-8 (PDF/X-5g, X-5pg, X-5n) that a file can be
+  judged on, from the output intent and metadata to fonts, colour, transparency and referenced files (`--pdfx x4` by
+  default, another level with `--pdfx x4p|x5g|x5pg|x5n`, `--no-pdfx` to skip). The counts are under [Checks](#checks).
+  PDF/X-1a:2001, X-3:2002, X-1a:2003 and X-3:2003 (ISO 15930-1, -3, -4, -6) are checked too (`--pdfx
+  x1a-2001|x3-2002|x1a-2003|x3-2003`); without `--pdfx`, a file whose Info claims one of them is verified at it.
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
   For a book interior, `--binding-bleed-mm 0` (with `--binding left|right`, the bound edge of page 1; it alternates page by page) expects no bleed on the binding edge,
-  so the sheet is wider by the outer bleed only; the centring check follows the asymmetry. Equal bleed on every side behaves as before.
-- **Colour**: total ink coverage (`--max-tac`, 300% default; opt-in `--warn-tac N`, below it, warns when the peak is between N and the limit; the peak is measured per pixel on a Ghostscript CMYK raster), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default; opt-in `--warn-dpi N` warns below N, `--max-dpi N` warns above N since it only grows the file, `--max-stretch-pct P` warns when an image's two axes differ by more than P percent, larger over smaller less one; none has a default, and `--warn-dpi` must exceed `--min-dpi`; each message gives the worst placement in mm from the page's bottom-left),
+  so the sheet is wider by the outer bleed only; the centring check follows the asymmetry.
+- **Colour**: total ink coverage, when asked (`--tac`; `--max-tac`, 300% default; opt-in `--warn-tac N`, below it, warns when the peak is between N and the limit; the peak is measured per pixel on Ghostscript's separations, one plate per ink, so each spot colour counts once at its tint), stray RGB (`--strict-cmyk`), effective image DPI (`--min-dpi`, 300 default; opt-in `--warn-dpi N` warns below N, `--max-dpi N` warns above N since it only grows the file, `--max-stretch-pct P` warns when an image's two axes differ by more than P percent, larger over smaller less one; none has a default, and `--warn-dpi` must exceed `--min-dpi`; each message gives the worst placement in mm from the page's bottom-left),
   overprint and rich-black small text (`--no-colour`). Overprinting 100% K text is fine; overprint on anything else is flagged,
   and **white that overprints is an error** (it adds no ink, so it vanishes on press). A page that uses transparency must blend
   in the output intent's colour space (a mismatch is an error, an undeclared space a warning).
 - **Spot inks and ICC profiles**: one ink defined two ways in the same space is an error (`spot-definition`); an invalid ICC profile, or a
-  profile that disagrees with its colour space, is an error, and so is a mix of RGB profiles in an RGB job (`icc-profile`); a CMYK
-  profile other than the output intent's is a warning.
+  profile that disagrees with its colour space, is an error, and so is a mix of RGB profiles in an RGB job (`icc-profile`); in a CMYK
+  job a CMYK `ICCBased` space using the output intent's own profile is an error, as PDF/X-4 forbids it (ISO 15930-7, 6.4.3.3).
 - **RGB proofing** (opt-in, `--colour-mode rgb`): for a screen job, CMYK images, fills, strokes, shadings and patterns and a CMYK output intent are errors, spot colours a warning;
   total ink, overprint and rich-black checks are skipped. Save it as a profile: `[profiles.web.verify]` with `colour-mode = "rgb"` and `pdfx = false`, chosen with `proof-pdf --profile web verify`.
 - **Marks and hidden content** (`--no-marks`, opt-in): anything painted beyond the bleed region is an error (`outside-bleed`): crop and registration marks, slug text.
   The region is the BleedBox, else the TrimBox grown by `--bleed-mm` when `--trim-mm` is given, else the TrimBox (a note says which). Judged on the visible extent after
   clipping, so artwork in the bleed zone is correct; pages without a TrimBox are skipped and rotated pages reported as not checked. A text run's extent is its font box.
-  Always on, regardless of the flag: an object painted entirely beyond the MediaBox is a warning (`outside-media`, hidden content that ships in the file).
+  Always on, regardless of the flag: an object painted entirely beyond the MediaBox is a warning (`outside-media`, hidden content that ships in the file),
+  and a `Do` naming an image or form that is not there is an error (`xobject-missing`): nothing prints where it was placed.
 - **Gray proofing** (opt-in, `--colour-mode gray`): for a black-and-white interior, anything painted outside the gray family (DeviceGray, CalGray, ICC gray) is an
   error (`gray-only`): RGB, CMYK and Lab, by fill, stroke, image, inline image, stencil mask (judged by its fill), shading, pattern and form content; spot colours a warning;
   an RGB or CMYK output intent is an error; more than one gray ICC profile is an error (`icc-profile`). The ink checks are skipped, so total ink is not measured (K alone cannot exceed 100%).
@@ -48,7 +52,8 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 `inspect` reports what is in a PDF without judging it, and `texlog` lints a LaTeX build log. `preview` rasterises each page and draws the trim, bleed and safe guides from the PDF's own boxes, so a geometry finding can be seen.
 
 ```zsh
-pip install proof-pdf          # Python 3.15; needs verapdf and gs (Ghostscript) on PATH
+pip install proof-pdf          # Python 3.15; verapdf (--pdfa) and gs (--tac) on PATH when asked for. Wheels for macOS arm64, Linux
+                               # x86-64 and arm64, Windows x64; elsewhere pip builds the Rust core, which needs rustup
 
 proof-pdf verify job/ --trim-mm 105x148 --bleed-mm 3 --exclude '*_preview.pdf'
 proof-pdf verify job/ --exempt 'manual.pdf=internal docs, never printed'   # listed with the reason, never fails
@@ -57,6 +62,21 @@ proof-pdf verify card.pdf --json          # machine-readable findings, for CI
 proof-pdf preview card.pdf --dpi 150
 proof-pdf --version                       # version, plus the commit when built from an image
 ```
+
+Without Python, the Rust `proof-pdf` runs `verify` on its own (`inspect`, `preview`, `extract`, `crop`, `layout` and
+`texlog` need the Python package):
+
+```zsh
+brew install release-art/tap/proof-pdf     # macOS, Linux
+```
+
+```powershell
+scoop bucket add release-art https://github.com/release-art/scoop-bucket
+scoop install release-art/proof-pdf        # Windows
+```
+
+or download `proof-pdf-<version>-<target>` from a [GitHub release](https://github.com/release-art/proofpress/releases)
+(macOS arm64, Linux x86-64 and arm64, Windows x64), each with its Sigstore bundle.
 
 - Arguments are files or directories; a directory expands to every PDF beneath it, minus `--exclude` globs (relative to that directory).
 - `--exempt GLOB=reason` declares a file out of scope. It is still listed, with the reason, and never fails; the glob matches at any
@@ -75,7 +95,89 @@ A job's config file works from Python too. `proof_pdf.load_profile(path=None, *,
 `proof-pdf.toml`, `PROOF_PDF_CONFIG`, `PROOF_PDF_PROFILE`) and returns a `LoadedConfig`: the `Profile`, the `exclude` globs, the `exempt`
 map, and `jobs`, `timeout` and the tool names. A file the CLI would reject raises `proof_pdf.ConfigError`. Pass those to
 `core.expand_targets` and `core.verify_files`, so the CLI and your code share one definition. `core.missing_tools(profile)` names the
-tools the profile needs (veraPDF for PDF/A, Ghostscript for colour) that are not on `PATH`, so a caller can fail early with one message.
+tools the profile needs (veraPDF for PDF/A, Ghostscript for total ink) that are not on `PATH`, so a caller can fail early with one message.
+
+### Checks
+
+<!-- checks -->
+Generated from `rust/checks.toml`; every check, with its clauses, is in [rust/CHECKS.md](rust/CHECKS.md).
+
+| Level | Implemented | Not yet | Not checkable (skip) |
+|---|---|---|---|
+| PDF/X-4 | 145 | 0 | 5 |
+| PDF/X-4p | 155 | 0 | 5 |
+| PDF/X-5g | 159 | 0 | 25 |
+| PDF/X-5pg | 169 | 0 | 25 |
+| PDF/X-5n | 159 | 0 | 24 |
+| PDF/X-1a:2001 | 81 | 0 | 3 |
+| PDF/X-3:2002 | 83 | 0 | 3 |
+| PDF/X-1a:2003 | 91 | 0 | 3 |
+| PDF/X-3:2003 | 92 | 0 | 3 |
+| Print checks | 54 | 0 | 4 |
+
+The print checks:
+
+| Id | What it checks | Severity |
+|---|---|---|
+| `tac` | Peak total ink stays under the limit (by Ghostscript) | error |
+| `overprint` | Overprint is used on purpose | warning |
+| `white-overprint` | White is never set to overprint | error |
+| `colour-space` | Colour spaces suit the job's colour mode | error |
+| `rgb-only` | An RGB job paints only RGB | error |
+| `gray-only` | A gray job paints only gray | error |
+| `k-only-text` | Text is 100% black only | error |
+| `rich-black` | Small text is not in rich black | warning |
+| `spot-ink` | Spot inks are on the allowed list | error |
+| `spot-definition` | A spot ink has one definition | error |
+| `icc-profile` | Embedded ICC profiles are sound and suit the job | error |
+| `blend-space` | Transparency declares its blend space | error |
+| `image-dpi` | Images meet the resolution floor | error |
+| `image-dpi-max` | Images do not exceed the resolution ceiling | warning |
+| `image-stretch` | Images are not stretched unevenly | warning |
+| `text-size` | Text meets the size floor | error |
+| `hairline` | Strokes meet the width floor | error |
+| `contrast` | Text contrasts with its background | error |
+| `safe-area` | Text stays inside the safe area | error |
+| `missing-glyph` | Text shows no missing glyphs | error |
+| `font-embedded` | Fonts are embedded | error |
+| `font-type3` | Type 3 fonts are reported | warning |
+| `geometry` | Pages are the expected trim size | error |
+| `bleed` | Pages carry the expected bleed | error |
+| `centring` | The trim is centred in the bleed | error |
+| `artwork-bleed` | Artwork reaches into the bleed | error |
+| `outside-bleed` | Nothing is painted beyond the bleed | error |
+| `outside-media` | Nothing is painted wholly off the page | warning |
+| `xobject-missing` | Painted XObjects exist | error |
+| `bleedbox` | Pages with a trim have a BleedBox (not checked: Replaced by the x4.boxes rows (a BleedBox inside the MediaBox) and the geometry checks' bleed) | error |
+| `boxes` | Each page has a MediaBox (not checked: Replaced by page.media-box and the x4.boxes rows) | error |
+| `page-size` | Pages share one size | error |
+| `page-count` | The page count fits the rule | error |
+| `page-rotate` | Pages are not rotated | warning |
+| `output-condition` | The output intent names the expected condition | error |
+| `pdfa` | veraPDF passes the PDF/A flavour (by veraPDF) | error |
+| `structure` | The file can be read (not checked: Not a check: whether the file could be read is the report's own structure and verdict) | error |
+| `internal` | The engine itself failed on this file (not checked: Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it) | error |
+| `file.header` | The file starts with a %PDF- header in its first 1024 bytes | error |
+| `file.header-offset` | The header is at the very start of the file | warning |
+| `file.startxref` | The file ends with startxref and the offset of its cross-reference | error |
+| `file.xref` | Every cross-reference section can be read | error |
+| `file.trailer` | The trailer names the document catalog | error |
+| `file.encrypted` | The file is not encrypted | error |
+| `file.eof` | The file ends with %%EOF and nothing after it | warning |
+| `file.limit` | The file stays within proof-pdf's safety limits | error |
+| `syntax.hex-digits` | Hex strings have an even number of digits | warning |
+| `syntax.octal-escape` | Octal escapes in strings stay within one byte | warning |
+| `syntax.name-escape` | Escapes in names are two hex digits, never 00 | error |
+| `syntax.duplicate-key` | No dictionary gives a key twice | warning |
+| `stream.eol` | Stream data is followed by an end of line before endstream | warning |
+| `stream.filter` | Every stream names filters ISO 32000 defines | error |
+| `content.damaged` | Every content stream can be read to its end | error |
+| `content.operator` | Undefined operators appear only inside BX and EX | error |
+| `content.compatibility` | BX and EX pair up | error |
+| `page.media-box` | Every page has a MediaBox, its own or inherited | error |
+| `object.damaged` | Every object reachable from the trailer can be read | error |
+| `object.dangling-reference` | References point at objects that exist | warning |
+<!-- /checks -->
 
 ### Proofing
 
@@ -200,13 +302,13 @@ The box is `X0,Y0,X1,Y1` in points from the page's bottom-left, the numbers `doc
 The piece also holds the rest of the page's content outside the window, which a viewer does not show; rasterise it when
 that matters.
 
-`--previews` renders `previews/index.html` (needs Ghostscript): each page with every recovered asset boxed on it and
+`--previews` renders `previews/index.html`: each page with every recovered asset boxed on it and
 linked to its thumbnail below, so a whole archive job can be reviewed by eye. Text in fonts without a `/ToUnicode` map
 cannot be read from the PDF; `document.json` says so in `notes` and keeps the font codes. Mind who owns the artwork you
 recover.
 
-The library offers the same as data: `proof_pdf.inventory.inspect_pdf(path)` returns plain dataclasses, `proof_pdf.extract.extract_pdf(path, out_dir)` writes the assets and returns what it found, and the checks are
-functions over an opened `pikepdf.Pdf`.
+The library offers the same as data: `proof_pdf.inventory.inspect_pdf(path)` returns plain dataclasses, `proof_pdf.extract.extract_pdf(path, out_dir)` writes the assets and returns what it found, and
+`await proof_pdf.core.verify_file(path, profile)` runs the checks and returns a report.
 
 ## Docker images
 
@@ -239,7 +341,8 @@ bin/docker/test.sh                    # the whole suite inside the full image, i
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). To release, add the version to [CHANGELOG.md](CHANGELOG.md) and push a tag:
 `git tag v1.2.3 && git push origin v1.2.3`. The tag is the version; it publishes to PyPI (TestPyPI first), creates a GitHub
-Release and pushes both images.
+Release with the standalone downloads, points the Homebrew tap and the Scoop bucket at it (stable releases only) and
+pushes the images.
 
 ## Licence
 

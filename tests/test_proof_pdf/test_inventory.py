@@ -78,7 +78,7 @@ class TestInventory:
         assert inventory.inspect_pdf(tmp_path / "spot.pdf").spot_inks == ["PANTONE 185 C"]
 
     def test_a_file_that_will_not_open_raises(self):
-        with pytest.raises(pikepdf.PdfError):
+        with pytest.raises(inventory.UnreadablePdfError):
             inventory.inspect_pdf(PDFS / "corrupt.pdf")
 
     async def test_the_async_wrapper_matches(self):
@@ -108,6 +108,10 @@ class TestInspectCommand:
         result = runner.invoke(cli.pdf_app, ["inspect", str(PDFS / "corrupt.pdf"), str(PDFS / "good.pdf"), "--json"])
         assert result.exit_code == 1
         assert [pathlib.Path(r["path"]).name for r in json.loads(result.stdout)] == ["good.pdf"]
+
+    def test_a_password_protected_file_fails_the_run(self, runner, password_pdf):
+        result = runner.invoke(cli.pdf_app, ["inspect", str(password_pdf)])
+        assert result.exit_code == 1 and "cannot open" in result.output
 
     def test_no_targets_is_an_error(self, runner):
         assert runner.invoke(cli.pdf_app, ["inspect"]).exit_code == 1

@@ -7,16 +7,17 @@ each test asks for the one shape it needs -- so a new case adds a call, not a
 new block of setup.
 """
 
+import json
 import pathlib
-import types
+import tempfile
 import zlib
 from typing import Any, cast
 
 import pikepdf
 import pytest
 
-from proof_pdf._internal import proc
-from proof_pdf.models import PageGeometry
+from proof_pdf._internal import _core
+from proof_pdf.models import Finding, PageGeometry, Severity
 
 # An A6 card (105x148 mm) centred inside a 3 mm bleed: the "correct" baseline.
 A6 = PageGeometry(trim_w_mm=105.0, trim_h_mm=148.0, bleed_mm=3.0)
@@ -29,6 +30,28 @@ GOOD_BOXES = {
     "TrimBox": [BLEED, BLEED, BLEED + TRIM_W, BLEED + TRIM_H],
     "BleedBox": [0, 0, MEDIA_W, MEDIA_H],
 }
+
+
+def core_run(path: pathlib.Path, params: dict[str, object] | None = None) -> list[Finding]:
+    """Every print check's findings on the PDF at *path*, from the Rust core, with the print checks' *params* (the
+    core's defaults for any left out); a check the core could not judge fails as "could not be checked"."""
+    report = json.loads(_core.verify(str(path), path.read_bytes(), "print", json.dumps(params or {})))
+    severity = {"error": Severity.ERROR, "warning": Severity.WARN}
+    findings = [Finding(f["check"], severity[f["severity"]], f["message"], f["page"]) for f in report["findings"]]
+    findings += [
+        Finding(c["id"], Severity.ERROR, f"could not be checked: {c['reason']}")
+        for c in report["checks"]
+        if c["status"] == "not_evaluated"
+    ]
+    return findings
+
+
+def core_findings(pdf: pikepdf.Pdf, checks: set[str], **params: object) -> list[Finding]:
+    """The Rust core's findings of *checks* on *pdf*, with the print checks' *params*."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = pathlib.Path(tmp) / "checked.pdf"
+        pdf.save(path)
+        return [f for f in core_run(path, params) if f.check in checks]
 
 
 @pytest.fixture
@@ -49,8 +72,18 @@ def make_pdf(tmp_path):
     return _make
 
 
-def xmp_bytes(*, pdfx: bool = True) -> bytes:
-    """A well-formed XMP packet, optionally carrying the PDF/X version key.
+@pytest.fixture
+def password_pdf(tmp_path) -> pathlib.Path:
+    """A one-page PDF that opens only with a password (pikepdf raises PasswordError, not PdfError)."""
+    path = tmp_path / "locked.pdf"
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.save(path, encryption=pikepdf.Encryption(user="secret", owner="secret"))
+    return path
+
+
+def xmp_bytes(*, pdfx: bool = True, trapped: str | None = "False") -> bytes:
+    """A well-formed XMP packet, optionally carrying the PDF/X version key and ``pdf:Trapped``.
 
     It has to be genuinely well-formed: pikepdf parses /Metadata on save and
     silently replaces anything it cannot read with an empty packet, so a
@@ -61,8 +94,10 @@ def xmp_bytes(*, pdfx: bool = True) -> bytes:
         '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>'
         '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
         '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
-        '<rdf:Description rdf:about="" xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/">'
+        '<rdf:Description rdf:about="" xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/"'
+        ' xmlns:pdf="http://ns.adobe.com/pdf/1.3/">'
         f"{version}"
+        f"{'' if trapped is None else f'<pdf:Trapped>{trapped}</pdf:Trapped>'}"
         "</rdf:Description></rdf:RDF></x:xmpmeta>"
         '<?xpacket end="w"?>'
     ).encode()
@@ -181,26 +216,3 @@ def vera_json():
         return json.dumps({"report": {"jobs": [{"validationResult": [{"compliant": compliant, "details": details}]}]}})
 
     return _make
-
-
-@pytest.fixture
-def fake_run(mocker):
-    """Replace ``proc.run`` with a recorded stub, returning the argv of every call.
-
-    A ``SimpleNamespace`` stands in for the ``CompletedProcess``, so a test can also assert on the command that
-    would have been issued. *side_effect* runs synchronously, e.g. to write the files the tool would have written.
-    """
-
-    def _install(*, returncode: int = 0, stdout: str = "", stderr: str = "", side_effect=None):
-        calls: list[list[str]] = []
-
-        async def _run(argv, **kwargs):
-            calls.append(list(argv))
-            if side_effect is not None:
-                side_effect(argv, **kwargs)
-            return types.SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
-
-        mocker.patch.object(proc, "run", side_effect=_run)
-        return calls
-
-    return _install

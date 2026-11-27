@@ -1,0 +1,1443 @@
+# What the PDF/X checks must report for each fixture: the set of check ids it must raise, each with a one-line reason.
+# A check not listed must pass. `levels` are the PDF/X levels the fixture is verified at. Fixtures live in
+# tests/fixtures/pdfs/ (built by build_pdfs.py) or here. Checked by rust/tests/completeness.rs: a check may be
+# `implemented` in rust/checks.toml only when some fixture expects it and another, at one of its levels, does not.
+
+# Genuine PDF/X-4, the base every negative is built from. pdfToolbox 17.1 "Verify compliance with PDFX-4" passes it.
+[x4-good]
+levels = ["x4", "print"]
+expect = {}
+
+# ---- One-defect negatives of x4-good (tests/fixtures/build_pdfs.py).
+[x4-lzw]
+levels = ["x4"]
+expect = { "x4.filter.no-lzw" = "the page content is LZW-encoded (6.8)" }
+
+[x4-crypt-filter]
+levels = ["x4"]
+expect = { "x4.filter.no-crypt" = "the page content uses the Identity Crypt filter (6.8)", "content.damaged" = "and so the page content, under Crypt, cannot be decoded and read (ISO 32000-2 7.8.2)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-filter-abbreviated]
+levels = ["x4"]
+expect = { "x4.filter.standard-only" = "the page content names its filter /Fl, an abbreviation only inline images may use (6.8)" }
+
+[x4-perms]
+levels = ["x4"]
+expect = { "x4.perms.ur-only" = "/Perms holds /DocMDP (6.15)" }
+
+[x4-name-not-utf8]
+levels = ["x4"]
+expect = { "x4.names.utf8" = "the font name /Proof#FF decodes to bytes that are not UTF-8 (6.6); twice, as BaseFont and FontName" }
+
+[x4-name-unescaped]
+levels = ["x4"]
+expect = { "x4.names.hex-escaped" = "the font name holds the UTF-8 bytes of an e-acute written raw, not as #C3#A9 (6.6)" }
+
+[x4-encrypted]
+levels = ["x4"]
+expect = { "x4.encrypt.absent" = "the file is encrypted with an empty password (6.15)", "file.encrypted" = "the reader refuses it, which is what makes it fail 6.15" }
+
+[x4-too-many-objects]
+levels = ["x4"]
+expect = { "x4.limits.objects" = "an update lists 8,388,608 objects in use, one more than Table C.1 of PDF 1.6 allows (6.25)" }
+
+# ---- Damage to the file's own structure: ISO 32000-2 rules every level checks (same-length edits of x4-good).
+[x4-no-header]
+levels = ["x4"]
+expect = { "file.header" = "%PDF- is spelt %PXF-, so the file is refused (7.5.2)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-header-offset]
+levels = ["x4"]
+expect = { "file.header-offset" = "five bytes before %PDF-: allowed, offsets count from the header, but PDF/A forbids it (7.5.2)" }
+
+[x4-truncated]
+levels = ["x4"]
+expect = { "file.startxref" = "cut in half, so no startxref (7.5.5)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-bad-xref]
+levels = ["x4"]
+expect = { "file.xref" = "startxref points at xreg, not a cross-reference section (7.5.4)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-no-root]
+levels = ["x4"]
+expect = { "file.trailer" = "the trailer's /Root is spelt /Rooo (7.5.5)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-after-eof]
+levels = ["x4"]
+expect = { "file.eof" = "bytes after %%EOF (7.5.5)" }
+
+[x4-many-updates]
+levels = ["x4"]
+expect = { "file.limit" = "1,001 empty incremental updates, more cross-reference sections than the reader's limit", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-odd-hex]
+levels = ["x4"]
+expect = { "syntax.hex-digits" = "the trailer /ID's second string has 31 hex digits (7.3.4.3)" }
+
+[x4-octal-overflow]
+levels = ["x4"]
+expect = { "syntax.octal-escape" = "the output condition's text starts with the escape \\777, above 255 (7.3.4.2)" }
+
+[x4-bad-name-escape]
+levels = ["x4"]
+expect = { "syntax.name-escape" = "the font name /Proof#GG has an escape that is not two hex digits (7.3.5)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-duplicate-key]
+levels = ["x4"]
+expect = { "syntax.duplicate-key" = "the Info dictionary gives /ModDate twice (7.3.7)" }
+
+[x4-no-eol-before-endstream]
+levels = ["x4"]
+expect = { "stream.eol" = "the page content's data runs straight into a space and endstream (7.3.8.1)" }
+
+[x4-unknown-filter]
+levels = ["x4"]
+expect = { "stream.filter" = "a stream names the filter /FlateDecodX (7.4.1)", "x4.filter.standard-only" = "the same name is not one of PDF 1.6's filters (6.8)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+# ISO 32000-2 7.7.3.3: every page has a MediaBox.
+[x4-no-media-box]
+levels = ["x4"]
+expect = { "page.media-box" = "the page has none, its own or inherited (7.7.3.3)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-damaged-object]
+levels = ["x4"]
+expect = { "object.damaged" = "the Info dictionary starts [<, which cannot be read; every other check is then not evaluated", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-dangling-reference]
+levels = ["x4"]
+expect = { "object.dangling-reference" = "the trailer's /Info points at generation 5 of an object that has generation 0 (7.3.10)" }
+
+# PDF/X-4 6.9 to 6.11: trapping, metadata, identification. Each changes x4-good's XMP or Info in one way.
+
+[x4-xmp-filtered]
+levels = ["x4"]
+expect = { "x4.xmp.unfiltered" = "the document's metadata stream is Flate-compressed (6.10.1)" }
+
+[x4-page-xmp-filtered]
+levels = ["x4"]
+expect = { "x4.xmp.unfiltered" = "the page's metadata stream is Flate-compressed (6.10.1, X4-Q8)" }
+
+[x4-page-xmp-malformed]
+levels = ["x4"]
+expect = { "x4.xmp.well-formed" = "the page's XMP lacks a closing rdf:Description tag (6.10.6)" }
+
+[x4-page-xmp-header-bytes]
+levels = ["x4"]
+expect = { "x4.xmp.no-bytes-encoding-attrs" = "the page's packet header has a bytes attribute (6.10.3)" }
+
+[x4-xmp-prefix]
+levels = ["x4"]
+expect = { "x4.xmp.namespace-prefixes" = "the pdfxid namespace is written with the prefix gts (6.10.1, Table 2)" }
+
+[x4-xmp-no-document-id]
+levels = ["x4"]
+expect = { "x4.xmp.document-id" = "no xmpMM:DocumentID (6.10.4)" }
+
+[x4-xmp-document-id-not-uuid]
+levels = ["x4"]
+expect = { "x4.xmp.document-id-uuid" = "the document ID is an xmp.did: URI, a warning (6.10.4)" }
+
+[x4-xmp-no-version-id]
+levels = ["x4"]
+expect = { "x4.xmp.version-id" = "no xmpMM:VersionID (6.10.4)" }
+
+[x4-xmp-no-rendition-class]
+levels = ["x4"]
+expect = { "x4.xmp.rendition-class" = "no xmpMM:RenditionClass (6.10.4)" }
+
+[x4-xmp-no-metadata-date]
+levels = ["x4"]
+expect = { "x4.xmp.metadata-date" = "no xmp:MetadataDate (6.10.4)" }
+
+[x4-xmp-no-title]
+levels = ["x4"]
+expect = { "x4.xmp.title" = "no dc:title, and no Info /Title (6.10.4)" }
+
+[x4-xmp-no-creator-tool]
+levels = ["x4"]
+expect = { "x4.xmp.agent-names" = "no xmp:CreatorTool and no Info /Creator, a warning (6.10.4)" }
+
+[x4-xmp-no-version]
+levels = ["x4"]
+expect = { "x4.identity.version-present" = "no pdfxid:GTS_PDFXVersion, and none in Info (6.11)" }
+
+[x4-xmp-wrong-version]
+levels = ["x4"]
+expect = { "x4.identity.version-value" = "pdfxid:GTS_PDFXVersion is PDF/X-3, as is Info's (6.11)" }
+
+[x4-xmp-pdfxid-extra]
+levels = ["x4"]
+expect = { "x4.identity.pdfxid-only-version" = "pdfxid:GTS_PDFXConformance beside the version (6.11)" }
+
+[x4-info-conformance]
+levels = ["x4"]
+expect = { "x4.identity.no-info-conformance" = "Info has /GTS_PDFXConformance (6.11)" }
+
+[x4-info-version-utf16]
+levels = ["x4"]
+expect = { "x4.info.pdfx-version-pdfdoc" = "Info /GTS_PDFXVersion is UTF-16; its text still equals XMP's (6.10.2)" }
+
+[x4-xmp-no-trapped]
+levels = ["x4"]
+expect = { "x4.trapped.present" = "no pdf:Trapped, and no Info /Trapped (6.9, X4-Q1)" }
+
+[x4-trapped-unknown]
+levels = ["x4"]
+expect = { "x4.trapped.true-or-false" = "pdf:Trapped and Info /Trapped are Unknown (6.9)" }
+
+[x4-info-title-differs]
+levels = ["x4"]
+expect = { "x4.info.xmp-analogue-equal" = "Info /Title differs from dc:title (6.10.2)" }
+
+[x4-info-no-analogue]
+levels = ["x4"]
+expect = { "x4.info.xmp-analogue-present" = "Info /Subject has no dc:description (6.10.2)" }
+
+[x4-author-bag]
+levels = ["x4"]
+expect = { "x4.info.author-single-creator" = "with Info /Author, dc:creator is an rdf:Bag, not an rdf:Seq (6.10.2, X4-Q6)", "x4.xmp.conforms" = "and XMP defines dc:creator as an ordered array (6.10.1)" }
+
+[x4-no-trailer-id]
+levels = ["x4"]
+expect = { "x4.trailer.id" = "the trailer's /ID key is renamed (6.10.4)" }
+
+[x4-xmp-bad-create-date]
+levels = ["x4"]
+expect = { "x4.xmp.create-date" = "xmp:CreateDate has month 13 (6.10.4, X4-Q7)", "x4.xmp.conforms" = "so it is not an XMP Date (6.10.1)", "x4.info.xmp-analogue-equal" = "so it cannot equal Info /CreationDate (6.10.2)" }
+
+[x4-xmp-bad-modify-date]
+levels = ["x4"]
+expect = { "x4.xmp.modify-date" = "xmp:ModifyDate has hour 25 (6.10.4, X4-Q7)", "x4.xmp.conforms" = "so it is not an XMP Date (6.10.1)", "x4.info.xmp-analogue-equal" = "so it cannot equal Info /ModDate (6.10.2)" }
+
+[x4-no-xmp]
+levels = ["x4"]
+expect = { "x4.xmp.present" = "the catalog's /Metadata key is renamed (6.10.1)", "x4.trapped.present" = "so nothing the XMP must hold is there (6.9)", "x4.info.xmp-analogue-present" = "nor any analogue of the Info entries (6.10.2)", "x4.xmp.document-id" = "6.10.4", "x4.xmp.version-id" = "6.10.4", "x4.xmp.rendition-class" = "6.10.4", "x4.xmp.create-date" = "6.10.4", "x4.xmp.modify-date" = "6.10.4", "x4.xmp.metadata-date" = "6.10.4", "x4.xmp.title" = "6.10.4", "x4.xmp.agent-names" = "6.10.4, a warning", "x4.identity.version-present" = "6.11" }
+
+# PDF/X-4 6.4.1 and 6.4.2.1: the output intent. Each changes x4-good's intent or its profile's header in one way.
+
+[x4-no-output-intent]
+levels = ["x4"]
+expect = { "x4.output-intent.present" = "the catalog has no /OutputIntents (6.4.2.1)" }
+
+[x4-intent-not-pdfx]
+levels = ["x4"]
+expect = { "x4.output-intent.present" = "the only output intent is /GTS_PDFA1 (6.4.2.1)" }
+
+[x4-two-pdfx-intents]
+levels = ["x4"]
+expect = { "x4.output-intent.unique" = "two /GTS_PDFX output intents (6.4.2.1)" }
+
+[x4-intent-no-identifier]
+levels = ["x4"]
+expect = { "x4.output-intent.identifier-present" = "no /OutputConditionIdentifier (6.4.2.1)" }
+
+[x4-intent-identifier-not-text]
+levels = ["x4"]
+expect = { "x4.output-intent.identifier-text-string" = "/OutputConditionIdentifier is a name, not a text string (6.4.2.1)" }
+
+[x4-intent-registry-not-url]
+levels = ["x4"]
+expect = { "x4.output-intent.registry-name-url" = "/RegistryName is not a URL, a warning (6.4.2.1)" }
+
+[x4-intent-no-profile]
+levels = ["x4"]
+expect = { "x4.output-intent.dest-profile-present" = "no /DestOutputProfile (6.4.2.1)" }
+
+[x4-intent-profile-ref]
+levels = ["x4"]
+expect = { "x4.output-intent.no-dest-profile-ref" = "a /DestOutputProfileRef, which only X-4p may use (6.4.2.1)" }
+
+[x4-intent-no-condition]
+levels = ["x4"]
+expect = { "x4.output-intent.output-condition" = "no /OutputCondition, a warning (6.4.2.1)" }
+
+[x4-intent-profile-v5]
+levels = ["x4"]
+expect = { "x4.output-intent.profile-version" = "the profile's version byte says 5 (6.4.2.1)" }
+
+[x4-intent-profile-monitor]
+levels = ["x4"]
+expect = { "x4.output-intent.profile-class-prtr" = "the profile's class is mntr (6.4.2.1)" }
+
+[x4-intent-profile-lab]
+levels = ["x4"]
+expect = { "x4.output-intent.channels" = "the profile's data colour space is Lab (6.4.1)" }
+
+# PDF/X-4 6.12: page boxes. Each changes x4-good's page boxes in one way.
+
+[x4-no-trim-or-art]
+levels = ["x4"]
+expect = { "x4.boxes.trim-or-art" = "the page has neither a TrimBox nor an ArtBox (6.12)" }
+
+[x4-trim-and-art]
+levels = ["x4"]
+expect = { "x4.boxes.not-both" = "the page has both (6.12)" }
+
+[x4-art-not-trim]
+levels = ["x4"]
+expect = { "x4.boxes.prefer-trim" = "an ArtBox instead of a TrimBox, a warning (6.12)" }
+
+[x4-trim-beyond-bleed]
+levels = ["x4"]
+expect = { "x4.boxes.within-bleed" = "the BleedBox is smaller than the TrimBox (6.12)" }
+
+[x4-bleed-beyond-crop]
+levels = ["x4"]
+expect = { "x4.boxes.within-crop" = "a CropBox inside the BleedBox (6.12)" }
+
+[x4-crop-beyond-media]
+levels = ["x4"]
+expect = { "x4.boxes.within-media" = "a CropBox larger than the MediaBox (6.12)" }
+
+# PDF/X-4 6.7 to 6.26: keys forbidden anywhere in the file (X4-Q3). Each adds one thing to x4-good.
+
+[x4-xobject-opi]
+levels = ["x4"]
+expect = { "x4.xobject.no-opi" = "a form XObject with /OPI (6.7)" }
+
+[x4-form-ref]
+levels = ["x4"]
+expect = { "x4.xobject.no-ref" = "a form XObject with /Ref (6.7)" }
+
+[x4-stream-external]
+levels = ["x4"]
+expect = { "x4.stream.no-external-f" = "a stream with /F (6.7)" }
+
+[x4-filespec-not-embedded]
+levels = ["x4"]
+expect = { "x4.filespec.embedded" = "a file specification in /AF without /EF (6.7)" }
+
+[x4-gstate-tr]
+levels = ["x4"]
+expect = { "x4.extgstate.no-tr" = "an ExtGState with /TR (6.13)" }
+
+[x4-gstate-htp]
+levels = ["x4"]
+expect = { "x4.extgstate.no-htp" = "an ExtGState with /HTP (6.13)" }
+
+[x4-gstate-tr2]
+levels = ["x4"]
+expect = { "x4.extgstate.tr2-default" = "an ExtGState with /TR2 /Identity (6.13)" }
+
+[x4-halftone-type]
+levels = ["x4"]
+expect = { "x4.halftone.type-1-or-5" = "a type 6 halftone (6.13)" }
+
+[x4-halftone-name]
+levels = ["x4"]
+expect = { "x4.halftone.no-name" = "a halftone with /HalftoneName (6.13)" }
+
+[x4-halftone-transfer]
+levels = ["x4"]
+expect = { "x4.halftone.transfer-function" = "a type 1 halftone with /TransferFunction (6.13, X4-Q9)" }
+
+[x4-postscript-xobject]
+levels = ["x4"]
+expect = { "x4.xobject.no-postscript" = "a PostScript XObject (6.14)" }
+
+[x4-form-subtype2-ps]
+levels = ["x4"]
+expect = { "x4.xobject.no-subtype2-ps" = "a form XObject with /Subtype2 /PS (6.14)" }
+
+[x4-image-alternate-printed]
+levels = ["x4"]
+expect = { "x4.image.no-default-for-printing" = "an image alternate with /DefaultForPrinting true (6.16)" }
+
+[x4-open-action]
+levels = ["x4"]
+expect = { "x4.actions.absent" = "a URI action as /OpenAction (6.18, X4-Q11)" }
+
+[x4-javascript]
+levels = ["x4"]
+expect = { "x4.javascript.absent" = "a /JavaScript name tree (6.18)" }
+
+[x4-viewer-print-area]
+levels = ["x4"]
+expect = { "x4.viewer-prefs.areas" = "ViewerPreferences /PrintArea /CropBox (6.21)" }
+
+[x4-alternate-presentations]
+levels = ["x4"]
+expect = { "x4.names.no-alternate-presentations" = "/AlternatePresentations in the name dictionary (6.22)" }
+
+[x4-pres-steps]
+levels = ["x4"]
+expect = { "x4.page.no-pres-steps" = "a page with /PresSteps (6.22)" }
+
+[x4-xfa]
+levels = ["x4"]
+expect = { "x4.acroform.no-xfa" = "an interactive form with /XFA (6.26)" }
+
+# PDF/X-4 6.24, optional content.
+
+[x4-oc-unnamed]
+levels = ["x4"]
+expect = { "x4.oc.config-name-present" = "the default configuration has no /Name (6.24)" }
+
+[x4-oc-same-name]
+levels = ["x4"]
+expect = { "x4.oc.config-name-unique" = "two configurations are named Print (6.24)" }
+
+[x4-oc-order-incomplete]
+levels = ["x4"]
+expect = { "x4.oc.order-complete" = "/Order lists one of two groups (6.24, X4-Q13)" }
+
+[x4-oc-as]
+levels = ["x4"]
+expect = { "x4.oc.no-as" = "the default configuration has /AS (6.24)" }
+
+# PDF/X-4 6.17 and 6.9, annotations and trap networks.
+
+[x4-annot-inside-bleed]
+levels = ["x4"]
+expect = { "x4.annot.outside-bleed" = "a Text annotation inside the bleed box (6.17)" }
+
+[x4-printermark-inside-trim]
+levels = ["x4"]
+expect = { "x4.annot.printermark-outside-trim" = "a PrinterMark annotation inside the trim box (6.17)" }
+
+[x4-trapnet-untrapped]
+levels = ["x4"]
+expect = { "x4.trapped.trapnet-implies-true" = "a TrapNet annotation while pdf:Trapped is False (6.9)" }
+
+[x4-trapnet-font-fauxing]
+levels = ["x4"]
+expect = { "x4.trapnet.font-fauxing-empty" = "a TrapNet annotation with /FontFauxing (6.9)" }
+
+[x4-trapnet-pcm-rgb]
+levels = ["x4"]
+expect = { "x4.trapnet.pcm-matches-intent" = "a TrapNet appearance with /PCM /DeviceRGB under a CMYK intent (6.9)" }
+
+# PDF/X-4 6.10.1 and 6.10.2: XMP value types and unlisted Info entries.
+
+[x4-xmp-wrong-type]
+levels = ["x4"]
+expect = { "x4.xmp.conforms" = "dc:subject is plain text, not an rdf:Bag (6.10.1)" }
+
+[x4-info-in-pdf-schema]
+levels = ["x4"]
+expect = { "x4.info.unlisted-not-in-predefined-schema" = "Info /Company is written as pdf:Company (6.10.2)" }
+
+# PDF/X-4 6.4.2.1: the ICC characterization registry.
+
+[x4-intent-custom]
+levels = ["x4"]
+expect = { "x4.output-intent.identifier-registered" = "the identifier is Custom, a warning (6.4.2.1)" }
+
+[x4-intent-registry-misspelt]
+levels = ["x4"]
+expect = { "x4.output-intent.registry-name-color-org" = "FOGRA39 under https://www.color.org/, not the exact ICC URL (6.4.2.1)" }
+
+[x4-intent-not-in-registry]
+levels = ["x4"]
+expect = { "x4.output-intent.identifier-in-registry" = "Little-CMS test1 under the ICC registry, which does not list it; a warning by decision (6.4.2.1)" }
+
+# Content streams: ISO 32000-2 7.8.2 and 8.9.7, PDF/X-4 6.19 and 6.23. Each appends to x4-good's page content.
+
+[x4-unknown-operator]
+levels = ["x4"]
+expect = { "content.operator" = "frob, outside BX/EX (ISO 32000-2 7.8.2)", "x4.content.known-operators" = "and not in the PDF 1.6 Reference (6.19)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-bx-ex]
+levels = ["x4"]
+expect = { "x4.content.no-bx-ex" = "an empty BX/EX section, a warning (6.19)" }
+
+[x4-operator-in-bx]
+levels = ["x4"]
+expect = { "x4.content.known-operators" = "frob inside BX/EX (6.19)", "x4.content.no-bx-ex" = "in a BX/EX section, a warning (6.19)" }
+
+[x4-bx-open]
+levels = ["x4"]
+expect = { "content.compatibility" = "BX with no EX (ISO 32000-2 7.8.2)", "x4.content.no-bx-ex" = "a BX section, a warning (6.19)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-inline-image-unknown-end]
+levels = ["x4"]
+expect = { "content.damaged" = "an inline JPEG with no end-of-image marker and no /L (ISO 32000-2 8.9.7)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-content-unreadable]
+levels = ["x4"]
+expect = { "content.damaged" = "an unterminated string in the page content (ISO 32000-2 7.8.2)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
+
+[x4-ri-unknown]
+levels = ["x4"]
+expect = { "x4.intent.known-values" = "/Vivid ri (6.23)" }
+
+[x4-gstate-ri-unknown]
+levels = ["x4"]
+expect = { "x4.intent.known-values" = "an ExtGState with /RI /Vivid (6.23, 6.13)" }
+
+# PDF/X-4 6.4.3: element colour spaces. Each paints a small rectangle on x4-good's page.
+
+[x4-device-rgb]
+levels = ["x4"]
+expect = { "x4.colour.device-space-matches-intent" = "a DeviceRGB fill under a CMYK intent (6.4.3.2)" }
+
+[x4-spot-rgb-alternate]
+levels = ["x4"]
+expect = { "x4.spot.alternate-space-restricted" = "a spot colour with a DeviceRGB alternate under a CMYK intent (6.4.3.4, X4-Q4)" }
+
+[x4-icc-v5]
+levels = ["x4"]
+expect = { "x4.icc.profile-version" = "an ICCBased fill whose profile says version 5 (6.4.3.3)" }
+
+[x4-icc-opm]
+levels = ["x4"]
+expect = { "x4.icc.overprint-mode-zero" = "a four-colour ICCBased fill overprinting with OPM 1 under a CMYK intent (6.4.3.3)" }
+
+[x4-icc-intent-profile]
+levels = ["x4"]
+expect = { "x4.icc.cmyk-not-intent-profile" = "an ICCBased fill on the output intent's own profile stream (6.4.3.3)" }
+
+[x4-icc-intent-copy]
+levels = ["x4"]
+expect = { "x4.icc.cmyk-not-intent-profile" = "an ICCBased fill on a copy of the intent's profile, equal by MD5 (6.4.3.3)" }
+
+# PDF/X-4 6.4.3.4 and 6.20: spot colours and transparency.
+
+[x4-colorants-mismatch]
+levels = ["x4"]
+expect = { "x4.spot.colorants-match-devicen" = "a DeviceN spot whose /Colorants Separation is half as dark (6.4.3.4, a should)" }
+
+[x4-devicen-no-colorants]
+levels = ["x4"]
+expect = { "x4.spot.colorants-entry" = "a DeviceN spot with no /Colorants entry (6.4.3.4)" }
+
+[x4-devicen-process-rgb]
+levels = ["x4"]
+expect = { "x4.spot.process-colorspace" = "/Process /ColorSpace /DeviceRGB under a CMYK intent (6.4.3.4, X4-Q5)" }
+
+[x4-nchannel-dotgain]
+levels = ["x4"]
+expect = { "x4.spot.no-dotgain" = "NChannel /MixingHints with /DotGain (6.4.3.4)" }
+
+[x4-spot-confusing-name]
+levels = ["x4"]
+expect = { "x4.spot.confusing-names" = "a spot named Red, a warning (6.4.3.4)" }
+
+[x4-spot-two-definitions]
+levels = ["x4"]
+expect = { "x4.spot.consistent-definition" = "two Separation arrays named Spot1 with different tint transforms (6.4.3.4)" }
+
+[x4-printing-order-clash]
+levels = ["x4"]
+expect = { "x4.spot.printing-order-consistent" = "PrintingOrder [/A /B] and [/B /A] (6.4.3.4)" }
+
+[x4-solidities-clash]
+levels = ["x4"]
+expect = { "x4.spot.solidities-consistent" = "Solidities for A of 1.0 and 0.5 (6.4.3.4)" }
+
+[x4-group-rgb]
+levels = ["x4"]
+expect = { "x4.transparency.group-cs-restricted" = "a page group with /CS /DeviceRGB under a CMYK intent (6.20)" }
+
+[x4-blend-mode-unknown]
+levels = ["x4"]
+expect = { "x4.transparency.blend-modes" = "an ExtGState with /BM /Funky (6.20, X4-Q19)" }
+
+# 6.20's positive (x4-test-material §3 item 16): a Multiply fill at half opacity on a page without /Group passes.
+[x4-transparency-no-group]
+levels = ["x4"]
+expect = {}
+
+# PDF/X-4 6.27: JPEG 2000 images. Each adds an image XObject to x4-good.
+
+[x4-jpx-five-channels]
+levels = ["x4"]
+expect = { "x4.jpx.channels" = "five channels (6.27)" }
+
+[x4-jpx-two-colours]
+levels = ["x4"]
+expect = { "x4.jpx.one-colour-space" = "two colour specification boxes (6.27)" }
+
+[x4-jpx-ciejab]
+levels = ["x4"]
+expect = { "x4.jpx.no-ciejab" = "the CIEJab enumerated colour space, 19 (6.27)" }
+
+[x4-jpx-depth-12]
+levels = ["x4"]
+expect = { "x4.jpx.bit-depth" = "12 bits per channel (6.27)" }
+
+[x4-jpx-mixed-depths]
+levels = ["x4"]
+expect = { "x4.jpx.uniform-depth" = "channels of 8 and 16 bits (6.27)" }
+
+[x4-jpx-cmyk-as-device]
+levels = ["x4"]
+expect = { "x4.jpx.cmyk-as-device" = "profile-less CMYK JPEG 2000 with no /ColorSpace under an RGB intent (6.27)", "x4.colour.device-space-matches-intent" = "and the page's own DeviceCMYK under that intent (6.4.3.2)" }
+
+[x4-jpx-plain-jp2]
+levels = ["x4"]
+expect = { "x4.jpx.baseline" = "a plain JP2 file: no jpx or jpxb brand, no Reader Requirements box (6.27, T.801 M.9.2)" }
+
+[x4-jpx-bare-codestream]
+levels = ["x4"]
+expect = { "x4.jpx.baseline" = "a bare codestream, not the JPX file format (6.27)" }
+
+[x4-jpx-not-jpeg2000]
+levels = ["x4"]
+expect = { "x4.image.jpx-valid" = "JPXDecode data that is not JPEG 2000 (6.8)" }
+
+[x4-dct-truncated]
+levels = ["x4"]
+expect = { "x4.image.dct-valid" = "a JPEG cut off inside its scan (6.8)" }
+
+[x4-jbig2-truncated]
+levels = ["x4"]
+expect = { "x4.image.jbig2-valid" = "a JBIG2 page information segment shorter than its data length (6.8)" }
+
+# PDF/X-4 6.1.2: pre-separated pages (X4-Q2).
+
+[x4-pre-separated]
+levels = ["x4"]
+expect = { "x4.pre-separated.absent" = "two pages painting only Cyan and only Magenta (6.1.2, X4-Q2)" }
+
+# proof-pdf's own print checks. Each adds one defect to x4-good's page.
+
+[print-outside-media]
+levels = ["print"]
+expect = { "outside-media" = "a 10 pt square at (2000, 2000), wholly beyond the MediaBox (warning)", "outside-bleed" = "and so beyond the bleed box too" }
+
+[print-xobject-missing]
+levels = ["print"]
+expect = { "xobject-missing" = "the page paints /Nothing, which its resources do not name (ISO 32000-2 7.8.3)" }
+
+# Today's ink fixtures (tests/fixtures/build_pdfs.py), verified for print.
+
+[black-text]
+levels = ["print"]
+expect = { "font-embedded" = "its text font, Helvetica, is not embedded" }
+
+[cyan-text]
+levels = ["print"]
+expect = { "overprint" = "cyan text under overprint (advisory)", "k-only-text" = "the text is C100 (k-only-text is opt-in; the core reports it and the profile decides)", "font-embedded" = "and its text font, Helvetica, is not embedded" }
+
+[white-overprint]
+levels = ["print"]
+expect = { "white-overprint" = "white text set to overprint", "overprint" = "and so overprint on something other than solid black text (advisory)", "font-embedded" = "and its text font, Helvetica, is not embedded" }
+
+[rich-black-text]
+levels = ["print"]
+expect = { "rich-black" = "12 pt text in C60 M50 Y40 K90, at the default 12 pt limit (advisory)", "k-only-text" = "and so not K only", "font-embedded" = "and its text font, Helvetica, is not embedded" }
+
+# Today's page-geometry fixtures, verified for print with the parameters a profile would give.
+
+[good]
+levels = ["print"]
+expect = {}
+params = { geometry = { trim_w_mm = 105.0, trim_h_mm = 148.0, bleed_mm = 3.0 }, uniform_pages = true, pages_multiple_of = 1, output_condition = "sRGB" }
+
+[wrong-size]
+levels = ["print"]
+expect = { "geometry" = "an A5 page where the profile wants A6", "bleed" = "and no bleed where 3 mm is wanted" }
+params = { geometry = { trim_w_mm = 105.0, trim_h_mm = 148.0, bleed_mm = 3.0 } }
+
+[two-sizes]
+levels = ["print"]
+expect = { "page-size" = "page 2 is A5 after an A6 page 1" }
+params = { uniform_pages = true }
+
+[three-pages]
+levels = ["print"]
+expect = { "page-count" = "3 pages where the profile wants a multiple of 2" }
+params = { pages_multiple_of = 2 }
+
+[book-interior]
+levels = ["print"]
+expect = { "bleed" = "no bleed on the binding edge where the profile wants 3 mm all round", "centring" = "and so the trim sits off-centre on the media box" }
+params = { geometry = { trim_w_mm = 105.0, trim_h_mm = 148.0, bleed_mm = 3.0 } }
+
+[bleed-short]
+levels = ["print"]
+expect = { "artwork-bleed" = "a fill that stops at the trim on the left" }
+
+[crop-marks]
+levels = ["print"]
+expect = { "outside-bleed" = "crop marks in the margin, beyond the bleed box", "output-condition" = "the intent names sRGB IEC61966-2.1 where the profile wants FOGRA39" }
+params = { output_condition = "FOGRA39" }
+
+[print-rotated]
+levels = ["print"]
+expect = { "page-rotate" = "x4-good turned with /Rotate 90 (warning)", "artwork-bleed" = "and so its bleed coverage is not checked (warning)", "outside-bleed" = "and nor is what lies beyond the bleed (warning)" }
+params = { uniform_pages = true }
+
+# Today's colour-mode fixtures, verified for print with the profile's colour parameters.
+
+[transparent-undeclared]
+levels = ["print"]
+expect = { "blend-space" = "transparency on a page with no /Group blend space (warning)" }
+
+[transparent-mismatch]
+levels = ["print"]
+expect = { "blend-space" = "a page group blending in RGB under a CMYK intent" }
+
+[transparent-matching]
+levels = ["print"]
+expect = {}
+
+[spot-ink]
+levels = ["print"]
+expect = { "spot-ink" = "a spot ink the profile does not allow" }
+params = { allow_spots = [] }
+
+[rgb-vector]
+levels = ["print"]
+expect = { "colour-space" = "RGB vector artwork in a CMYK job (warning)" }
+
+[rgb-image]
+levels = ["print"]
+expect = { "colour-space" = "an RGB image in a CMYK job" }
+
+[cmyk-vector]
+levels = ["print"]
+expect = { "rgb-only" = "CMYK artwork in an RGB job" }
+params = { colour_mode = "rgb" }
+
+[low-contrast]
+levels = ["print"]
+expect = { "contrast" = "gray text on a slightly lighter gray, below a 30 L* minimum", "font-embedded" = "and its font is not embedded" }
+params = { min_delta_l = 30.0 }
+
+[high-contrast]
+levels = ["print"]
+expect = { "font-embedded" = "its font is not embedded; black text on the paper passes a 30 L* minimum" }
+params = { min_delta_l = 30.0 }
+
+[gray-vector]
+levels = ["print"]
+expect = {}
+params = { colour_mode = "gray" }
+
+[gray-k-only-vector]
+levels = ["print"]
+expect = {}
+params = { colour_mode = "gray", allow_k_only = true }
+
+[gray-rgb-intent]
+levels = ["print"]
+expect = { "gray-only" = "an RGB output intent in a gray job" }
+params = { colour_mode = "gray" }
+
+[gray-cmyk-image-not-k-only]
+levels = ["print"]
+expect = { "gray-only" = "a CMYK image with C, M or Y ink, K-only allowed", "image-dpi" = "and its image is placed below 300 dpi" }
+params = { colour_mode = "gray", allow_k_only = true }
+
+[mixed-rgb-profiles]
+levels = ["print"]
+expect = { "icc-profile" = "two RGB profiles in an RGB job", "image-dpi" = "and its images are placed below 300 dpi" }
+params = { colour_mode = "rgb" }
+
+[cmyk-image-profile]
+levels = ["print"]
+expect = { "icc-profile" = "an ICCBased CMYK space carrying the output intent's own profile", "image-dpi" = "and its image is placed below 300 dpi" }
+
+# Today's image resolution fixtures, verified for print with the profile's limits.
+
+[image-resolution-ok]
+levels = ["print"]
+expect = {}
+params = { max_dpi = 1200.0, max_stretch_pct = 5.0 }
+
+[low-dpi-image]
+levels = ["print"]
+expect = { "image-dpi" = "an image placed below 300 dpi" }
+
+[image-stretched]
+levels = ["print"]
+expect = { "image-stretch" = "an image scaled more on one axis than the other (warning)", "image-dpi" = "and placed below 300 dpi" }
+params = { max_stretch_pct = 5.0 }
+
+[image-too-sharp]
+levels = ["print"]
+expect = { "image-dpi-max" = "an image placed at 1016 dpi, above a 600 dpi ceiling (warning)" }
+params = { max_dpi = 600.0 }
+
+# Today's text fixtures, verified for print with the profile's text limits.
+
+[embedded-text]
+levels = ["print"]
+expect = {}
+params = { min_text_pt = 6.0, min_stroke_pt = 0.25, safe_mm = 3.0 }
+
+[notdef-text]
+levels = ["print"]
+expect = { "missing-glyph" = "code 0 in an Identity-H font, shown as .notdef", "font-embedded" = "and the font is not embedded" }
+
+[type3-text]
+levels = ["print"]
+expect = { "font-type3" = "text in a Type 3 font (warning)" }
+
+[small-text]
+levels = ["print"]
+expect = { "text-size" = "text below the 6 pt floor", "font-embedded" = "and its font is not embedded" }
+params = { min_text_pt = 6.0 }
+
+[hairline]
+levels = ["print"]
+expect = { "hairline" = "a stroke below the 0.25 pt floor" }
+params = { min_stroke_pt = 0.25 }
+
+[edge-text]
+levels = ["print"]
+expect = { "safe-area" = "text reaching within 3 mm of the trim", "font-embedded" = "and its font is not embedded" }
+params = { safe_mm = 3.0 }
+
+# Today's spot colour fixtures, verified for print.
+
+[spot-colour]
+levels = ["print"]
+expect = {}
+
+[spot-conflict]
+levels = ["print"]
+expect = { "spot-definition" = "the ink Foil with two different CMYK alternates" }
+
+# PDF/X-4 6.5.4: the encodings of TrueType fonts. Each changes x4-good's one TrueType font.
+[x4-tt-no-encoding]
+levels = ["x4"]
+expect = { "x4.font.truetype-nonsymbolic-encoding" = "a non-symbolic TrueType font without /Encoding (6.5.4)" }
+
+[x4-tt-differences]
+levels = ["x4"]
+expect = { "x4.font.truetype-nonsymbolic-no-differences" = "WinAnsiEncoding with /Differences (6.5.4)" }
+
+[x4-tt-symbolic-encoding]
+levels = ["x4"]
+expect = { "x4.font.truetype-symbolic-no-encoding" = "a symbolic TrueType font with /Encoding (6.5.4)" }
+
+[x4-tt-symbolic-two-cmaps]
+levels = ["x4"]
+expect = { "x4.font.truetype-symbolic-one-cmap" = "a symbolic TrueType program with two cmap subtables (6.5.4)" }
+
+# PDF/X-4 6.5.1: embedding.
+[x4-font-not-embedded]
+levels = ["x4"]
+expect = { "x4.font.embedded" = "the TrueType font's program removed (6.5.1)" }
+
+# 6.5.1's positive: an unembedded Helvetica shows text only in render mode 3.
+[x4-font-invisible-unembedded]
+levels = ["x4"]
+expect = {}
+
+# PDF/X-4 6.5.1 to 6.5.3, judged against x4-good's TrueType program.
+[x4-font-glyph-missing]
+levels = ["x4"]
+expect = { "x4.font.glyphs-present" = "eacute, which the program has no glyph for (6.5.1)" }
+
+[x4-font-notdef]
+levels = ["x4"]
+expect = { "x4.font.no-notdef" = "code 16, which WinAnsiEncoding names nothing for (6.5.2)" }
+
+[x4-font-widths]
+levels = ["x4"]
+expect = { "x4.font.widths-consistent" = "/Widths 650 for P, 600 in the program (6.5.3)" }
+
+[x4-font-hidden-oc]
+levels = ["x4"]
+expect = { "x4.font.embedded" = "an unembedded font in optional content that is off (6.5.1, 6.24)" }
+
+# 6.5.1's glyph presence skips a code shown only in render mode 3.
+[x4-font-invisible-missing]
+levels = ["x4"]
+expect = {}
+
+# PDF/X-4 6.25: the limits of the PDF 1.6 Reference's Table C.1.
+[x4-limit-integer]
+levels = ["x4"]
+expect = { "x4.limits.lexical" = "the integer 2147483648 in a content stream (6.25)" }
+
+[x4-limit-name]
+levels = ["x4"]
+expect = { "x4.limits.lexical" = "a page key 128 bytes long (6.25)" }
+
+[x4-limit-nesting]
+levels = ["x4"]
+expect = { "x4.limits.graphics" = "29 levels of q (6.25)" }
+
+[x4-limit-devicen]
+levels = ["x4"]
+expect = { "x4.limits.graphics" = "a DeviceN space of 33 inks (6.25)" }
+
+# PDF/X-4 6.6's recommendation for names other than font and separation names (a warning).
+[x4-name-other-not-utf8]
+levels = ["x4"]
+expect = { "x4.names.other-recommended" = "a name that is not UTF-8 (6.6)" }
+
+# PDF/X-4 6.3: a resource the content uses is not in the file.
+[x4-resource-missing]
+levels = ["x4"]
+expect = { "x4.complete.resources-inside" = "/Nowhere Do with no /Nowhere XObject (6.3)" }
+
+# PDF/X-4p (ISO 15930-7 Annex A). The external profile is tests/fixtures/icc/little-cms-test1.icc, which the
+# fixtures name by the relative URL ../icc/little-cms-test1.icc; they are verified as a file set unless `alone`.
+[x4p-good]
+levels = ["x4p"]
+expect = {}
+
+[x4p-good-alone]
+levels = ["x4p"]
+alone = true
+expect = {}
+unjudged = { "x4p.fileset.checksum-matches" = "verified alone (A.1 NOTE)", "x4p.fileset.fields-match" = "verified alone", "x4p.fileset.profile-valid" = "verified alone" }
+
+[x4p-local-then-network]
+levels = ["x4p"]
+expect = {}
+
+[x4p-embedded-profile]
+levels = ["x4p"]
+expect = { "x4p.output-intent.no-dest-profile" = "the intent embeds a profile too (A.2)" }
+
+[x4p-no-ref]
+levels = ["x4p"]
+expect = { "x4p.output-intent.dest-profile-ref" = "the intent neither embeds nor refers to a profile (A.2)" }
+
+[x4p-no-profile-name]
+levels = ["x4p"]
+expect = { "x4p.ref.profile-name" = "no /ProfileName (A.2)" }
+
+[x4p-url-string]
+levels = ["x4p"]
+expect = { "x4p.ref.urls" = "a URL as a bare string, not a URL file specification (A.2)" }
+
+[x4p-url-embedded]
+levels = ["x4p"]
+expect = { "x4p.ref.urls-no-ef-platform" = "a URL file specification with /Mac (A.2)" }
+
+[x4p-checksum-short]
+levels = ["x4p"]
+expect = { "x4p.ref.checksum" = "a 10-byte /CheckSum (A.2)" }
+unjudged = { "x4p.fileset.checksum-matches" = "no candidate can be confirmed without a checksum", "x4p.fileset.fields-match" = "the same", "x4p.fileset.profile-valid" = "the same" }
+
+[x4p-profile-cs-lab]
+levels = ["x4p"]
+expect = { "x4p.ref.profile-cs" = "/ProfileCS (Lab ) (A.2)", "x4p.fileset.fields-match" = "nor is it the profile's own space" }
+
+[x4p-icc-version-short]
+levels = ["x4p"]
+expect = { "x4p.ref.icc-version" = "a 2-byte /ICCVersion (A.2)", "x4p.fileset.fields-match" = "nor is it the profile's version bytes" }
+
+[x4p-colorant-table]
+levels = ["x4p"]
+expect = { "x4p.ref.no-colorant-table" = "/ColorantTable, which is X-5n's (A.2)" }
+
+[x4p-wrong-checksum]
+levels = ["x4p"]
+expect = { "x4p.fileset.checksum-matches" = "the profile at the URL has another MD5 (A.2)" }
+unjudged = { "x4p.fileset.fields-match" = "no external profile", "x4p.fileset.profile-valid" = "no external profile" }
+
+[x4p-missing-profile]
+levels = ["x4p"]
+expect = { "x4p.fileset.checksum-matches" = "no file at the only URL: the file set is incomplete (A.1)" }
+unjudged = { "x4p.fileset.fields-match" = "no external profile", "x4p.fileset.profile-valid" = "no external profile" }
+
+[x4p-network-only]
+levels = ["x4p"]
+expect = {}
+unjudged = { "x4p.fileset.checksum-matches" = "only an https URL, which is not fetched", "x4p.fileset.fields-match" = "the same", "x4p.fileset.profile-valid" = "the same" }
+
+[x4p-wrong-name]
+levels = ["x4p"]
+expect = { "x4p.fileset.fields-match" = "/ProfileName is not the profile's description (A.2)" }
+
+[x4p-not-a-profile]
+levels = ["x4p"]
+expect = { "x4p.fileset.profile-valid" = "the referenced file is not an ICC profile (A.1, 6.4.2.1)", "x4p.fileset.fields-match" = "so it has no description to match" }
+
+[x4p-cmyk-is-intent]
+levels = ["x4p"]
+expect = { "x4.icc.cmyk-not-intent-profile" = "a DefaultCMYK that is the external profile, by identity (6.4.3.3 under A.1)" }
+
+[x4p-cmyk-is-intent-alone]
+levels = ["x4p"]
+alone = true
+expect = { "x4.icc.cmyk-not-intent-profile" = "the same, told by its MD5 equal to /CheckSum without the external profile" }
+unjudged = { "x4p.fileset.checksum-matches" = "verified alone", "x4p.fileset.fields-match" = "verified alone", "x4p.fileset.profile-valid" = "verified alone" }
+
+# PDF/X-5g and X-5pg (ISO 15930-8 clauses 8, 9). A container is x4-good relabelled, with a proxy placing page 0 of a
+# file beside it in tests/fixtures/pdfs; verified as a file set unless `alone`.
+[x5g-good]
+levels = ["x5g"]
+expect = {}
+
+[x5pg-good]
+levels = ["x5pg"]
+expect = {}
+
+[x5g-good-alone]
+levels = ["x5g"]
+alone = true
+expect = {}
+unjudged = { "x5.g-target-conformance-level" = "verified alone", "x5.g-target-conforms" = "verified alone", "x5.g-no-circular-refs" = "verified alone", "x5.g-target-xmp-ids" = "verified alone", "x5.g-target-identity" = "verified alone", "x5.g-target-version-policy" = "verified alone", "x5.g-target-page-exists" = "verified alone", "x5.g-same-printing-condition" = "verified alone", "x5.g-target-no-ocg" = "verified alone" }
+
+[x5g-wrong-version]
+levels = ["x5g"]
+expect = { "x5.identification-value" = "XMP and Info say PDF/X-5n at X-5g (6.2)" }
+
+[x5g-no-proxy]
+levels = ["x5g"]
+expect = { "x5.g-ref-present" = "nothing is placed from another file, a warning (X5-Q1)" }
+
+[x5g-ref-on-image]
+levels = ["x5g"]
+expect = { "x5.g-proxy-is-form" = "/Ref on an image XObject, ignored by readers (8.2; warning)", "x5.g-ref-present" = "so no form proxy either (warning)", "x5.g-ref-filespec-external" = "the image's /Ref is no reference, so its /F owes /EF (15930-7 6.7)" }
+
+[x5g-ref-no-id]
+levels = ["x5g"]
+expect = { "x5.g-ref-id-required" = "a /Ref without /ID (8.2)" }
+
+[x5g-filespec-not-embedded]
+levels = ["x5g"]
+expect = { "x5.g-ref-filespec-external" = "an /AF file specification without /EF; only the reference's may be external (8.2, 6.7)" }
+
+[x5g-proxy-no-metadata]
+levels = ["x5g"]
+expect = { "x5.g-proxy-metadata" = "a proxy without /Metadata (8.3)" }
+
+[x5g-rendition-wrong-case]
+levels = ["x5g"]
+expect = { "x5.g-proxy-rendition-of" = "stRef:DocumentID, not stRef:documentID (8.3, X5-Q6)" }
+
+[x5g-target-docid-not-uuid]
+levels = ["x5g"]
+expect = { "x5.g-document-id-uuid" = "the target's document ID is xmp.did:, not uuid: (8.3, warning)" }
+
+[x5g-target-missing]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "no file at missing.pdf: the file set is incomplete" }
+unjudged = { "x5.g-target-conformance-level" = "no target to read", "x5.g-target-conforms" = "no target to read", "x5.g-no-circular-refs" = "no target to read", "x5.g-target-xmp-ids" = "no target to read", "x5.g-target-version-policy" = "no target to read", "x5.g-target-page-exists" = "no target to read", "x5.g-same-printing-condition" = "no target to read", "x5.g-target-no-ocg" = "no target to read" }
+
+[x5g-target-network]
+levels = ["x5g"]
+expect = {}
+unjudged = { "x5.g-target-conformance-level" = "the target is only at an https URL, which is not fetched", "x5.g-target-conforms" = "the target is only at an https URL, which is not fetched", "x5.g-no-circular-refs" = "the target is only at an https URL, which is not fetched", "x5.g-target-xmp-ids" = "the target is only at an https URL, which is not fetched", "x5.g-target-identity" = "the target is only at an https URL, which is not fetched", "x5.g-target-version-policy" = "the target is only at an https URL, which is not fetched", "x5.g-target-page-exists" = "the target is only at an https URL, which is not fetched", "x5.g-same-printing-condition" = "the target is only at an https URL, which is not fetched", "x5.g-target-no-ocg" = "the target is only at an https URL, which is not fetched" }
+
+[x5g-target-wrong-id]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "the reference's first /ID is not the target's (8.4)" }
+
+[x5g-target-other-version]
+levels = ["x5g"]
+expect = {}
+unjudged = { "x5.g-target-version-policy" = "another version of the target, and no choice made (X5-Q5)" }
+
+[x5g-target-other-version-accepted]
+levels = ["x5g"]
+params = { accept_target_versions = true }
+expect = {}
+
+[x5g-target-other-version-rejected]
+levels = ["x5g"]
+params = { accept_target_versions = false }
+expect = { "x5.g-target-version-policy" = "another version of the target, which the job rejects (8.4 NOTE 2)" }
+
+[x5g-target-page-missing]
+levels = ["x5g"]
+expect = { "x5.g-target-page-exists" = "page index 5 of a one-page target (ISO 32000-1 8.10.4)" }
+
+[x5g-target-label-missing]
+levels = ["x5g"]
+expect = { "x5.g-target-page-exists" = "a page label the target does not have" }
+
+[x5g-target-nonconforming]
+levels = ["x5g"]
+expect = { "x5.g-target-conforms" = "the target x4-lzw fails PDF/X-4 (8.2)" }
+
+[x5g-target-ocg]
+levels = ["x5g"]
+expect = { "x5.g-target-no-ocg" = "an X-4 target with optional content (8.7)" }
+
+[x5g-target-other-condition]
+levels = ["x5g"]
+expect = { "x5.g-same-printing-condition" = "the target's intent names FOGRA39 (8.5, X5-Q7)" }
+
+[x5g-target-x1a]
+levels = ["x5g"]
+expect = { "x5.g-target-xmp-ids" = "an X-1a target without xmpMM:DocumentID, VersionID or RenditionClass (8.3)" }
+# Verified at X-1a:2001 since L-Q10 (2026-11-27), where it conforms; before, not evaluated (X5-Q9).
+
+[x5g-target-x2]
+levels = ["x5g"]
+expect = { "x5.g-target-conformance-level" = "the target claims PDF/X-2 (8.2)" }
+unjudged = { "x5.g-target-conforms" = "not a level a target may have, so not verified" }
+
+[x5g-cycle]
+levels = ["x5g"]
+expect = { "x5.g-no-circular-refs" = "the container refers to itself (8.2)", "x5.g-ref-id-required" = "and its reference has no /ID" }
+unjudged = { "x5.g-target-conforms" = "a loop is not verified again" }
+
+# The X-4 files X-5 containers refer to.
+[x5-target-ocg]
+levels = ["x4"]
+expect = {}
+
+[x5-target-other-condition]
+levels = ["x4"]
+expect = {}
+
+[x5-target-x2]
+levels = ["x4"]
+expect = { "x4.identity.version-value" = "it claims PDF/X-2" }
+
+[x5g-target-no-f]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "a /Ref without /F names no target" }
+unjudged = { "x5.g-target-conformance-level" = "no target to read", "x5.g-target-conforms" = "no target to read", "x5.g-no-circular-refs" = "no target to read", "x5.g-target-xmp-ids" = "no target to read", "x5.g-target-version-policy" = "no target to read", "x5.g-target-page-exists" = "no target to read", "x5.g-same-printing-condition" = "no target to read", "x5.g-target-no-ocg" = "no target to read" }
+
+[x5g-target-f-not-file]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "a /Ref whose /F is a number names no file" }
+unjudged = { "x5.g-target-conformance-level" = "no target to read", "x5.g-target-conforms" = "no target to read", "x5.g-no-circular-refs" = "no target to read", "x5.g-target-xmp-ids" = "no target to read", "x5.g-target-version-policy" = "no target to read", "x5.g-target-page-exists" = "no target to read", "x5.g-same-printing-condition" = "no target to read", "x5.g-target-no-ocg" = "no target to read" }
+
+[x5g-target-other-document]
+levels = ["x5g"]
+expect = { "x5.g-target-identity" = "the proxy names another document ID than the target's (8.4)" }
+
+[x5g-target-labelled]
+levels = ["x5g"]
+expect = {}
+
+[x5g-ref-page-name]
+levels = ["x5g"]
+expect = { "x5.g-target-page-exists" = "/Page is a name, neither an index nor a label" }
+
+[x5g-target-other-profile]
+levels = ["x5g"]
+expect = { "x5.g-same-printing-condition" = "the same condition with a profile that differs, a warning (X5-Q7)" }
+
+[x5g-proxy-metadata-dict]
+levels = ["x5g"]
+expect = { "x5.g-proxy-metadata" = "/Metadata is a dictionary, not a stream (8.3)" }
+
+[x5-target-labelled]
+levels = ["x4"]
+expect = {}
+
+[x5-target-other-profile]
+levels = ["x4"]
+expect = {}
+
+# PDF/X-5n (ISO 15930-8 clause 7): x4p relabelled, its intent referring to an n-colorant ICC v4 profile of our own
+# (tests/fixtures/icc/xclr-5.icc or xclr-6.icc, written by build_pdfs.py), or embedding it in the URL file
+# specification (7.2).
+[x5n-good]
+levels = ["x5n"]
+expect = {}
+
+[x5n-good-6]
+levels = ["x5n"]
+expect = {}
+
+[x5n-good-embedded]
+levels = ["x5n"]
+expect = {}
+
+[x5n-good-alone]
+levels = ["x5n"]
+alone = true
+expect = {}
+unjudged = { "x4p.fileset.checksum-matches" = "verified alone", "x4p.fileset.fields-match" = "verified alone", "x5.n-profile-iso15076" = "verified alone, and /ICCVersion says 4.3", "x5.n-colorant-table-matches-profile" = "verified alone" }
+
+[x5n-profile-cs-cmyk]
+levels = ["x5n"]
+expect = { "x5.n-profilecs-xclr" = "/ProfileCS (CMYK), not xCLR (7.2)", "x4p.fileset.fields-match" = "nor the profile's 5CLR" }
+
+[x5n-no-colorant-table]
+levels = ["x5n"]
+expect = { "x5.n-colorant-table-present" = "no /ColorantTable (7.2)", "x5.n-devicegray-needs-black" = "so no Black for the page's DeviceGray (7.3)", "x5.n-devicecmyk-needs-cmyk" = "nor CMYK for its DeviceCMYK (7.3)" }
+
+[x5n-colorant-table-count]
+levels = ["x5n"]
+expect = { "x5.n-colorant-table-count" = "4 names for 5CLR, a warning (X5-Q4)", "x5.n-colorant-table-matches-profile" = "and not the profile's colorants (7.2)" }
+
+[x5n-colorant-table-order]
+levels = ["x5n"]
+expect = { "x5.n-colorant-table-matches-profile" = "the profile's colorants in reverse order (7.2)" }
+
+[x5n-4clr-cmyk]
+levels = ["x5n"]
+expect = { "x5.n-3clr-4clr-not-rgb-cmyk" = "4CLR naming exactly the CMYK inks, a warning (7.2, X5-Q4)", "x4p.fileset.fields-match" = "the profile is 5CLR", "x5.n-colorant-table-matches-profile" = "and its colorants differ" }
+
+[x5n-url-mac]
+levels = ["x5n"]
+expect = { "x5.n-urls-ef-allowed" = "a URL file specification with /Mac (7.2 allows only /EF)" }
+
+[x5n-icc-version-2]
+levels = ["x5n"]
+expect = { "x4p.fileset.fields-match" = "/ICCVersion says 2.1, the profile 4.3 (A.2)" }
+
+[x5n-icc-version-2-alone]
+levels = ["x5n"]
+alone = true
+expect = { "x5.n-profile-iso15076" = "/ICCVersion 2.1, told without the profile (7.1)" }
+unjudged = { "x4p.fileset.checksum-matches" = "verified alone", "x4p.fileset.fields-match" = "verified alone", "x5.n-colorant-table-matches-profile" = "verified alone" }
+
+[x5n-profile-v2]
+levels = ["x5n"]
+expect = { "x5.n-profile-iso15076" = "an embedded ICC 2.1 n-colorant profile, not ISO 15076-1 (7.1)" }
+
+[x5n-no-black]
+levels = ["x5n"]
+expect = { "x5.n-devicegray-needs-black" = "DeviceGray, but no Black colorant (7.3)", "x5.n-devicecmyk-needs-cmyk" = "DeviceCMYK, but no Black (7.3)", "x5.n-colorant-table-matches-profile" = "the colorants are not the profile's" }
+
+[x5n-rgb]
+levels = ["x5n"]
+expect = { "x5.n-no-devicergb" = "a DeviceRGB fill (7.3)" }
+
+[x5n-devicen-nchannel]
+levels = ["x5n"]
+expect = { "x5.n-devicen-subtype" = "/Subtype /NChannel (7.3)" }
+
+[x5n-devicen-process]
+levels = ["x5n"]
+expect = { "x5.n-devicen-no-process" = "/Process in a DeviceN's attributes (7.3)" }
+
+[x5n-transparency-no-group]
+levels = ["x5n"]
+expect = { "x5.n-transparency-group-cs" = "opacity on a page without /Group (7.3, X5-Q12)" }
+
+[x5n-trapnet-pcm-cmyk]
+levels = ["x5n"]
+expect = { "x5.n-trapnet-pcm" = "a TrapNet appearance with /PCM /DeviceCMYK (7.1)" }
+
+[x5n-trapnet-separations]
+levels = ["x5n"]
+expect = { "x5.n-trapnet-separations" = "/SeparationColorNames lists Cyan alone (7.1)" }
+
+# ---- PDF/X-1a and PDF/X-3 (ISO 15930-1, -3, -4, -6; docs/interpretations.md). x4-good identified as each older
+# level in Info, without its X-4 XMP: the base each older-level negative is built from.
+[x1a-2001-good]
+levels = ["x1a-2001"]
+expect = {}
+
+[x3-2002-good]
+levels = ["x3-2002"]
+expect = {}
+
+[x1a-2003-good]
+levels = ["x1a-2003"]
+expect = {}
+
+[x3-2003-good]
+levels = ["x3-2003"]
+expect = {}
+
+[x13-trapped-missing]
+levels = ["x3-2003"]
+expect = { "x13.trapped.present" = "Info has no /Trapped (15930-6 6.6)" }
+
+[x13-trapped-unknown]
+levels = ["x1a-2001"]
+expect = { "x13.trapped.true-or-false" = "Info /Trapped is /Unknown (15930-1 6.9)" }
+
+[x13-trapnet-untrapped]
+levels = ["x1a-2003"]
+expect = { "x13.trapped.trapnet-implies-true" = "a TrapNet annotation while Info /Trapped is /False (15930-4 6.6)" }
+
+[x1a-trapnet-pcm-rgb]
+levels = ["x1a-2001"]
+expect = { "x1a.trapnet.pcm-cmyk" = "a TrapNet appearance with /PCM /DeviceRGB (15930-1 6.9)" }
+
+[x13-version-missing]
+levels = ["x3-2002"]
+expect = { "x13.identity.version-present" = "Info has no /GTS_PDFXVersion (15930-3 6.6)" }
+
+[x13-version-wrong]
+levels = ["x1a-2003"]
+expect = { "x13.identity.version-value" = "Info /GTS_PDFXVersion names X-1a:2001, verified as X-1a:2003 (15930-4 6.7)" }
+
+[x1a-conformance-misprint]
+levels = ["x1a-2001"]
+expect = { "x1a.identity.conformance" = "Info /GTS_PDFXConformance is 6.13's misprint PDF/X-a1:2001 (L-Q13)" }
+
+[x1a-plain-x1]
+levels = ["x1a-2001"]
+expect = {}
+unjudged = { "x1a.identity.conformance" = "version PDF/X-1:2001 with no conformance key claims plain PDF/X-1 (L-Q1)" }
+
+[x13-creation-date-missing]
+levels = ["x3-2003"]
+expect = { "x13.info.creation-date" = "Info has no /CreationDate (15930-6 6.7)" }
+
+[x13-mod-date-invalid]
+levels = ["x1a-2001"]
+expect = { "x13.info.mod-date" = "Info /ModDate is not a date (15930-1 6.13)" }
+
+[x13-title-empty]
+levels = ["x3-2002"]
+expect = { "x13.info.title" = "Info /Title is empty (15930-3 6.6)" }
+
+[x13-producer-missing]
+levels = ["x1a-2003"]
+expect = { "x13.info.agent-names" = "Info has no /Producer (15930-4 6.7, a recommendation)" }
+
+[x13-xmp-mod-date-differs]
+levels = ["x3-2003"]
+expect = { "x13.xmp.mod-date-agrees" = "XMP's modification date is a day before Info /ModDate (15930-6 6.7, L-Q5)" }
+
+# ---- Older levels: output intent and print-element colour (task 2.1).
+[x13-icc-name-no-registry]
+levels = ["x1a-2001"]
+expect = { "x13.output-intent.icc-name-needs-registry" = "identifier FOGRA39, an ICC registry name, with no /RegistryName (15930-1 6.3.2)" }
+
+[x13-no-profile-unregistered-2003]
+levels = ["x3-2003"]
+expect = { "x13.output-intent.dest-profile-by-registry" = "no /RegistryName and no /DestOutputProfile (15930-6 6.2.2)" }
+
+[x13-no-profile-unregistered-2002]
+levels = ["x3-2002"]
+expect = { "x13.output-intent.dest-profile-by-icc-name" = "an identifier outside the ICC registry and no /DestOutputProfile (15930-3 6.2.2)" }
+
+[x3-no-profile-icc-colour]
+levels = ["x3-2002"]
+expect = { "x3.output-intent.dest-profile-for-colour" = "a registered condition without a profile, and a print element in ICCBased colour (15930-3 6.2.2)" }
+
+# A registered CMYK condition named without a profile, with CMYK print elements only: allowed.
+[x3-2002-registered-no-profile]
+levels = ["x3-2002"]
+expect = {}
+
+[x1a-profile-no-atob1]
+levels = ["x1a-2001"]
+expect = { "x1a.output-intent.profile-atob1" = "the output profile has no AToB1Tag (15930-1 6.3.2)" }
+
+[x1a-intent-rgb]
+levels = ["x1a-2003"]
+expect = { "x1a.output-intent.cmyk" = "the output profile's data colour space is RGB (15930-4 6.2.1, L-Q16)" }
+
+[x1a-no-output-condition]
+levels = ["x1a-2001"]
+expect = { "x1a.output-intent.output-condition-unregistered" = "an unregistered identifier and no /OutputCondition (15930-1 6.3.2, a recommendation)" }
+
+[x3-intent-no-info]
+levels = ["x3-2002"]
+expect = { "x3.output-intent.info" = "the PDF/X intent has no /Info (15930-3 6.2.2, a recommendation)" }
+
+[x13-profile-v4]
+levels = ["x3-2003"]
+expect = { "x13.output-intent.profile-version" = "the output profile is ICC version 4 (L-Q11)" }
+
+[x3-icc-v4]
+levels = ["x3-2003"]
+expect = { "x3.icc.profile-version" = "a print element's ICCBased profile is version 4 (L-Q11)" }
+
+[x3-2003-registry-https]
+levels = ["x3-2003"]
+expect = { "x3.output-intent.registry-name-color-org-2003" = "FOGRA39 under /RegistryName https://www.color.org (15930-6 6.2.2)" }
+
+# The ICC registry URL with a final slash, as 15930-6 spells it: right at X-3:2003 (L-Q15), a variant at X-1a:2003.
+[x3-2003-registry-slash]
+levels = ["x3-2003"]
+expect = {}
+
+[x1a-2003-registry-slash]
+levels = ["x1a-2003"]
+expect = { "x4.output-intent.registry-name-color-org" = "FOGRA39 under http://www.color.org/, not exactly the URL 15930-4 6.2.2 gives (L-Q15)" }
+
+[x1a-device-rgb]
+levels = ["x1a-2001"]
+expect = { "x1a.colour.print-spaces" = "a DeviceRGB fill (15930-1 6.3.1)" }
+
+[x1a-default-cmyk]
+levels = ["x1a-2003"]
+expect = { "x1a.colour.print-spaces" = "a DefaultCMYK ICCBased space remaps a DeviceCMYK fill (15930-4 6.2.1, L-Q12)" }
+
+[x1a-spot-rgb-alternate]
+levels = ["x1a-2003"]
+expect = { "x1a.spot.alternate-cmyk-or-gray" = "a Separation whose alternate is DeviceRGB (15930-4 6.2.3)" }
+
+[x1a-unused-default]
+levels = ["x1a-2001"]
+expect = { "x1a.colour.no-default-space" = "the page holds a DefaultRGB space no print element uses (15930-1 6.3.1, L-Q12, a warning)" }
+
+# ---- Older levels: transparency (15930-4 and -6 6.16; L-Q3 at X-1a:2001 and X-3:2002; task 2.2).
+[x13-smask-extgstate]
+levels = ["x1a-2001"]
+expect = { "x13.transparency.smask" = "an ExtGState with a luminosity soft mask is set (L-Q3, 15930-1 6.2)" }
+
+[x13-image-smask]
+levels = ["x3-2003"]
+expect = { "x13.transparency.smask" = "an image with an /SMask is drawn (15930-6 6.16)" }
+
+[x13-opacity]
+levels = ["x3-2002"]
+expect = { "x13.transparency.extgstate-values" = "an ExtGState with /ca 0.5 is set (L-Q3, 15930-3 Annex D.2)" }
+
+[x13-blend-multiply]
+levels = ["x1a-2003"]
+expect = { "x13.transparency.extgstate-values" = "an ExtGState with /BM /Multiply is set (15930-4 6.16)" }
+
+[x13-form-group]
+levels = ["x3-2003"]
+expect = { "x13.transparency.no-group" = "a form XObject with a transparency group is drawn (15930-6 6.16)" }
+
+# The keys at their opaque values, and a page group (L-Q19): allowed.
+[x13-opaque-transparency-keys]
+levels = ["x1a-2001"]
+expect = {}
+
+[x13-page-group]
+levels = ["x1a-2003"]
+expect = {}
+
+# ---- Older levels: data structure and compression, L-Q2 and L-Q4 (task 2.3).
+[x13-object-streams]
+levels = ["x3-2002"]
+expect = { "x13.structure.xref-table" = "written with a cross-reference stream and object streams (L-Q2, 15930-3 6.1)" }
+
+[x1a-content-lzw]
+levels = ["x1a-2001"]
+expect = { "x1a.filter.listed-2001" = "the page content is LZW-encoded (15930-1 6.8)" }
+
+# ASCII85 is an encoding, not compression: allowed at X-1a:2001 (L-Q18).
+[x1a-content-ascii85]
+levels = ["x1a-2001"]
+expect = {}
+
+[x13-jpx-image]
+levels = ["x1a-2003"]
+expect = { "x13.filter.listed" = "an image under JPXDecode, a PDF 1.5 filter (L-Q4, 15930-4 6.5)" }
+
+[x13-jbig2-image]
+levels = ["x3-2003"]
+expect = { "x13.filter.no-jbig2" = "an image under JBIG2Decode (15930-6 6.5)" }
+
+[x13-image-16-bit]
+levels = ["x3-2002"]
+expect = { "x13.image.bit-depth" = "an image of 16 bits per sample, a PDF 1.5 depth (L-Q4)" }
+
+[x13-oc-off]
+levels = ["x1a-2003"]
+expect = { "x13.oc.hides-print" = "optional content whose default configuration turns its groups off (L-Q4)" }
+
+[x13-oc-on]
+levels = ["x3-2003"]
+expect = { "x13.oc.present" = "optional content, always on (L-Q4, a warning)" }
+
+# ---- Older levels: the remaining rows (task 2.4).
+[x13-tr2-default]
+levels = ["x1a-2001"]
+expect = { "x13.extgstate.no-tr2" = "an ExtGState with /TR2 /Default, which X-4 allows (15930-1 6.15)" }
+
+[x13-attachment]
+levels = ["x3-2003"]
+expect = { "x13.filespec.absent" = "an embedded file's file specification (15930-6 6.4, L-Q22)" }
+
+[x1a-attachment]
+levels = ["x1a-2001"]
+expect = { "x1a.filespec.embedded-file" = "an embedded file (L-Q22 at X-1a:2001, a warning)" }
+
+[x13-trim-outside-crop]
+levels = ["x3-2002"]
+expect = { "x13.boxes.trim-within-crop" = "the TrimBox extends beyond the CropBox (15930-3 6.7); the BleedBox does too, which 6.7 does not judge" }
+
+[x13-printermark-inside-bleed]
+levels = ["x1a-2001"]
+expect = { "x13.annot.outside-bleed-trapnet-only" = "a PrinterMark annotation inside the bleed box, not exempt at X-1a:2001 (15930-1 6.19, L-Q20)" }
+
+[x13-print-area-trim]
+levels = ["x1a-2003"]
+expect = { "x13.viewer-prefs.areas" = "PrintArea /TrimBox while the page has a BleedBox (15930-4 6.17)" }
+
+[x13-font-restricted]
+levels = ["x3-2002"]
+expect = { "x13.font.embedding-permitted" = "the TrueType program's OS/2 fsType asks for restricted-licence embedding (15930-3 6.3, a warning)" }

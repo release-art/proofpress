@@ -25,9 +25,11 @@
 \newcommand\PdfProfile[3]{\directlua{
   pdfraw.profiles["#1"] = pdf.immediateobj("stream", pdfraw.file("#2"), "/N #3")}}
 \newcommand\PdfICC[1]{[/ICCBased \directlua{tex.sprint(pdfraw.profiles["#1"])}\space 0 R]}
+% The samples are given in hex and written as binary: LuaTeX compresses the stream and adds its own /Filter, so naming
+% one here would give the dictionary two /Filter keys.
 \newcommand\PdfImage[6]{\directlua{
-  local n = pdf.immediateobj("stream", "#6>",
-    "/Type /XObject /Subtype /Image /Width #2 /Height #3 /BitsPerComponent #4 /ColorSpace #5 /Filter /ASCIIHexDecode")
+  local n = pdf.immediateobj("stream", (string.gsub("#6", "[0-9A-Fa-f][0-9A-Fa-f]", function(h) return string.char(tonumber(h, 16)) end)),
+    "/Type /XObject /Subtype /Image /Width #2 /Height #3 /BitsPerComponent #4 /ColorSpace #5")
   pdfraw.resource("/XObject", "#1", n .. " 0 R")}}
 \newcommand\PdfSpot[3]{\directlua{
   pdfraw.resource("/ColorSpace", "#1",

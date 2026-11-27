@@ -1,136 +1,136 @@
-"""Orchestration: which layers run, and what a missing tool means."""
+"""The Python API over the Rust command: which layers run, what a missing tool means, and how files are chosen."""
 
 import asyncio
+import os
 import pathlib
 
 import pytest
 
 from proof_pdf import core
-from proof_pdf._internal import colour, pdfx, verapdf
 from proof_pdf.models import FileReport, Finding, PageGeometry, Profile, Severity
 
 from .conftest import A6
 
-
-@pytest.fixture
-def tools_present(mocker, vera_json):
-    """Both external tools resolve and report success."""
-    mocker.patch.object(verapdf, "available", return_value=True)
-    mocker.patch.object(verapdf, "run", return_value=vera_json(True))
-    mocker.patch.object(colour, "gs_available", return_value=True)
-    mocker.patch.object(colour, "check_tac", return_value=[])
+# Every Profile here leaves PDF/X out unless a test is about it: the blank test pages are not PDF/X-4 files.
+PRINT = Profile(pdfx=False)
 
 
 def _checks(report) -> set[str]:
     return {f.check for f in report.findings}
 
 
+def _script(tmp_path: pathlib.Path, name: str, body: str) -> str:
+    """An executable stand-in for an external tool."""
+    path = tmp_path / name
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+    return str(path)
+
+
 class TestVerifyFile:
-    async def test_a_correct_file_passes_every_layer(self, make_pdf, tools_present, mocker):
-        path = make_pdf()
-        # The synthetic PDF has no PDF/X identity, which is a separate concern.
-        boxes_only = tuple(r for r in pdfx.RULES if r.id == "page-boxes")
-        mocker.patch.object(pdfx, "RULES", boxes_only)
-        report = await core.verify_file(path, Profile())
+    async def test_a_correct_file_passes(self, make_pdf):
+        report = await core.verify_file(make_pdf(), PRINT)
         assert report.ok, report.findings
 
-    async def test_missing_verapdf_fails_rather_than_skips(self, make_pdf, mocker):
-        """An unconfirmable file must not read as OK -- that is the whole point."""
-        mocker.patch.object(verapdf, "available", return_value=False)
-        mocker.patch.object(colour, "gs_available", return_value=True)
-        mocker.patch.object(colour, "check_tac", return_value=[])
+    async def test_the_pdfx_level_runs_by_default(self, make_pdf):
         report = await core.verify_file(make_pdf(), Profile())
-        assert not report.ok
-        assert any("veraPDF not found" in f.message for f in report.findings)
+        assert any(check.startswith("x4.") for check in _checks(report)) and not report.ok
 
-    async def test_missing_ghostscript_fails_rather_than_skips(self, make_pdf, mocker, vera_json):
-        mocker.patch.object(verapdf, "available", return_value=True)
-        mocker.patch.object(verapdf, "run", return_value=vera_json(True))
-        mocker.patch.object(colour, "gs_available", return_value=False)
-        report = await core.verify_file(make_pdf(), Profile())
-        assert any("Ghostscript not found" in f.message for f in report.findings)
+    async def test_missing_verapdf_fails_rather_than_skips(self, make_pdf):
+        report = await core.verify_file(make_pdf(), Profile(pdfx=False, pdfa=True), verapdf_bin="/nonexistent/vera")
+        assert [(f.check, f.message) for f in report.errors] == [
+            (
+                "pdfa",
+                "veraPDF not found (/nonexistent/vera), so PDF/A-2b is not confirmed; "
+                "install it, set --verapdf, or drop --pdfa",
+            )
+        ]
 
-    async def test_verapdf_tool_error_is_a_finding_not_a_crash(self, make_pdf, mocker):
-        mocker.patch.object(verapdf, "available", return_value=True)
-        mocker.patch.object(verapdf, "run", side_effect=verapdf.VeraPdfError("boom"))
-        mocker.patch.object(colour, "gs_available", return_value=True)
-        mocker.patch.object(colour, "check_tac", return_value=[])
-        report = await core.verify_file(make_pdf(), Profile())
-        assert any("boom" in f.message for f in report.findings)
+    async def test_missing_ghostscript_fails_rather_than_skips(self, make_pdf):
+        report = await core.verify_file(make_pdf(), Profile(pdfx=False, tac=True), gs_bin="/nonexistent/gs")
+        assert [(f.check, f.message) for f in report.errors] == [
+            (
+                "tac",
+                "Ghostscript not found (/nonexistent/gs), so peak ink is not measured; "
+                "install it, set --gs, or drop --tac",
+            )
+        ]
 
-    async def test_ghostscript_error_is_a_finding_not_a_crash(self, make_pdf, mocker, vera_json):
-        mocker.patch.object(verapdf, "available", return_value=True)
-        mocker.patch.object(verapdf, "run", return_value=vera_json(True))
-        mocker.patch.object(colour, "gs_available", return_value=True)
-        mocker.patch.object(colour, "check_tac", side_effect=colour.GhostscriptError("gs died"))
-        report = await core.verify_file(make_pdf(), Profile())
-        assert any("gs died" in f.message for f in report.findings)
-
-    async def test_corrupt_pdf_is_a_finding_not_a_crash(self, tmp_path, mocker):
-        mocker.patch.object(verapdf, "available", return_value=True)
-        mocker.patch.object(verapdf, "run", return_value='{"report": {"jobs": []}}')
-        broken = tmp_path / "broken.pdf"
-        broken.write_bytes(b"%PDF-1.7\nnot really a pdf")
-        report = await core.verify_file(broken, Profile())
-        assert any("corrupt or encrypted" in f.message for f in report.findings)
-
-    @pytest.mark.parametrize(
-        ("profile", "absent"),
-        [
-            pytest.param(Profile(pdfa=False), "pdfa", id="no-pdfa"),
-            pytest.param(Profile(pdfx=False), "trapped", id="no-pdfx"),
-            pytest.param(Profile(geometry=None), "geometry", id="no-geometry"),
-        ],
-    )
-    async def test_layers_toggle_independently(self, make_pdf, mocker, profile, absent):
-        mocker.patch.object(verapdf, "available", return_value=True)
-        mocker.patch.object(verapdf, "run", return_value='{"report": {"jobs": []}}')
-        mocker.patch.object(colour, "gs_available", return_value=True)
-        mocker.patch.object(colour, "check_tac", return_value=[])
-        boxes = {"MediaBox": [0, 0, 100, 100], "TrimBox": [0, 0, 100, 100]}
-        report = await core.verify_file(make_pdf(boxes=boxes), profile)
-        assert absent not in _checks(report)
-
-    async def test_colour_layer_off_skips_ghostscript_entirely(self, make_pdf, mocker, vera_json):
-        mocker.patch.object(verapdf, "available", return_value=True)
-        mocker.patch.object(verapdf, "run", return_value=vera_json(True))
-        gs = mocker.patch.object(colour, "gs_available", return_value=True)
-        report = await core.verify_file(make_pdf(), Profile(colour=False))
-        gs.assert_not_called()
-        assert "tac" not in _checks(report)
-
-    async def test_geometry_uses_the_profile_dimensions(self, make_pdf, tools_present):
-        """The same file passes or fails depending on the stock it is held to."""
-        path = make_pdf()
-        profile = Profile(pdfa=False, pdfx=False, colour=False, geometry=A6)
-        assert "geometry" not in _checks(await core.verify_file(path, profile))
-        wrong = Profile(
-            pdfa=False, pdfx=False, colour=False, geometry=PageGeometry(trim_w_mm=85, trim_h_mm=55, bleed_mm=3)
+    @pytest.mark.skipif(os.name != "posix", reason="the stand-in tool is a shell script")
+    async def test_verapdf_rules_become_findings(self, make_pdf, tmp_path):
+        report_json = (
+            '{"report": {"jobs": [{"validationResult": [{"compliant": false, "details": {"ruleSummaries": '
+            '[{"clause": "6.1.2", "testNumber": 1, "description": "header"}]}}]}]}}'
         )
+        vera = _script(tmp_path, "vera", f"echo '{report_json}'\nexit 1")
+        report = await core.verify_file(make_pdf(), Profile(pdfx=False, pdfa=True), verapdf_bin=vera)
+        assert [(f.check, f.message) for f in report.errors] == [("pdfa", "PDF/A-2b 6.1.2-1: header")]
+
+    @pytest.mark.skipif(os.name != "posix", reason="the stand-in tool is a shell script")
+    async def test_a_tool_that_runs_too_long_is_a_finding(self, make_pdf, tmp_path):
+        vera = _script(tmp_path, "vera", "sleep 5")
+        report = await core.verify_file(make_pdf(), Profile(pdfx=False, pdfa=True), verapdf_bin=vera, timeout=0.1)
+        assert [f.check for f in report.errors] == ["pdfa"]
+        assert "timed out" in report.errors[0].message
+
+    async def test_corrupt_pdf_is_a_finding_not_a_crash(self, tmp_path):
+        broken = tmp_path / "broken.pdf"
+        broken.write_bytes(b"not a pdf at all")
+        report = await core.verify_file(broken, PRINT)
+        assert not report.ok
+        assert all(f.message.startswith("could not be checked") or f.check.startswith("file.") for f in report.errors)
+
+    async def test_a_file_that_cannot_be_read_fails(self, tmp_path):
+        report = await core.verify_file(tmp_path / "missing.pdf", PRINT)
+        assert [(f.check, f.message.split(":")[0]) for f in report.errors] == [("structure", "cannot read the file")]
+
+    async def test_password_protected_pdf_is_a_finding_not_a_crash(self, password_pdf):
+        report = await core.verify_file(password_pdf, PRINT)
+        assert not report.ok
+
+    async def test_tools_run_only_when_asked(self, make_pdf):
+        report = await core.verify_file(make_pdf(), PRINT, verapdf_bin="/nonexistent", gs_bin="/nonexistent")
+        assert not {"pdfa", "tac"} & _checks(report)
+
+    async def test_geometry_uses_the_profile_dimensions(self, make_pdf):
+        path = make_pdf()
+        assert "geometry" not in _checks(await core.verify_file(path, Profile(pdfx=False, geometry=A6)))
+        wrong = Profile(pdfx=False, geometry=PageGeometry(trim_w_mm=210, trim_h_mm=297, bleed_mm=3, binding="right"))
         assert "geometry" in _checks(await core.verify_file(path, wrong))
+
+    async def test_every_option_reaches_the_command(self, make_pdf):
+        profile = Profile(
+            pdfx=False,
+            colour=False,
+            missing_glyphs=False,
+            fonts=False,
+            strict_cmyk=True,
+            allow_k_only=True,
+            require_bleed=True,
+            no_marks=True,
+            uniform_pages=True,
+            pages_multiple_of=2,
+            output_condition="FOGRA51",
+            allow_spots=(),
+            warn_tac=250.0,
+            warn_dpi=400.0,
+            max_dpi=900.0,
+            max_stretch_pct=1.0,
+            min_text_pt=6.0,
+            min_stroke_pt=0.25,
+            safe_mm=3.0,
+            min_delta_l=40.0,
+            proof_profile=pathlib.Path("p.icc"),
+        )
+        report = await core.verify_file(make_pdf(), profile)
+        assert {"page-count", "output-condition"} <= _checks(report)
+
+    async def test_a_profile_the_command_refuses_raises(self, make_pdf):
+        with pytest.raises(ValueError, match="must be below --max-tac"):
+            await core.verify_file(make_pdf(), Profile(pdfx=False, warn_tac=400.0))
 
 
 class TestConcurrency:
-    async def test_the_external_tools_overlap_within_one_file(self, make_pdf, mocker):
-        """veraPDF and the Ghostscript scan each wait for the other to start: sequential execution would hang."""
-        vera_started, tac_started = asyncio.Event(), asyncio.Event()
-
-        async def _vera(*a, **k):
-            vera_started.set()
-            await tac_started.wait()
-            return '{"report": {"jobs": []}}'
-
-        async def _tac(*a, **k):
-            tac_started.set()
-            await vera_started.wait()
-            return []
-
-        mocker.patch.object(verapdf, "available", return_value=True)
-        mocker.patch.object(colour, "gs_available", return_value=True)
-        mocker.patch.object(verapdf, "run", side_effect=_vera)
-        mocker.patch.object(colour, "check_tac", side_effect=_tac)
-        await asyncio.wait_for(core.verify_file(make_pdf(), Profile()), timeout=5)
-
     async def test_verify_files_keeps_input_order_and_bounds_concurrency(self, tmp_path, mocker):
         running = peak = 0
 
@@ -144,7 +144,7 @@ class TestConcurrency:
 
         mocker.patch.object(core, "verify_file", side_effect=_verify)
         paths = [tmp_path / f"{name}.pdf" for name in "abcde"]
-        reports = await core.verify_files(paths, Profile(), jobs=2)
+        reports = await core.verify_files(paths, PRINT, jobs=2)
         assert [r.path for r in reports] == paths
         assert peak == 2
 
@@ -263,14 +263,13 @@ class TestFileReport:
 
 class TestMissingTools:
     def test_names_only_what_the_profile_needs_and_cannot_find(self, mocker):
-        mocker.patch.object(verapdf, "available", return_value=False)
-        mocker.patch.object(colour, "gs_available", return_value=False)
-        assert core.missing_tools(Profile(), verapdf_bin="vera", gs_bin="ghost") == ["vera", "ghost"]
-        assert core.missing_tools(Profile(pdfa=False)) == ["gs"]
-        assert core.missing_tools(Profile(colour=False)) == ["verapdf"]
-        assert core.missing_tools(Profile(pdfa=False, colour=False)) == []
+        mocker.patch.object(core.shutil, "which", return_value=None)
+        both = Profile(pdfa=True, tac=True)
+        assert core.missing_tools(both, verapdf_bin="vera", gs_bin="ghost") == ["vera", "ghost"]
+        assert core.missing_tools(Profile(tac=True)) == ["gs"]
+        assert core.missing_tools(Profile(pdfa=True)) == ["verapdf"]
+        assert core.missing_tools(Profile()) == []
 
     def test_a_tool_that_is_there_is_not_reported(self, mocker):
-        mocker.patch.object(verapdf, "available", return_value=True)
-        mocker.patch.object(colour, "gs_available", return_value=True)
-        assert core.missing_tools(Profile()) == []
+        mocker.patch.object(core.shutil, "which", return_value="/usr/bin/tool")
+        assert core.missing_tools(Profile(pdfa=True, tac=True)) == []

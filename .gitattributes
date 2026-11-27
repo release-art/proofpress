@@ -1,0 +1,5 @@
+# Every text file is checked out with LF on every platform, Windows included: tests compare files byte for byte
+# (generated docs, snapshots, a fixture referenced by its MD5). Git detects other binaries itself.
+* text=auto eol=lf
+*.pdf binary
+*.icc binary

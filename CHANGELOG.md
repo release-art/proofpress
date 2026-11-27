@@ -7,10 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-27
+
+proof-pdf now runs on a core written in Rust: every check, and the PDF reading and writing of every command. pikepdf and
+Pillow are no longer dependencies, `verify` is also a standalone program, and the PDF/X checks cover the standards in
+full. Check ids, options and config keys keep their spelling unless listed below; every check is in
+[rust/CHECKS.md](rust/CHECKS.md).
+
+### Changed
+
+- **PDF/A (veraPDF) and total ink (Ghostscript) are opt-in**, with `--pdfa` and `--tac` (`Profile.pdfa`, `Profile.tac`),
+  so a bare `verify` needs no external tool. A CI job that relies on either must turn it on.
+- **PDF/X is checked in full**, not only the page boxes, `/Trapped` and identity: PDF/X-4 by default, or
+  `--pdfx x4p|x5g|x5pg|x5n|x1a-2001|x3-2002|x1a-2003|x3-2003` (ISO 15930-1, -3, -4, -6, -7, -8). A file whose Info
+  claims X-1a or X-3 is verified at that level. The findings have new ids (`x4.*`, `x5.*`, `x13.*`, `x1a.*`, `x3.*`);
+  the old `pdfx-intent`, `trapped`, `pdfx-xmp` and `trimbox` are aliases. At X-4, `/Trapped` is judged in the XMP.
+- **Files are read strictly.** A damaged file that pikepdf repaired silently now fails, with the reason; an encrypted
+  file fails, even with an empty password. A damaged part leaves the checks that need it "not evaluated", which fails
+  the file, and the rest are still checked.
+- **Reports:** each check has a status (pass, fail, not evaluated); the JSON carries `findings`, `checks` and the PDF/X
+  `level` it verified at. A timeout exits 3, a usage error 64.
+- **Total ink counts each spot colour as one ink at its tint** (Ghostscript's `tiffsep`), so jobs with spots can read
+  lower, or higher where a spot overprints process ink.
+- In a CMYK job, an `ICCBased` space using the output intent's own profile is an `icc-profile` error (ISO 15930-7
+  6.4.3.3); a different CMYK profile no longer warns.
+- A form XObject without `/Resources` uses the page's resources (ISO 32000-2 7.8.3), not the enclosing form's.
+- `preview` renders with `hayro` instead of Ghostscript, so pixels shift slightly on colour-managed files. `extract`
+  copies JPEG, JPEG 2000 and CCITT images as stored and writes soft masks as files of their own. `crop_page`,
+  `extract_pdf`, `inspect_pdf` and `preview` raise the core's `UnreadablePdfError`, never a pikepdf error.
+
+### Added
+
+- Standalone `proof-pdf` downloads (the Rust `verify`, no Python needed) for macOS arm64, Linux x86-64 and arm64 and
+  Windows x64 on each GitHub release, signed with Sigstore: `brew install release-art/tap/proof-pdf` or
+  `scoop install release-art/proof-pdf`.
+- PDF/X file sets: an X-4p file is verified with its external profile and an X-5 file with its targets, found on this
+  computer, never over the network (`--file-alone` to verify a file alone, `--target-versions accept|reject`).
+- Config files may set `schema = 1` and `extends` another profile.
+
 ### Removed
 
-- `--pdfx-version`, `Profile.pdfx_version`, `PdfxVersion` and the config key `pdfx-version`: x1a and x3 had no checks, so
-  selecting them could only fail. The x4 rule table is unchanged; `pdfx/COVERAGE.md` and its generator are gone too.
+- pikepdf and Pillow as runtime dependencies. Wheels ship per platform; installing from source needs Rust.
+- `--pdfx-version` (`Profile.pdfx_version`, config `pdfx-version`): use `--pdfx`.
+- The print checks `bleedbox` and `boxes`, replaced by `x4.boxes.*` and `page.media-box`.
+- `preview_file`'s `gs_bin` and `timeout`, `extract_pdf`'s `gs_bin`, `GhostscriptError`, `gs_available`, `PageBoxes`,
+  `page_boxes`, and `proof_pdf._internal.verapdf`. `--gs` and `--timeout` are still accepted, and ignored.
+
+### Fixed
+
+- A page with no MediaBox fails (`page.media-box`).
+- A page that paints an image or form that is not there fails (`xobject-missing`).
+- A password-protected PDF is reported as unreadable instead of crashing.
+- `--allow-k-only` judges CMYK JPEG samples as a printer reads them, so an inverted Adobe CMYK JPEG no longer passes.
+- An empty Flate stream reads as empty, not as damaged.
 
 ## [0.3.8] - 2026-11-06
 
@@ -251,7 +300,8 @@ First release.
 - Weekly Docker image builds, with `:latest`, `:tl2025` and a `:<version>` tag per release. Each image records its
   commit, and `proof-pdf --version` shows it.
 
-[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.8...HEAD
+[Unreleased]: https://github.com/release-art/proofpress/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/release-art/proofpress/compare/v0.3.8...v0.4.0
 [0.3.8]: https://github.com/release-art/proofpress/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/release-art/proofpress/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/release-art/proofpress/compare/v0.3.5...v0.3.6

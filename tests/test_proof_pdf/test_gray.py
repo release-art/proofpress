@@ -7,10 +7,10 @@ import pikepdf
 import pytest
 from PIL import Image
 
-from proof_pdf._internal import colour
 from proof_pdf.models import ColourMode, Severity
 
 from ._samples import build
+from .conftest import core_findings
 from .test_colour import _icc_space, _page_with, _pdf_with_pattern, _pdf_with_profiles, _shading, _tiling
 
 FAKE_CMYK = bytes(16) + b"CMYK" + bytes(180)  # only the header signature matters to the colour family
@@ -20,7 +20,7 @@ PATTERN = b"/Pattern cs /P1 scn 0 0 10 10 re f"
 
 
 def _check(pdf, *, k_only=False):
-    return colour.check_gray_only(pdf, allow_k_only=k_only)
+    return core_findings(pdf, {"gray-only"}, colour_mode=str(ColourMode.GRAY), allow_k_only=k_only)
 
 
 def _flagged(findings, severity=Severity.ERROR) -> bool:
@@ -179,7 +179,7 @@ class TestImages:
             Image.new("CMYK", (8, 8), channels).save(buf, "JPEG", quality=95)
             return buf.getvalue()
 
-        def image(data):
+        def image(data, *, inverted=True):
             def make(p):
                 made = p.make_stream(
                     data,
@@ -191,13 +191,16 @@ class TestImages:
                     ColorSpace=pikepdf.Name.DeviceCMYK,
                     Filter=pikepdf.Name.DCTDecode,
                 )
-                made.Decode = [1, 0, 1, 0, 1, 0, 1, 0]  # Pillow writes Adobe (inverted) CMYK, as LaTeX includes it
+                if inverted:  # Pillow writes Adobe (inverted) CMYK; LaTeX includes it with this /Decode
+                    made.Decode = [1, 0, 1, 0, 1, 0, 1, 0]
                 return p.make_indirect(made)
 
             return make
 
         assert _check(_pdf_with_image(image(jpeg((0, 0, 0, 180)))), k_only=True) == []
         assert _flagged(_check(_pdf_with_image(image(jpeg((0, 150, 220, 0)))), k_only=True))
+        # Without /Decode a reader prints the stored (inverted) samples: near-full C, M and Y, whatever Pillow shows.
+        assert _flagged(_check(_pdf_with_image(image(jpeg((0, 0, 0, 180)), inverted=False)), k_only=True))
 
     def test_icc_and_indexed_cmyk_images_are_never_k_only(self):
         icc = lambda p: _cmyk_image(p, b"\x00" * 16, space=_icc_space(p, FAKE_CMYK, 4))  # noqa: E731
@@ -208,17 +211,14 @@ class TestImages:
             [finding] = _check(_pdf_with_image(make), k_only=True)
             assert "not treated as K-only" in finding.message
 
-    def test_an_image_is_decoded_once_however_often_it_is_placed(self, mocker):
-        spy = mocker.spy(colour, "_cmy_problem")
-        pdf = _pdf_with_image(lambda p: _cmyk_image(p, b"\x00\x00\x00\x80" * 4), b"q /Im1 Do Q q /Im1 Do Q q /Im1 Do Q")
+    def test_an_image_placed_often_is_one_finding_per_page(self):
+        pdf = _pdf_with_image(lambda p: _cmyk_image(p, b"\x01\x00\x00\x80" * 4), b"q /Im1 Do Q q /Im1 Do Q q /Im1 Do Q")
         pdf.pages.append(pdf.pages[0])  # the same image on a second page
-        assert _check(pdf, k_only=True) == []
-        assert spy.call_count == 1
+        assert [f.page for f in _check(pdf, k_only=True)] == [1, 2]
 
-    def test_strict_mode_never_decodes(self, mocker):
-        spy = mocker.spy(colour, "_cmy_problem")
-        _check(_pdf_with_image(lambda p: _cmyk_image(p, b"\x00\x00\x00\x80" * 4)))
-        assert spy.call_count == 0
+    def test_strict_mode_does_not_decode(self):
+        [finding] = _check(_pdf_with_image(_broken_jpeg))
+        assert finding.message == "image /Im1 is in a CMYK colour space in a gray job"
 
     @pytest.mark.parametrize(
         ("space", "data", "strict", "allowed"),
@@ -346,13 +346,13 @@ class TestOutputIntent:
 class TestGrayProfiles:
     def test_two_different_gray_profiles_are_an_error_in_a_gray_job_only(self):
         pdf = _pdf_with_profiles((build.gray_profile("One gray"), 1), (build.gray_profile("Two gray"), 1))
-        [finding] = colour.check_icc_profiles(pdf, ColourMode.GRAY)
+        [finding] = core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY))
         assert finding.severity is Severity.ERROR and "mixes 2 gray profiles" in finding.message
-        assert colour.check_icc_profiles(pdf, ColourMode.CMYK) == []
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
 
     def test_the_same_gray_profile_twice_is_one_profile(self):
         pdf = _pdf_with_profiles((build.gray_profile("One gray"), 1), (build.gray_profile("One gray"), 1))
-        assert colour.check_icc_profiles(pdf, ColourMode.GRAY) == []
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY)) == []
 
     def test_the_intent_counts_as_a_gray_profile(self):
         pdf = _pdf_with_profiles((build.gray_profile("One gray"), 1))
@@ -362,11 +362,13 @@ class TestGrayProfiles:
             DestOutputProfile=pdf.make_stream(build.gray_profile("Two gray"), N=1),
         )
         pdf.Root.OutputIntents = pikepdf.Array([pdf.make_indirect(intent)])
-        assert colour.check_icc_profiles(pdf, ColourMode.GRAY)
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY))
 
     def test_rgb_mode_wording_is_unchanged(self):
         from .test_colour import _SRGB_NAME, _renamed, _srgb
 
         other = _renamed(_srgb(), _SRGB_NAME, "Odd RGB built".encode("utf-16-be"))
-        [finding] = colour.check_icc_profiles(_pdf_with_profiles((_srgb(), 3), (other, 3)), ColourMode.RGB)
+        [finding] = core_findings(
+            _pdf_with_profiles((_srgb(), 3), (other, 3)), {"icc-profile"}, colour_mode=str(ColourMode.RGB)
+        )
         assert finding.message.startswith("the RGB job mixes 2 RGB profiles")

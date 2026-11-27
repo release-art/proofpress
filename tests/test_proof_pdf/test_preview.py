@@ -1,21 +1,14 @@
-"""Rasterising proofs and drawing the page-box guides."""
+"""Rasterising proofs and drawing the page-box guides, through the Rust core's renderer."""
 
 import pathlib
 from typing import cast
 
-import pikepdf
 import pytest
 from PIL import Image
 
 from proof_pdf import preview
-from proof_pdf._internal import proc
 
 from .conftest import BLEED, MEDIA_H, MEDIA_W, TRIM_H, TRIM_W
-
-
-def _white_png(path: pathlib.Path, size=(72, 72)) -> pathlib.Path:
-    Image.new("RGB", size, (255, 255, 255)).save(path)
-    return path
 
 
 def _pixels(png: pathlib.Path) -> set[tuple[int, int, int]]:
@@ -23,116 +16,69 @@ def _pixels(png: pathlib.Path) -> set[tuple[int, int, int]]:
         return cast("set[tuple[int, int, int]]", set(img.convert("RGB").get_flattened_data()))
 
 
-class TestPageBoxes:
-    def test_every_box_is_read(self, make_pdf):
-        with pikepdf.open(make_pdf()) as pdf:
-            boxes = preview.page_boxes(pdf)
-        assert len(boxes) == 1
-        assert boxes[0].trim is not None and boxes[0].bleed is not None
-        assert boxes[0].media == (0, 0, pytest.approx(MEDIA_W), pytest.approx(MEDIA_H))
-
-    def test_optional_boxes_are_none_when_absent(self, make_pdf):
-        with pikepdf.open(make_pdf(boxes={"MediaBox": [0, 0, MEDIA_W, MEDIA_H]})) as pdf:
-            boxes = preview.page_boxes(pdf)
-        assert boxes[0].trim is None and boxes[0].bleed is None
+def _boxes(*, trim: bool = True, bleed: list[float] | None = None) -> dict:
+    boxes: dict = {"MediaBox": [0, 0, MEDIA_W, MEDIA_H]}
+    if trim:
+        boxes["TrimBox"] = [BLEED, BLEED, BLEED + TRIM_W, BLEED + TRIM_H]
+    if bleed is not None:
+        boxes["BleedBox"] = bleed
+    return boxes
 
 
-class TestRenderPages:
-    async def test_pages_come_back_in_numeric_order(self, tmp_path, fake_run):
-        def _write(argv, **kwargs):
-            out = next(a for a in argv if a.startswith("-sOutputFile=")).removeprefix("-sOutputFile=")
-            for i in (1, 2, 10):
-                _white_png(pathlib.Path(out.replace("%d", str(i))))
+class TestRenderPdf:
+    def test_one_png_a_page_in_page_order(self, make_pdf, tmp_path):
+        pngs = preview.render_pdf(make_pdf("deck.pdf", pages=3), tmp_path / "out", dpi=72, guides=False, safe_mm=None)
+        assert [p.name for p in pngs] == ["deck-p1.png", "deck-p2.png", "deck-p3.png"]
+        with Image.open(pngs[0]) as img:
+            assert img.size == (round(MEDIA_W), round(MEDIA_H))
 
-        calls = fake_run(side_effect=_write)
-        pngs = await preview._render_pages("gs", tmp_path / "deck.pdf", tmp_path / "out", 150)
-        assert [p.name for p in pngs] == ["deck-p1.png", "deck-p2.png", "deck-p10.png"]
-        assert "-r150" in calls[0]
+    def test_trim_bleed_and_safe_are_all_drawn(self, make_pdf, tmp_path):
+        path = make_pdf(boxes=_boxes(bleed=[1, 1, MEDIA_W - 1, MEDIA_H - 1]))
+        [png] = preview.render_pdf(path, tmp_path, dpi=72, guides=True, safe_mm=3.0)
+        assert {preview._TRIM_RGB, preview._SAFE_RGB, preview._BLEED_RGB} <= _pixels(png)
 
-    @pytest.mark.parametrize(
-        ("stderr", "expected"), [("bad page", "bad page"), ("", "ghostscript failed")], ids=["detail", "default"]
-    )
-    async def test_failure_raises(self, tmp_path, fake_run, stderr, expected):
-        fake_run(returncode=1, stderr=stderr)
-        with pytest.raises(preview.GhostscriptError, match=expected):
-            await preview._render_pages("gs", tmp_path / "a.pdf", tmp_path / "out", 150)
-
-    async def test_timeout_raises(self, tmp_path, mocker):
-        mocker.patch.object(proc, "run", side_effect=proc.ProcTimeoutError("timed out"))
-        with pytest.raises(preview.GhostscriptError, match="timed out"):
-            await preview._render_pages("gs", tmp_path / "a.pdf", tmp_path / "out", 150, timeout=5)
-
-
-class TestGuideOverlay:
-    def _boxes(self, *, media=True, trim=True, bleed=None) -> preview.PageBoxes:
-        return preview.PageBoxes(
-            media=(0, 0, MEDIA_W, MEDIA_H) if media else None,
-            trim=(BLEED, BLEED, BLEED + TRIM_W, BLEED + TRIM_H) if trim else None,
-            bleed=bleed,
+    def test_bleed_equal_to_media_is_not_drawn(self, make_pdf, tmp_path):
+        """No point outlining the sheet edge: it is already the image border."""
+        [png] = preview.render_pdf(
+            make_pdf(boxes=_boxes(bleed=[0, 0, MEDIA_W, MEDIA_H])), tmp_path, dpi=72, guides=True, safe_mm=None
         )
+        assert preview._BLEED_RGB not in _pixels(png) and preview._TRIM_RGB in _pixels(png)
 
-    def test_trim_bleed_and_safe_are_all_drawn(self, tmp_path):
-        png = _white_png(tmp_path / "p.png", size=(300, 400))
-        preview._overlay_guides(png, self._boxes(bleed=(0, 0, MEDIA_W, MEDIA_H - 1)), 72, 3.0)
-        colours = _pixels(png)
-        assert preview._TRIM_RGB in colours
-        assert preview._SAFE_RGB in colours
-        assert preview._BLEED_RGB in colours
+    def test_without_trim_only_bleed_is_drawn(self, make_pdf, tmp_path):
+        path = make_pdf(boxes=_boxes(trim=False, bleed=[10, 10, 100, 100]))
+        [png] = preview.render_pdf(path, tmp_path, dpi=72, guides=True, safe_mm=3.0)
+        assert preview._BLEED_RGB in _pixels(png)
+        assert preview._TRIM_RGB not in _pixels(png) and preview._SAFE_RGB not in _pixels(png)
 
-    def test_bleed_equal_to_media_is_not_drawn(self, tmp_path):
-        """No point outlining the sheet edge -- it is already the image border."""
-        png = _white_png(tmp_path / "p.png", size=(300, 400))
-        preview._overlay_guides(png, self._boxes(bleed=(0, 0, MEDIA_W, MEDIA_H)), 72, 3.0)
-        assert preview._BLEED_RGB not in _pixels(png)
+    def test_no_guides_leaves_the_raster_plain(self, make_pdf, tmp_path):
+        [png] = preview.render_pdf(make_pdf(), tmp_path, dpi=72, guides=False, safe_mm=3.0)
+        assert _pixels(png) == {(255, 255, 255)}
 
-    def test_without_trim_only_bleed_is_drawn(self, tmp_path):
-        png = _white_png(tmp_path / "p.png", size=(300, 400))
-        preview._overlay_guides(png, self._boxes(trim=False, bleed=(10, 10, 100, 100)), 72, 3.0)
-        colours = _pixels(png)
-        assert preview._BLEED_RGB in colours
-        assert preview._TRIM_RGB not in colours
-
-    def test_without_media_it_is_a_no_op(self, tmp_path):
-        """Points cannot be mapped to pixels without the media origin."""
-        png = _white_png(tmp_path / "p.png")
-        before = _pixels(png)
-        preview._overlay_guides(png, self._boxes(media=False), 72, 3.0)
-        assert _pixels(png) == before
-
-
-class TestPreviewFile:
-    def _fake_render(self, mocker, tmp_path, count=1):
-        async def _render(gs_bin, pdf_path, out_dir, dpi, *, timeout=None):
-            out_dir.mkdir(parents=True, exist_ok=True)
-            return [_white_png(out_dir / f"{pdf_path.stem}-p{i}.png", size=(340, 462)) for i in range(1, count + 1)]
-
-        mocker.patch.object(preview, "_render_pages", side_effect=_render)
-
-    async def test_guides_are_overlaid_when_asked(self, make_pdf, tmp_path, mocker):
-        self._fake_render(mocker, tmp_path)
-        path = make_pdf()
-        pngs = await preview.preview_file(path, tmp_path / "out", dpi=72, guides=True, safe_mm=3.0, gs_bin="gs")
-        assert preview._TRIM_RGB in _pixels(pngs[0])
-
-    async def test_no_guides_leaves_the_raster_untouched(self, make_pdf, tmp_path, mocker):
-        self._fake_render(mocker, tmp_path)
-        pngs = await preview.preview_file(make_pdf(), tmp_path / "out", dpi=72, guides=False, safe_mm=3.0, gs_bin="gs")
-        assert _pixels(pngs[0]) == {(255, 255, 255)}
-
-    async def test_the_guides_show_where_a_wrong_trimbox_actually_is(self, make_pdf, tmp_path, mocker):
+    def test_the_guides_show_where_a_wrong_trimbox_actually_is(self, make_pdf, tmp_path):
         """The visual counterpart of the geometry finding: a trim guide inset 25pt."""
-        self._fake_render(mocker, tmp_path)
         boxes = {
             "MediaBox": [0, 0, 337.32198, 459.21146],
             "TrimBox": [25, 20, 312.32198, 439.21146],
             "BleedBox": [0, 0, 337.32198, 459.21146],
         }
-        pngs = await preview.preview_file(
-            make_pdf(boxes=boxes), tmp_path / "out", dpi=72, guides=True, safe_mm=3.0, gs_bin="gs"
-        )
-        with Image.open(pngs[0]) as img:
+        [png] = preview.render_pdf(make_pdf(boxes=boxes), tmp_path, dpi=72, guides=True, safe_mm=3.0)
+        with Image.open(png) as img:
             flat = img.convert("RGB").get_flattened_data()
             row = flat[img.width * (img.height // 2) : img.width * (img.height // 2 + 1)]
-        first_trim_x = next(x for x, px in enumerate(row) if px == preview._TRIM_RGB)
         # 25pt at 72dpi is 25px from the left edge, not the 7mm (~20px) it should be.
-        assert first_trim_x == pytest.approx(25, abs=2)
+        assert next(x for x, px in enumerate(row) if px == preview._TRIM_RGB) == 25
+
+    def test_a_file_that_cannot_be_read_raises(self, tmp_path):
+        bad = tmp_path / "bad.pdf"
+        bad.write_bytes(b"not a pdf")
+        with pytest.raises(preview.UnreadablePdfError):
+            preview.render_pdf(bad, tmp_path / "out", dpi=72, guides=True, safe_mm=None)
+        assert not (tmp_path / "out").exists()
+
+    def test_a_page_too_large_for_the_resolution_raises(self, make_pdf, tmp_path):
+        with pytest.raises(ValueError, match="65,535 pixels"):
+            preview.render_pdf(make_pdf(), tmp_path, dpi=100_000, guides=False, safe_mm=None)
+
+    async def test_the_async_wrapper_matches(self, make_pdf, tmp_path):
+        pngs = await preview.preview_file(make_pdf(), tmp_path, dpi=72, guides=True, safe_mm=None)
+        assert [p.name for p in pngs] == ["test-p1.png"]

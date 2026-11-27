@@ -1,0 +1,333 @@
+//! Reads `checks.toml`, refuses it if any entry is malformed, and writes the check table (`$OUT_DIR/checks.rs`) and
+//! its Markdown listing (`$OUT_DIR/CHECKS.md`). The generated code is data only, with no branches: every check is a
+//! constant, so naming a check that does not exist fails to compile.
+
+// A build script reports a malformed checks.toml, or an unreadable file, by failing the build, and panicking is how it
+// fails. The no-panic rule protects PDF input, which never reaches this file.
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a build script fails the build by panicking"
+)]
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
+
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct File {
+    check: Vec<Entry>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Entry {
+    id: String,
+    #[serde(default)]
+    aliases: Vec<String>,
+    title: String,
+    clauses: Vec<String>,
+    severity: String,
+    applies: Vec<String>,
+    status: String,
+    reason: Option<String>,
+    /// The external program whose verdict an implemented check reports, run by the command line, not the core.
+    tool: Option<String>,
+    /// For an X-4 check reused at an older level: per level, the clause of that level's standard each of its ISO 15930-7
+    /// clauses becomes (`cite.x1a-2001 = { "6.17" = "6.19" }`).
+    #[serde(default)]
+    cite: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+/// The older levels and the standard each is defined by: a check reused from X-4 cites that standard's clause there.
+const OLDER: &[(&str, &str)] = &[
+    ("x1a-2001", "iso-15930-1"),
+    ("x3-2002", "iso-15930-3"),
+    ("x1a-2003", "iso-15930-4"),
+    ("x3-2003", "iso-15930-6"),
+];
+
+const SEVERITIES: &[&str] = &["error", "warning"];
+const LEVELS: &[&str] = &[
+    "x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print",
+];
+const TOOLS: &[&str] = &["veraPDF", "Ghostscript"];
+
+fn main() {
+    let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));
+    let source = root.join("checks.toml");
+    println!("cargo::rerun-if-changed={}", source.display());
+    println!("cargo::rerun-if-changed={}", root.join("clauses").display());
+    let text = fs::read_to_string(&source).expect("rust/checks.toml is readable");
+    let file: File = toml::from_str(&text).unwrap_or_else(|e| panic!("rust/checks.toml: {e}"));
+    let known = known_clauses(&root.join("clauses"));
+    let problems = validate(&file.check, &known);
+    assert!(problems.is_empty(), "rust/checks.toml:\n{}", problems.join("\n"));
+    let out = PathBuf::from(env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
+    fs::write(out.join("checks.rs"), code(&file.check)).expect("OUT_DIR is writable");
+    fs::write(out.join("CHECKS.md"), markdown(&file.check)).expect("OUT_DIR is writable");
+    fs::write(out.join("README-checks.md"), readme(&file.check)).expect("OUT_DIR is writable");
+}
+
+/// The clause numbers held per standard: `clauses/<standard>.txt`, one number per line.
+fn known_clauses(dir: &Path) -> BTreeSet<String> {
+    let mut known = BTreeSet::new();
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        let Some(standard) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if path.extension().is_some_and(|e| e == "txt") {
+            let text = fs::read_to_string(&path).expect("clause lists are readable");
+            known.extend(
+                text.lines()
+                    .filter(|l| !l.is_empty())
+                    .map(|l| format!("{standard}:{l}")),
+            );
+        }
+    }
+    known
+}
+
+fn validate(checks: &[Entry], known: &BTreeSet<String>) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut names = BTreeSet::new();
+    for c in checks {
+        let id = &c.id;
+        for name in std::iter::once(id).chain(&c.aliases) {
+            if !names.insert(name.clone()) {
+                problems.push(format!("{name}: used twice, as an id or an alias"));
+            }
+            if name.is_empty()
+                || !name
+                    .chars()
+                    .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || "-.".contains(ch))
+            {
+                problems.push(format!("{name}: ids are lower case letters, digits, '-' and '.'"));
+            }
+        }
+        if c.title.is_empty() {
+            problems.push(format!("{id}: no title"));
+        }
+        if !SEVERITIES.contains(&c.severity.as_str()) {
+            problems.push(format!("{id}: severity {:?} is not one of {SEVERITIES:?}", c.severity));
+        }
+        if c.applies.is_empty() || c.applies.iter().any(|a| !LEVELS.contains(&a.as_str())) {
+            problems.push(format!("{id}: applies {:?} must name some of {LEVELS:?}", c.applies));
+        }
+        for clause in &c.clauses {
+            if !known.contains(clause) {
+                problems.push(format!("{id}: clause {clause} is not in rust/clauses/"));
+            }
+        }
+        match (c.status.as_str(), &c.reason) {
+            ("implemented" | "todo", None) => {}
+            ("skip", Some(reason)) if !reason.is_empty() => {}
+            ("skip", _) => problems.push(format!("{id}: a skip needs a reason")),
+            ("implemented" | "todo", Some(_)) => problems.push(format!("{id}: only a skip has a reason")),
+            (other, _) => problems.push(format!("{id}: status {other:?} is not implemented, todo or skip")),
+        }
+        problems.extend(citations(c));
+        match &c.tool {
+            Some(tool) if !TOOLS.contains(&tool.as_str()) => {
+                problems.push(format!("{id}: tool {tool:?} is not one of {TOOLS:?}"));
+            }
+            Some(_) if c.status != "implemented" => {
+                problems.push(format!("{id}: only an implemented check names a tool"));
+            }
+            _ => {}
+        }
+    }
+    problems
+}
+
+/// What is wrong with a check's `cite` table: each level it names is an older level the check applies to, each source
+/// is one of its ISO 15930-7 clause numbers and each target one of its clauses in that level's standard; and every
+/// older level it applies to maps every ISO 15930-7 clause it has, so no finding there cites the X-4 text.
+fn citations(c: &Entry) -> Vec<String> {
+    let id = &c.id;
+    let x4: BTreeSet<&str> = c
+        .clauses
+        .iter()
+        .filter_map(|cl| cl.strip_prefix("iso-15930-7:"))
+        .collect();
+    let mut problems = Vec::new();
+    for (level, standard) in OLDER {
+        let map = c.cite.get(*level);
+        if c.applies.iter().any(|a| a == level) {
+            let missing: Vec<&&str> = x4
+                .iter()
+                .filter(|n| !map.is_some_and(|m| m.contains_key(**n)))
+                .collect();
+            if !missing.is_empty() {
+                problems.push(format!("{id}: cite.{level} must map ISO 15930-7 clause(s) {missing:?}"));
+            }
+        } else if map.is_some() {
+            problems.push(format!("{id}: cite.{level} names a level the check does not apply to"));
+        }
+        for (from, to) in map.into_iter().flatten() {
+            if !x4.contains(from.as_str()) {
+                problems.push(format!(
+                    "{id}: cite.{level} maps {from:?}, not one of its ISO 15930-7 clauses"
+                ));
+            }
+            if !c.clauses.contains(&format!("{standard}:{to}")) {
+                problems.push(format!(
+                    "{id}: cite.{level} cites {standard}:{to}, which its clauses do not list"
+                ));
+            }
+        }
+    }
+    for level in c.cite.keys() {
+        if !OLDER.iter().any(|(l, _)| l == level) {
+            problems.push(format!("{id}: cite.{level} is not an older level"));
+        }
+    }
+    problems
+}
+
+/// `x4.output-intent.present` → `X4_OUTPUT_INTENT_PRESENT`.
+fn constant(id: &str) -> String {
+    id.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// The `Level` variant a level name in `checks.toml` names: `x1a-2001` is `X1a2001`.
+fn variant(word: &str) -> String {
+    let word = word.replace('-', "");
+    let mut chars = word.chars();
+    chars
+        .next()
+        .map_or_else(String::new, |c| c.to_ascii_uppercase().to_string() + chars.as_str())
+}
+
+fn code(checks: &[Entry]) -> String {
+    let mut out = String::from("// Generated by build.rs from rust/checks.toml. Do not edit.\n\n");
+    for c in checks {
+        let clauses: Vec<String> = c
+            .clauses
+            .iter()
+            .map(|cl| {
+                let (standard, number) = cl.split_once(':').expect("validated: every clause is known");
+                format!("Clause {{ standard: {standard:?}, number: {number:?} }}")
+            })
+            .collect();
+        let applies: Vec<String> = c.applies.iter().map(|a| format!("Level::{}", variant(a))).collect();
+        let cites: Vec<String> = OLDER
+            .iter()
+            .flat_map(|(level, standard)| {
+                c.cite.get(*level).into_iter().flatten().map(move |(from, to)| {
+                    format!(
+                        "(Level::{}, {from:?}, Clause {{ standard: {standard:?}, number: {to:?} }})",
+                        variant(level)
+                    )
+                })
+            })
+            .collect();
+        let status = match (c.status.as_str(), &c.reason) {
+            ("skip", Some(reason)) => format!("Status::Skip({reason:?})"),
+            (status, _) => format!("Status::{}", variant(status)),
+        };
+        let _ = writeln!(
+            out,
+            "/// The `{id}` check.\npub const {name}: &Check = &Check {{\n    id: {id:?},\n    aliases: &{aliases:?},\n    title: {title:?},\n    \
+             clauses: &[{clauses}],\n    severity: Severity::{severity},\n    applies: &[{applies}],\n    cites: &[{cites}],\n    status: {status},\n    tool: {tool:?},\n}};\n",
+            title = c.title,
+            name = constant(&c.id),
+            id = c.id,
+            aliases = c.aliases,
+            clauses = clauses.join(", "),
+            severity = variant(&c.severity),
+            applies = applies.join(", "),
+            cites = cites.join(", "),
+            tool = c.tool,
+        );
+    }
+    let all: Vec<String> = checks.iter().map(|c| constant(&c.id)).collect();
+    let _ = writeln!(
+        out,
+        "/// Every check, in the order of `rust/checks.toml`.\npub const ALL: &[&Check] = &[{}];",
+        all.join(", ")
+    );
+    out
+}
+
+/// The README's section on checks: how many each level has, then every house print check.
+fn readme(checks: &[Entry]) -> String {
+    let mut out = String::from(
+        "Generated from `rust/checks.toml`; every check, with its clauses, is in [rust/CHECKS.md](rust/CHECKS.md).\n\n\
+         | Level | Implemented | Not yet | Not checkable (skip) |\n|---|---|---|---|\n",
+    );
+    for (level, name) in [
+        ("x4", "PDF/X-4"),
+        ("x4p", "PDF/X-4p"),
+        ("x5g", "PDF/X-5g"),
+        ("x5pg", "PDF/X-5pg"),
+        ("x5n", "PDF/X-5n"),
+        ("x1a-2001", "PDF/X-1a:2001"),
+        ("x3-2002", "PDF/X-3:2002"),
+        ("x1a-2003", "PDF/X-1a:2003"),
+        ("x3-2003", "PDF/X-3:2003"),
+        ("print", "Print checks"),
+    ] {
+        let of = |status: &str| {
+            checks
+                .iter()
+                .filter(|c| c.applies.iter().any(|a| a == level) && c.status == status)
+                .count()
+        };
+        let _ = writeln!(
+            out,
+            "| {name} | {} | {} | {} |",
+            of("implemented"),
+            of("todo"),
+            of("skip")
+        );
+    }
+    out.push_str("\nThe print checks:\n\n| Id | What it checks | Severity |\n|---|---|---|\n");
+    for c in checks.iter().filter(|c| c.applies.iter().any(|a| a == "print")) {
+        let note = match (&c.reason, &c.tool) {
+            (Some(reason), _) => format!(" (not checked: {reason})"),
+            (None, Some(tool)) => format!(" (by {tool})"),
+            (None, None) => String::new(),
+        };
+        let _ = writeln!(out, "| `{}` | {}{note} | {} |", c.id, c.title, c.severity);
+    }
+    out
+}
+
+fn markdown(checks: &[Entry]) -> String {
+    let mut out = String::from(
+        "# Checks\n\nGenerated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while this copy is stale \
+         (refresh it with `bin/rust/check.sh --fix`).\n\n| Id | Title | Clauses | Severity | Applies | Status |\n|---|---|---|---|---|---|\n",
+    );
+    for c in checks {
+        let status = match (&c.reason, &c.tool) {
+            (Some(reason), _) => format!("skip: {reason}"),
+            (None, Some(tool)) => format!("{} ({tool})", c.status),
+            (None, None) => c.status.clone(),
+        };
+        let _ = writeln!(
+            out,
+            "| `{}` | {} | {} | {} | {} | {} |",
+            c.id,
+            c.title,
+            c.clauses.join(", "),
+            c.severity,
+            c.applies.join(", "),
+            status
+        );
+    }
+    out
+}

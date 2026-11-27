@@ -1,0 +1,2568 @@
+# Every check proof-pdf knows, as data. build.rs reads it to generate the check table (src/checks.rs) and
+# rust/CHECKS.md. Fields: id (stable, never reused), aliases (old ids), title (our words), clauses (`<standard>:<clause>`,
+# validated against rust/clauses/), severity (error or warning), applies (x4, x4p, x5g, x5pg, x5n, or print for house
+# checks), status (implemented, todo, or skip with a reason). Parameters arrive with the checks that take them.
+# PDF/X rows come from the requirement registers in proof-pdf-test-db/docs/pdfx/, by id and clause number only.
+
+[[check]]
+id = "x4.pdf-reference.conforms"
+title = "Valid PDF as the PDF 1.6 Reference defines it"
+clauses = ["iso-15930-7:6.1.1", "iso-15930-7:B", "iso-15930-1:A", "iso-15930-1:6.2", "iso-15930-3:A", "iso-15930-3:6.1", "iso-15930-4:A", "iso-15930-4:6.1", "iso-15930-6:A", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.1.1" = "6.2", "B" = "A" }
+cite.x3-2002 = { "6.1.1" = "6.1", "B" = "A" }
+cite.x1a-2003 = { "6.1.1" = "6.1", "B" = "A" }
+cite.x3-2003 = { "6.1.1" = "6.1", "B" = "A" }
+
+[[check]]
+id = "x4.pre-separated.absent"
+title = "Pages are not pre-separated plates"
+clauses = ["iso-15930-7:6.1.2", "iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.1.2" = "6.2" }
+cite.x3-2002 = { "6.1.2" = "6.1" }
+cite.x1a-2003 = { "6.1.2" = "6.1" }
+cite.x3-2003 = { "6.1.2" = "6.1" }
+
+[[check]]
+id = "x4.complete.resources-inside"
+title = "Every resource a print element needs is in the file"
+clauses = ["iso-15930-7:6.3", "iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.3" = "6.2" }
+cite.x3-2002 = { "6.3" = "6.1" }
+cite.x1a-2003 = { "6.3" = "6.1" }
+cite.x3-2003 = { "6.3" = "6.1" }
+
+[[check]]
+id = "x4.complete.single-condition"
+title = "All print data is prepared for one printing condition"
+clauses = ["iso-15930-7:6.3", "iso-15930-7:6.4.1", "iso-15930-1:6.2", "iso-15930-1:6.3.1", "iso-15930-3:6.1", "iso-15930-3:6.2.1", "iso-15930-4:6.1", "iso-15930-4:6.2.1", "iso-15930-6:6.1", "iso-15930-6:6.2.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "skip"
+reason = "Intent, not a property of the file: the colour rows are its checkable part"
+cite.x1a-2001 = { "6.3" = "6.2", "6.4.1" = "6.3.1" }
+cite.x3-2002 = { "6.3" = "6.1", "6.4.1" = "6.2.1" }
+cite.x1a-2003 = { "6.3" = "6.1", "6.4.1" = "6.2.1" }
+cite.x3-2003 = { "6.3" = "6.1", "6.4.1" = "6.2.1" }
+
+[[check]]
+id = "x4.output-intent.channels"
+title = "The printing condition has 1, 3 or 4 channels"
+clauses = ["iso-15930-7:6.4.1", "iso-15930-3:6.2.1", "iso-15930-6:6.2.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x3-2002", "x3-2003"]
+status = "implemented"
+cite.x3-2002 = { "6.4.1" = "6.2.1" }
+cite.x3-2003 = { "6.4.1" = "6.2.1" }
+
+[[check]]
+id = "x4.output-intent.present"
+aliases = ["pdfx-intent"]
+title = "A GTS_PDFX output intent exists"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-1:6.3.2", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.4.2.1" = "6.3.2" }
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.output-intent.unique"
+title = "Only one output intent is GTS_PDFX"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-1:6.3.2", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.4.2.1" = "6.3.2" }
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.output-intent.identifier-present"
+title = "The PDF/X intent names its condition identifier"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-1:6.3.2", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.4.2.1" = "6.3.2" }
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.output-intent.identifier-text-string"
+title = "The condition identifier is a text string"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.output-intent.identifier-registered"
+title = "The condition identifier names a registered condition"
+clauses = ["iso-15930-7:6.4.2.1"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.output-intent.registry-name-color-org"
+title = "An ICC-registered condition gives the ICC registry"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-4:6.2.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.output-intent.identifier-in-registry"
+title = "The identifier exists in the named registry"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.output-intent.registry-name-url"
+title = "A non-ICC registry name is a URL"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-1:6.3.2", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.4.2.1" = "6.3.2" }
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.output-intent.dest-profile-present"
+title = "The PDF/X intent embeds its profile"
+clauses = ["iso-15930-7:6.4.2.1"]
+severity = "error"
+applies = ["x4", "x5g"]
+status = "implemented"
+
+[[check]]
+id = "x4.output-intent.no-dest-profile-ref"
+title = "The PDF/X intent has no external profile reference"
+clauses = ["iso-15930-7:6.4.2.1"]
+severity = "error"
+applies = ["x4", "x5g"]
+status = "implemented"
+
+[[check]]
+id = "x4.output-intent.profile-class-prtr"
+title = "The intent profile is an output-device profile"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-3:6.2.2", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x3-2002 = { "6.4.2.1" = "6.2.2" }
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.output-intent.profile-version"
+title = "The intent profile is ICC version 2 or 4"
+clauses = ["iso-15930-7:6.4.2.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.output-intent.output-condition"
+title = "The PDF/X intent describes its condition for people"
+clauses = ["iso-15930-7:6.4.2.1", "iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.4.2.1" = "6.2.2" }
+cite.x3-2003 = { "6.4.2.1" = "6.2.2" }
+
+[[check]]
+id = "x4.colour.device-space-matches-intent"
+title = "Device colour matches the output intent's family"
+clauses = ["iso-15930-7:6.4.3.2", "iso-15930-7:6.4.2.3", "iso-15930-3:6.2", "iso-15930-6:6.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x3-2002", "x3-2003"]
+status = "implemented"
+cite.x3-2002 = { "6.4.3.2" = "6.2", "6.4.2.3" = "6.2" }
+cite.x3-2003 = { "6.4.3.2" = "6.2", "6.4.2.3" = "6.2" }
+
+[[check]]
+id = "x4.icc.profile-version"
+title = "ICCBased profiles are ICC version 2 or 4"
+clauses = ["iso-15930-7:6.4.3.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.icc.overprint-mode-zero"
+title = "Overprinted four-channel ICC colour uses overprint mode 0"
+clauses = ["iso-15930-7:6.4.3.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.icc.cmyk-not-intent-profile"
+title = "Four-channel ICC colour does not reuse the intent profile"
+clauses = ["iso-15930-7:6.4.3.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.colorants-entry"
+title = "Every DeviceN spot has a Colorants entry"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.consistent-definition"
+title = "A spot name has one definition throughout"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.colorants-match-devicen"
+title = "Colorants entries agree with their DeviceN space"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.confusing-names"
+title = "Spot names do not imitate process or RGB inks"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.process-colorspace"
+title = "A DeviceN process space matches the output intent"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.no-dotgain"
+title = "NChannel mixing hints carry no dot gain"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.printing-order-consistent"
+title = "Printing orders agree across the file"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.solidities-consistent"
+title = "Each ink has one solidity across the file"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.spot.mixing-hints-informed"
+title = "Mixing hints omit default values"
+clauses = ["iso-15930-7:6.4.3.4"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "Whether a value was chosen with care cannot be read from the file"
+
+[[check]]
+id = "x4.spot.alternate-space-restricted"
+title = "Spot alternate spaces follow the colour rules"
+clauses = ["iso-15930-7:6.4.3.4", "iso-15930-3:6.2.7", "iso-15930-6:6.2.7"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x3-2002", "x3-2003"]
+status = "implemented"
+cite.x3-2002 = { "6.4.3.4" = "6.2.7" }
+cite.x3-2003 = { "6.4.3.4" = "6.2.7" }
+
+[[check]]
+id = "x4.font.embedded"
+title = "Fonts used for text are embedded"
+clauses = ["iso-15930-7:6.5.1", "iso-15930-7:6.24", "iso-15930-1:6.4", "iso-15930-3:6.3", "iso-15930-4:6.3", "iso-15930-6:6.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.5.1" = "6.4", "6.24" = "6.4" }
+cite.x3-2002 = { "6.5.1" = "6.3", "6.24" = "6.3" }
+cite.x1a-2003 = { "6.5.1" = "6.3", "6.24" = "6.3" }
+cite.x3-2003 = { "6.5.1" = "6.3", "6.24" = "6.3" }
+
+[[check]]
+id = "x4.font.glyphs-present"
+title = "Embedded fonts have every glyph they show"
+clauses = ["iso-15930-7:6.5.1", "iso-15930-1:6.4", "iso-15930-3:6.3", "iso-15930-4:6.3", "iso-15930-6:6.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.5.1" = "6.4" }
+cite.x3-2002 = { "6.5.1" = "6.3" }
+cite.x1a-2003 = { "6.5.1" = "6.3" }
+cite.x3-2003 = { "6.5.1" = "6.3" }
+
+[[check]]
+id = "x4.font.no-notdef"
+title = "Text never shows the .notdef glyph"
+clauses = ["iso-15930-7:6.5.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.font.widths-consistent"
+title = "Declared widths match the font program"
+clauses = ["iso-15930-7:6.5.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.font.truetype-nonsymbolic-encoding"
+title = "Non-symbolic TrueType uses MacRoman or WinAnsi"
+clauses = ["iso-15930-7:6.5.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.font.truetype-nonsymbolic-no-differences"
+title = "Non-symbolic TrueType has no Differences"
+clauses = ["iso-15930-7:6.5.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.font.truetype-symbolic-no-encoding"
+title = "Symbolic TrueType has no Encoding"
+clauses = ["iso-15930-7:6.5.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.font.truetype-symbolic-one-cmap"
+title = "Symbolic TrueType has exactly one cmap subtable"
+clauses = ["iso-15930-7:6.5.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.names.utf8"
+title = "Font and separation names are UTF-8"
+clauses = ["iso-15930-7:6.6"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.names.hex-escaped"
+title = "Bytes outside printable ASCII in those names are escaped"
+clauses = ["iso-15930-7:6.6"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.names.other-recommended"
+title = "Other names are UTF-8 and escaped too"
+clauses = ["iso-15930-7:6.6"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xobject.no-opi"
+title = "XObjects carry no OPI"
+clauses = ["iso-15930-7:6.7", "iso-15930-1:6.5", "iso-15930-3:6.15", "iso-15930-4:6.4", "iso-15930-6:6.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.7" = "6.5" }
+cite.x3-2002 = { "6.7" = "6.15" }
+cite.x1a-2003 = { "6.7" = "6.4" }
+cite.x3-2003 = { "6.7" = "6.4" }
+
+[[check]]
+id = "x4.xobject.no-ref"
+title = "Form XObjects are not reference XObjects"
+clauses = ["iso-15930-7:6.7", "iso-15930-4:6.4", "iso-15930-6:6.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.7" = "6.4" }
+cite.x3-2003 = { "6.7" = "6.4" }
+
+[[check]]
+id = "x4.filespec.embedded"
+title = "File specifications embed their file"
+clauses = ["iso-15930-7:6.7"]
+severity = "error"
+applies = ["x4", "x4p", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.stream.no-external-f"
+title = "No stream points at external data"
+clauses = ["iso-15930-7:6.7", "iso-15930-1:6.2", "iso-15930-3:6.15", "iso-15930-4:6.4", "iso-15930-6:6.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.7" = "6.2" }
+cite.x3-2002 = { "6.7" = "6.15" }
+cite.x1a-2003 = { "6.7" = "6.4" }
+cite.x3-2003 = { "6.7" = "6.4" }
+
+[[check]]
+id = "x4.filter.no-lzw"
+title = "LZW compression is not used"
+clauses = ["iso-15930-7:6.8", "iso-15930-3:6.4", "iso-15930-4:6.5", "iso-15930-6:6.5"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x3-2002 = { "6.8" = "6.4" }
+cite.x1a-2003 = { "6.8" = "6.5" }
+cite.x3-2003 = { "6.8" = "6.5" }
+
+[[check]]
+id = "x4.filter.no-crypt"
+title = "The Crypt filter is not used"
+clauses = ["iso-15930-7:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.filter.standard-only"
+title = "Only standard filters are used"
+clauses = ["iso-15930-7:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.image.dct-valid"
+title = "JPEG data is valid"
+clauses = ["iso-15930-7:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.image.jpx-valid"
+title = "JPEG 2000 data is valid"
+clauses = ["iso-15930-7:6.8", "iso-15930-7:6.27"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.image.jbig2-valid"
+title = "JBIG2 data is valid"
+clauses = ["iso-15930-7:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.trapped.present"
+aliases = ["trapped"]
+title = "XMP states whether the file is trapped"
+clauses = ["iso-15930-7:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.trapped.true-or-false"
+title = "The trapped state is True or False"
+clauses = ["iso-15930-7:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.trapped.trapnet-implies-true"
+title = "TrapNet annotations need the trapped state True"
+clauses = ["iso-15930-7:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.trapped.truthful"
+title = "The trapped state is true of the whole file"
+clauses = ["iso-15930-7:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "Whether a file is really trapped cannot be read from it"
+
+[[check]]
+id = "x4.trapnet.font-fauxing-empty"
+title = "TrapNet font fauxing is absent or empty"
+clauses = ["iso-15930-7:6.9", "iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.9" = "6.9" }
+cite.x3-2002 = { "6.9" = "6.5" }
+cite.x1a-2003 = { "6.9" = "6.6" }
+cite.x3-2003 = { "6.9" = "6.6" }
+
+[[check]]
+id = "x4.trapnet.pcm-matches-intent"
+title = "TrapNet process colour model matches the intent"
+clauses = ["iso-15930-7:6.9", "iso-15930-3:6.5", "iso-15930-6:6.6"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x3-2002", "x3-2003"]
+status = "implemented"
+cite.x3-2002 = { "6.9" = "6.5" }
+cite.x3-2003 = { "6.9" = "6.6" }
+
+[[check]]
+id = "x4.xmp.present"
+title = "The catalog has document metadata"
+clauses = ["iso-15930-7:6.10.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.conforms"
+title = "Document metadata is valid XMP"
+clauses = ["iso-15930-7:6.10.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.namespace-prefixes"
+title = "XMP uses the required prefixes for its namespaces"
+clauses = ["iso-15930-7:6.10.1", "iso-15930-7:6.11"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.unfiltered"
+title = "Metadata streams are not filtered"
+clauses = ["iso-15930-7:6.10.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.info.xmp-analogue-present"
+title = "Info entries with an XMP equivalent are in XMP"
+clauses = ["iso-15930-7:6.10.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.info.xmp-analogue-equal"
+title = "Info entries equal their XMP equivalents"
+clauses = ["iso-15930-7:6.10.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.info.unlisted-not-in-predefined-schema"
+title = "Other Info entries stay out of predefined schemas"
+clauses = ["iso-15930-7:6.10.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.info.pdfx-version-pdfdoc"
+title = "Info GTS_PDFXVersion is PDFDocEncoded"
+clauses = ["iso-15930-7:6.10.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.info.author-single-creator"
+title = "With Info Author, dc:creator has one item"
+clauses = ["iso-15930-7:6.10.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.no-bytes-encoding-attrs"
+title = "XMP packet headers have no bytes or encoding attribute"
+clauses = ["iso-15930-7:6.10.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.document-id"
+title = "XMP has a document ID"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.version-id"
+title = "XMP has a version ID"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.rendition-class"
+title = "XMP has a rendition class"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.document-id-uuid"
+title = "The document ID is a UUID URI"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.create-date"
+title = "XMP has a creation date"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.modify-date"
+title = "XMP has a modification date"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.metadata-date"
+title = "XMP has a metadata date"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.title"
+title = "XMP has a title"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.xmp.agent-names"
+title = "XMP names the creator tool and producer"
+clauses = ["iso-15930-7:6.10.4"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.trailer.id"
+title = "The trailer has a file ID"
+clauses = ["iso-15930-7:6.10.4", "iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.10.4" = "6.13" }
+cite.x3-2002 = { "6.10.4" = "6.6" }
+cite.x1a-2003 = { "6.10.4" = "6.7" }
+cite.x3-2003 = { "6.10.4" = "6.7" }
+
+[[check]]
+id = "x4.xmp.well-formed"
+title = "Every XMP packet is well-formed RDF/XML"
+clauses = ["iso-15930-7:6.10.6"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.identity.version-present"
+aliases = ["pdfx-xmp"]
+title = "XMP declares the PDF/X version"
+clauses = ["iso-15930-7:6.11", "iso-15930-7:A.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.identity.version-value"
+title = "The PDF/X version value is exact"
+clauses = ["iso-15930-7:6.11", "iso-15930-7:A.3"]
+severity = "error"
+applies = ["x4", "x4p"]
+status = "implemented"
+
+[[check]]
+id = "x4.identity.pdfxid-only-version"
+title = "The pdfxid namespace holds only the version"
+clauses = ["iso-15930-7:6.11"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.identity.no-info-conformance"
+title = "Info has no GTS_PDFXConformance"
+clauses = ["iso-15930-7:6.11"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.boxes.trim-or-art"
+aliases = ["trimbox"]
+title = "Each page has a TrimBox or an ArtBox"
+clauses = ["iso-15930-7:6.12", "iso-15930-1:6.14", "iso-15930-3:6.7", "iso-15930-4:6.8", "iso-15930-6:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.12" = "6.14" }
+cite.x3-2002 = { "6.12" = "6.7" }
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
+
+[[check]]
+id = "x4.boxes.not-both"
+title = "No page has both TrimBox and ArtBox"
+clauses = ["iso-15930-7:6.12", "iso-15930-1:6.14", "iso-15930-3:6.7", "iso-15930-4:6.8", "iso-15930-6:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.12" = "6.14" }
+cite.x3-2002 = { "6.12" = "6.7" }
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
+
+[[check]]
+id = "x4.boxes.within-bleed"
+title = "The trim or art box lies within the BleedBox"
+clauses = ["iso-15930-7:6.12", "iso-15930-1:6.14", "iso-15930-3:6.7", "iso-15930-4:6.8", "iso-15930-6:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.12" = "6.14" }
+cite.x3-2002 = { "6.12" = "6.7" }
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
+
+[[check]]
+id = "x4.boxes.within-crop"
+title = "Page boxes lie within the CropBox"
+clauses = ["iso-15930-7:6.12", "iso-15930-4:6.8", "iso-15930-6:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
+
+[[check]]
+id = "x4.boxes.within-media"
+title = "Page boxes lie within the MediaBox"
+clauses = ["iso-15930-7:6.12", "iso-15930-4:6.8", "iso-15930-6:6.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
+
+[[check]]
+id = "x4.boxes.prefer-trim"
+title = "TrimBox is used rather than ArtBox"
+clauses = ["iso-15930-7:6.12", "iso-15930-1:6.14", "iso-15930-3:6.7", "iso-15930-4:6.8", "iso-15930-6:6.8"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.12" = "6.14" }
+cite.x3-2002 = { "6.12" = "6.7" }
+cite.x1a-2003 = { "6.12" = "6.8" }
+cite.x3-2003 = { "6.12" = "6.8" }
+
+[[check]]
+id = "x4.extgstate.no-tr"
+title = "Graphics states have no transfer function"
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
+
+[[check]]
+id = "x4.extgstate.no-htp"
+title = "Graphics states have no halftone phase"
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
+
+[[check]]
+id = "x4.extgstate.tr2-default"
+title = "TR2, if present, is Default"
+clauses = ["iso-15930-7:6.13"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.halftone.transfer-function"
+title = "Halftones carry transfer functions only where required"
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
+
+[[check]]
+id = "x4.halftone.type-1-or-5"
+title = "Halftones are type 1 or 5"
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
+
+[[check]]
+id = "x4.halftone.no-name"
+title = "Halftones have no name"
+clauses = ["iso-15930-7:6.13", "iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.13" = "6.15" }
+cite.x3-2002 = { "6.13" = "6.8" }
+cite.x1a-2003 = { "6.13" = "6.9" }
+cite.x3-2003 = { "6.13" = "6.9" }
+
+[[check]]
+id = "x4.xobject.no-postscript"
+title = "No PostScript XObjects"
+clauses = ["iso-15930-7:6.14", "iso-15930-1:6.16", "iso-15930-3:6.9", "iso-15930-4:6.10", "iso-15930-6:6.10"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.14" = "6.16" }
+cite.x3-2002 = { "6.14" = "6.9" }
+cite.x1a-2003 = { "6.14" = "6.10" }
+cite.x3-2003 = { "6.14" = "6.10" }
+
+[[check]]
+id = "x4.xobject.no-subtype2-ps"
+title = "No form XObject is PostScript underneath"
+clauses = ["iso-15930-7:6.14", "iso-15930-4:6.10", "iso-15930-6:6.10"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.14" = "6.10" }
+cite.x3-2003 = { "6.14" = "6.10" }
+
+[[check]]
+id = "x4.encrypt.absent"
+title = "The file is not encrypted"
+clauses = ["iso-15930-7:6.15", "iso-15930-1:6.17", "iso-15930-3:6.10", "iso-15930-4:6.11", "iso-15930-6:6.11"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.15" = "6.17" }
+cite.x3-2002 = { "6.15" = "6.10" }
+cite.x1a-2003 = { "6.15" = "6.11" }
+cite.x3-2003 = { "6.15" = "6.11" }
+
+[[check]]
+id = "x4.perms.ur-only"
+title = "Permissions hold only usage rights"
+clauses = ["iso-15930-7:6.15"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.image.no-default-for-printing"
+title = "No image alternate is the default for printing"
+clauses = ["iso-15930-7:6.16", "iso-15930-1:6.18", "iso-15930-3:6.11", "iso-15930-4:6.12", "iso-15930-6:6.12"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.16" = "6.18" }
+cite.x3-2002 = { "6.16" = "6.11" }
+cite.x1a-2003 = { "6.16" = "6.12" }
+cite.x3-2003 = { "6.16" = "6.12" }
+
+[[check]]
+id = "x4.image.alternates-same-content"
+title = "Image alternates show the same picture"
+clauses = ["iso-15930-7:6.16", "iso-15930-1:6.18", "iso-15930-3:6.11", "iso-15930-4:6.12", "iso-15930-6:6.12"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "skip"
+reason = "Whether two images show the same area of one master image, at another resolution or in another colour space, needs a similarity judgement, not a reading of the file"
+cite.x1a-2001 = { "6.16" = "6.18" }
+cite.x3-2002 = { "6.16" = "6.11" }
+cite.x1a-2003 = { "6.16" = "6.12" }
+cite.x3-2003 = { "6.16" = "6.12" }
+
+[[check]]
+id = "x4.annot.outside-bleed"
+title = "Annotations lie outside the bleed"
+clauses = ["iso-15930-7:6.17", "iso-15930-4:6.13", "iso-15930-6:6.13"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.17" = "6.13" }
+cite.x3-2003 = { "6.17" = "6.13" }
+
+[[check]]
+id = "x4.annot.printermark-outside-trim"
+title = "Printer's marks lie outside the trim"
+clauses = ["iso-15930-7:6.17", "iso-15930-4:6.13", "iso-15930-6:6.13"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2003 = { "6.17" = "6.13" }
+cite.x3-2003 = { "6.17" = "6.13" }
+
+[[check]]
+id = "x4.actions.absent"
+title = "The file has no actions"
+clauses = ["iso-15930-7:6.18", "iso-15930-7:6.2", "iso-15930-1:6.20", "iso-15930-3:6.13", "iso-15930-4:6.14", "iso-15930-6:6.14"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.18" = "6.20", "6.2" = "6.20" }
+cite.x3-2002 = { "6.18" = "6.13", "6.2" = "6.13" }
+cite.x1a-2003 = { "6.18" = "6.14", "6.2" = "6.14" }
+cite.x3-2003 = { "6.18" = "6.14", "6.2" = "6.14" }
+
+[[check]]
+id = "x4.javascript.absent"
+title = "The file has no JavaScript"
+clauses = ["iso-15930-7:6.18", "iso-15930-7:6.2", "iso-15930-1:6.20", "iso-15930-3:6.13", "iso-15930-4:6.14", "iso-15930-6:6.14"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.18" = "6.20", "6.2" = "6.20" }
+cite.x3-2002 = { "6.18" = "6.13", "6.2" = "6.13" }
+cite.x1a-2003 = { "6.18" = "6.14", "6.2" = "6.14" }
+cite.x3-2003 = { "6.18" = "6.14", "6.2" = "6.14" }
+
+[[check]]
+id = "x4.content.known-operators"
+title = "Content uses only PDF 1.6 operators"
+clauses = ["iso-15930-7:6.19", "iso-15930-7:B", "iso-15930-1:A", "iso-15930-1:6.21", "iso-15930-3:A", "iso-15930-3:6.14", "iso-15930-4:A", "iso-15930-4:6.15", "iso-15930-6:A", "iso-15930-6:6.15"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.19" = "6.21", "B" = "A" }
+cite.x3-2002 = { "6.19" = "6.14", "B" = "A" }
+cite.x1a-2003 = { "6.19" = "6.15", "B" = "A" }
+cite.x3-2003 = { "6.19" = "6.15", "B" = "A" }
+
+[[check]]
+id = "x4.content.no-bx-ex"
+title = "Content avoids BX and EX"
+clauses = ["iso-15930-7:6.19", "iso-15930-1:6.21", "iso-15930-3:6.14", "iso-15930-4:6.15", "iso-15930-6:6.15"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+cite.x1a-2001 = { "6.19" = "6.21" }
+cite.x3-2002 = { "6.19" = "6.14" }
+cite.x1a-2003 = { "6.19" = "6.15" }
+cite.x3-2003 = { "6.19" = "6.15" }
+
+[[check]]
+id = "x4.transparency.group-cs-restricted"
+title = "Transparency group colour spaces follow the colour rules"
+clauses = ["iso-15930-7:6.20"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x4.transparency.blend-modes"
+title = "Blend modes are standard"
+clauses = ["iso-15930-7:6.20"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.viewer-prefs.areas"
+title = "Viewer areas and clips are MediaBox or BleedBox"
+clauses = ["iso-15930-7:6.21"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.names.no-alternate-presentations"
+title = "No alternate presentations"
+clauses = ["iso-15930-7:6.22"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.page.no-pres-steps"
+title = "No page has presentation steps"
+clauses = ["iso-15930-7:6.22"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.intent.known-values"
+title = "Rendering intents are standard"
+clauses = ["iso-15930-7:6.23", "iso-15930-7:6.13"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.oc.config-name-present"
+title = "Optional-content configurations are named"
+clauses = ["iso-15930-7:6.24"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.oc.config-name-unique"
+title = "Optional-content configuration names are unique"
+clauses = ["iso-15930-7:6.24"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.oc.order-complete"
+title = "An Order lists every optional-content group, or none"
+clauses = ["iso-15930-7:6.24"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.oc.no-as"
+title = "Optional-content configurations have no AS"
+clauses = ["iso-15930-7:6.24"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.limits.lexical"
+title = "Numbers, strings and names stay within PDF 1.6 limits"
+clauses = ["iso-15930-7:6.25"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.limits.objects"
+title = "The indirect-object count stays within PDF 1.6 limits"
+clauses = ["iso-15930-7:6.25"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.limits.graphics"
+title = "Graphics-state nesting, DeviceN and CIDs stay within limits"
+clauses = ["iso-15930-7:6.25"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.acroform.no-xfa"
+title = "Forms have no XFA"
+clauses = ["iso-15930-7:6.26"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.jpx.baseline"
+title = "JPEG 2000 uses the JPX format, baseline features only"
+clauses = ["iso-15930-7:6.27"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.jpx.channels"
+title = "JPEG 2000 has 1, 3 or 4 channels"
+clauses = ["iso-15930-7:6.27"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.jpx.one-colour-space"
+title = "JPEG 2000 declares at most one colour space"
+clauses = ["iso-15930-7:6.27"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.jpx.no-ciejab"
+title = "JPEG 2000 does not use CIEJab"
+clauses = ["iso-15930-7:6.27"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.jpx.cmyk-as-device"
+title = "Profile-less CMYK JPEG 2000 is judged as DeviceCMYK"
+clauses = ["iso-15930-7:6.27"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x4.jpx.bit-depth"
+title = "JPEG 2000 bit depth is 1, 8 or 16"
+clauses = ["iso-15930-7:6.27"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4.jpx.uniform-depth"
+title = "JPEG 2000 channels share one bit depth"
+clauses = ["iso-15930-7:6.27"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.output-intent.dest-profile-ref"
+title = "The PDF/X intent references its external profile"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.output-intent.no-dest-profile"
+title = "The PDF/X intent embeds no profile"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.ref.profile-name"
+title = "The profile reference names the profile"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.ref.urls"
+title = "The profile reference lists URL file specifications"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.ref.urls-no-ef-platform"
+title = "Those URLs embed nothing and name no platform paths"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x4p.ref.checksum"
+title = "The profile reference has a 16-byte checksum"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.ref.profile-cs"
+title = "The profile reference states GRAY, RGB or CMYK"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x4p.ref.icc-version"
+title = "The profile reference states the ICC version"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.ref.no-colorant-table"
+title = "The profile reference has no colorant table"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x4p.fileset.checksum-matches"
+title = "The external profile matches the checksum"
+clauses = ["iso-15930-7:A.1", "iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.fileset.fields-match"
+title = "The external profile matches the reference's fields"
+clauses = ["iso-15930-7:A.2"]
+severity = "error"
+applies = ["x4p", "x5pg", "x5n"]
+status = "implemented"
+
+[[check]]
+id = "x4p.fileset.profile-valid"
+title = "The external profile meets the output-intent rules"
+clauses = ["iso-15930-7:A.1"]
+severity = "error"
+applies = ["x4p", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.identification-value"
+title = "XMP declares an X-5 level"
+clauses = ["iso-15930-8:6.2"]
+severity = "error"
+applies = ["x5g", "x5n", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.self-contained-is-x4"
+title = "A self-contained file claims X-4, not X-5"
+clauses = ["iso-15930-8:5"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "skip"
+reason = "At X-5g it is the same test as x5.g-ref-present, a warning (X5-Q1); at X-5pg the external profile means the file is never self-contained"
+
+[[check]]
+id = "x5.g-ref-present"
+title = "At least one reference XObject exists"
+clauses = ["iso-15930-8:8.2"]
+# A warning (X5-Q1): what was left out of the file cannot be seen, only the proxies.
+severity = "warning"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-proxy-is-form"
+title = "External content is placed through a form proxy"
+clauses = ["iso-15930-8:8.2"]
+severity = "warning"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-ref-id-required"
+title = "Every reference has a file ID"
+clauses = ["iso-15930-8:8.2"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-ref-filespec-external"
+title = "A reference's file may be outside the file"
+clauses = ["iso-15930-8:8.2", "iso-15930-7:6.7"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-proxy-metadata"
+title = "A proxy form has metadata"
+clauses = ["iso-15930-8:8.3"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-proxy-rendition-of"
+title = "A proxy's XMP says which document it renders"
+clauses = ["iso-15930-8:8.3"]
+# The field names are spelled as ISO 15930-8:2010 Technical Corrigendum 1 corrects them (X5-Q6).
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-target-conformance-level"
+title = "Targets are at an allowed PDF/X level"
+clauses = ["iso-15930-8:8.2"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-target-conforms"
+title = "Targets conform to the level they claim"
+clauses = ["iso-15930-8:8.2"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-no-circular-refs"
+title = "References never lead back to a visited file"
+clauses = ["iso-15930-8:8.2"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-target-xmp-ids"
+title = "Targets carry XMP document, version and rendition IDs"
+clauses = ["iso-15930-8:8.3"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-document-id-uuid"
+title = "A target's document ID is a UUID URI"
+clauses = ["iso-15930-8:8.3"]
+severity = "warning"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-target-identity"
+title = "Reference IDs match their target"
+clauses = ["iso-15930-8:8.4"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-target-version-policy"
+title = "A target of another version is accepted only by choice"
+clauses = ["iso-15930-8:8.4"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-target-page-exists"
+title = "A reference's page exists in its target"
+clauses = ["iso-15930-8:8.2", "iso-32000-1:8.10.4"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-same-printing-condition"
+title = "Container and targets share a printing condition"
+clauses = ["iso-15930-8:8.5"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-target-no-ocg"
+title = "Targets have no optional content"
+clauses = ["iso-15930-8:8.7"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "implemented"
+
+[[check]]
+id = "x5.g-proxy-bbox-target-page"
+title = "A proxy's BBox is in the target page's space"
+clauses = ["iso-15930-8:8.5"]
+severity = "error"
+applies = ["x5g", "x5pg"]
+status = "skip"
+reason = "8.5 says how a reader places the target page in a proxy's BBox; any BBox can be read so, so the file holds nothing to check"
+
+[[check]]
+id = "x5.n-profile-iso15076"
+title = "The n-colorant profile is ICC version 4"
+clauses = ["iso-15930-8:7.1"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-trapnet-pcm"
+title = "TrapNet process colour model is DeviceN"
+clauses = ["iso-15930-8:7.1"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-trapnet-separations"
+title = "TrapNet lists every output-intent colorant"
+clauses = ["iso-15930-8:7.1"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-urls-ef-allowed"
+title = "A profile URL may embed the profile"
+clauses = ["iso-15930-8:7.2"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-profilecs-xclr"
+title = "The profile colour space is an n-colour signature"
+clauses = ["iso-15930-8:7.2"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-3clr-4clr-not-rgb-cmyk"
+title = "Three or four colorants do not stand for RGB or CMYK"
+clauses = ["iso-15930-8:7.2"]
+# A warning (X5-Q4): the colorant names, or a count derived from 3.13, are the only sign.
+severity = "warning"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-subtractive"
+title = "The printing condition is subtractive"
+clauses = ["iso-15930-8:7.2"]
+severity = "error"
+applies = ["x5n"]
+status = "skip"
+reason = "Whether a printing condition is subtractive is not recorded in an ICC profile or the file"
+
+[[check]]
+id = "x5.n-colorant-table-present"
+title = "The profile reference has a colorant table"
+clauses = ["iso-15930-8:7.2"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-colorant-table-count"
+title = "The colorant table matches the channel count"
+clauses = ["iso-15930-8:7.2"]
+# A warning (X5-Q4): the colorant names, or a count derived from 3.13, are the only sign.
+severity = "warning"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-colorant-table-matches-profile"
+title = "The colorant table matches the profile"
+clauses = ["iso-15930-8:7.2"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-devicegray-needs-black"
+title = "DeviceGray needs a Black colorant"
+clauses = ["iso-15930-8:7.3"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-devicecmyk-needs-cmyk"
+title = "DeviceCMYK needs all four process colorants"
+clauses = ["iso-15930-8:7.3"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-no-devicergb"
+title = "DeviceRGB is not used"
+clauses = ["iso-15930-8:7.3"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-devicen-subtype"
+title = "DeviceN attributes are not NChannel"
+clauses = ["iso-15930-8:7.3"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-devicen-no-process"
+title = "DeviceN attributes have no Process"
+clauses = ["iso-15930-8:7.3"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.n-transparency-group-cs"
+title = "Pages with transparency declare a group colour space"
+clauses = ["iso-15930-8:7.3"]
+severity = "error"
+applies = ["x5n"]
+status = "implemented"
+
+[[check]]
+id = "x5.reader.writer-level"
+title = "A writer produces at least one X-5 level"
+clauses = ["iso-15930-8:5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.reader-levels"
+title = "A reader handles its levels plus X-4 and X-4p"
+clauses = ["iso-15930-8:5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.documentation"
+title = "Products name the levels they support"
+clauses = ["iso-15930-8:5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.parse-all"
+title = "Readers parse all PDF and may ignore print flags"
+clauses = ["iso-15930-8:5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.file-set-rendering"
+title = "File sets render as the PDF Reference says"
+clauses = ["iso-15930-8:5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.old-features"
+title = "Features from before PDF 1.6 may be ignored"
+clauses = ["iso-15930-8:5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.cmm-capabilities"
+title = "Colour management needed for n-colour conditions"
+clauses = ["iso-15930-8:7.2"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.colorant-names"
+title = "Spot names matching the colorant table are those colorants"
+clauses = ["iso-15930-8:7.3"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.device-mapping"
+title = "Device gray and CMYK map onto the named colorants"
+clauses = ["iso-15930-8:7.3"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.cycle-detection"
+title = "Readers detect circular references"
+clauses = ["iso-15930-8:8.2"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.finding-targets"
+title = "How a reader finds targets is open"
+clauses = ["iso-15930-8:8.4"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.matching-workflow"
+title = "Readers treat an ID match as exact or another version"
+clauses = ["iso-15930-8:8.4"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.use-target-data"
+title = "Rendering uses all target data"
+clauses = ["iso-15930-8:8.5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.target-fonts"
+title = "Each file's text uses that file's fonts"
+clauses = ["iso-15930-8:8.5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.cross-file-blending"
+title = "Overprint and transparency across files look like one file"
+clauses = ["iso-15930-8:8.5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.target-placement"
+title = "Target pages are placed by their rotated MediaBox"
+clauses = ["iso-15930-8:8.5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.profile-conversion"
+title = "Assembly converts between differing profiles"
+clauses = ["iso-15930-8:8.5"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "x5.reader.trapped-scope"
+title = "pdf:Trapped says nothing about targets"
+clauses = ["iso-15930-8:8.6"]
+severity = "error"
+applies = ["x5g", "x5pg", "x5n"]
+status = "skip"
+reason = "A rule on readers, writers or workflows, not a property of a file (ISO 15930-8, register §4)"
+
+[[check]]
+id = "tac"
+title = "Peak total ink stays under the limit"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+tool = "Ghostscript"
+
+[[check]]
+id = "overprint"
+title = "Overprint is used on purpose"
+clauses = []
+severity = "warning"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "white-overprint"
+title = "White is never set to overprint"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "colour-space"
+title = "Colour spaces suit the job's colour mode"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "rgb-only"
+title = "An RGB job paints only RGB"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "gray-only"
+title = "A gray job paints only gray"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "k-only-text"
+title = "Text is 100% black only"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "rich-black"
+title = "Small text is not in rich black"
+clauses = []
+severity = "warning"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "spot-ink"
+title = "Spot inks are on the allowed list"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "spot-definition"
+title = "A spot ink has one definition"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "icc-profile"
+title = "Embedded ICC profiles are sound and suit the job"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "blend-space"
+title = "Transparency declares its blend space"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "image-dpi"
+title = "Images meet the resolution floor"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "image-dpi-max"
+title = "Images do not exceed the resolution ceiling"
+clauses = []
+severity = "warning"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "image-stretch"
+title = "Images are not stretched unevenly"
+clauses = []
+severity = "warning"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "text-size"
+title = "Text meets the size floor"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "hairline"
+title = "Strokes meet the width floor"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "contrast"
+title = "Text contrasts with its background"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "safe-area"
+title = "Text stays inside the safe area"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "missing-glyph"
+title = "Text shows no missing glyphs"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "font-embedded"
+title = "Fonts are embedded"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "font-type3"
+title = "Type 3 fonts are reported"
+clauses = []
+severity = "warning"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "geometry"
+title = "Pages are the expected trim size"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "bleed"
+title = "Pages carry the expected bleed"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "centring"
+title = "The trim is centred in the bleed"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "artwork-bleed"
+title = "Artwork reaches into the bleed"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "outside-bleed"
+title = "Nothing is painted beyond the bleed"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "outside-media"
+title = "Nothing is painted wholly off the page"
+clauses = []
+severity = "warning"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "xobject-missing"
+title = "Painted XObjects exist"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "bleedbox"
+title = "Pages with a trim have a BleedBox"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "skip"
+reason = "Replaced by the x4.boxes rows (a BleedBox inside the MediaBox) and the geometry checks' bleed"
+
+[[check]]
+id = "boxes"
+title = "Each page has a MediaBox"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "skip"
+reason = "Replaced by page.media-box and the x4.boxes rows"
+
+[[check]]
+id = "page-size"
+title = "Pages share one size"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "page-count"
+title = "The page count fits the rule"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "page-rotate"
+title = "Pages are not rotated"
+clauses = []
+severity = "warning"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "output-condition"
+title = "The output intent names the expected condition"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+
+[[check]]
+id = "pdfa"
+title = "veraPDF passes the PDF/A flavour"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "implemented"
+tool = "veraPDF"
+
+[[check]]
+id = "structure"
+title = "The file can be read"
+clauses = []
+severity = "error"
+applies = ["print"]
+status = "skip"
+reason = "Not a check: whether the file could be read is the report's own structure and verdict"
+
+[[check]]
+id = "internal"
+title = "The engine itself failed on this file"
+clauses = []
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "skip"
+reason = "Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it"
+
+# ---- File structure and syntax: tiers 1 to 5's own findings, at every level. ISO 32000-2 clauses.
+
+[[check]]
+id = "file.header"
+title = "The file starts with a %PDF- header in its first 1024 bytes"
+clauses = ["iso-32000-2:7.5.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "file.header-offset"
+title = "The header is at the very start of the file"
+clauses = ["iso-32000-2:7.5.2"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "file.startxref"
+title = "The file ends with startxref and the offset of its cross-reference"
+clauses = ["iso-32000-2:7.5.5"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "file.xref"
+title = "Every cross-reference section can be read"
+clauses = ["iso-32000-2:7.5.4", "iso-32000-2:7.5.8"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "file.trailer"
+title = "The trailer names the document catalog"
+clauses = ["iso-32000-2:7.5.5"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "file.encrypted"
+title = "The file is not encrypted"
+clauses = ["iso-32000-2:7.6"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "file.eof"
+title = "The file ends with %%EOF and nothing after it"
+clauses = ["iso-32000-2:7.5.5"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "file.limit"
+title = "The file stays within proof-pdf's safety limits"
+clauses = []
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "syntax.hex-digits"
+title = "Hex strings have an even number of digits"
+clauses = ["iso-32000-2:7.3.4.3"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "syntax.octal-escape"
+title = "Octal escapes in strings stay within one byte"
+clauses = ["iso-32000-2:7.3.4.2"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "syntax.name-escape"
+title = "Escapes in names are two hex digits, never 00"
+clauses = ["iso-32000-2:7.3.5"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "syntax.duplicate-key"
+title = "No dictionary gives a key twice"
+clauses = ["iso-32000-2:7.3.7"]
+# A warning, though 7.3.7 says "shall not": LuaLaTeX's pdfx package writes catalog keys twice in files that print
+# correctly; qpdf warns, and pdfToolbox does not object.
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "stream.eol"
+title = "Stream data is followed by an end of line before endstream"
+clauses = ["iso-32000-2:7.3.8.1"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "stream.filter"
+title = "Every stream names filters ISO 32000 defines"
+clauses = ["iso-32000-2:7.4.1"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "content.damaged"
+title = "Every content stream can be read to its end"
+clauses = ["iso-32000-2:7.8.2", "iso-32000-2:8.9.7"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "content.operator"
+title = "Undefined operators appear only inside BX and EX"
+clauses = ["iso-32000-2:7.8.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "content.compatibility"
+title = "BX and EX pair up"
+clauses = ["iso-32000-2:7.8.2"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "page.media-box"
+title = "Every page has a MediaBox, its own or inherited"
+clauses = ["iso-32000-2:7.7.3.3"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "object.damaged"
+title = "Every object reachable from the trailer can be read"
+clauses = ["iso-32000-2:7.3", "iso-32000-2:7.3.8.1", "iso-32000-2:7.3.10", "iso-32000-2:7.5.7"]
+severity = "error"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+[[check]]
+id = "object.dangling-reference"
+title = "References point at objects that exist"
+clauses = ["iso-32000-2:7.3.10"]
+severity = "warning"
+applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print"]
+status = "implemented"
+
+# PDF/X-1a:2001, X-3:2002, X-1a:2003 and X-3:2003 (ISO 15930-1, -3, -4, -6): the rules that differ from X-4, from
+# proof-pdf-test-db/docs/pdfx/x1a3-register.md by id and clause number only (docs/interpretations.md, L-Q*).
+
+[[check]]
+id = "x13.structure.xref-table"
+title = "Cross-reference tables only: no cross-reference or object streams"
+clauses = ["iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.output-intent.icc-name-needs-registry"
+title = "An ICC registry identifier comes with the ICC RegistryName"
+clauses = ["iso-15930-1:6.3.2", "iso-15930-3:6.2.2"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002"]
+status = "implemented"
+
+[[check]]
+id = "x13.output-intent.dest-profile-by-registry"
+title = "A condition the ICC registry does not name embeds its output profile"
+clauses = ["iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.output-intent.dest-profile-by-icc-name"
+title = "An identifier that is not an ICC registry name comes with an output profile"
+clauses = ["iso-15930-1:6.3.2", "iso-15930-3:6.2.2"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002"]
+status = "implemented"
+
+[[check]]
+id = "x3.output-intent.dest-profile-for-colour"
+title = "Colour outside the condition's process model comes with an output profile"
+clauses = ["iso-15930-3:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x3-2002", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x1a.output-intent.profile-atob1"
+title = "The output profile has a colorimetric device-to-PCS table"
+clauses = ["iso-15930-1:6.3.2"]
+severity = "error"
+applies = ["x1a-2001"]
+status = "implemented"
+
+[[check]]
+id = "x1a.output-intent.cmyk"
+title = "The printing condition is CMYK"
+clauses = ["iso-15930-1:6.3.1", "iso-15930-1:6.3.3", "iso-15930-1:6.9", "iso-15930-4:6.2.1", "iso-15930-4:6.2.3"]
+severity = "error"
+applies = ["x1a-2001", "x1a-2003"]
+status = "implemented"
+
+[[check]]
+id = "x1a.output-intent.output-condition-unregistered"
+title = "A condition outside the ICC registry is described for people"
+clauses = ["iso-15930-1:6.3.2"]
+severity = "warning"
+applies = ["x1a-2001"]
+status = "implemented"
+
+[[check]]
+id = "x3.output-intent.info"
+title = "The PDF/X intent carries a description in /Info"
+clauses = ["iso-15930-3:6.2.2"]
+severity = "warning"
+applies = ["x3-2002"]
+status = "implemented"
+
+[[check]]
+id = "x13.output-intent.profile-version"
+title = "The output profile is ICC version 2"
+clauses = ["iso-15930-1:2", "iso-15930-1:6.3.2", "iso-15930-3:2", "iso-15930-3:6.2.2", "iso-15930-4:2", "iso-15930-4:6.2.2", "iso-15930-6:2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x3.icc.profile-version"
+title = "ICCBased profiles are ICC version 2"
+clauses = ["iso-15930-3:2", "iso-15930-3:6.2.1", "iso-15930-6:2", "iso-15930-6:6.2.1"]
+severity = "error"
+applies = ["x3-2002", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x1a.colour.print-spaces"
+title = "Print elements use only CMYK, gray and separation colour"
+clauses = ["iso-15930-1:6.3.1", "iso-15930-1:6.3.4", "iso-15930-4:6.2.1", "iso-15930-4:6.2.4"]
+severity = "error"
+applies = ["x1a-2001", "x1a-2003"]
+status = "implemented"
+
+[[check]]
+id = "x1a.colour.no-default-space"
+title = "No page holds a default colour space that remaps nothing"
+clauses = ["iso-15930-1:6.3.1", "iso-15930-4:6.2.1"]
+severity = "warning"
+applies = ["x1a-2001", "x1a-2003"]
+status = "implemented"
+
+[[check]]
+id = "x1a.spot.alternate-cmyk-or-gray"
+title = "Spot colour alternates are DeviceCMYK or DeviceGray"
+clauses = ["iso-15930-1:6.3.3", "iso-15930-4:6.2.3"]
+severity = "error"
+applies = ["x1a-2001", "x1a-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.font.embedding-permitted"
+title = "Embedded fonts permit embedding"
+clauses = ["iso-15930-1:6.4", "iso-15930-3:6.3", "iso-15930-4:6.3", "iso-15930-6:6.3"]
+severity = "warning"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.filespec.absent"
+title = "No file specifications"
+clauses = ["iso-15930-3:6.15", "iso-15930-4:6.4", "iso-15930-6:6.4"]
+severity = "error"
+applies = ["x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x1a.filespec.embedded-file"
+title = "No embedded files"
+clauses = ["iso-15930-1:6.2", "iso-15930-1:6.5"]
+severity = "warning"
+applies = ["x1a-2001"]
+status = "implemented"
+
+[[check]]
+id = "x1a.filter.listed-2001"
+title = "Only the filters PDF/X-1a:2001 lists, each on the kind of data it allows"
+clauses = ["iso-15930-1:6.8"]
+severity = "error"
+applies = ["x1a-2001"]
+status = "implemented"
+
+[[check]]
+id = "x13.filter.no-jbig2"
+title = "JBIG2 compression is not used"
+clauses = ["iso-15930-3:6.4", "iso-15930-4:6.5", "iso-15930-6:6.5"]
+severity = "error"
+applies = ["x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.filter.listed"
+title = "Only filters the level's PDF Reference defines"
+clauses = ["iso-15930-3:6.4", "iso-15930-4:6.5", "iso-15930-6:6.5"]
+severity = "error"
+applies = ["x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.image.bit-depth"
+title = "Image samples have 1, 2, 4 or 8 bits"
+clauses = ["iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.oc.hides-print"
+title = "Optional content cannot hide print content"
+clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-4:5", "iso-15930-4:6.1", "iso-15930-6:5", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.oc.present"
+title = "Optional content is present, always on"
+clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-4:5", "iso-15930-4:6.1", "iso-15930-6:5", "iso-15930-6:6.1"]
+severity = "warning"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.trapped.present"
+title = "Info has /Trapped"
+clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.trapped.true-or-false"
+title = "Info /Trapped is True or False"
+clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.trapped.trapnet-implies-true"
+title = "A TrapNet annotation needs Info /Trapped True"
+clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x1a.trapnet.pcm-cmyk"
+title = "TrapNet /PCM is DeviceCMYK"
+clauses = ["iso-15930-1:6.9", "iso-15930-4:6.6"]
+severity = "error"
+applies = ["x1a-2001", "x1a-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.identity.version-present"
+title = "Info has a /GTS_PDFXVersion string"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.identity.version-value"
+title = "Info /GTS_PDFXVersion names the level"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x1a.identity.conformance"
+title = "Info /GTS_PDFXConformance names PDF/X-1a:2001"
+clauses = ["iso-15930-1:6.13", "iso-15930-1:A"]
+severity = "error"
+applies = ["x1a-2001"]
+status = "implemented"
+
+[[check]]
+id = "x13.info.creation-date"
+title = "Info /CreationDate is a non-empty date"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.info.mod-date"
+title = "Info /ModDate is a non-empty date"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.info.title"
+title = "Info /Title is not empty"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.info.agent-names"
+title = "Info names its creator and producer"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "warning"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.xmp.mod-date-agrees"
+title = "XMP's modification date agrees with Info /ModDate"
+clauses = ["iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "warning"
+applies = ["x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.boxes.trim-within-crop"
+title = "TrimBox or ArtBox lies inside the CropBox"
+clauses = ["iso-15930-1:6.14", "iso-15930-3:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002"]
+status = "implemented"
+
+[[check]]
+id = "x13.extgstate.no-tr2"
+title = "No ExtGState has /TR2"
+clauses = ["iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.annot.outside-bleed-trapnet-only"
+title = "Every annotation but TrapNet lies outside the bleed"
+clauses = ["iso-15930-1:6.19", "iso-15930-3:6.12"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002"]
+status = "implemented"
+
+[[check]]
+id = "x13.transparency.smask"
+title = "No soft masks"
+clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-3:D.2", "iso-15930-4:6.16", "iso-15930-6:6.16"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.transparency.extgstate-values"
+title = "ExtGState blend mode and opacity are opaque values"
+clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-3:D.2", "iso-15930-4:6.16", "iso-15930-6:6.16"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.transparency.no-group"
+title = "No form XObject is a transparency group"
+clauses = ["iso-15930-4:6.16", "iso-15930-6:6.16"]
+severity = "error"
+applies = ["x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x13.viewer-prefs.areas"
+title = "Viewer-preference areas are MediaBox or BleedBox when a page has a BleedBox"
+clauses = ["iso-15930-4:6.17", "iso-15930-6:6.17"]
+severity = "error"
+applies = ["x1a-2003", "x3-2003"]
+status = "implemented"
+
+[[check]]
+id = "x3.output-intent.registry-name-color-org-2003"
+title = "An ICC-registered condition names the ICC registry, with or without the final slash"
+clauses = ["iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x3-2003"]
+status = "implemented"

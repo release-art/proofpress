@@ -21,7 +21,10 @@ directory (or named with ``--config`` / ``PROOF_PDF_CONFIG``)::
 
 Each table is a command (``verify``, ``inspect``, ``preview``, ``texlog``) and each key an option of that command,
 spelled with dashes or underscores. An option given on the command line always wins. Unknown tables and keys are
-errors, so a typo cannot silently turn a check off.
+errors, so a typo cannot silently turn a check off. A profile may ``extends`` another, merged over it.
+
+``verify`` is the Rust command's (``rust/src/cli/config.rs``), which reads the same file; this module reads the tables
+of the commands still in Python, and leaves ``[verify]`` to it.
 """
 
 import pathlib
@@ -29,6 +32,8 @@ import tomllib
 import typing
 
 CONFIG_NAME = "proof-pdf.toml"
+# The config format this proof-pdf reads; ``schema = 1`` may be written, or left out.
+SCHEMA = 1
 _PYPROJECT = "pyproject.toml"
 
 
@@ -58,10 +63,13 @@ def default_map(
     table = _tool_table(path) if path.name == _PYPROJECT else _read(path)
     if table is None:
         raise ConfigError(f"{path} has no [tool.proof-pdf] table")
+    if (schema := table.pop("schema", SCHEMA)) != SCHEMA:
+        raise ConfigError(f"{path}: schema {schema} is not supported; this proof-pdf reads schema {SCHEMA}")
     profiles = table.pop("profiles", {})
     selected = _select(profiles, profile, path)
     result: dict[str, dict[str, typing.Any]] = {}
-    for name in {*table, *selected}:
+    # ``verify`` is the Rust command's, which reads its own table.
+    for name in {*table, *selected} - {"verify"}:
         command = commands.get(name)
         if command is None:
             raise ConfigError(f"{path}: [{name}] is not a command; the commands are {', '.join(sorted(commands))}")
@@ -73,7 +81,9 @@ def default_map(
 def _read(path: pathlib.Path) -> dict[str, typing.Any]:
     try:
         return tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+    except OSError as exc:
+        raise ConfigError(f"cannot read {path}: {exc.strerror or exc}") from exc
+    except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"cannot read {path}: {exc}") from exc
 
 
@@ -86,12 +96,25 @@ def _tool_table(pyproject: pathlib.Path) -> dict[str, typing.Any] | None:
 
 
 def _select(profiles: object, name: str | None, path: pathlib.Path) -> dict[str, dict[str, typing.Any]]:
+    """The command tables of profile *name*, merged over those of the profiles it ``extends``, ancestor first."""
     if name is None:
         return {}
-    if not isinstance(profiles, dict) or name not in profiles:
-        known = ", ".join(sorted(profiles)) if isinstance(profiles, dict) and profiles else "none"
-        raise ConfigError(f"{path} has no profile {name!r} (profiles: {known})")
-    return profiles[name]
+    chain: list[dict[str, typing.Any]] = []
+    while name is not None:
+        if not isinstance(profiles, dict) or name not in profiles:
+            known = ", ".join(sorted(profiles)) if isinstance(profiles, dict) and profiles else ""
+            listed = f"profiles: {known}" if known else "it defines none"
+            raise ConfigError(f"{path} has no profile {name!r} ({listed})")
+        if any(profile is profiles[name] for profile in chain):
+            raise ConfigError(f"{path}: profile {name!r} extends itself")
+        chain.append(profiles[name])
+        name = profiles[name].get("extends")
+    merged: dict[str, dict[str, typing.Any]] = {}
+    for profile in reversed(chain):
+        for command, table in profile.items():
+            if command != "extends":
+                merged[command] = {**merged.get(command, {}), **table}
+    return merged
 
 
 def _options(raw: dict[str, typing.Any], command: typing.Any, name: str, path: pathlib.Path) -> dict[str, typing.Any]:

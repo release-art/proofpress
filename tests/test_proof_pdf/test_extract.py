@@ -2,14 +2,13 @@
 
 import json
 import pathlib
-import shutil
 
 import pikepdf
 import pytest
 import typer.testing
 
 from proof_pdf import cli, extract
-from proof_pdf._internal import fonts, xmp
+from proof_pdf._internal import xmp
 
 PDFS = pathlib.Path(__file__).parents[1] / "fixtures" / "pdfs"
 
@@ -73,14 +72,6 @@ class TestText:
         assert (run.text, run.font, run.page) == ("cyan", "Helvetica", 1)
         assert run.size_pt > 0 and run.colour and run.width > 0
 
-    def test_to_unicode_maps_chars_and_ranges(self):
-        pdf = pikepdf.new()
-        cmap = pdf.make_stream(
-            b"1 beginbfchar <0003> <0020> endbfchar "
-            b"2 beginbfrange <0010> <0012> <0041> <0020> <0021> [<0061> <0062>] endbfrange",
-        )
-        assert fonts._to_unicode(cmap) == {3: " ", 0x10: "A", 0x11: "B", 0x12: "C", 0x20: "a", 0x21: "b"}
-
 
 class TestDocument:
     def test_document_json_holds_pages_assets_text_and_inventory(self, tmp_path):
@@ -112,6 +103,10 @@ class TestCli:
     def test_a_file_that_will_not_open_fails_the_run(self, runner, tmp_path):
         result = runner.invoke(cli.pdf_app, ["extract", str(PDFS / "corrupt.pdf"), "--out", str(tmp_path)])
         assert result.exit_code == 1
+
+    def test_a_password_protected_file_fails_the_run(self, runner, tmp_path, password_pdf):
+        result = runner.invoke(cli.pdf_app, ["extract", str(password_pdf), "--out", str(tmp_path / "out")])
+        assert result.exit_code == 1 and "cannot open" in result.output
 
 
 def test_artwork_smaller_than_the_minimum_page_size_is_still_written(tmp_path):
@@ -183,8 +178,6 @@ class TestUnreadableText:
         assert len(result.notes) == 1 and "Foo (1)" in result.notes[0]
 
 
-@pytest.mark.container
-@pytest.mark.skipif(shutil.which("gs") is None, reason="needs Ghostscript on PATH")
 class TestPreviews:
     def test_the_review_page_boxes_each_asset_on_its_page_and_lists_it_below(self, tmp_path):
         result = extract.extract_pdf(PDFS / "rgb-image.pdf", tmp_path, previews=True)
@@ -200,10 +193,11 @@ class TestPreviews:
 
 
 class TestPreviewsCli:
-    def test_previews_without_ghostscript_fails_before_extracting(self, runner, tmp_path):
+    def test_previews_need_no_ghostscript_and_the_old_option_is_still_accepted(self, runner, tmp_path):
         args = ["extract", str(PDFS / "good.pdf"), "--out", str(tmp_path), "--previews", "--gs", "no-such-gs"]
         result = runner.invoke(cli.pdf_app, args)
-        assert result.exit_code == 1 and not (tmp_path / "good").exists()
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "good" / "previews" / "index.html").is_file()
 
 
 PACKET = b"""<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>
@@ -412,21 +406,6 @@ def _fn(**entries) -> pikepdf.Dictionary:
 
 
 class TestSpotColours:
-    def test_functions_give_the_alternate_of_a_tint(self):
-        from proof_pdf._internal import functions
-
-        pdf = pikepdf.new()
-        exponential = _fn(FunctionType=2, C0=[0, 0, 0, 0], C1=[0, 0.2, 0.8, 0.1], N=1)
-        calculator = pdf.make_stream(b"{ dup 0.4 mul exch 0.2 mul 0 0 }")
-        calculator.update(_fn(FunctionType=4, Range=[0, 1] * 4))
-        sampled = pdf.make_stream(bytes([0, 0, 255, 128]))
-        sampled.update(_fn(FunctionType=0, Size=[2], BitsPerSample=8, Range=[0, 1, 0, 1]))
-        assert functions.evaluate(exponential, [1.0]) == pytest.approx([0, 0.2, 0.8, 0.1])
-        assert functions.evaluate(exponential, [0.5]) == pytest.approx([0, 0.1, 0.4, 0.05])
-        assert functions.evaluate(calculator, [1.0]) == pytest.approx([0.4, 0.2, 0, 0])
-        assert functions.evaluate(sampled, [1.0]) == pytest.approx([1.0, 128 / 255])
-        assert functions.evaluate(_fn(FunctionType=9), [1.0]) is None
-
     def test_a_separation_is_named_with_its_alternate_and_shows_in_the_palette(self, tmp_path):
         pdf = pikepdf.new()
         page = pdf.add_blank_page(page_size=(300, 200))
@@ -556,9 +535,21 @@ class TestTaggedStructure:
 
 
 def test_font_descriptor_facts_read_flags_weight_and_slant():
-    descriptor = pikepdf.Dictionary(
-        Flags=(1 << 18) | 2, ItalicAngle=-12, FontWeight=400, FontFamily=pikepdf.String("Acme")
-    )
+    raw = dict.fromkeys(
+        (
+            "flags",
+            "weight",
+            "italic_angle",
+            "family",
+            "stretch",
+            "ascent",
+            "descent",
+            "cap_height",
+            "x_height",
+            "stem_v",
+        )
+    ) | {"bbox": None}
+    descriptor = raw | {"flags": (1 << 18) | 2, "italic_angle": -12.0, "weight": 400.0, "family": "Acme"}
     facts = extract._descriptor_facts(descriptor, "Acme-Regular")
     assert (facts["bold"], facts["italic"], facts["family"], facts["flags"]) == (
         True,
@@ -566,7 +557,7 @@ def test_font_descriptor_facts_read_flags_weight_and_slant():
         "Acme",
         ["serif", "force-bold"],
     )
-    plain = extract._descriptor_facts(pikepdf.Dictionary(Flags=32, FontWeight=700), "Acme-Black")
+    plain = extract._descriptor_facts(raw | {"flags": 32.0, "weight": 700.0}, "Acme-Black")
     assert (plain["bold"], plain["italic"], plain["flags"]) == (True, False, ["nonsymbolic"])
 
 
@@ -623,9 +614,6 @@ def test_a_compound_hairline_path_too_big_for_a_background_still_joins_its_drawi
     assert [a.details["shapes"] for a in result.assets if a.kind == "vector"] == [4]
 
 
-def test_a_state_set_again_keeps_the_latest_value_last():
-    from proof_pdf._internal import vector
-
-    old = vector._StateOp("w", (1,))
-    line = vector._put({"a": old, "w": old}, "a", vector._StateOp("w", (2,)))
-    assert list(line) == ["w", "a"]
+def test_what_the_core_cannot_read_is_listed_as_a_failure(tmp_path):
+    result = extract.extract_pdf(PDFS / "x4-damaged-object.pdf", tmp_path, kinds=())
+    assert any(f.startswith("reading the file: object.damaged:") for f in result.failures), result.failures

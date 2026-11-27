@@ -45,9 +45,11 @@ def _profile(name: str, mode: ColourMode, allow_k_only: bool = False) -> Profile
         extra["geometry"] = PageGeometry(*extra["geometry"])
     # The standards layers are off unless a sample is built to pass them, and min_dpi is below any sample's: most are
     # 1 to 64 pixel images, and resolution is not what they are about.
+    # Peak ink is measured in a CMYK job, as it always was; it is opt-in now (``tac``).
     base: dict[str, typing.Any] = {
         "pdfa": False,
         "pdfx": False,
+        "tac": mode is ColourMode.CMYK and extra.get("colour", True),
         "min_dpi": 0.1,
         "colour_mode": mode,
         "allow_k_only": allow_k_only,

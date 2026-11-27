@@ -33,7 +33,7 @@ def suite_file(request) -> pathlib.Path:
 
 
 async def test_the_checks_raised_are_the_expected_ones(suite_file):
-    report = await core.verify_file(suite_file, Profile(pdfa=False))
+    report = await core.verify_file(suite_file, Profile(tac=True))
     assert not any(f.check == "structure" for f in report.findings), "the file must open"
     assert {f.check for f in report.findings} == set(EXPECTED[suite_file.name])
 

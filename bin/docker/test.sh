@@ -5,4 +5,5 @@ cd "$(dirname "$0")/../.."
 eval "$(bin/docker/version.sh)" # PKG_VERSION
 source bin/docker/cache.sh
 docker buildx build --target test --load ${CACHE[@]+"${CACHE[@]}"} --build-arg PKG_VERSION="$PKG_VERSION" -t releaseart/test:local .
-docker run --rm releaseart/test:local "${@:--q}" -p no:cacheprovider
+# The fixture rebuild needs no tools and runs in CI's test job; in the image it only adds time.
+docker run --rm releaseart/test:local "${@:--q}" -p no:cacheprovider --ignore=tests/test_proof_pdf/test_fixtures_current.py
