@@ -115,15 +115,20 @@ impl Pipeline {
     }
 }
 
-#[when(regex = r"^it is verified as PDF/X-(4|4p|5g|5pg|5n)$")]
+/// A level as a scenario writes it, `4p` or `1a:2001`.
+fn named(level: &str) -> Level {
+    Level::from_name(&format!("x{}", level.replace(':', "-"))).unwrap()
+}
+
+#[when(regex = r"^it is verified as PDF/X-(4|4p|5g|5pg|5n|1a:2001|3:2002|1a:2003|3:2003)$")]
 fn verified(world: &mut Pipeline, level: String) {
-    world.verify(Level::from_name(&format!("x{level}")).unwrap(), "{}", false);
+    world.verify(named(&level), "{}", false);
 }
 
 /// Without the files it refers to (ISO 15930-7 A.1).
 #[when(regex = r"^it is verified alone as PDF/X-(4|4p|5g|5pg|5n)$")]
 fn verified_alone(world: &mut Pipeline, level: String) {
-    world.verify(Level::from_name(&format!("x{level}")).unwrap(), "{}", true);
+    world.verify(named(&level), "{}", true);
 }
 
 #[when("it is verified for print")]

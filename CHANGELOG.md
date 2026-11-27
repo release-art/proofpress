@@ -18,7 +18,8 @@ What existing users will notice, most important first (the entries below give th
 - **PDF/X-1a and PDF/X-3 levels (in progress):** `--pdfx x1a-2001|x3-2002|x1a-2003|x3-2003` (`Profile.pdfx_level`),
   and without `--pdfx` a file whose Info claims one of these levels is verified at it (the JSON report's new `level`
   says which; the text report adds "as PDF/X-3:2002" and the summary says "PDF/X as claimed"). Their checks are
-  being written; until then those levels report them as not evaluated.
+  being written; until then those levels report them as not evaluated. Written so far: the X-4 rules these levels
+  share, and identification, dates, title and `/Trapped` in the Info dictionary (`x13.*`, `x1a.*`).
 - **`/Trapped` is judged in the XMP** (`pdf:Trapped`), where ISO 15930-7 6.9 puts it; an Info `/Trapped` must agree.
 - **Damaged files are read strictly.** A file that pikepdf repaired silently now fails, with the reason; an encrypted
   file fails, even with an empty password. A damaged object or stream no longer stops the whole file: the rest is

@@ -22,7 +22,7 @@ use crate::findings::{
 
 const DC: &str = "http://purl.org/dc/elements/1.1/";
 const PDF: &str = "http://ns.adobe.com/pdf/1.3/";
-const XMP: &str = "http://ns.adobe.com/xap/1.0/";
+pub(super) const XMP: &str = "http://ns.adobe.com/xap/1.0/";
 pub(super) const MM: &str = "http://ns.adobe.com/xap/1.0/mm/";
 pub(super) const PDFXID: &str = "http://www.npes.org/pdfx/ns/id/";
 

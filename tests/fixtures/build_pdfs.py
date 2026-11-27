@@ -1833,6 +1833,55 @@ def _x4_page_object_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+OLDER_VERSIONS = {
+    "x1a-2001": ("PDF/X-1:2001", "PDF/X-1a:2001"),
+    "x3-2002": ("PDF/X-3:2002", None),
+    "x1a-2003": ("PDF/X-1a:2003", None),
+    "x3-2003": ("PDF/X-3:2003", None),
+}
+
+
+def _older(level: str, *, xmp: bool = False, **info: pikepdf.Object | None) -> pikepdf.Pdf:
+    """x4-good identified as PDF/X-1a or PDF/X-3 at ``level`` (ISO 15930-1, -3, -4, -6): Info carries the version (and
+    for X-1a:2001 the conformance) and the trapped state, and the X-4 XMP is dropped, as these levels do not need it.
+    ``info`` changes Info's entries, ``None`` removing one: one defect per negative."""
+    pdf = _x4_good()
+    if not xmp:
+        del pdf.Root["/Metadata"]
+    version, conformance = OLDER_VERSIONS[level]
+    pdf.docinfo["/GTS_PDFXVersion"] = pikepdf.String(version)
+    if conformance:
+        pdf.docinfo["/GTS_PDFXConformance"] = pikepdf.String(conformance)
+    for key, value in info.items():
+        if value is None:
+            del pdf.docinfo[f"/{key}"]
+        else:
+            pdf.docinfo[f"/{key}"] = value
+    return pdf
+
+
+def _older_fixtures() -> dict[str, pikepdf.Pdf]:
+    """x4-good at each older level, and the one-defect negatives of their Info rows (expected.toml says what each
+    raises)."""
+    name, text = pikepdf.Name, pikepdf.String
+    return {
+        **{f"{level}-good": _older(level) for level in OLDER_VERSIONS},
+        "x13-trapped-missing": _older("x3-2003", Trapped=None),
+        "x13-trapped-unknown": _older("x1a-2001", Trapped=name("/Unknown")),
+        "x13-trapnet-untrapped": _trapnet(_older("x1a-2003")),
+        "x1a-trapnet-pcm-rgb": _trapnet(_older("x1a-2001", Trapped=name("/True")), PCM=name.DeviceRGB),
+        "x13-version-missing": _older("x3-2002", GTS_PDFXVersion=None),
+        "x13-version-wrong": _older("x1a-2003", GTS_PDFXVersion=text("PDF/X-1a:2001")),
+        "x1a-conformance-misprint": _older("x1a-2001", GTS_PDFXConformance=text("PDF/X-a1:2001")),
+        "x1a-plain-x1": _older("x1a-2001", GTS_PDFXConformance=None),
+        "x13-creation-date-missing": _older("x3-2003", CreationDate=None),
+        "x13-mod-date-invalid": _older("x1a-2001", ModDate=text("yesterday")),
+        "x13-title-empty": _older("x3-2002", Title=text("")),
+        "x13-producer-missing": _older("x1a-2003", Producer=None),
+        "x13-xmp-mod-date-differs": _older("x3-2003", xmp=True, ModDate=text("D:20261126120000Z")),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -1923,6 +1972,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_x4_jpx_fixtures(),
         **_x4_font_fixtures(),
         **_x4p_fixtures(),
+        **_older_fixtures(),
         **_x5_targets(),
         **_x5n_fixtures(),
         **_print_fixtures(),

@@ -93,6 +93,8 @@ fn register_coverage() {
             "print"
         } else if check.id.starts_with("x5.") {
             "PDF/X-5"
+        } else if ["x13.", "x1a.", "x3."].iter().any(|p| check.id.starts_with(p)) {
+            "PDF/X-1a, X-3"
         } else {
             "PDF/X-4"
         };

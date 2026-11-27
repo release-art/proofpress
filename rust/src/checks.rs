@@ -12,6 +12,7 @@ pub(crate) mod contents;
 pub(crate) mod contrast;
 mod fonts;
 mod gray;
+mod info;
 mod ink;
 mod intent;
 pub mod inventory;
@@ -227,9 +228,21 @@ const JUDGES: &[(&Check, Judge)] = &[
         f::X5_N_COLORANT_TABLE_MATCHES_PROFILE,
         x4p::x5n_colorant_table_matches_profile,
     ),
+    (f::X1A_IDENTITY_CONFORMANCE, info::conformance),
 ];
 
 const RUNS: &[(&Check, Run)] = &[
+    (f::X13_TRAPPED_PRESENT, info::trapped_present),
+    (f::X13_TRAPPED_TRUE_OR_FALSE, info::trapped_true_or_false),
+    (f::X13_TRAPPED_TRAPNET_IMPLIES_TRUE, annots::x13_trapnet_implies_true),
+    (f::X1A_TRAPNET_PCM_CMYK, annots::x1a_pcm),
+    (f::X13_IDENTITY_VERSION_PRESENT, info::version_present),
+    (f::X13_IDENTITY_VERSION_VALUE, info::version_value),
+    (f::X13_INFO_CREATION_DATE, info::creation_date),
+    (f::X13_INFO_MOD_DATE, info::mod_date),
+    (f::X13_INFO_TITLE, info::title),
+    (f::X13_INFO_AGENT_NAMES, info::agent_names),
+    (f::X13_XMP_MOD_DATE_AGREES, info::mod_date_agrees),
     (X4_FILTER_NO_LZW, |d, _| x4::no_lzw(d)),
     (X4_FILTER_NO_CRYPT, |d, _| x4::no_crypt(d)),
     (X4_FILTER_STANDARD_ONLY, |d, _| x4::standard_only(d)),

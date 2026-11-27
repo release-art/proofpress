@@ -2413,7 +2413,7 @@ title = "Info has /Trapped"
 clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.trapped.true-or-false"
@@ -2421,7 +2421,7 @@ title = "Info /Trapped is True or False"
 clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.trapped.trapnet-implies-true"
@@ -2429,7 +2429,7 @@ title = "A TrapNet annotation needs Info /Trapped True"
 clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.trapnet.pcm-cmyk"
@@ -2437,7 +2437,7 @@ title = "TrapNet /PCM is DeviceCMYK"
 clauses = ["iso-15930-1:6.9", "iso-15930-4:6.6"]
 severity = "error"
 applies = ["x1a-2001", "x1a-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.identity.version-present"
@@ -2445,7 +2445,7 @@ title = "Info has a /GTS_PDFXVersion string"
 clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.identity.version-value"
@@ -2453,7 +2453,7 @@ title = "Info /GTS_PDFXVersion names the level"
 clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x1a.identity.conformance"
@@ -2461,7 +2461,7 @@ title = "Info /GTS_PDFXConformance names PDF/X-1a:2001"
 clauses = ["iso-15930-1:6.13", "iso-15930-1:A"]
 severity = "error"
 applies = ["x1a-2001"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.info.creation-date"
@@ -2469,7 +2469,7 @@ title = "Info /CreationDate is a non-empty date"
 clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.info.mod-date"
@@ -2477,7 +2477,7 @@ title = "Info /ModDate is a non-empty date"
 clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.info.title"
@@ -2485,7 +2485,7 @@ title = "Info /Title is not empty"
 clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.info.agent-names"
@@ -2493,7 +2493,7 @@ title = "Info names its creator and producer"
 clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
 severity = "warning"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.xmp.mod-date-agrees"
@@ -2501,7 +2501,7 @@ title = "XMP's modification date agrees with Info /ModDate"
 clauses = ["iso-15930-4:6.7", "iso-15930-6:6.7"]
 severity = "warning"
 applies = ["x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.boxes.trim-within-crop"

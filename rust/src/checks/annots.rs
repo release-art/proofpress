@@ -5,13 +5,14 @@
 //! edges are outside and a rectangle that encloses the box is not.
 
 use super::Settings;
-use super::intent;
 use super::metadata;
+use super::{info, intent};
 use crate::common::rect::{Rect, rect};
 use crate::document::{Dict, Document, Object, Page};
 use crate::findings::{
-    Check, Finding, Location, X4_ANNOT_OUTSIDE_BLEED, X4_ANNOT_PRINTERMARK_OUTSIDE_TRIM, X4_TRAPNET_FONT_FAUXING_EMPTY,
-    X4_TRAPNET_PCM_MATCHES_INTENT, X4_TRAPPED_TRAPNET_IMPLIES_TRUE, X5_N_TRAPNET_PCM, X5_N_TRAPNET_SEPARATIONS,
+    Check, Finding, Location, X1A_TRAPNET_PCM_CMYK, X4_ANNOT_OUTSIDE_BLEED, X4_ANNOT_PRINTERMARK_OUTSIDE_TRIM,
+    X4_TRAPNET_FONT_FAUXING_EMPTY, X4_TRAPNET_PCM_MATCHES_INTENT, X4_TRAPPED_TRAPNET_IMPLIES_TRUE, X5_N_TRAPNET_PCM,
+    X5_N_TRAPNET_SEPARATIONS, X13_TRAPPED_TRAPNET_IMPLIES_TRUE,
 };
 
 /// Every annotation dictionary with its page's index and the page.
@@ -112,6 +113,24 @@ pub(super) fn trapnet_implies_true(doc: &Document, _: &Settings) -> Vec<Finding>
     )]
 }
 
+/// The older levels (15930-1 6.9, -3 6.5, -4 and -6 6.6): with a `TrapNet` annotation, Info `/Trapped` is `True`.
+pub(super) fn x13_trapnet_implies_true(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    let pages = doc.pages();
+    match trapnets(doc, &pages).into_iter().next() {
+        Some((i, _)) if !info::trapped_true(doc) => vec![info::per_level(
+            on_page(
+                X13_TRAPPED_TRAPNET_IMPLIES_TRUE,
+                i,
+                "a TrapNet annotation, but Info /Trapped is not /True",
+                "6.9",
+            ),
+            settings,
+            info::TRAPPING,
+        )],
+        _ => Vec::new(),
+    }
+}
+
 /// 6.9: a `TrapNet` annotation's `/FontFauxing` is absent or an empty array.
 pub(super) fn font_fauxing(doc: &Document, _: &Settings) -> Vec<Finding> {
     let pages = doc.pages();
@@ -150,6 +169,14 @@ pub(super) fn pcm_matches_intent(doc: &Document, settings: &Settings) -> Vec<Fin
     };
     let want = pcm_for(space);
     pcm_is(doc, X4_TRAPNET_PCM_MATCHES_INTENT, want, "6.9")
+}
+
+/// PDF/X-1a (15930-1 6.9, 15930-4 6.6): a `TrapNet` appearance's `/PCM` is `DeviceCMYK`.
+pub(super) fn x1a_pcm(doc: &Document, settings: &Settings) -> Vec<Finding> {
+    pcm_is(doc, X1A_TRAPNET_PCM_CMYK, b"DeviceCMYK", "6.9")
+        .into_iter()
+        .map(|f| info::per_level(f, settings, info::TRAPPING))
+        .collect()
 }
 
 /// ISO 15930-8 7.1: under PDF/X-5n a `TrapNet` appearance's `/PCM` is `DeviceN`.

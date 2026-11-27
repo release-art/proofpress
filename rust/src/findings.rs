@@ -94,6 +94,20 @@ impl Level {
         }
     }
 
+    /// The standard that defines the level, as `rust/clauses/` names it.
+    #[must_use]
+    pub fn standard(self) -> &'static str {
+        match self {
+            Self::X4 | Self::X4p => "iso-15930-7",
+            Self::X5g | Self::X5pg | Self::X5n => "iso-15930-8",
+            Self::X1a2001 => "iso-15930-1",
+            Self::X32002 => "iso-15930-3",
+            Self::X1a2003 => "iso-15930-4",
+            Self::X32003 => "iso-15930-6",
+            Self::Print => "iso-32000-2",
+        }
+    }
+
     /// The level as its standard names it, `PDF/X-1a:2001`; `None` for the print checks.
     #[must_use]
     pub fn title(self) -> Option<&'static str> {
@@ -239,6 +253,20 @@ impl Finding {
         self
     }
 
+    /// The same finding, citing clause `number` of `standard` among its check's clauses: for a check whose clause
+    /// numbers repeat across the standards of the levels it applies to.
+    #[must_use]
+    pub fn citing_in(mut self, standard: &str, number: &str) -> Self {
+        let found = self
+            .check
+            .clauses
+            .iter()
+            .find(|c| c.standard == standard && c.number == number);
+        debug_assert!(found.is_some(), "{} may not cite {standard}:{number}", self.check.id);
+        self.clause = found;
+        self
+    }
+
     /// The same finding, located by `chain`; its page is the last page in the chain.
     #[must_use]
     pub fn at(mut self, chain: Vec<Location>) -> Self {
@@ -375,6 +403,22 @@ mod tests {
         assert_eq!(Level::from_name("x3"), None);
         assert_eq!(Level::X1a2001.title(), Some("PDF/X-1a:2001"));
         assert_eq!(Level::Print.title(), None);
+        let standards = Level::ALL.map(Level::standard);
+        assert_eq!(
+            standards,
+            [
+                "iso-15930-7",
+                "iso-15930-7",
+                "iso-15930-8",
+                "iso-15930-8",
+                "iso-15930-8",
+                "iso-15930-1",
+                "iso-15930-3",
+                "iso-15930-4",
+                "iso-15930-6",
+                "iso-32000-2"
+            ]
+        );
     }
 
     #[test]

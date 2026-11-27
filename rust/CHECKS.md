@@ -279,18 +279,18 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x13.image.bit-depth` | Image samples have 1, 2, 4 or 8 bits | iso-15930-1:6.2, iso-15930-3:6.1, iso-15930-4:6.1, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
 | `x13.oc.hides-print` | Optional content cannot hide print content | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-4:5, iso-15930-4:6.1, iso-15930-6:5, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
 | `x13.oc.present` | Optional content is present, always on | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-4:5, iso-15930-4:6.1, iso-15930-6:5, iso-15930-6:6.1 | warning | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.trapped.present` | Info has /Trapped | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.trapped.true-or-false` | Info /Trapped is True or False | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.trapped.trapnet-implies-true` | A TrapNet annotation needs Info /Trapped True | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x1a.trapnet.pcm-cmyk` | TrapNet /PCM is DeviceCMYK | iso-15930-1:6.9, iso-15930-4:6.6 | error | x1a-2001, x1a-2003 | todo |
-| `x13.identity.version-present` | Info has a /GTS_PDFXVersion string | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.identity.version-value` | Info /GTS_PDFXVersion names the level | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x1a.identity.conformance` | Info /GTS_PDFXConformance names PDF/X-1a:2001 | iso-15930-1:6.13, iso-15930-1:A | error | x1a-2001 | todo |
-| `x13.info.creation-date` | Info /CreationDate is a non-empty date | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.info.mod-date` | Info /ModDate is a non-empty date | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.info.title` | Info /Title is not empty | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.info.agent-names` | Info names its creator and producer | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | warning | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.xmp.mod-date-agrees` | XMP's modification date agrees with Info /ModDate | iso-15930-4:6.7, iso-15930-6:6.7 | warning | x1a-2003, x3-2003 | todo |
+| `x13.trapped.present` | Info has /Trapped | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.trapped.true-or-false` | Info /Trapped is True or False | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.trapped.trapnet-implies-true` | A TrapNet annotation needs Info /Trapped True | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x1a.trapnet.pcm-cmyk` | TrapNet /PCM is DeviceCMYK | iso-15930-1:6.9, iso-15930-4:6.6 | error | x1a-2001, x1a-2003 | implemented |
+| `x13.identity.version-present` | Info has a /GTS_PDFXVersion string | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.identity.version-value` | Info /GTS_PDFXVersion names the level | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x1a.identity.conformance` | Info /GTS_PDFXConformance names PDF/X-1a:2001 | iso-15930-1:6.13, iso-15930-1:A | error | x1a-2001 | implemented |
+| `x13.info.creation-date` | Info /CreationDate is a non-empty date | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.info.mod-date` | Info /ModDate is a non-empty date | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.info.title` | Info /Title is not empty | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.info.agent-names` | Info names its creator and producer | iso-15930-1:6.13, iso-15930-3:6.6, iso-15930-4:6.7, iso-15930-6:6.7 | warning | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.xmp.mod-date-agrees` | XMP's modification date agrees with Info /ModDate | iso-15930-4:6.7, iso-15930-6:6.7 | warning | x1a-2003, x3-2003 | implemented |
 | `x13.boxes.trim-within-crop` | TrimBox or ArtBox lies inside the CropBox | iso-15930-1:6.14, iso-15930-3:6.7 | error | x1a-2001, x3-2002 | todo |
 | `x13.extgstate.no-tr2` | No ExtGState has /TR2 | iso-15930-1:6.15, iso-15930-3:6.8, iso-15930-4:6.9, iso-15930-6:6.9 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
 | `x13.annot.outside-bleed-trapnet-only` | Every annotation but TrapNet lies outside the bleed | iso-15930-1:6.19, iso-15930-3:6.12 | error | x1a-2001, x3-2002 | todo |
