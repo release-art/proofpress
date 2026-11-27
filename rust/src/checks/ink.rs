@@ -267,6 +267,17 @@ mod tests {
     }
 
     #[test]
+    fn one_more_run_is_singular() {
+        assert_eq!(
+            found(&["BT /F 10 Tf 1 0 0 0 k (c) Tj (d) Tj ET"]),
+            [(
+                1,
+                "text is painted in C100 M0 Y0 K0 (and 1 more run), not K only".to_owned()
+            )]
+        );
+    }
+
+    #[test]
     fn colours_judged() {
         use Family::{Cmyk, Gray, Other, Rgb};
         assert!(is_white(&fill(Gray, &[1.0])) && !is_white(&fill(Gray, &[])) && !is_white(&fill(Other, &[1.0])));

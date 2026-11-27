@@ -429,6 +429,11 @@ mod tests {
                 "spot colour(s) Silver have no gray value",
             ]
         );
+        let more = format!("{page} 1 0 0 0 k 0 0 1 1 re f");
+        assert_eq!(
+            messages(&[&more], true)[1],
+            "artwork is painted in colours other than gray: C100 M0 Y0 K0, RGB, shading /Nope, ..."
+        );
         let inline = "BI /W 1 /H 1 /BPC 8 /CS /DeviceCMYK ID \0\0\0\0 EI";
         assert_eq!(
             messages(&[inline, "BI /W 1 /H 1 /BPC 8 /CS /CMYK ID \0\0\0\0 EI"], true),
