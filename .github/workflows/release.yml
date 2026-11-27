@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build as, e.g. 0.0.0.dev1 (nothing is published)"
+        description: "Version to build as, plain semver such as 0.0.1 (nothing is published)"
         required: true
 
 env:
