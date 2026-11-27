@@ -359,14 +359,10 @@ fn version_is(doc: &Document, check: &'static Check, want: &str, clause: &str) -
         Some(v) if v == want => Vec::new(),
         other => {
             // A level this tool also verifies: say which --pdfx value checks it.
-            let hint = match other {
-                Some("PDF/X-4") => "; verify with --pdfx x4",
-                Some("PDF/X-4p") => "; verify with --pdfx x4p",
-                Some("PDF/X-5g") => "; verify with --pdfx x5g",
-                Some("PDF/X-5pg") => "; verify with --pdfx x5pg",
-                Some("PDF/X-5n") => "; verify with --pdfx x5n",
-                _ => "",
-            };
+            let hint = other
+                .and_then(|v| v.strip_prefix("PDF/X-"))
+                .filter(|level| ["4", "4p", "5g", "5pg", "5n"].contains(level))
+                .map_or_else(String::new, |level| format!("; verify with --pdfx x{level}"));
             vec![
                 Finding::new(
                     check,

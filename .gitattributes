@@ -1,8 +1,5 @@
-# Files the tests compare byte for byte keep LF on every platform, including Windows checkouts.
-rust/CHECKS.md text eol=lf
-README.md text eol=lf
-rust/src/snapshots/*.snap text eol=lf
-# x4p-not-a-profile references this file by URL, and its /CheckSum is the MD5 of the LF bytes.
-tests/fixtures/icc/LICENSE-little-cms text eol=lf
+# Every text file is checked out with LF on every platform, Windows included: tests compare files byte for byte
+# (generated docs, snapshots, a fixture referenced by its MD5). Git detects other binaries itself.
+* text=auto eol=lf
 *.pdf binary
 *.icc binary

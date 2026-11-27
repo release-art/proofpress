@@ -442,6 +442,10 @@ mod tests {
             ["veraPDF could not validate the file: it exited with code 3"]
         );
         assert!(messages(&said("echo nonsense"))[0].contains("unreadable JSON"));
+        assert_eq!(
+            messages(&said("kill -KILL $$")),
+            ["veraPDF could not validate the file: it was stopped (signal: 9 (SIGKILL))"]
+        );
         let slow = said("sleep 5");
         assert!(slow.timed_out);
         let slow = verapdf(

@@ -400,6 +400,26 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
+    #[test]
+    fn every_reason_has_words() {
+        let reasons = [
+            Reason::Lexical(LexReason::UnterminatedLiteral),
+            Reason::Lexical(LexReason::UnterminatedHex),
+            Reason::Lexical(LexReason::BadHexDigit),
+            Reason::Lexical(LexReason::UnexpectedDelimiter),
+            Reason::Lexical(LexReason::IntegerOverflow),
+            Reason::Unbalanced,
+            Reason::BadKey,
+            Reason::MisplacedKeyword,
+            Reason::Brace,
+            Reason::TooDeep,
+            Reason::RawPastEnd,
+        ];
+        let words: std::collections::BTreeSet<&str> = reasons.into_iter().map(describe).collect();
+        assert_eq!(words.len(), reasons.len());
+        assert!(words.contains("a literal string is never closed"));
+    }
+
     fn events(buf: &[u8], mode: Mode) -> (Vec<Event<'_>>, Option<Damage>) {
         let mut parser = Parser::new(buf, 0, mode, 4);
         let mut out = Vec::new();

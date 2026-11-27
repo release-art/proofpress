@@ -212,7 +212,15 @@ mod tests {
         );
         let (code, out, _) = cli(&["verify", "no-such.pdf"]);
         assert_eq!(code, 2);
-        assert!(out.contains("x cannot read the file"), "{out}");
+        // The OS's own words (they differ on Windows), without Rust's "(os error N)".
+        assert!(
+            out.contains("x cannot read the file: ") && !out.contains("os error"),
+            "{out}"
+        );
+        let (code, out, _) = cli(&["verify", &fixture("corrupt")]);
+        assert_eq!(code, 2);
+        assert!(out.contains("x not evaluated, the file was refused: "), "{out}");
+        assert!(out.contains(" checks\n"), "{out}");
         // A warning alone passes; repeated findings collapse into page ranges.
         let (code, out, _) = cli(&["verify", &fixture("x4-name-other-not-utf8"), "--no-colour"]);
         assert_eq!(code, 0, "{out}");

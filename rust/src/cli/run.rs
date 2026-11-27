@@ -383,9 +383,7 @@ pub(crate) fn verify(path: &Path, plan: &Plan, exemptions: &[(GlobMatcher, Strin
 /// An I/O error's message without the "(os error N)" the OS's own words already say.
 pub(crate) fn io_message(e: &std::io::Error) -> String {
     let text = e.to_string();
-    e.raw_os_error()
-        .and_then(|code| text.strip_suffix(&format!(" (os error {code})")))
-        .map_or_else(|| text.clone(), str::to_owned)
+    text.split(" (os error ").next().unwrap_or_default().to_owned()
 }
 
 fn combined(name: &str, bytes: &[u8], plan: &Plan) -> Report {

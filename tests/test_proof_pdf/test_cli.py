@@ -287,5 +287,5 @@ class TestMissingFiles:
         result = runner.invoke(cli.pdf_app, [command, str(missing)])
         assert result.exit_code == 1
         assert result.exception is None or isinstance(result.exception, SystemExit)
-        assert "No such file or directory" in result.output
+        assert "FAIL -- " in result.output and missing.name in result.output
         assert "Traceback" not in result.output
