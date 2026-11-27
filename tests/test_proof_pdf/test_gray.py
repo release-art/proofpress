@@ -10,7 +10,7 @@ from PIL import Image
 from proof_pdf.models import ColourMode, Severity
 
 from ._samples import build
-from .conftest import ported_findings
+from .conftest import core_findings
 from .test_colour import _icc_space, _page_with, _pdf_with_pattern, _pdf_with_profiles, _shading, _tiling
 
 FAKE_CMYK = bytes(16) + b"CMYK" + bytes(180)  # only the header signature matters to the colour family
@@ -20,7 +20,7 @@ PATTERN = b"/Pattern cs /P1 scn 0 0 10 10 re f"
 
 
 def _check(pdf, *, k_only=False):
-    return ported_findings(pdf, {"gray-only"}, colour_mode=str(ColourMode.GRAY), allow_k_only=k_only)
+    return core_findings(pdf, {"gray-only"}, colour_mode=str(ColourMode.GRAY), allow_k_only=k_only)
 
 
 def _flagged(findings, severity=Severity.ERROR) -> bool:
@@ -346,13 +346,13 @@ class TestOutputIntent:
 class TestGrayProfiles:
     def test_two_different_gray_profiles_are_an_error_in_a_gray_job_only(self):
         pdf = _pdf_with_profiles((build.gray_profile("One gray"), 1), (build.gray_profile("Two gray"), 1))
-        [finding] = ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY))
+        [finding] = core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY))
         assert finding.severity is Severity.ERROR and "mixes 2 gray profiles" in finding.message
-        assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
 
     def test_the_same_gray_profile_twice_is_one_profile(self):
         pdf = _pdf_with_profiles((build.gray_profile("One gray"), 1), (build.gray_profile("One gray"), 1))
-        assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY)) == []
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY)) == []
 
     def test_the_intent_counts_as_a_gray_profile(self):
         pdf = _pdf_with_profiles((build.gray_profile("One gray"), 1))
@@ -362,13 +362,13 @@ class TestGrayProfiles:
             DestOutputProfile=pdf.make_stream(build.gray_profile("Two gray"), N=1),
         )
         pdf.Root.OutputIntents = pikepdf.Array([pdf.make_indirect(intent)])
-        assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY))
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.GRAY))
 
     def test_rgb_mode_wording_is_unchanged(self):
         from .test_colour import _SRGB_NAME, _renamed, _srgb
 
         other = _renamed(_srgb(), _SRGB_NAME, "Odd RGB built".encode("utf-16-be"))
-        [finding] = ported_findings(
+        [finding] = core_findings(
             _pdf_with_profiles((_srgb(), 3), (other, 3)), {"icc-profile"}, colour_mode=str(ColourMode.RGB)
         )
         assert finding.message.startswith("the RGB job mixes 2 RGB profiles")

@@ -5,7 +5,7 @@ import pytest
 
 from proof_pdf.models import Severity
 
-from .conftest import ported_findings
+from .conftest import core_findings
 
 
 def _one_page(pdf: pikepdf.Pdf, stream: bytes, resources: pikepdf.Dictionary) -> None:
@@ -38,11 +38,11 @@ class TestEffectiveDpi:
     def test_float_rounding_at_the_minimum_is_not_a_shortfall(self, placed_image):
         """74 px over 17.76 pt measures 299.99999999999994 dpi in floats; it was prepared for exactly 300."""
         with pikepdf.open(placed_image(pixels=74, points=17.76)) as pdf:
-            assert ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
+            assert core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
 
     def test_a_real_shortfall_still_counts(self, placed_image):
         with pikepdf.open(placed_image(pixels=424, points=102.0)) as pdf:  # 299.6 dpi
-            assert ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
+            assert core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
 
     @pytest.mark.parametrize(
         ("pixels", "points", "expected_dpi"),
@@ -55,17 +55,17 @@ class TestEffectiveDpi:
     )
     def test_dpi_is_pixels_over_placed_inches(self, placed_image, pixels, points, expected_dpi):
         with pikepdf.open(placed_image(pixels=pixels, points=points)) as pdf:
-            findings = ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=expected_dpi + 1)
+            findings = core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=expected_dpi + 1)
         assert findings, "expected a finding at a threshold just above the measured dpi"
         assert f"{expected_dpi:.0f} dpi" in findings[0].message
 
     def test_at_or_above_the_minimum_is_clean(self, placed_image):
         with pikepdf.open(placed_image(pixels=600, points=72.0)) as pdf:
-            assert ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
+            assert core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
 
     def test_below_the_minimum_is_an_error(self, placed_image):
         with pikepdf.open(placed_image(pixels=150, points=72.0)) as pdf:
-            findings = ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
+            findings = core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
         assert [f.severity for f in findings] == [Severity.ERROR]
         assert "150 dpi" in findings[0].message
 
@@ -73,13 +73,13 @@ class TestEffectiveDpi:
         """A square image stretched on one axis only is judged by the soft axis."""
         stream = b"q 72 0 0 288 0 0 cm /Im1 Do Q"  # 1in wide, 4in tall
         with pikepdf.open(placed_image(pixels=300, stream=stream)) as pdf:
-            findings = ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
+            findings = core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
         assert findings and "75 dpi" in findings[0].message
 
     def test_worst_placement_of_a_repeated_image_is_reported(self, placed_image):
         stream = b"q 72 0 0 72 0 0 cm /Im1 Do Q q 288 0 0 288 0 0 cm /Im1 Do Q"
         with pikepdf.open(placed_image(pixels=300, stream=stream)) as pdf:
-            findings = ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
+            findings = core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
         assert len(findings) == 1
         assert "75 dpi" in findings[0].message
 
@@ -99,7 +99,7 @@ class TestEffectiveDpi:
         _one_page(pdf, b"/Fm1 Do", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            findings = ported_findings(opened, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
+            findings = core_findings(opened, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0)
         assert findings and "75 dpi" in findings[0].message
 
     def test_forms_are_not_measured_as_images(self, tmp_path, make_form):
@@ -109,12 +109,12 @@ class TestEffectiveDpi:
         _one_page(pdf, b"q 1 0 0 1 0 0 cm /Fm1 Do Q", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert ported_findings(opened, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
+            assert core_findings(opened, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
 
     def test_hairline_placement_is_not_measured(self, placed_image):
         """A sub-point placement would divide by ~0 and report a nonsense dpi."""
         with pikepdf.open(placed_image(pixels=10, stream=b"q 0.4 0 0 0.4 0 0 cm /Im1 Do Q")) as pdf:
-            assert ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
+            assert core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
 
     def test_missing_dimensions_are_skipped(self, tmp_path, make_image):
         path = tmp_path / "nodims.pdf"
@@ -128,7 +128,7 @@ class TestEffectiveDpi:
         )
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert ported_findings(opened, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
+            assert core_findings(opened, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
 
     def test_unresolvable_name_is_skipped(self, tmp_path):
         path = tmp_path / "dangling.pdf"
@@ -136,14 +136,14 @@ class TestEffectiveDpi:
         _one_page(pdf, b"q 72 0 0 72 0 0 cm /Missing Do Q", pikepdf.Dictionary())
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert ported_findings(opened, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
+            assert core_findings(opened, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300.0) == []
 
 
 def test_inline_images_are_measured_too(tmp_path):
     pdf = pikepdf.new()
     stream = b"q 72 0 0 72 0 0 cm BI /W 100 /H 100 /CS /G /BPC 8 ID " + b"\x00" * 10000 + b" EI Q"
     _one_page(pdf, stream, pikepdf.Dictionary())
-    [finding] = ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300)
+    [finding] = core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=300)
     assert finding.severity is Severity.ERROR and "(inline)" in finding.message and "100 dpi" in finding.message
 
 
@@ -152,7 +152,7 @@ class TestLimits:
 
     def _check(self, placed_image, stream=None, *, pixels=300, min_dpi=200.0, **limits):
         with pikepdf.open(placed_image(pixels=pixels, stream=stream)) as pdf:
-            return ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=min_dpi, **limits)
+            return core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=min_dpi, **limits)
 
     def test_everything_is_off_until_given(self, placed_image):
         assert self._check(placed_image, pixels=3000) == []
@@ -210,5 +210,5 @@ class TestLimits:
             b"q 36 0 0 36 0 0 cm BI /W 100 /H 100 /CS /G /BPC 8 ID " + bytes(10000) + b" EI Q",
             pikepdf.Dictionary(),
         )
-        [finding] = ported_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=200.0, max_dpi=100.0)
+        [finding] = core_findings(pdf, {"image-dpi", "image-dpi-max", "image-stretch"}, min_dpi=200.0, max_dpi=100.0)
         assert "(inline)" in finding.message and "200 dpi" in finding.message

@@ -36,8 +36,11 @@ bin/test.sh                           # pytest with coverage
 - Public API is the top-level modules of `src/proof_pdf`; everything else lives in `proof_pdf/_internal/` and may change
   freely. A new module goes in `_internal` unless it is meant to be imported by users (then add it to `PUBLIC` in
   `tests/test_proof_pdf/test_public_api.py` and document it).
-- New behaviour comes with a test. The suite builds small real PDFs with pikepdf and stubs the external tools
-  (`verapdf`, `gs`) at the subprocess boundary.
+- New behaviour comes with a test, in the language that holds it. A check's logic is tested in Rust (unit tests,
+  fixtures and scenarios, above). The Python suite tests the Python surface (the API, the commands, `layout`, `texlog`
+  and how `extract` assembles `document.json`) and runs the checks end to end through the core
+  (`core_findings` and `core_run` in `tests/test_proof_pdf/conftest.py`). It builds small real PDFs with pikepdf, a
+  development dependency only, and stubs the external tools (`verapdf`, `gs`) at the subprocess boundary.
 - Add a line under `## [Unreleased]` in `CHANGELOG.md` for anything user-visible.
 - Integration tests (`tests/test_proof_pdf/test_integration.py`) run the real CLI on small PDFs against real veraPDF and
   Ghostscript, and skip without them; `bin/docker/test.sh` runs the whole suite in the image so they always run there.
@@ -45,8 +48,8 @@ bin/test.sh                           # pytest with coverage
   the builder, regenerate with `pdm run python tests/fixtures/build_pdfs.py`; a test fails if the committed PDFs are stale.
   The colour samples beside them are LaTeX (`tests/fixtures/samples/*.tex`, built by its `build.py` into the same
   `tests/fixtures/pdfs/`); see the README there. Both builders leave each other's files alone.
-- PDF/X rules are rows in `src/proof_pdf/_internal/pdfx/x4.py`; a clause is only filled in from the standard
-  itself.
+- PDF/X rules are checks in `rust/checks.toml` and code in `rust/src/checks/`; a clause is only filled in from the
+  standard itself.
 - Calibration against the free Ghent and Altona test suites: `bin/suites/fetch.sh` downloads them (they may not be
   redistributed, so they are never committed) and `pdm run pytest tests/test_proof_pdf/test_suites.py` checks each file
   raises exactly the checks in `tests/fixtures/suites/expected.toml`. The tests skip without the files; CI runs them by

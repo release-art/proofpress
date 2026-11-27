@@ -46,10 +46,10 @@ def core_run(path: pathlib.Path, params: dict[str, object] | None = None) -> lis
     return findings
 
 
-def ported_findings(pdf: pikepdf.Pdf, checks: set[str], **params: object) -> list[Finding]:
+def core_findings(pdf: pikepdf.Pdf, checks: set[str], **params: object) -> list[Finding]:
     """The Rust core's findings of *checks* on *pdf*, with the print checks' *params*."""
     with tempfile.TemporaryDirectory() as tmp:
-        path = pathlib.Path(tmp) / "ported.pdf"
+        path = pathlib.Path(tmp) / "checked.pdf"
         pdf.save(path)
         return [f for f in core_run(path, params) if f.check in checks]
 

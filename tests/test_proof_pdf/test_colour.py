@@ -1,27 +1,17 @@
 """Ink coverage, overprint, colour space and rich-black checks."""
 
 import io
-import pathlib
 import shutil
-import tempfile
 
 import pikepdf
 import pytest
 from PIL import ImageCms
 
 from proof_pdf import core
-from proof_pdf.models import ColourMode, Finding, Profile, Severity
+from proof_pdf.models import ColourMode, Profile, Severity
 
-from .conftest import core_run, ported_findings
+from .conftest import core_findings
 from .test_contrast import CMYK_PROFILE, needs_cmyk_profile
-
-
-def _ported(pdf: pikepdf.Pdf, check: str) -> list[Finding]:
-    """The Rust core's findings of one ported check on *pdf*, with the profile's default parameters."""
-    with tempfile.TemporaryDirectory() as tmp:
-        path = pathlib.Path(tmp) / "ported.pdf"
-        pdf.save(path)
-        return [f for f in core_run(path) if f.check == check]
 
 
 def _checks(findings) -> set[str]:
@@ -44,7 +34,7 @@ class TestOverprint:
 
     def _findings(self, make_content_pdf, stream, **kwargs):
         with pikepdf.open(make_content_pdf(stream, extgstates=self.GS, **kwargs)) as pdf:
-            return _ported(pdf, "overprint")
+            return core_findings(pdf, {"overprint"})
 
     def test_painting_under_overprint_is_flagged(self, make_content_pdf):
         findings = self._findings(make_content_pdf, b"/GS1 gs " + self.FILL, font=False)
@@ -61,7 +51,7 @@ class TestOverprint:
     def test_overprint_off_is_clean(self, make_content_pdf):
         off = {"/GS1": pikepdf.Dictionary(OP=False)}
         with pikepdf.open(make_content_pdf(b"/GS1 gs " + self.FILL, font=False, extgstates=off)) as pdf:
-            assert _ported(pdf, "overprint") == []
+            assert core_findings(pdf, {"overprint"}) == []
 
     @pytest.mark.parametrize(
         "text",
@@ -102,7 +92,7 @@ class TestOverprint:
         _page_with(pdf, b"/Fm1 Do", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert _checks(_ported(opened, "overprint")) == {"overprint"}
+            assert _checks(core_findings(opened, {"overprint"})) == {"overprint"}
 
     def test_overprint_set_in_a_form_does_not_leak_out_of_it(self, tmp_path, make_form):
         path = tmp_path / "leak.pdf"
@@ -117,7 +107,7 @@ class TestOverprint:
         _page_with(pdf, b"/Fm1 Do " + self.FILL, pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert _ported(opened, "overprint") == []
+            assert core_findings(opened, {"overprint"}) == []
 
 
 class TestColourSpaces:
@@ -128,7 +118,7 @@ class TestColourSpaces:
         _page_with(pdf, b"q 100 0 0 100 0 0 cm /Im1 Do Q", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            findings = ported_findings(opened, {"colour-space"}, strict_cmyk=False)
+            findings = core_findings(opened, {"colour-space"}, strict_cmyk=False)
         assert [f.severity for f in findings] == [Severity.ERROR]
         assert "/Im1" in findings[0].message
 
@@ -139,7 +129,7 @@ class TestColourSpaces:
         _page_with(pdf, b"q 100 0 0 100 0 0 cm /Im1 Do Q", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert ported_findings(opened, {"colour-space"}, strict_cmyk=False) == []
+            assert core_findings(opened, {"colour-space"}, strict_cmyk=False) == []
 
     @pytest.mark.parametrize(
         ("strict", "expected"), [(False, Severity.WARN), (True, Severity.ERROR)], ids=["advisory", "strict"]
@@ -147,7 +137,7 @@ class TestColourSpaces:
     def test_vector_rgb_severity_follows_strict(self, make_content_pdf, strict, expected):
         path = make_content_pdf(b"1 0 0 rg 0 0 10 10 re f", font=False)
         with pikepdf.open(path) as pdf:
-            findings = ported_findings(pdf, {"colour-space"}, strict_cmyk=strict)
+            findings = core_findings(pdf, {"colour-space"}, strict_cmyk=strict)
         assert [f.severity for f in findings] == [expected]
 
     @pytest.mark.parametrize(
@@ -163,7 +153,7 @@ class TestColourSpaces:
     def test_vector_rgb_is_found_wherever_it_is_painted(self, make_content_pdf, stream, flagged):
         path = make_content_pdf(stream, font=False, colorspaces={"/DeviceRGB": pikepdf.Name.DeviceRGB})
         with pikepdf.open(path) as pdf:
-            assert bool(ported_findings(pdf, {"colour-space"}, strict_cmyk=False)) is flagged
+            assert bool(core_findings(pdf, {"colour-space"}, strict_cmyk=False)) is flagged
 
     def test_repeated_image_reports_once_per_page(self, tmp_path, make_image):
         path = tmp_path / "repeat.pdf"
@@ -173,19 +163,19 @@ class TestColourSpaces:
         _page_with(pdf, stream, pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert len(ported_findings(opened, {"colour-space"}, strict_cmyk=False)) == 1
+            assert len(core_findings(opened, {"colour-space"}, strict_cmyk=False)) == 1
 
 
 class TestRgbOnly:
     def test_cmyk_fill_is_an_error(self, make_content_pdf):
         with pikepdf.open(make_content_pdf(b"0 0 0 1 k 0 0 10 10 re f", font=False)) as pdf:
-            assert [f.severity for f in ported_findings(pdf, {"rgb-only"}, colour_mode="rgb")] == [Severity.ERROR]
+            assert [f.severity for f in core_findings(pdf, {"rgb-only"}, colour_mode="rgb")] == [Severity.ERROR]
 
     def test_cmyk_image_is_an_error(self, tmp_path, make_image):
         pdf = pikepdf.new()
         image = pdf.make_indirect(make_image(pdf, colorspace=pikepdf.Name.DeviceCMYK))
         _page_with(pdf, b"q 100 0 0 100 0 0 cm /Im1 Do Q", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)))
-        assert "/Im1" in ported_findings(pdf, {"rgb-only"}, colour_mode="rgb")[0].message
+        assert "/Im1" in core_findings(pdf, {"rgb-only"}, colour_mode="rgb")[0].message
 
     @pytest.mark.parametrize(
         ("stream", "flagged"),
@@ -200,7 +190,7 @@ class TestRgbOnly:
     )
     def test_stroke_colour_is_checked_only_where_it_paints(self, make_content_pdf, stream, flagged):
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            assert bool(ported_findings(pdf, {"rgb-only"}, colour_mode="rgb")) is flagged
+            assert bool(core_findings(pdf, {"rgb-only"}, colour_mode="rgb")) is flagged
 
     @pytest.mark.parametrize(
         ("space", "flagged"),
@@ -210,12 +200,12 @@ class TestRgbOnly:
         stream = b"q 10 0 0 10 0 0 cm BI /W 1 /H 1 /CS " + space + b" /BPC 8 ID \x00\x00\x00\x00 EI Q"
         path = make_content_pdf(stream, font=False, colorspaces={"/CS0": pikepdf.Name.DeviceCMYK})
         with pikepdf.open(path) as pdf:
-            assert bool(ported_findings(pdf, {"rgb-only"}, colour_mode="rgb")) is flagged
+            assert bool(core_findings(pdf, {"rgb-only"}, colour_mode="rgb")) is flagged
 
     def test_inline_rgb_image_is_an_error_in_cmyk_mode(self, make_content_pdf):
         path = make_content_pdf(b"BI /W 1 /H 1 /CS /RGB /BPC 8 ID \x00\x00\x00 EI", font=False)
         with pikepdf.open(path) as pdf:
-            findings = ported_findings(pdf, {"colour-space"}, strict_cmyk=False)
+            findings = core_findings(pdf, {"colour-space"}, strict_cmyk=False)
         assert [f.severity for f in findings] == [Severity.ERROR]
 
     @pytest.mark.parametrize(
@@ -241,17 +231,17 @@ class TestRgbOnly:
             fill + b" q 10 0 0 10 0 0 cm " + (inline if kind == "inline" else b"/Im1 Do") + b" Q",
             pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=pdf.make_indirect(mask))),
         )
-        assert bool(ported_findings(pdf, {"rgb-only"}, colour_mode="rgb")) is flagged
+        assert bool(core_findings(pdf, {"rgb-only"}, colour_mode="rgb")) is flagged
 
     def test_stencil_mask_in_rgb_fill_is_vector_severity_in_cmyk_mode(self, make_content_pdf):
         path = make_content_pdf(b"1 0 0 rg BI /W 1 /H 1 /IM true /BPC 1 ID \x00 EI", font=False)
         with pikepdf.open(path) as pdf:
-            findings = ported_findings(pdf, {"colour-space"}, strict_cmyk=False)
+            findings = core_findings(pdf, {"colour-space"}, strict_cmyk=False)
         assert [f.severity for f in findings] == [Severity.WARN]
 
     def test_rgb_and_gray_are_clean(self, make_content_pdf):
         with pikepdf.open(make_content_pdf(b"1 0 0 rg 0 0 10 10 re f 0.5 g 0 0 5 5 re f", font=False)) as pdf:
-            assert ported_findings(pdf, {"rgb-only"}, colour_mode="rgb") == []
+            assert core_findings(pdf, {"rgb-only"}, colour_mode="rgb") == []
 
 
 def _shading(pdf: pikepdf.Pdf, space: pikepdf.Object) -> pikepdf.Object:
@@ -299,7 +289,7 @@ class TestShadingsAndPatterns:
             b"/Sh1 sh",
             lambda p: (pikepdf.Dictionary(Sh1=_shading(p, space)), pikepdf.Dictionary(), pikepdf.Dictionary()),
         )
-        assert bool(ported_findings(pdf, {"rgb-only"}, colour_mode="rgb")) is flagged
+        assert bool(core_findings(pdf, {"rgb-only"}, colour_mode="rgb")) is flagged
 
     @pytest.mark.parametrize(("space", "flagged"), [(CMYK_SPACE, True), (RGB_SPACE, False)])
     def test_shading_pattern_is_judged_by_its_colour_space(self, space, flagged):
@@ -307,9 +297,7 @@ class TestShadingsAndPatterns:
             pattern = pikepdf.Dictionary(PatternType=2, Shading=_shading(p, space))
             return pikepdf.Dictionary(), pikepdf.Dictionary(P1=p.make_indirect(pattern)), pikepdf.Dictionary()
 
-        assert (
-            bool(ported_findings(_pdf_with_pattern(_FILL_PATTERN, build), {"rgb-only"}, colour_mode="rgb")) is flagged
-        )
+        assert bool(core_findings(_pdf_with_pattern(_FILL_PATTERN, build), {"rgb-only"}, colour_mode="rgb")) is flagged
 
     @pytest.mark.parametrize(
         ("content", "flagged"), [(b"0 0 0 1 k 0 0 1 1 re f", True), (b"1 0 0 rg 0 0 1 1 re f", False)]
@@ -318,9 +306,7 @@ class TestShadingsAndPatterns:
         def build(p):
             return pikepdf.Dictionary(), pikepdf.Dictionary(P1=_tiling(p, content)), pikepdf.Dictionary()
 
-        assert (
-            bool(ported_findings(_pdf_with_pattern(_FILL_PATTERN, build), {"rgb-only"}, colour_mode="rgb")) is flagged
-        )
+        assert bool(core_findings(_pdf_with_pattern(_FILL_PATTERN, build), {"rgb-only"}, colour_mode="rgb")) is flagged
 
     @pytest.mark.parametrize(("base", "flagged"), [(CMYK_SPACE, True), (RGB_SPACE, False)])
     def test_uncoloured_tiling_pattern_takes_its_base_space(self, base, flagged):
@@ -334,7 +320,7 @@ class TestShadingsAndPatterns:
             )
 
         stream = b"/CS0 cs 0 0 0 0 /P1 scn 0 0 10 10 re f"
-        assert bool(ported_findings(_pdf_with_pattern(stream, build), {"rgb-only"}, colour_mode="rgb")) is flagged
+        assert bool(core_findings(_pdf_with_pattern(stream, build), {"rgb-only"}, colour_mode="rgb")) is flagged
 
     def test_stroked_pattern_is_found(self):
         def build(p):
@@ -345,7 +331,7 @@ class TestShadingsAndPatterns:
             )
 
         stream = b"/Pattern CS /P1 SCN 0 0 10 10 re S"
-        assert ported_findings(_pdf_with_pattern(stream, build), {"rgb-only"}, colour_mode="rgb")
+        assert core_findings(_pdf_with_pattern(stream, build), {"rgb-only"}, colour_mode="rgb")
 
     def test_a_pattern_that_contains_itself_does_not_loop(self):
         def build(p):
@@ -353,21 +339,21 @@ class TestShadingsAndPatterns:
             pattern.Resources = pikepdf.Dictionary(Pattern=pikepdf.Dictionary(P1=pattern))
             return pikepdf.Dictionary(), pikepdf.Dictionary(P1=pattern), pikepdf.Dictionary()
 
-        assert ported_findings(_pdf_with_pattern(_FILL_PATTERN, build), {"rgb-only"}, colour_mode="rgb") == []
+        assert core_findings(_pdf_with_pattern(_FILL_PATTERN, build), {"rgb-only"}, colour_mode="rgb") == []
 
     def test_rgb_shading_is_vector_severity_in_cmyk_mode(self):
         pdf = _pdf_with_pattern(
             b"/Sh1 sh",
             lambda p: (pikepdf.Dictionary(Sh1=_shading(p, RGB_SPACE)), pikepdf.Dictionary(), pikepdf.Dictionary()),
         )
-        assert [f.severity for f in ported_findings(pdf, {"colour-space"}, strict_cmyk=False)] == [Severity.WARN]
+        assert [f.severity for f in core_findings(pdf, {"colour-space"}, strict_cmyk=False)] == [Severity.WARN]
 
 
 class TestRichBlack:
     def test_small_rich_black_text_is_flagged(self, make_content_pdf):
         path = make_content_pdf(b"BT /F1 8 Tf 0.6 0.5 0.4 0.9 k (hello) Tj ET")
         with pikepdf.open(path) as pdf:
-            findings = _ported(pdf, "rich-black")
+            findings = core_findings(pdf, {"rich-black"})
         assert [f.severity for f in findings] == [Severity.WARN]
         assert "8.0pt" in findings[0].message
 
@@ -383,30 +369,30 @@ class TestRichBlack:
     )
     def test_clean_cases(self, make_content_pdf, stream):
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            assert _ported(pdf, "rich-black") == []
+            assert core_findings(pdf, {"rich-black"}) == []
 
     def test_a_q_restores_the_fill_before_the_text(self, make_content_pdf):
         """The fill set inside q...Q is gone by the time the text is shown."""
         stream = b"q 0.6 0.5 0.4 0.9 k Q BT /F1 8 Tf (x) Tj ET"
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            assert _ported(pdf, "rich-black") == []
+            assert core_findings(pdf, {"rich-black"}) == []
 
     def test_text_matrix_scaling_counts_towards_the_size(self, make_content_pdf):
         """4pt text scaled 4x is 16pt on the page, and must not be flagged."""
         path = make_content_pdf(b"BT 4 0 0 4 0 0 Tm /F1 4 Tf 0.6 0.5 0.4 0.9 k (x) Tj ET")
         with pikepdf.open(path) as pdf:
-            assert _ported(pdf, "rich-black") == []
+            assert core_findings(pdf, {"rich-black"}) == []
 
     def test_ctm_scaling_counts_too(self, make_content_pdf):
         path = make_content_pdf(b"0.25 0 0 0.25 0 0 cm BT /F1 16 Tf 0.6 0.5 0.4 0.9 k (x) Tj ET")
         with pikepdf.open(path) as pdf:
-            findings = _ported(pdf, "rich-black")
+            findings = core_findings(pdf, {"rich-black"})
         assert findings and "4.0pt" in findings[0].message
 
     def test_smallest_run_on_the_page_is_reported(self, make_content_pdf):
         stream = b"BT 0.6 0.5 0.4 0.9 k /F1 10 Tf (a) Tj /F1 5 Tf (b) Tj ET"
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            findings = _ported(pdf, "rich-black")
+            findings = core_findings(pdf, {"rich-black"})
         assert "5.0pt" in findings[0].message
 
     def test_rich_black_inside_a_form_is_found(self, tmp_path, make_form):
@@ -425,14 +411,14 @@ class TestRichBlack:
         _page_with(pdf, b"/Fm1 Do", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            findings = _ported(opened, "rich-black")
+            findings = core_findings(opened, {"rich-black"})
         assert findings and "6.0pt" in findings[0].message
 
 
 class TestKOnlyText:
     def _findings(self, make_content_pdf, stream, **kwargs):
         with pikepdf.open(make_content_pdf(stream, **kwargs)) as pdf:
-            return _ported(pdf, "k-only-text")
+            return core_findings(pdf, {"k-only-text"})
 
     @pytest.mark.parametrize(
         "stream",
@@ -499,7 +485,7 @@ class TestKOnlyText:
         _page_with(pdf, b"/Fm1 Do BT /F1 8 Tf (x) Tj ET", page_resources)
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert _ported(opened, "k-only-text") == []
+            assert core_findings(opened, {"k-only-text"}) == []
 
     def test_cyan_text_inside_a_form_is_found(self, tmp_path, make_form):
         path = tmp_path / "form.pdf"
@@ -517,7 +503,7 @@ class TestKOnlyText:
         _page_with(pdf, b"/Fm1 Do", pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=form)))
         pdf.save(path)
         with pikepdf.open(path) as opened:
-            assert _checks(_ported(opened, "k-only-text")) == {"k-only-text"}
+            assert _checks(core_findings(opened, {"k-only-text"})) == {"k-only-text"}
 
 
 @pytest.mark.skipif(shutil.which("gs") is None, reason="Ghostscript not installed")
@@ -543,29 +529,29 @@ class TestWhiteOverprint:
     def test_white_text_set_to_overprint_is_an_error(self, make_content_pdf, white):
         path = make_content_pdf(b"/GS1 gs BT /F1 12 Tf " + white + b" (x) Tj ET", extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            [finding] = _ported(pdf, "white-overprint")
+            [finding] = core_findings(pdf, {"white-overprint"})
         assert finding.severity is Severity.ERROR and finding.check == "white-overprint" and finding.page == 1
         assert "knock out" in finding.message
 
     def test_a_white_shape_under_overprint_is_flagged_too(self, make_content_pdf):
         path = make_content_pdf(b"/GS1 gs 1 g 0 0 10 10 re f", font=False, extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            assert _checks(_ported(pdf, "white-overprint")) == {"white-overprint"}
+            assert _checks(core_findings(pdf, {"white-overprint"})) == {"white-overprint"}
 
     def test_white_that_knocks_out_is_fine(self, make_content_pdf):
         path = make_content_pdf(b"BT /F1 12 Tf 1 g (x) Tj ET", extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            assert _ported(pdf, "white-overprint") == []
+            assert core_findings(pdf, {"white-overprint"}) == []
 
     def test_overprinting_black_is_not_white(self, make_content_pdf):
         path = make_content_pdf(b"/GS1 gs BT /F1 12 Tf 0 g (x) Tj ET", extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            assert _ported(pdf, "white-overprint") == []
+            assert core_findings(pdf, {"white-overprint"}) == []
 
     def test_a_q_restores_a_white_fill(self, make_content_pdf):
         path = make_content_pdf(b"/GS1 gs q 1 g Q BT /F1 12 Tf (x) Tj ET", extgstates=GS_OP)
         with pikepdf.open(path) as pdf:
-            assert _ported(pdf, "white-overprint") == []
+            assert core_findings(pdf, {"white-overprint"}) == []
 
 
 class TestSpotInks:
@@ -575,7 +561,7 @@ class TestSpotInks:
 
     def _findings(self, make_content_pdf, spaces, allowed):
         with pikepdf.open(make_content_pdf(self.STREAM, font=False, colorspaces=spaces)) as pdf:
-            return ported_findings(pdf, {"spot-ink"}, allow_spots=list(allowed))
+            return core_findings(pdf, {"spot-ink"}, allow_spots=list(allowed))
 
     def test_a_spot_not_on_the_list_is_an_error_naming_it(self, make_content_pdf):
         [finding] = self._findings(make_content_pdf, self.SEP, ["Dieline"])
@@ -593,7 +579,7 @@ class TestSpotInks:
 
     def test_no_spots_means_nothing_to_report(self, make_content_pdf):
         with pikepdf.open(make_content_pdf(b"0 g 0 0 5 5 re f", font=False)) as pdf:
-            assert ported_findings(pdf, {"spot-ink"}, allow_spots=[]) == []
+            assert core_findings(pdf, {"spot-ink"}, allow_spots=[]) == []
 
 
 def _transparent(tmp_path, *, group_cs=None, intent_n=None, extgstate=None, stream=b"/GS1 gs 0.5 g 0 0 50 50 re f"):
@@ -620,22 +606,22 @@ def _transparent(tmp_path, *, group_cs=None, intent_n=None, extgstate=None, stre
 class TestTransparency:
     def test_a_blend_space_that_disagrees_with_the_output_intent_is_an_error(self, tmp_path):
         with _transparent(tmp_path, group_cs="/DeviceRGB", intent_n=4) as pdf:
-            [finding] = ported_findings(pdf, {"blend-space"})
+            [finding] = core_findings(pdf, {"blend-space"})
         assert finding.severity is Severity.ERROR and finding.check == "blend-space"
         assert "RGB" in finding.message and "CMYK" in finding.message and "opacity" in finding.message
 
     def test_a_matching_blend_space_is_clean(self, tmp_path):
         with _transparent(tmp_path, group_cs="/DeviceCMYK", intent_n=4) as pdf:
-            assert ported_findings(pdf, {"blend-space"}) == []
+            assert core_findings(pdf, {"blend-space"}) == []
 
     def test_an_undeclared_blend_space_is_a_warning(self, tmp_path):
         with _transparent(tmp_path, intent_n=4) as pdf:
-            [finding] = ported_findings(pdf, {"blend-space"})
+            [finding] = core_findings(pdf, {"blend-space"})
         assert finding.severity is Severity.WARN and "declares no blend colour space" in finding.message
 
     def test_without_transparency_there_is_nothing_to_say(self, tmp_path):
         with _transparent(tmp_path, extgstate={"/GS1": pikepdf.Dictionary(ca=1.0)}, intent_n=4) as pdf:
-            assert ported_findings(pdf, {"blend-space"}) == []
+            assert core_findings(pdf, {"blend-space"}) == []
 
     @pytest.mark.parametrize(
         ("extgstate", "reason"),
@@ -647,18 +633,18 @@ class TestTransparency:
     )
     def test_each_kind_of_transparency_is_recognised(self, tmp_path, extgstate, reason):
         with _transparent(tmp_path, group_cs="/DeviceRGB", intent_n=4, extgstate=extgstate) as pdf:
-            [finding] = ported_findings(pdf, {"blend-space"})
+            [finding] = core_findings(pdf, {"blend-space"})
         assert reason in finding.message
 
     @pytest.mark.parametrize("mode", ["/Normal", "/Compatible"])
     def test_a_normal_blend_mode_is_not_transparency(self, tmp_path, mode):
         gs = {"/GS1": pikepdf.Dictionary(BM=pikepdf.Name(mode), SMask=pikepdf.Name("/None"))}
         with _transparent(tmp_path, group_cs="/DeviceRGB", intent_n=4, extgstate=gs) as pdf:
-            assert ported_findings(pdf, {"blend-space"}) == []
+            assert core_findings(pdf, {"blend-space"}) == []
 
     def test_no_output_intent_means_no_mismatch_to_report(self, tmp_path):
         with _transparent(tmp_path, group_cs="/DeviceRGB") as pdf:
-            assert ported_findings(pdf, {"blend-space"}) == []
+            assert core_findings(pdf, {"blend-space"}) == []
 
 
 def _tint(c1: list[float]) -> pikepdf.Dictionary:
@@ -674,7 +660,7 @@ class TestSpotSources:
 
     def _spots(self, pdf, stream, **resources) -> list[str]:
         _page_with(pdf, stream, pikepdf.Dictionary(**resources))
-        return [f.message for f in ported_findings(pdf, {"spot-ink"}, allow_spots=[])]
+        return [f.message for f in core_findings(pdf, {"spot-ink"}, allow_spots=[])]
 
     def test_image_xobject(self, make_image):
         pdf = pikepdf.new()
@@ -723,7 +709,7 @@ class TestStrokedText:
     def test_k_only_text_looks_at_the_stroke_where_the_glyph_is_stroked(self, make_content_pdf, mode, flagged):
         stream = b"BT /F1 12 Tr 1 0 0 RG 0 g (a) Tj ET".replace(b"12 Tr", b"12 Tf %d Tr" % mode)
         with pikepdf.open(make_content_pdf(stream)) as pdf:
-            assert bool(_ported(pdf, "k-only-text")) is flagged
+            assert bool(core_findings(pdf, {"k-only-text"})) is flagged
 
 
 class TestSpotDefinitions:
@@ -736,21 +722,20 @@ class TestSpotDefinitions:
 
     def test_one_ink_defined_two_ways_is_an_error(self):
         pdf = self._pdf(_separation("PANTONE 165 C", [0, 0.6, 1, 0]), _separation("PANTONE 165 C", [0, 0.5, 1, 0]))
-        [finding] = _ported(pdf, "spot-definition")
+        [finding] = core_findings(pdf, {"spot-definition"})
         assert finding.severity is Severity.ERROR and "PANTONE 165 C" in finding.message
 
     def test_the_same_definition_twice_and_within_a_percent_is_fine(self):
         pdf = self._pdf(_separation("Foil", [0, 0.6, 1, 0]), _separation("Foil", [0, 0.604, 1, 0]))
-        assert _ported(pdf, "spot-definition") == []
+        assert core_findings(pdf, {"spot-definition"}) == []
 
     def test_different_inks_do_not_clash(self):
-        assert (
-            _ported(self._pdf(_separation("A", [1, 0, 0, 0]), _separation("B", [0, 1, 0, 0])), "spot-definition") == []
-        )
+        pdf = self._pdf(_separation("A", [1, 0, 0, 0]), _separation("B", [0, 1, 0, 0]))
+        assert core_findings(pdf, {"spot-definition"}) == []
 
     def test_alternates_in_different_spaces_are_not_compared(self):
         pdf = self._pdf(_separation("Black", [1], pikepdf.Name.DeviceGray), _separation("Black", [0, 0, 0, 1]))
-        assert _ported(pdf, "spot-definition") == []
+        assert core_findings(pdf, {"spot-definition"}) == []
 
 
 _SRGB_NAME = "sRGB built-in".encode("utf-16-be")  # lcms writes v4 descriptions as UTF-16
@@ -779,30 +764,28 @@ def _pdf_with_profiles(*spaces: tuple[bytes, int]) -> pikepdf.Pdf:
 
 class TestIccProfiles:
     def test_a_sound_profile_is_clean(self):
-        assert (
-            ported_findings(_pdf_with_profiles((_srgb(), 3)), {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
-        )
+        assert core_findings(_pdf_with_profiles((_srgb(), 3)), {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
 
     def test_junk_is_not_a_profile(self):
-        [finding] = ported_findings(
+        [finding] = core_findings(
             _pdf_with_profiles((b"x" * 200, 3)), {"icc-profile"}, colour_mode=str(ColourMode.CMYK)
         )
         assert finding.severity is Severity.ERROR and "not a valid ICC profile" in finding.message
 
     def test_n_must_match_the_profile_header(self):
-        [finding] = ported_findings(_pdf_with_profiles((_srgb(), 4)), {"icc-profile"}, colour_mode=str(ColourMode.CMYK))
+        [finding] = core_findings(_pdf_with_profiles((_srgb(), 4)), {"icc-profile"}, colour_mode=str(ColourMode.CMYK))
         assert finding.severity is Severity.ERROR and "/N 4" in finding.message
 
     def test_mixed_rgb_profiles_fail_an_rgb_job_only(self):
         other = _renamed(_srgb(), _SRGB_NAME, "Odd RGB built".encode("utf-16-be"))
         pdf = _pdf_with_profiles((_srgb(), 3), (other, 3))
-        [finding] = ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB))
+        [finding] = core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB))
         assert finding.severity is Severity.ERROR and "mixes 2 RGB profiles" in finding.message
-        assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
 
     def test_the_same_rgb_profile_twice_is_one_profile(self):
         pdf = _pdf_with_profiles((_srgb(), 3), (_srgb(), 3))
-        assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB)) == []
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB)) == []
 
     @needs_cmyk_profile
     def test_the_intent_profile_on_an_element_fails_a_cmyk_job(self):
@@ -815,14 +798,14 @@ class TestIccProfiles:
             DestOutputProfile=pdf.make_stream(_renamed_cmyk(cmyk), N=4),
         )
         pdf.Root.OutputIntents = pikepdf.Array([pdf.make_indirect(intent)])
-        assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK)) == []
         # The same profile, even as a separate stream whose ID, flags and rendering intent differ, is the intent's.
         same = bytearray(cmyk)
         same[44:48], same[64:68], same[84:100] = b"\x00\x00\x00\x01", b"\x00\x00\x00\x01", b"\x11" * 16
         pdf.Root.OutputIntents[0].DestOutputProfile = pdf.make_stream(bytes(same), N=4)
-        [finding] = ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK))
+        [finding] = core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.CMYK))
         assert finding.severity is Severity.ERROR and "output intent's own profile" in finding.message
-        assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB)) == []
+        assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB)) == []
 
 
 def _renamed_cmyk(data: bytes) -> bytes:
@@ -834,4 +817,4 @@ def _renamed_cmyk(data: bytes) -> bytes:
 def test_a_malformed_output_intent_entry_is_ignored_not_a_crash():
     pdf = _pdf_with_profiles((_srgb(), 3))
     pdf.Root.OutputIntents = pikepdf.Array([None, 5])
-    assert ported_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB)) == []
+    assert core_findings(pdf, {"icc-profile"}, colour_mode=str(ColourMode.RGB)) == []

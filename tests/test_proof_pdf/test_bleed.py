@@ -10,7 +10,7 @@ import pytest
 
 from proof_pdf.models import PageGeometry, Severity
 
-from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W, core_run, ported_findings
+from .conftest import BLEED, GOOD_BOXES, MEDIA_H, MEDIA_W, MM, TRIM_H, TRIM_W, core_findings, core_run
 
 T = BLEED  # the trim's lower-left corner, in points
 TR, TT = BLEED + TRIM_W, BLEED + TRIM_H  # and its upper-right
@@ -34,7 +34,7 @@ def _pdf(tmp_path, stream: bytes, *, boxes=None, rotate: int = 0, make_form=None
 
 def _check(path):
     with pikepdf.open(path) as pdf:
-        return ported_findings(pdf, {"artwork-bleed"})
+        return core_findings(pdf, {"artwork-bleed"})
 
 
 def _rect(x0, y0, x1, y1, op=b"f") -> bytes:
@@ -164,7 +164,7 @@ MARK = b"0.25 w 0 G 5 40 m 30 40 l S "  # a crop mark in the margin, left of the
 def _outside(path, bleed_mm=None):
     geometry = PageGeometry(220, 320, bleed_mm) if bleed_mm else None
     with pikepdf.open(path) as pdf:
-        return ported_findings(
+        return core_findings(
             pdf, {"outside-bleed"}, geometry=dataclasses.asdict(geometry) if geometry is not None else None
         )
 
