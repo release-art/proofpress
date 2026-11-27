@@ -4,6 +4,8 @@ import importlib.util
 import pathlib
 import sys
 
+import pytest
+
 FIXTURES = pathlib.Path(__file__).parents[1] / "fixtures"
 
 
@@ -16,6 +18,7 @@ def _builder():
     return module
 
 
+@pytest.mark.timeout(120)  # rebuilds all 350-odd fixtures; about 17 s on a laptop
 def test_committed_pdfs_match_a_rebuild():
     """Regenerate with ``pdm run python tests/fixtures/build_pdfs.py`` after changing the builder."""
     built = _builder().render()

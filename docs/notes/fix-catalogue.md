@@ -20,7 +20,7 @@ Read on 2026-11-26. Every row is in our own words.
   checked this time.
 
 Tool codes in `Offered by`: K Kura, T pdfToolbox, P PitStop, A Acrobat, G Ghostscript, Q qpdf, M mutool, V veraPDF, S commercial
-SDKs (PDF Tools, Apryse), B BentoPDF and Hyper Compress, R other open-source rewriters (pdfcpu, pikepdf).
+SDKs (PDF Tools, Apryse), B BentoPDF and Hyper Compress, R other open-source rewriters (pdfcpu, pikepdf; pikepdf rows checked against 10.17.0).
 
 Risk classes:
 
@@ -39,7 +39,7 @@ the mapping depends on how our check reads the case. "—" means no check of our
 | Fix | Resolves | Method | Risk | Refuses when | Parameters | Offered by |
 |---|---|---|---|---|---|---|
 | `xmp-rebuild` | `x4.xmp.present`, `x4.xmp.conforms`, `x4.xmp.well-formed`, `x4.xmp.no-bytes-encoding-attrs`, `x4.xmp.namespace-prefixes` | Writes a fresh document XMP packet from the old packet and the Info dictionary, then adds the target's identification. | metadata-only | Custom or extension schemas in the old packet would be lost | target level | K, T, P, V, S |
-| `xmp-repair-wellformed` | `x4.xmp.well-formed`, `x4.xmp.no-bytes-encoding-attrs` | Repairs an unparseable packet or drops deprecated attributes; drops the packet if it cannot be repaired. | metadata-only | The packet cannot be parsed and dropping it is not allowed | drop-if-unfixable | P, T |
+| `xmp-repair-wellformed` | `x4.xmp.well-formed`, `x4.xmp.no-bytes-encoding-attrs` | Repairs an unparseable packet or drops deprecated attributes; drops the packet if it cannot be repaired. | metadata-only | The packet cannot be parsed and dropping it is not allowed | drop-if-unfixable | P, T, R |
 | `xmp-namespace-prefixes` | `x4.xmp.namespace-prefixes` | Rewrites namespace declarations to the prefixes the standard requires. | metadata-only | — | — | P |
 | `xmp-extension-schemas` | — | Adds or repairs the extension schema descriptions a PDF/A packet needs. | metadata-only | — | — | P |
 | `xmp-prune-noncompliant` | `x4.xmp.conforms`, `x4.info.unlisted-not-in-predefined-schema`, `x4.identity.pdfxid-only-version` | Deletes XMP properties and schemas the target level does not allow, in the document packet and in per-object packets. | destroys information | The property holds data the user asked to keep | target standard | K, T, S |
@@ -47,13 +47,15 @@ the mapping depends on how our check reads the case. "—" means no check of our
 | `xmp-uncompress` | `x4.xmp.unfiltered` | Rewrites metadata streams without filters. | lossless | — | — | K, T |
 | `xmp-ids-add` | `x4.xmp.document-id`, `x4.xmp.version-id`, `x4.xmp.rendition-class`, `x4.xmp.document-id-uuid` | Adds a document ID, version ID and rendition class to XMP. | metadata-only | An ID exists but is malformed (replacing it breaks links from other files) | — | P, K |
 | `trailer-id-add` | `x4.trailer.id` | Generates the file identifier pair in the trailer. | metadata-only | — | — | P, Q, M, R |
-| `info-xmp-sync` | `x4.info.xmp-analogue-present`, `x4.info.xmp-analogue-equal`, `x4.info.author-single-creator`, `x4.xmp.agent-names`? | Copies values between Info and XMP so each Info entry has an equal XMP twin. | metadata-only | The two disagree and no direction is given | direction | K, T, P, V, R(K) |
+| `info-xmp-sync` | `x4.info.xmp-analogue-present`, `x4.info.xmp-analogue-equal`, `x4.info.author-single-creator`, `x4.xmp.agent-names`? | Copies values between Info and XMP so each Info entry has an equal XMP twin. | metadata-only | The two disagree and no direction is given | direction | K, T, P, V, R |
 | `info-legacy-keys-remove` | `x4.identity.no-info-conformance` | Removes Info keys the level forbids or deprecates, or moves them into XMP. | destroys information | — | target level | K, P |
 | `info-to-xmp-migrate` | — | For PDF 2.0 levels, moves Info values into XMP and drops the Info dictionary. | metadata-only | — | target level | K |
 | `dates-fill` | `x4.xmp.create-date`, `x4.xmp.modify-date`, `x4.xmp.metadata-date` | Writes the current time into absent date fields; drops a date that cannot be parsed. | metadata-only | A creation date is invented for a file that had one in another form | which dates | K, T, P |
 | `title-set` | `x4.xmp.title` | Writes a title when none exists, from the file name or a given text. | metadata-only | — | source (file name or text) | K, T, P |
 | `set-document-info` | `x4.xmp.title` | Sets, edits or replaces words in Info keys, optionally only where empty. | metadata-only | The key is unknown | key, value, only-if-empty | K, P, A, B, R |
 | `info-text-encoding` | `x4.info.pdfx-version-pdfdoc` | Re-encodes text strings to the encoding the version needs (PDFDoc, UTF-16, UTF-8). | metadata-only | A character has no form in the target encoding | encoding | P |
+| `xmp-pdf-version-sync` | — | Rewrites the PDF version recorded in XMP to the version the file is saved as. pikepdf does this on every save by default. | metadata-only | — | on or off | R |
+| `editor-stamp` | `x4.xmp.modify-date`?, `x4.xmp.metadata-date`? | Writes the producer and the modification and metadata dates whenever metadata is edited. pikepdf does this by default; it is a side effect, not a requested fix. | metadata-only | — | on or off | R, K, T, P |
 | `trapped-set` | `x4.trapped.present`, `x4.trapped.true-or-false` | Sets the trapped state to a chosen True or False where it is absent or Unknown. | metadata-only | The chosen value is False and TrapNet annotations exist (`x4.trapped.trapnet-implies-true`); nobody knows whether the job was trapped | value | K, T, P, G |
 | `pdfx-identify` | `x4.identity.version-present`, `x4.identity.version-value`, `x4.info.pdfx-version-pdfdoc`, `x5.identification-value` | Writes the PDF/X version in Info and XMP for the target level. | metadata-only | The file does not yet pass the level (pdfToolbox writes it only after the other fixes) | level | K, T, P, G |
 | `conformance-claim-remove` | — | Strips one family's identification (A, X, E, UA, VT) so the file stops claiming a standard it fails. | destroys information | — | family | K, T, P, V |
@@ -148,7 +150,7 @@ the mapping depends on how our check reads the case. "—" means no check of our
 | `soft-mask-simplify` | — | Drops opaque soft masks and turns two-level ones into stencil masks. | lossless | — | — | K |
 | `colour-key-mask-drop` | — | Drops a colour-key mask that no longer matches after colour conversion. | alters appearance | — | — | K |
 | `image-fragments-merge` | — | Merges an image stored as strips into one. | lossless | — | scope | K, T |
-| `inline-image-fix` | `stream.filter`? | Rewrites inline image syntax and filters, or moves inline images out to XObjects. | lossless | — | min size | K, P, Q |
+| `inline-image-fix` | `stream.filter`? | Rewrites inline image syntax and filters, or moves inline images out to XObjects. | lossless | — | min size | K, P, Q, R |
 | `image-rotate` | — | Rotates an image object. | alters appearance | — | angle | P |
 | `image-replace` | — | Extracts or replaces images by hand. | alters appearance | — | — | R |
 | `deskew` | — | Straightens scanned pages. | alters appearance | — | — | B |
@@ -193,12 +195,14 @@ the mapping depends on how our check reads the case. "—" means no check of our
 
 | Fix | Resolves | Method | Risk | Refuses when | Parameters | Offered by |
 |---|---|---|---|---|---|---|
-| `xref-rebuild` | `file.xref`, `file.startxref`, `file.trailer`, `object.damaged` | Rebuilds the cross-reference and object table by scanning the file, and writes it out clean. | lossless | The file is beyond repair; the scan had to guess | suppress recovery, parser limits | K, Q, M, S, B, R(K) |
+| `xref-rebuild` | `file.xref`, `file.startxref`, `file.trailer`, `object.damaged` | Rebuilds the cross-reference and object table by scanning the file, and writes it out clean. | lossless | The file is beyond repair; the scan had to guess | suppress recovery, parser limits | K, Q, M, S, B, R |
 | `rewrite-clean` | `file.header-offset`, `file.eof`, `syntax.hex-digits`, `syntax.octal-escape`, `syntax.name-escape`, `syntax.duplicate-key`, `stream.eol` | Re-serialises every object through a writer, so syntax faults vanish. | lossless | A duplicate key or bad escape forced the parser to choose a value | object streams, newline before endstream, keep metadata | Q, M, R, P |
 | `content-normalise` | `x4.content.known-operators`?, `x4.content.no-bx-ex`?, `content.compatibility`? | Parses and rewrites content streams, fixing bad operand counts and dropping invalid operators. | alters appearance | A stream cannot be decoded | — | K, Q, M |
 | `content-undecodable-empty` | `content.damaged` | Replaces a content stream that cannot be decoded with an empty one. | destroys information | — | — | K |
 | `missing-resource-fix` | `x4.complete.resources-inside`, house: `xobject-missing` | Drops operators that name missing resources, or adds an empty placeholder. | alters appearance | — | scope | K |
 | `resources-tidy` | — | Lists inherited resources explicitly and removes unused ones. | lossless | — | keep unreferenced | K, Q, P, R |
+| `inherited-attributes-push` | — | Copies attributes a page inherits from the page tree (boxes, resources, rotation) onto each page. pikepdf does it on open by default. | lossless | — | on or off | Q, R |
+| `content-coalesce` | — | Joins a page's array of content streams into one stream. | lossless | A stream cannot be decoded | — | Q, R |
 | `resource-cycle-cut` | — | Breaks a form or pattern that draws itself. | alters appearance | — | — | K |
 | `required-entries-add` | `x4.pdf-reference.conforms`? | Adds missing required entries to forms, patterns and shadings, and removes a bad bounding box. | lossless | — | — | K |
 | `postscript-remove` | `x4.xobject.no-postscript`, `x4.xobject.no-subtype2-ps` | Deletes PostScript XObjects and fragments. | destroys information | — | — | K, T, P |
@@ -224,9 +228,9 @@ the mapping depends on how our check reads the case. "—" means no check of our
 |---|---|---|---|---|---|---|
 | `annotations-move-out` | `x4.annot.outside-bleed`, `x4.annot.printermark-outside-trim` | Moves annotations out of the trim or bleed, sparing TrapNet and printer's marks. | alters appearance | — | box, types spared | T, P |
 | `annotations-remove` | `x4.annot.outside-bleed`, `x4.annot.printermark-outside-trim` | Deletes annotations by type, including ones whose appearance font cannot be embedded. | destroys information | — | types | K, T, P, S, R, B |
-| `annotations-flatten` | `x4.annot.outside-bleed` | Draws an annotation's appearance into the page content, or turns it into a stamp. | alters appearance | No appearance exists | types | K, T, P, Q, S, B |
+| `annotations-flatten` | `x4.annot.outside-bleed` | Draws an annotation's appearance into the page content, or turns it into a stamp. | alters appearance | No appearance exists | types | K, T, P, Q, S, B, R |
 | `annotation-flags-set` | — | Sets print and hidden flags as the standard requires. | alters appearance | — | flags, types | K, T, P |
-| `appearances-generate` | — | Builds missing appearance streams and states for annotations and fields. | lossless | — | — | K, T, Q, M |
+| `appearances-generate` | — | Builds missing appearance streams and states for annotations and fields. | lossless | — | — | K, T, Q, M, R |
 | `appearances-trim` | — | Keeps only the normal appearance, dropping rollover and down states. | destroys information | — | — | K |
 | `annotation-colour-remove` | — | Deletes annotation colour entries under a non-RGB intent. | alters appearance | — | — | K |
 | `trapnet-fauxing-clear` | `x4.trapnet.font-fauxing-empty` | Removes the font substitution list from TrapNet annotations. | destroys information | — | — | K |
@@ -346,10 +350,12 @@ the mapping depends on how our check reads the case. "—" means no check of our
 | veraPDF | Metadata fixes only | Runs only when the file has no other violation | n/a | Validation runs first; the fix is its last step | Refuses whenever anything else is wrong, so it never certifies a bad file | The fixed file and a list of changes |
 | Hyper Compress | Size presets | Preset and target size | Internal | Validates the output | Rolls back changes that visibly alter a page; never returns a larger file; skips signed files unless told | Before and after size |
 | SDKs (PDF Tools, Apryse) | A PDF/A conversion that emits events | Target level | Internal | Apryse recommends re-validating the output | The caller decides which event severities are acceptable | Events with severity (information, warning, error), Apryse with changed object numbers |
+| pikepdf | Library calls on qpdf, plus options on open and save | The caller picks calls; several repairs are defaults that run on every open or save (recovery, pushing inherited attributes, compressing streams, syncing the XMP version, stamping the editor) | The caller's code | None built in; a syntax check and qpdf's warnings are there to call | Keeps a PDF/A claim through edits by default, whether or not the edit keeps the file conformant; no refusal | qpdf warnings; a flag on metadata it had to recover |
 
 Three patterns recur. A check is used as a **selector**, not a trigger: it says where a fix applies, and the fix decides how. Writing
 the **identification comes last**, once everything else passes. And the trustworthy tools **re-verify** after fixing, with the same
-engine; none of them uses an independent checker.
+engine; none of them uses an independent checker. Libraries such as pikepdf are the opposite case: they repair silently on open and save,
+and keep a conformance claim through an edit without checking it, so a file that passed can stop passing while still claiming to.
 
 The pdfToolbox PDF/X-4 conversion is a useful reference set. Its 33 built-in fixups map to these rows: `actions-remove`,
 `postscript-remove`, `forms-remove`, `opi-remove`, `transfer-functions-apply`, `trapped-set`, `artbox-remove`, `boxes-nest`,

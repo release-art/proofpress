@@ -80,7 +80,8 @@ mod tests {
         assert_eq!(place("file:p.icc", here), local("/jobs/p.icc"));
         assert_eq!(place("file://server/p.icc", here), Place::Network);
         assert_eq!(place("https://www.color.org/p.icc", here), Place::Network);
-        assert_eq!(place("C:p.icc", here), local("/jobs/C:p.icc"));
+        // A drive letter is a path, not a scheme; how it joins the folder is the platform's rule.
+        assert_eq!(place("C:p.icc", here), Place::Local(here.join("C:p.icc")));
         assert_eq!(place("9x:p.icc", here), local("/jobs/9x:p.icc"));
         assert_eq!(place("svn+ssh://host/p.icc", here), Place::Network);
         assert_eq!(place("my file:p.icc", here), local("/jobs/my file:p.icc"));
