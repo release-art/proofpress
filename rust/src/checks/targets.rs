@@ -229,7 +229,9 @@ fn open(path: &Path, data: &[u8], settings: &Settings, limits: &Limits, chain: &
                 let mut deeper = chain.to_vec();
                 deeper.push(path.to_owned());
                 let file = path.display().to_string();
-                Verified::Report(Box::new(super::verify_chain(&file, data, &target, limits, &deeper)))
+                Verified::Report(Box::new(super::verify_chain(
+                    &file, data, &target, limits, &deeper, false,
+                )))
             }
             None => Verified::Not(match &claim {
                 Some(c) if ALLOWED.contains(&c.as_str()) => {
@@ -266,6 +268,18 @@ fn level(claim: &str) -> Option<Level> {
         "PDF/X-4p" => Some(Level::X4p),
         "PDF/X-5g" => Some(Level::X5g),
         "PDF/X-5pg" => Some(Level::X5pg),
+        _ => None,
+    }
+}
+
+/// The PDF/X-1a or PDF/X-3 level a file claims, which `verify` uses when no level is asked for. A plain PDF/X-1:2001
+/// claim is read as X-1a:2001, where its conformance key is reported not evaluated (L-Q1).
+pub(super) fn claimed_older_level(doc: &Document) -> Option<Level> {
+    match claim(doc)?.as_str() {
+        "PDF/X-1a:2001" | "PDF/X-1:2001" => Some(Level::X1a2001),
+        "PDF/X-3:2002" => Some(Level::X32002),
+        "PDF/X-1a:2003" => Some(Level::X1a2003),
+        "PDF/X-3:2003" => Some(Level::X32003),
         _ => None,
     }
 }
@@ -772,6 +786,23 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn the_older_level_a_file_claims() {
+        let claimed = |info: &str, body: &str| {
+            claimed_older_level(&Document::open(&target("", info, "", body), &Limits::default()).unwrap())
+        };
+        let version = |v: &str| format!("<< /GTS_PDFXVersion ({v}) >>");
+        assert_eq!(claimed(&version("PDF/X-3:2002"), ""), Some(Level::X32002));
+        assert_eq!(claimed(&version("PDF/X-1a:2003"), ""), Some(Level::X1a2003));
+        assert_eq!(claimed(&version("PDF/X-3:2003"), ""), Some(Level::X32003));
+        // X-1a:2001 by its conformance key, and plain X-1 read as X-1a:2001 too (L-Q1).
+        let x1a = "<< /GTS_PDFXVersion (PDF/X-1:2001) /GTS_PDFXConformance (PDF/X-1a:2001) >>";
+        assert_eq!(claimed(x1a, ""), Some(Level::X1a2001));
+        assert_eq!(claimed(&version("PDF/X-1:2001"), ""), Some(Level::X1a2001));
+        assert_eq!(claimed(&version("PDF/X-4"), ""), None);
+        assert_eq!(claimed("<< >>", ""), None);
     }
 
     #[test]

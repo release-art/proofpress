@@ -43,23 +43,72 @@ pub enum Level {
     X5pg,
     /// PDF/X-5n (ISO 15930-8).
     X5n,
+    /// PDF/X-1a:2001 (ISO 15930-1).
+    X1a2001,
+    /// PDF/X-3:2002 (ISO 15930-3).
+    X32002,
+    /// PDF/X-1a:2003 (ISO 15930-4).
+    X1a2003,
+    /// PDF/X-3:2003 (ISO 15930-6).
+    X32003,
     /// A house check, not from a PDF/X standard.
     Print,
 }
 
 impl Level {
-    /// The level a command line or a profile names: `x4`, `x4p`, `x5g`, `x5pg`, `x5n` or `print`.
+    /// Every level, in the order `checks.toml` and the README list them.
+    pub const ALL: [Self; 10] = [
+        Self::X4,
+        Self::X4p,
+        Self::X5g,
+        Self::X5pg,
+        Self::X5n,
+        Self::X1a2001,
+        Self::X32002,
+        Self::X1a2003,
+        Self::X32003,
+        Self::Print,
+    ];
+
+    /// The level a command line or a profile names: `x4`, `x4p`, `x5g`, `x5pg`, `x5n`, `x1a-2001`, `x3-2002`,
+    /// `x1a-2003`, `x3-2003` or `print`.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "x4" => Some(Self::X4),
-            "x4p" => Some(Self::X4p),
-            "x5g" => Some(Self::X5g),
-            "x5pg" => Some(Self::X5pg),
-            "x5n" => Some(Self::X5n),
-            "print" => Some(Self::Print),
-            _ => None,
+        Self::ALL.into_iter().find(|level| level.name() == name)
+    }
+
+    /// The name [`Level::from_name`] reads.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::X4 => "x4",
+            Self::X4p => "x4p",
+            Self::X5g => "x5g",
+            Self::X5pg => "x5pg",
+            Self::X5n => "x5n",
+            Self::X1a2001 => "x1a-2001",
+            Self::X32002 => "x3-2002",
+            Self::X1a2003 => "x1a-2003",
+            Self::X32003 => "x3-2003",
+            Self::Print => "print",
         }
+    }
+
+    /// The level as its standard names it, `PDF/X-1a:2001`; `None` for the print checks.
+    #[must_use]
+    pub fn title(self) -> Option<&'static str> {
+        Some(match self {
+            Self::X4 => "PDF/X-4",
+            Self::X4p => "PDF/X-4p",
+            Self::X5g => "PDF/X-5g",
+            Self::X5pg => "PDF/X-5pg",
+            Self::X5n => "PDF/X-5n",
+            Self::X1a2001 => "PDF/X-1a:2001",
+            Self::X32002 => "PDF/X-3:2002",
+            Self::X1a2003 => "PDF/X-1a:2003",
+            Self::X32003 => "PDF/X-3:2003",
+            Self::Print => return None,
+        })
     }
 }
 
@@ -254,6 +303,10 @@ pub struct Report {
     pub file: String,
     /// Pass, fail or refused.
     pub verdict: Verdict,
+    /// The PDF/X level the file was verified at, as its standard names it (`PDF/X-1a:2001`); absent for the print
+    /// checks alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub level: Option<&'static str>,
     /// Whether the file itself was sound, separate from what the checks thought of its content.
     pub structure: Structure,
     /// Every enabled check and its outcome, so a check that never ran still leaves a trace.
@@ -283,6 +336,7 @@ impl Report {
             schema: 1,
             file: file.into(),
             verdict,
+            level: None,
             structure,
             checks,
             findings,
@@ -311,13 +365,13 @@ mod tests {
 
     #[test]
     fn levels_by_name() {
-        let names = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"];
-        let levels = names.map(Level::from_name);
-        assert_eq!(
-            levels,
-            [Level::X4, Level::X4p, Level::X5g, Level::X5pg, Level::X5n, Level::Print].map(Some)
-        );
+        let names = [
+            "x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print",
+        ];
+        assert_eq!(names.map(Level::from_name), Level::ALL.map(Some));
         assert_eq!(Level::from_name("x3"), None);
+        assert_eq!(Level::X1a2001.title(), Some("PDF/X-1a:2001"));
+        assert_eq!(Level::Print.title(), None);
     }
 
     #[test]

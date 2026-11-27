@@ -94,6 +94,7 @@ def _loaded(table: dict[str, typing.Any], path: pathlib.Path | None) -> LoadedCo
         flavour=get("flavour", default="2b"),
         pdfa=bool(get("pdfa", default=False)),
         pdfx=pdfx is not False and not get("no-pdfx", default=False),
+        pdfx_level=pdfx if isinstance(pdfx, str) else None,
         colour=on("colour", True),
         tac=bool(get("tac", default=False)),
         geometry=geometry,

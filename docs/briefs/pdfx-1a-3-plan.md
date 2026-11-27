@@ -80,7 +80,7 @@ positives.
 
 ## Phase 1: levels and identification
 
-**1.1 The levels.** Add `x1a2001`, `x3-2002`, `x1a2003` and `x3-2003` to `Level`, `checks.toml`'s `applies`, `--pdfx` and the
+**1.1 The levels.** Add `x1a-2001`, `x3-2002`, `x1a-2003` and `x3-2003` to `Level`, `checks.toml`'s `applies`, `--pdfx` and the
 Python API. Auto-detection from Info picks the level when `--pdfx` is not given.
 
 **1.2 Map the inherited checks.** For every register row marked as an existing `x4.*` check, widen `applies` and

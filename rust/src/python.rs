@@ -9,7 +9,8 @@ use pyo3::prelude::*;
 use crate::checks;
 use crate::findings::Level;
 
-/// Verify `data`, the bytes of the file named `file`, at `level` (`x4`, `x4p`, `x5g`, `x5pg`, `x5n` or `print`), with
+/// Verify `data`, the bytes of the file named `file`, at `level` (`x4`, `x4p`, `x5g`, `x5pg`, `x5n`, `x1a-2001`, `x3-2002`,
+/// `x1a-2003`, `x3-2003` or `print`), with
 /// the print checks' parameters given as a JSON object (`params`, by name; any left out keep their defaults), and return
 /// the report as JSON (schema 1). The GIL is released while the file is read.
 #[pyfunction]

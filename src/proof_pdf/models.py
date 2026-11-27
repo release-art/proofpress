@@ -99,7 +99,9 @@ class Profile:
 
     *pdfa* runs veraPDF against *flavour*, a PDF/A flavour string (``2b``, ``2a``, ``2u``, ...) passed through
     verbatim; *tac* measures peak ink with Ghostscript, against *max_tac*. Both are off unless asked for, since they
-    need those tools. *pdfx* toggles the PDF/X-4 checks;
+    need those tools. *pdfx* toggles the PDF/X checks, at *pdfx_level* (``x4``, ``x4p``, ``x5g``, ``x5pg``, ``x5n``,
+    ``x1a-2001``, ``x3-2002``, ``x1a-2003``, ``x3-2003``) or, when that is ``None``, at the PDF/X-1a or PDF/X-3 level
+    the file claims, else PDF/X-4;
     *colour* toggles the ink-coverage / overprint / rich-black / colour-space
     layer; *geometry* is the expected finished size, or ``None`` to skip it.
     *k_only_text* is an opt-in house rule: text may be painted with the K plate only.
@@ -122,6 +124,7 @@ class Profile:
     flavour: str = "2b"
     pdfa: bool = False
     pdfx: bool = True
+    pdfx_level: str | None = None
     colour: bool = True
     geometry: PageGeometry | None = None
     max_tac: float = DEFAULT_MAX_TAC

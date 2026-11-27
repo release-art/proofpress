@@ -456,6 +456,13 @@ pub fn verify_settings(file: &str, bytes: &[u8], settings: &Settings) -> Report 
     verify_in(file, bytes, settings, &Limits::default())
 }
 
+/// [`verify_settings`] at the PDF/X-1a or PDF/X-3 level the file claims in its identification, when it claims one,
+/// and otherwise at `settings`' level. Used when no level is asked for.
+#[must_use]
+pub fn verify_claimed(file: &str, bytes: &[u8], settings: &Settings) -> Report {
+    verify_chain(file, bytes, settings, &Limits::default(), &[], true)
+}
+
 /// The checks of `catalogue` at `level` still to be written, each not evaluated, so a level that is not fully checked
 /// cannot pass.
 fn unwritten(catalogue: &'static [&'static Check], level: Level) -> Vec<CheckResult> {
@@ -478,11 +485,19 @@ enum Code {
 }
 
 fn verify_in(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits) -> Report {
-    verify_chain(file, bytes, settings, limits, &[])
+    verify_chain(file, bytes, settings, limits, &[], false)
 }
 
-/// [`verify_in`] for a file that is a target of the files in `chain`, outermost first (ISO 15930-8 8.2).
-fn verify_chain(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits, outer: &[PathBuf]) -> Report {
+/// [`verify_in`] for a file that is a target of the files in `chain`, outermost first (ISO 15930-8 8.2); with
+/// `detect`, at the older level the file claims, if any (see [`verify_claimed`]).
+fn verify_chain(
+    file: &str,
+    bytes: &[u8],
+    settings: &Settings,
+    limits: &Limits,
+    outer: &[PathBuf],
+    detect: bool,
+) -> Report {
     // The files being verified, this one last, to tell a reference that loops back.
     let mut chain = outer.to_vec();
     if let Files::Set(folder) = &settings.files {
@@ -490,6 +505,15 @@ fn verify_chain(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits, 
         chain.push(std::fs::canonicalize(&path).unwrap_or(path));
     }
     let set = std::cell::OnceCell::new();
+    let opened = Document::open(bytes, limits);
+    let claimed = match (&opened, detect) {
+        (Ok(doc), true) => targets::claimed_older_level(doc),
+        _ => None,
+    };
+    let settings = &Settings {
+        level: claimed.unwrap_or(settings.level),
+        ..settings.clone()
+    };
     let level = settings.level;
     let applies = |check: &Check| check.applies.contains(&level) && check.status == Status::Implemented;
     let runs = RUNS.iter().map(|&(check, run)| (check, Code::Run(run)));
@@ -497,7 +521,7 @@ fn verify_chain(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits, 
     let set_judges = SET_JUDGES.iter().map(|&(check, judge)| (check, Code::Set(judge)));
     let enabled = runs.chain(judges).chain(set_judges).filter(|(check, _)| applies(check));
     let unwritten = unwritten(f::ALL, level).into_iter();
-    match Document::open(bytes, limits) {
+    let mut report = match opened {
         Err(refusal) => {
             let unread = enabled.map(|(id, _)| CheckResult {
                 id,
@@ -551,7 +575,9 @@ fn verify_chain(file: &str, bytes: &[u8], settings: &Settings, limits: &Limits, 
             checks.extend(unwritten);
             judged_from_structure(file, structure, checks, findings, &applies)
         }
-    }
+    };
+    report.level = level.title();
+    report
 }
 
 /// The report, with the checks judged from tiers 1 to 5's findings added: `x4.encrypt.absent` fails on an encrypted
@@ -750,6 +776,42 @@ mod tests {
             ("x5.example", &Outcome::NotEvaluated("not written yet".into()))
         );
         assert_eq!(unwritten(&CATALOGUE, Level::X4), []);
+    }
+
+    #[test]
+    fn a_file_claiming_an_older_level_is_verified_at_it_when_none_is_asked_for() {
+        use crate::document::test_pdf::classic;
+        let file = |info: &str| {
+            classic(
+                &[
+                    (1, b"<< /Type /Catalog /Pages 2 0 R >>"),
+                    (2, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+                    (3, b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>"),
+                    (4, info.as_bytes()),
+                ],
+                "<< /Size SIZE /Root 1 0 R /Info 4 0 R >>",
+            )
+        };
+        let x3 = file("<< /GTS_PDFXVersion (PDF/X-3:2002) >>");
+        let report = verify_claimed("x3.pdf", &x3, &Level::X4.into());
+        assert_eq!(report.level, Some("PDF/X-3:2002"));
+        assert!(
+            report.checks.iter().all(|c| c.id.applies.contains(&Level::X32002)),
+            "{report:?}"
+        );
+        assert_eq!(report.verdict, Verdict::Fail, "its checks not yet written fail it");
+        // Asked for a level, or claiming none of the older ones: the level given.
+        assert_eq!(verify_settings("x3.pdf", &x3, &Level::X4.into()).level, Some("PDF/X-4"));
+        let plain = file("<< >>");
+        assert_eq!(
+            verify_claimed("plain.pdf", &plain, &Level::X4.into()).level,
+            Some("PDF/X-4")
+        );
+        assert_eq!(
+            verify_claimed("bad.pdf", b"%PDF-1.3", &Level::X4.into()).level,
+            Some("PDF/X-4")
+        );
+        assert_eq!(verify_settings("x3.pdf", &x3, &Level::Print.into()).level, None);
     }
 
     #[test]

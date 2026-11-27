@@ -61,6 +61,14 @@ pub(crate) enum Pdfx {
     X5g,
     X5pg,
     X5n,
+    #[value(name = "x1a-2001")]
+    X1a2001,
+    #[value(name = "x3-2002")]
+    X32002,
+    #[value(name = "x1a-2003")]
+    X1a2003,
+    #[value(name = "x3-2003")]
+    X32003,
 }
 
 /// The `verify` command's options.

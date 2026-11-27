@@ -40,7 +40,9 @@ struct Entry {
 }
 
 const SEVERITIES: &[&str] = &["error", "warning"];
-const LEVELS: &[&str] = &["x4", "x4p", "x5g", "x5pg", "x5n", "print"];
+const LEVELS: &[&str] = &[
+    "x4", "x4p", "x5g", "x5pg", "x5n", "x1a-2001", "x3-2002", "x1a-2003", "x3-2003", "print",
+];
 const TOOLS: &[&str] = &["veraPDF", "Ghostscript"];
 
 fn main() {
@@ -143,7 +145,9 @@ fn constant(id: &str) -> String {
         .collect()
 }
 
+/// The `Level` variant a level name in `checks.toml` names: `x1a-2001` is `X1a2001`.
 fn variant(word: &str) -> String {
+    let word = word.replace('-', "");
     let mut chars = word.chars();
     chars
         .next()
@@ -201,6 +205,10 @@ fn readme(checks: &[Entry]) -> String {
         ("x5g", "PDF/X-5g"),
         ("x5pg", "PDF/X-5pg"),
         ("x5n", "PDF/X-5n"),
+        ("x1a-2001", "PDF/X-1a:2001"),
+        ("x3-2002", "PDF/X-3:2002"),
+        ("x1a-2003", "PDF/X-1a:2003"),
+        ("x3-2003", "PDF/X-3:2003"),
         ("print", "Print checks"),
     ] {
         let of = |status: &str| {

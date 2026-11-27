@@ -38,7 +38,7 @@ class TestVerifyCommand:
     def test_a_conforming_file_exits_zero(self, runner):
         result = _verify(runner, GOOD)
         assert result.exit_code == 0
-        assert "OK -- all 1 file(s) passed: PDF/X-4" in result.stdout
+        assert "OK -- all 1 file(s) passed: PDF/X as claimed" in result.stdout
 
     def test_an_error_exits_one_and_names_the_check(self, runner):
         result = _verify(runner, PDFS / "x4-limit-nesting.pdf")

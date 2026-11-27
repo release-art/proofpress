@@ -160,7 +160,10 @@ pub(crate) fn apply(o: &mut Verify, table: &Table, base: &Path, at: &str) -> Res
                 Value::Boolean(on) => o.layers.no_pdfx |= !on,
                 _ => fill(
                     &mut o.layers.pdfx,
-                    enumerated(&text()?, bad("x4, x4p, x5g, x5pg or x5n"))?,
+                    enumerated(
+                        &text()?,
+                        bad("x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003 or x3-2003"),
+                    )?,
                 ),
             },
             "no-pdfx" => o.layers.no_pdfx |= flag()?,
@@ -428,7 +431,7 @@ mod tests {
         assert!(wrong("allow-spot = 1").contains("a string or a list of strings"));
         assert!(wrong("exempt = 1").contains("a table of glob = reason"));
         assert!(wrong("exempt = { a = 1 }").contains("a table of glob = reason"));
-        assert!(wrong("pdfx = 'x9'").contains("x4, x4p, x5g, x5pg or x5n"));
+        assert!(wrong("pdfx = 'x9'").contains("x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003 or x3-2003"));
         assert!(wrong("target-versions = 'maybe'").contains("accept or reject"));
         assert!(wrong("jobs = 0").contains("a whole number from 1"));
         assert!(wrong("pages-multiple-of = 'two'").contains("a whole number from 1"));

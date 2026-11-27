@@ -2062,3 +2062,342 @@ clauses = ["iso-32000-2:7.3.10"]
 severity = "warning"
 applies = ["x4", "x4p", "x5g", "x5pg", "x5n", "print"]
 status = "implemented"
+
+# PDF/X-1a:2001, X-3:2002, X-1a:2003 and X-3:2003 (ISO 15930-1, -3, -4, -6): the rules that differ from X-4, from
+# proof-pdf-test-db/docs/pdfx/x1a3-register.md by id and clause number only (docs/briefs/pdfx-1a-3-plan.md).
+
+[[check]]
+id = "x13.structure.xref-table"
+title = "Cross-reference tables only: no cross-reference or object streams"
+clauses = ["iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.output-intent.icc-name-needs-registry"
+title = "An ICC registry identifier comes with the ICC RegistryName"
+clauses = ["iso-15930-1:6.3.2", "iso-15930-3:6.2.2"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002"]
+status = "todo"
+
+[[check]]
+id = "x13.output-intent.dest-profile-by-registry"
+title = "A condition the ICC registry does not name embeds its output profile"
+clauses = ["iso-15930-4:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.output-intent.dest-profile-by-icc-name"
+title = "An identifier that is not an ICC registry name comes with an output profile"
+clauses = ["iso-15930-1:6.3.2", "iso-15930-3:6.2.2"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002"]
+status = "todo"
+
+[[check]]
+id = "x3.output-intent.dest-profile-for-colour"
+title = "Colour outside the condition's process model comes with an output profile"
+clauses = ["iso-15930-3:6.2.2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x3-2002", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x1a.output-intent.profile-atob1"
+title = "The output profile has a colorimetric device-to-PCS table"
+clauses = ["iso-15930-1:6.3.2"]
+severity = "error"
+applies = ["x1a-2001"]
+status = "todo"
+
+[[check]]
+id = "x1a.output-intent.cmyk"
+title = "The printing condition is CMYK"
+clauses = ["iso-15930-1:6.3.1", "iso-15930-1:6.3.3", "iso-15930-1:6.9", "iso-15930-4:6.2.1", "iso-15930-4:6.2.3"]
+severity = "error"
+applies = ["x1a-2001", "x1a-2003"]
+status = "todo"
+
+[[check]]
+id = "x1a.output-intent.output-condition-unregistered"
+title = "A condition outside the ICC registry is described for people"
+clauses = ["iso-15930-1:6.3.2"]
+severity = "warning"
+applies = ["x1a-2001"]
+status = "todo"
+
+[[check]]
+id = "x3.output-intent.info"
+title = "The PDF/X intent carries a description in /Info"
+clauses = ["iso-15930-3:6.2.2"]
+severity = "warning"
+applies = ["x3-2002"]
+status = "todo"
+
+[[check]]
+id = "x13.output-intent.profile-version"
+title = "The output profile is ICC version 2"
+clauses = ["iso-15930-1:2", "iso-15930-1:6.3.2", "iso-15930-3:2", "iso-15930-3:6.2.2", "iso-15930-4:2", "iso-15930-4:6.2.2", "iso-15930-6:2", "iso-15930-6:6.2.2"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x3.icc.profile-version"
+title = "ICCBased profiles are ICC version 2"
+clauses = ["iso-15930-3:2", "iso-15930-3:6.2.1", "iso-15930-6:2", "iso-15930-6:6.2.1"]
+severity = "error"
+applies = ["x3-2002", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x1a.colour.print-spaces"
+title = "Print elements use only CMYK, gray and separation colour"
+clauses = ["iso-15930-1:6.3.1", "iso-15930-1:6.3.4", "iso-15930-4:6.2.1", "iso-15930-4:6.2.4"]
+severity = "error"
+applies = ["x1a-2001", "x1a-2003"]
+status = "todo"
+
+[[check]]
+id = "x1a.colour.no-default-space"
+title = "No unused default colour space beside print elements"
+clauses = ["iso-15930-1:6.3.1", "iso-15930-4:6.2.1"]
+severity = "warning"
+applies = ["x1a-2001", "x1a-2003"]
+status = "todo"
+
+[[check]]
+id = "x1a.spot.alternate-cmyk-or-gray"
+title = "Spot colour alternates are DeviceCMYK or DeviceGray"
+clauses = ["iso-15930-1:6.3.3", "iso-15930-4:6.2.3"]
+severity = "error"
+applies = ["x1a-2001", "x1a-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.font.embedding-permitted"
+title = "Embedded fonts permit embedding"
+clauses = ["iso-15930-1:6.4", "iso-15930-3:6.3", "iso-15930-4:6.3", "iso-15930-6:6.3"]
+severity = "warning"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.filespec.absent"
+title = "No file specifications"
+clauses = ["iso-15930-3:6.15", "iso-15930-4:6.4", "iso-15930-6:6.4"]
+severity = "error"
+applies = ["x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x1a.filespec.embedded-file"
+title = "No embedded files"
+clauses = ["iso-15930-1:6.2", "iso-15930-1:6.5"]
+severity = "warning"
+applies = ["x1a-2001"]
+status = "todo"
+
+[[check]]
+id = "x1a.filter.listed-2001"
+title = "Only the filters PDF/X-1a:2001 lists, each on the kind of data it allows"
+clauses = ["iso-15930-1:6.8"]
+severity = "error"
+applies = ["x1a-2001"]
+status = "todo"
+
+[[check]]
+id = "x13.filter.no-jbig2"
+title = "JBIG2 compression is not used"
+clauses = ["iso-15930-3:6.4", "iso-15930-4:6.5", "iso-15930-6:6.5"]
+severity = "error"
+applies = ["x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.filter.listed"
+title = "Only filters the level's PDF Reference defines"
+clauses = ["iso-15930-3:6.4", "iso-15930-4:6.5", "iso-15930-6:6.5"]
+severity = "error"
+applies = ["x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.image.bit-depth"
+title = "Image samples have 1, 2, 4 or 8 bits"
+clauses = ["iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.oc.hides-print"
+title = "Optional content cannot hide print content"
+clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-4:5", "iso-15930-4:6.1", "iso-15930-6:5", "iso-15930-6:6.1"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.oc.present"
+title = "Optional content is present, always on"
+clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-4:5", "iso-15930-4:6.1", "iso-15930-6:5", "iso-15930-6:6.1"]
+severity = "warning"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.trapped.present"
+title = "Info has /Trapped"
+clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.trapped.true-or-false"
+title = "Info /Trapped is True or False"
+clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.trapped.trapnet-implies-true"
+title = "A TrapNet annotation needs Info /Trapped True"
+clauses = ["iso-15930-1:6.9", "iso-15930-3:6.5", "iso-15930-4:6.6", "iso-15930-6:6.6"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x1a.trapnet.pcm-cmyk"
+title = "TrapNet /PCM is DeviceCMYK"
+clauses = ["iso-15930-1:6.9", "iso-15930-4:6.6"]
+severity = "error"
+applies = ["x1a-2001", "x1a-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.identity.version-present"
+title = "Info has a /GTS_PDFXVersion string"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.identity.version-value"
+title = "Info /GTS_PDFXVersion names the level"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x1a.identity.conformance"
+title = "Info /GTS_PDFXConformance names PDF/X-1a:2001"
+clauses = ["iso-15930-1:6.13", "iso-15930-1:A"]
+severity = "error"
+applies = ["x1a-2001"]
+status = "todo"
+
+[[check]]
+id = "x13.info.creation-date"
+title = "Info /CreationDate is a non-empty date"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.info.mod-date"
+title = "Info /ModDate is a non-empty date"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.info.title"
+title = "Info /Title is not empty"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.info.agent-names"
+title = "Info names its creator and producer"
+clauses = ["iso-15930-1:6.13", "iso-15930-3:6.6", "iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "warning"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.xmp.mod-date-agrees"
+title = "XMP's modification date agrees with Info /ModDate"
+clauses = ["iso-15930-4:6.7", "iso-15930-6:6.7"]
+severity = "warning"
+applies = ["x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.boxes.trim-within-crop"
+title = "TrimBox or ArtBox lies inside the CropBox"
+clauses = ["iso-15930-1:6.14", "iso-15930-3:6.7"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002"]
+status = "todo"
+
+[[check]]
+id = "x13.extgstate.no-tr2"
+title = "No ExtGState has /TR2"
+clauses = ["iso-15930-1:6.15", "iso-15930-3:6.8", "iso-15930-4:6.9", "iso-15930-6:6.9"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.annot.outside-bleed-trapnet-only"
+title = "Every annotation but TrapNet lies outside the bleed"
+clauses = ["iso-15930-1:6.19", "iso-15930-3:6.12"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002"]
+status = "todo"
+
+[[check]]
+id = "x13.transparency.smask"
+title = "No soft masks"
+clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-3:D.2", "iso-15930-4:6.16", "iso-15930-6:6.16"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.transparency.extgstate-values"
+title = "ExtGState blend mode and opacity are opaque values"
+clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-3:D.2", "iso-15930-4:6.16", "iso-15930-6:6.16"]
+severity = "error"
+applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.transparency.no-group"
+title = "No form XObject is a transparency group"
+clauses = ["iso-15930-4:6.16", "iso-15930-6:6.16"]
+severity = "error"
+applies = ["x1a-2003", "x3-2003"]
+status = "todo"
+
+[[check]]
+id = "x13.viewer-prefs.areas"
+title = "Viewer-preference areas are MediaBox or BleedBox when a page has a BleedBox"
+clauses = ["iso-15930-4:6.17", "iso-15930-6:6.17"]
+severity = "error"
+applies = ["x1a-2003", "x3-2003"]
+status = "todo"

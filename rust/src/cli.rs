@@ -193,7 +193,7 @@ mod tests {
             "{out}"
         );
         assert!(
-            out.ends_with("FAIL -- 1 of 2 file(s) failed: PDF/X-4, geometry, colour, missing glyphs, fonts\n"),
+            out.ends_with("FAIL -- 1 of 2 file(s) failed: PDF/X as claimed, geometry, colour, missing glyphs, fonts\n"),
             "{out}"
         );
         let (code, out, _) = cli(&["verify", &fixture("x4-good"), "--exempt", "x4-good.pdf=a proof copy"]);
@@ -290,7 +290,16 @@ mod tests {
             out.contains("PDF/A-1b, PDF/X-5n, peak ink, colour, K-only text"),
             "{out}"
         );
-        for (level, name) in [("x4p", "PDF/X-4p"), ("x5g", "PDF/X-5g"), ("x5pg", "PDF/X-5pg")] {
+        for (level, name) in [
+            ("x4", "PDF/X-4"),
+            ("x4p", "PDF/X-4p"),
+            ("x5g", "PDF/X-5g"),
+            ("x5pg", "PDF/X-5pg"),
+            ("x1a-2001", "PDF/X-1a:2001"),
+            ("x3-2002", "PDF/X-3:2002"),
+            ("x1a-2003", "PDF/X-1a:2003"),
+            ("x3-2003", "PDF/X-3:2003"),
+        ] {
             assert!(cli(&["verify", &fixture("x4-good"), "--pdfx", level]).1.contains(name));
         }
         let gray = cli(&[
@@ -302,10 +311,44 @@ mod tests {
             "--no-missing-glyphs",
         ]);
         assert!(
-            gray.1.contains("passed: PDF/X-4, colour\n") || gray.1.contains("failed: PDF/X-4, colour\n"),
+            gray.1.contains("passed: PDF/X as claimed, colour\n")
+                || gray.1.contains("failed: PDF/X as claimed, colour\n"),
             "{}",
             gray.1
         );
+    }
+
+    #[test]
+    fn a_file_claiming_an_older_level_is_verified_at_it_unless_a_level_is_asked_for() {
+        use std::fmt::Write;
+        let path = std::env::temp_dir().join(format!("proof-pdf-cli-x3-{}.pdf", std::process::id()));
+        // A one-page file whose Info claims PDF/X-3:2002, with its cross-reference table worked out here.
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>",
+            "<< /GTS_PDFXVersion (PDF/X-3:2002) >>",
+        ];
+        let mut bytes = String::from("%PDF-1.3\n");
+        let mut xref = String::from("xref\n0 5\n0000000000 65535 f\r\n");
+        for (n, object) in objects.iter().enumerate() {
+            let _ = write!(xref, "{:010} 00000 n\r\n", bytes.len());
+            let _ = write!(bytes, "{} 0 obj\n{object}\nendobj\n", n + 1);
+        }
+        let start = bytes.len();
+        let _ = write!(
+            bytes,
+            "{xref}trailer\n<< /Size 5 /Root 1 0 R /Info 4 0 R >>\nstartxref\n{start}\n%%EOF\n"
+        );
+        std::fs::write(&path, bytes).unwrap();
+        let file = path.display().to_string();
+        let (_, out, _) = cli(&["verify", &file, "--no-colour"]);
+        assert!(out.contains("FAIL (as PDF/X-3:2002)"), "{out}");
+        let (_, out, _) = cli(&["verify", &file, "--json"]);
+        assert!(out.contains("\"level\": \"PDF/X-3:2002\""), "{out}");
+        let (_, out, _) = cli(&["verify", &file, "--pdfx", "x4", "--json"]);
+        assert!(out.contains("\"level\": \"PDF/X-4\""), "{out}");
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

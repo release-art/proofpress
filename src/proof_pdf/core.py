@@ -80,6 +80,8 @@ def arguments(profile: Profile) -> list[str]:
     args += number("--max-stretch-pct", profile.max_stretch_pct) + number("--min-text-pt", profile.min_text_pt)
     args += number("--min-stroke-pt", profile.min_stroke_pt) + number("--safe-mm", profile.safe_mm)
     args += number("--min-delta-l", profile.min_delta_l)
+    if profile.pdfx and profile.pdfx_level is not None:
+        args += ["--pdfx", profile.pdfx_level]
     if profile.proof_profile is not None:
         args += ["--proof-profile", str(profile.proof_profile)]
     if profile.allow_spots is not None:

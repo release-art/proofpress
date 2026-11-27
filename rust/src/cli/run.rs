@@ -43,6 +43,8 @@ impl FileReport {
 /// The print checks' parameters and which of them the options turn on, and the external tools to run.
 pub(crate) struct Plan {
     pub(crate) pdfx: Option<Level>,
+    /// Whether a file claiming PDF/X-1a or PDF/X-3 is verified at the level it claims: no level was asked for.
+    pub(crate) detect: bool,
     pub(crate) settings: Settings,
     pub(crate) wanted: BTreeSet<&'static str>,
     /// Every print check an option switches, on or off.
@@ -132,6 +134,10 @@ pub(crate) fn plan(o: &Verify) -> Result<Plan, Usage> {
         Pdfx::X5g => Level::X5g,
         Pdfx::X5pg => Level::X5pg,
         Pdfx::X5n => Level::X5n,
+        Pdfx::X1a2001 => Level::X1a2001,
+        Pdfx::X32002 => Level::X32002,
+        Pdfx::X1a2003 => Level::X1a2003,
+        Pdfx::X32003 => Level::X32003,
     });
     let timeout = Duration::from_secs_f64(o.timeout.unwrap_or(900.0).max(0.0));
     let mut tools = Vec::new();
@@ -159,6 +165,7 @@ pub(crate) fn plan(o: &Verify) -> Result<Plan, Usage> {
         switchable,
         tools,
         pdfx,
+        detect: o.layers.pdfx.is_none(),
         settings: Settings {
             level: Level::Print,
             params,
@@ -360,7 +367,10 @@ pub(crate) fn verify(path: &Path, plan: &Plan, exemptions: &[(GlobMatcher, Strin
         });
         findings.extend(verdict.findings);
     }
-    let report = Report::new(report.file, report.structure, checks, findings);
+    let report = Report {
+        level: report.level,
+        ..Report::new(report.file, report.structure, checks, findings)
+    };
     FileReport {
         path: path.to_owned(),
         exempt: None,
@@ -383,10 +393,11 @@ fn combined(name: &str, bytes: &[u8], plan: &Plan) -> Report {
     let mut checks: Vec<_> = print.checks.into_iter().filter(|c| keep(c.id.id)).collect();
     let mut findings: Vec<Finding> = print.findings.into_iter().filter(|f| keep(f.check.id)).collect();
     let mut structure = print.structure;
-    if let Some(level) = plan.pdfx {
+    let mut level = None;
+    if let Some(at) = plan.pdfx {
         let folder = Path::new(name).parent().map_or_default(Path::to_owned);
         let settings = Settings {
-            level,
+            level: at,
             params: plan.settings.params.clone(),
             files: if plan.file_alone {
                 Files::Alone
@@ -394,12 +405,20 @@ fn combined(name: &str, bytes: &[u8], plan: &Plan) -> Report {
                 Files::Set(folder)
             },
         };
-        let pdfx = checks::verify_settings(name, bytes, &settings);
+        let pdfx = if plan.detect {
+            checks::verify_claimed(name, bytes, &settings)
+        } else {
+            checks::verify_settings(name, bytes, &settings)
+        };
         checks.extend(pdfx.checks);
         findings.extend(pdfx.findings);
         structure = pdfx.structure;
+        level = pdfx.level;
     }
-    Report::new(name, structure, checks, findings)
+    Report {
+        level,
+        ..Report::new(name, structure, checks, findings)
+    }
 }
 
 #[cfg(test)]

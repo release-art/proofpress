@@ -13,6 +13,10 @@ import re
 import sys
 
 STANDARDS = {
+    "iso-15930-1": "iso-15930-1-2001-cgats.md",
+    "iso-15930-3": "iso-15930-3-2002-cgats.md",
+    "iso-15930-4": "iso-15930-4-2003-cgats.md",
+    "iso-15930-6": "iso-15930-6-2003-cgats.md",
     "iso-15930-7": "iso-15930-7-2010-cgats.md",
     "iso-15930-8": "iso-15930-8-2010-cgats.md",
     "iso-32000-1": "iso-32000-1-2008-adobe.md",

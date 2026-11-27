@@ -57,7 +57,14 @@ pub(crate) fn text(reports: &[FileReport], o: &Verify, plan: &Plan, style: &Styl
         } else {
             style.paint("31", "FAIL")
         };
-        lines.push(format!("  {path:<52} {status}"));
+        // A file verified at the older level it claims, not the default, says so.
+        let claimed = report
+            .report
+            .as_ref()
+            .and_then(|r| r.level)
+            .filter(|l| plan.detect && *l != "PDF/X-4");
+        let at = claimed.map_or_default(|l| format!(" (as {l})"));
+        lines.push(format!("  {path:<52} {status}{at}"));
         lines.extend(
             report
                 .unreadable
@@ -154,6 +161,10 @@ fn level_name(level: Pdfx) -> &'static str {
         Pdfx::X5g => "PDF/X-5g",
         Pdfx::X5pg => "PDF/X-5pg",
         Pdfx::X5n => "PDF/X-5n",
+        Pdfx::X1a2001 => "PDF/X-1a:2001",
+        Pdfx::X32002 => "PDF/X-3:2002",
+        Pdfx::X1a2003 => "PDF/X-1a:2003",
+        Pdfx::X32003 => "PDF/X-3:2003",
     }
 }
 
@@ -162,7 +173,10 @@ fn summary(reports: &[FileReport], o: &Verify, plan: &Plan, style: &Style) -> St
     let flavour = format!("PDF/A-{}", o.layers.flavour.as_deref().unwrap_or("2b"));
     let named: [(&str, bool); 17] = [
         (flavour.as_str(), o.layers.pdfa),
-        (level_name(o.layers.pdfx.unwrap_or_default()), plan.pdfx.is_some()),
+        (
+            o.layers.pdfx.map_or("PDF/X as claimed", level_name),
+            plan.pdfx.is_some(),
+        ),
         ("peak ink", o.layers.tac),
         ("geometry", p.geometry.is_some()),
         ("colour", !o.inks.no_colour),
