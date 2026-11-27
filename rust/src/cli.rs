@@ -169,7 +169,35 @@ mod tests {
         };
         let good = fixture("x4-good");
         usage(&["verify", "--bogus"], "unexpected argument");
-        usage(&["verify", &good, "--warn-tac", "300"], "must be below --max-tac");
+        usage(
+            &["verify", &good, "--tac", "--warn-tac", "300"],
+            "must be below --max-tac",
+        );
+        // An option of an opt-in layer that is off would be ignored: that is refused, not skipped in silence.
+        let ink = "needs --tac: total ink is opt-in since 0.4.0";
+        usage(
+            &["verify", &good, "--max-tac", "280"],
+            &format!("error: --max-tac {ink}"),
+        );
+        usage(
+            &["verify", &good, "--warn-tac", "250"],
+            &format!("error: --warn-tac {ink}"),
+        );
+        let pdfa = "error: --flavour needs --pdfa: PDF/A is opt-in since 0.4.0";
+        usage(&["verify", &good, "--flavour", "2u"], pdfa);
+        usage(&["verify", &good, "--pdfa", "--no-pdfa", "--flavour", "2u"], pdfa);
+        let on = [
+            "--no-config",
+            "verify",
+            "--show-profile",
+            "--tac",
+            "--max-tac",
+            "280",
+            "--warn-tac",
+            "250",
+        ];
+        assert_eq!(cli(&on), (0, String::new(), String::new()));
+        assert_eq!(cli(&[&on[..3], &["--pdfa", "--flavour", "2u"]].concat()).0, 0);
         usage(&["verify", &good, "--warn-dpi", "200"], "must be above --min-dpi");
         usage(&["verify", &good, "--trim-mm", "85"], "must look like 105x148");
         usage(&["verify", &good, "--trim-mm", "0x5"], "must be positive");
@@ -412,6 +440,30 @@ mod tests {
         let (code, _, err) = cli(&["--config", config, "--profile", "none", "verify", &fixture("x4-good")]);
         assert_eq!(code, 64);
         assert!(err.contains("has no profile \"none\""), "{err}");
+        // An inherited profile's total-ink option needs the switch too, from the file or the command line.
+        std::fs::write(
+            &file,
+            "[profiles.base.verify]\nmax-tac = 280\n[profiles.press]\nextends = 'base'\n",
+        )
+        .unwrap();
+        let (code, _, err) = cli(&["--config", config, "--profile", "press", "verify", &fixture("x4-good")]);
+        assert_eq!(code, 64);
+        assert!(
+            err.contains(&format!(
+                "error: {config}: max-tac needs tac = true: total ink is opt-in since 0.4.0"
+            )),
+            "{err}"
+        );
+        let shown = cli(&[
+            "--config",
+            config,
+            "--profile",
+            "press",
+            "verify",
+            "--tac",
+            "--show-profile",
+        ]);
+        assert_eq!(shown, (0, "max-tac = 280\n".to_owned(), String::new()));
         std::fs::write(&file, "[verify]\nbleed = 3\n").unwrap();
         assert!(
             cli(&["--config", config, "verify", &fixture("x4-good")])

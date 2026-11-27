@@ -92,7 +92,7 @@ class TestOptions:
         assert result.exit_code == 64 and "--trim-mm" in result.stderr
 
     def test_the_warn_levels_must_sit_inside_the_limits(self, runner):
-        assert "must be below --max-tac" in _verify(runner, GOOD, "--warn-tac", "300").stderr
+        assert "must be below --max-tac" in _verify(runner, GOOD, "--tac", "--warn-tac", "300").stderr
         assert "must be above --min-dpi" in _verify(runner, GOOD, "--warn-dpi", "200").stderr
 
     def test_a_house_rule_is_off_until_asked(self, runner):
@@ -242,6 +242,20 @@ class TestPreviewCommand:
         mocker.patch.object(cli.preview, "preview_file", return_value=[])
         result = runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf")), "--gs", "gs", "--timeout", "9"])
         assert result.exit_code == 0, result.output
+        assert result.stderr == "warning: --gs and --timeout are ignored: previews no longer use Ghostscript\n"
+
+    def test_the_old_options_warn_when_they_come_from_the_config_file(self, runner, tmp_path, mocker):
+        mocker.patch.object(cli.preview, "preview_file", return_value=[])
+        config = tmp_path / "proof-pdf.toml"
+        config.write_text('[preview]\ngs = "gs"\n[extract]\ngs-bin = "gs"\n')
+        result = runner.invoke(cli.pdf_app, ["--config", str(config), "preview", str(_pdf(tmp_path, "a.pdf"))])
+        assert result.exit_code == 0, result.output
+        assert result.stderr == "warning: --gs is ignored: previews no longer use Ghostscript\n"
+
+    def test_no_warning_without_the_old_options(self, runner, tmp_path, mocker):
+        mocker.patch.object(cli.preview, "preview_file", return_value=[])
+        result = runner.invoke(cli.pdf_app, ["preview", str(_pdf(tmp_path, "a.pdf"))])
+        assert result.exit_code == 0 and "warning" not in result.stderr
 
     @pytest.mark.parametrize("error", [preview.UnreadablePdfError("bad page"), ValueError("bad page")])
     def test_render_failure_exits_one(self, runner, tmp_path, mocker, error):

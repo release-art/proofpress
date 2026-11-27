@@ -71,7 +71,7 @@ pub fn publish<E>(event: &E, observers: &mut [&mut dyn Listener<E>], readers: &m
 /// verdict: the scope becomes a gap, or the file is refused when the limit is file-wide.
 ///
 /// ponytail: the defaults are chosen to pass every file in the corpus, not measured; strings, names, images, graphs and
-/// content have no limit yet.
+/// operators per content have no limit yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
     /// Arrays and dictionaries nested inside one direct object.
@@ -84,6 +84,11 @@ pub struct Limits {
     pub objects: usize,
     /// Files a PDF/X-5 file set follows references through, the file itself not counted (X5-Q13).
     pub target_depth: usize,
+    /// Graphics states one content (a page's streams read as one, or one form, pattern or glyph) has saved with `q`
+    /// and not restored. Real files nest tens at most; each saved state is a copy of the whole graphics state.
+    pub saved_states: usize,
+    /// Operands waiting for an operator in a content; no operator takes more than 33 (`scn` in a 32-component space).
+    pub operands: usize,
 }
 
 impl Default for Limits {
@@ -94,6 +99,8 @@ impl Default for Limits {
             xref_sections: 1000,
             objects: 10_000_000,
             target_depth: 16,
+            saved_states: 4096,
+            operands: 4096,
         }
     }
 }

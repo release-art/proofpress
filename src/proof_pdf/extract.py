@@ -674,7 +674,7 @@ def _descriptor_facts(descriptor: dict[str, typing.Any], name: str) -> dict[str,
 def _number(value: typing.Any) -> float | None:
     try:
         return float(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 

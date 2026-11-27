@@ -25,7 +25,7 @@ const COLOR_ORG: &[u8] = b"http://www.color.org";
 
 /// The reference names of the ICC Characterization Data Registry: the CMYK characterizations
 /// (registry.color.org/cmyk-registry) and the three-component colour encodings (registry.color.org/rgb-registry), as
-/// listed on 2026-11-25. The list only grows; nothing on it is marked withdrawn.
+/// listed on [`ICC_REGISTRY_DATE`]. The list only grows; nothing on it is marked withdrawn.
 const ICC_REGISTRY: [&str; 73] = [
     "FOGRA53",
     "CGATS21-2-CRPC7",
@@ -101,6 +101,10 @@ const ICC_REGISTRY: [&str; 73] = [
     "DCI P3",
     "Display P3",
 ];
+
+/// The day [`ICC_REGISTRY`] was copied. Verifying never uses the network, so the copy goes stale; the findings that
+/// judge by it give this date.
+const ICC_REGISTRY_DATE: &str = "2026-11-25";
 
 /// Where in [`ICC_REGISTRY`] the three-component (RGB) encodings start; the CMYK characterizations come first.
 const RGB_FROM: usize = 56;
@@ -392,7 +396,8 @@ pub(super) fn identifier_in_registry(doc: &Document, _: &Settings) -> Vec<Findin
         return Vec::new();
     };
     let unlisted = registry(&name) != Registry::Other && !ICC_REGISTRY.contains(&id.as_str());
-    let message = format!("/OutputConditionIdentifier {id:?} is not a name in the ICC registry");
+    let message =
+        format!("/OutputConditionIdentifier {id:?} is not a name in the ICC registry (copy of {ICC_REGISTRY_DATE})");
     when(unlisted, X4_OUTPUT_INTENT_IDENTIFIER_IN_REGISTRY, &message, "6.4.2.1")
 }
 
@@ -434,7 +439,7 @@ pub(super) fn icc_name_needs_registry(doc: &Document, settings: &Settings) -> Ve
     };
     let failed = ICC_REGISTRY.contains(&id.as_str()) && !names_icc_registry(doc, settings);
     let message = format!(
-        "/OutputConditionIdentifier {id:?} is an ICC registry name, but /RegistryName is not \"http://www.color.org\""
+        "/OutputConditionIdentifier {id:?} is an ICC registry name (copy of {ICC_REGISTRY_DATE}), but /RegistryName is not \"http://www.color.org\""
     );
     when_older(
         failed,
@@ -468,11 +473,14 @@ pub(super) fn dest_profile_by_icc_name(doc: &Document, settings: &Settings) -> V
     let unregistered =
         text_entry(doc, b"OutputConditionIdentifier").is_none_or(|id| !ICC_REGISTRY.contains(&id.as_str()));
     let failed = the_intent(doc).is_some() && unregistered && !has_profile(doc);
-    let message = "/OutputConditionIdentifier is not in the ICC registry and the PDF/X output intent embeds no /DestOutputProfile";
+    let message = format!(
+        "/OutputConditionIdentifier is not in the ICC registry (copy of {ICC_REGISTRY_DATE}) and the PDF/X output intent \
+         embeds no /DestOutputProfile"
+    );
     when_older(
         failed,
         X13_OUTPUT_INTENT_DEST_PROFILE_BY_ICC_NAME,
-        message,
+        &message,
         settings,
         OLDER_INTENT,
     )
@@ -514,12 +522,14 @@ pub(super) fn output_condition_unregistered(doc: &Document, _: &Settings) -> Vec
     let unregistered =
         text_entry(doc, b"OutputConditionIdentifier").is_none_or(|id| !ICC_REGISTRY.contains(&id.as_str()));
     let failed = unregistered && intent.get(b"OutputCondition").is_none();
-    let message =
-        "/OutputConditionIdentifier is not in the ICC registry and the PDF/X output intent has no /OutputCondition";
+    let message = format!(
+        "/OutputConditionIdentifier is not in the ICC registry (copy of {ICC_REGISTRY_DATE}) and the PDF/X output intent \
+         has no /OutputCondition"
+    );
     when(
         failed,
         X1A_OUTPUT_INTENT_OUTPUT_CONDITION_UNREGISTERED,
-        message,
+        &message,
         "6.3.2",
     )
 }
@@ -685,6 +695,31 @@ mod tests {
         )
         .unwrap();
         assert_eq!(profile_stream(&bare), None, "no profile");
+    }
+
+    #[test]
+    fn unlisted_names_give_the_copys_date() {
+        let unlisted = Document::open(
+            &classic(
+                &[(
+                    1,
+                    b"<< /OutputIntents [<< /S /GTS_PDFX /RegistryName (http://www.color.org) \
+                      /OutputConditionIdentifier (ISO Coated v2) >>] >>",
+                )],
+                "<< /Size SIZE /Root 1 0 R >>",
+            ),
+            &Limits::default(),
+        )
+        .unwrap();
+        let messages: Vec<String> = identifier_in_registry(&unlisted, &Level::X4.into())
+            .into_iter()
+            .map(|f| f.message)
+            .collect();
+        assert_eq!(
+            messages,
+            ["/OutputConditionIdentifier \"ISO Coated v2\" is not a name in the ICC registry (copy of 2026-11-25)"],
+            "the copy's date, since verifying never fetches the registry"
+        );
     }
 
     #[test]

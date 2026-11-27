@@ -37,3 +37,9 @@ Feature: PDF/X-4 6.19 and 6.23, content streams
       | fixture | check |
       | x4-inline-image-unknown-end | content.damaged |
       | x4-content-unreadable | content.damaged |
+
+  Scenario: Past one of the reader's limits the rest of the content is not read
+    Given the fixture "x4-content-limit"
+    When it is verified as PDF/X-4
+    Then check "content.limit" fails
+    And check "x4.limits.graphics" fails

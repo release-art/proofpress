@@ -11,6 +11,7 @@ import collections.abc
 import json
 import os
 import pathlib
+import re
 import shutil
 
 from ._internal import _core
@@ -58,7 +59,9 @@ async def verify_file(
 def arguments(profile: Profile) -> list[str]:
     """*profile* as ``proof-pdf verify`` options."""
     number = _number
-    args = ["--flavour", profile.flavour, "--colour-mode", str(profile.colour_mode)]
+    # ``--flavour`` and the ink limits mean something only with PDF/A and total ink on; the core refuses them otherwise.
+    args = ["--flavour", profile.flavour] if profile.pdfa else []
+    args += ["--colour-mode", str(profile.colour_mode)]
     flags = (
         ("--pdfa", profile.pdfa),
         ("--no-pdfx", not profile.pdfx),
@@ -74,7 +77,8 @@ def arguments(profile: Profile) -> list[str]:
         ("--uniform-pages", profile.uniform_pages),
     )
     args += [flag for flag, on in flags if on]
-    args += number("--max-tac", profile.max_tac) + number("--warn-tac", profile.warn_tac)
+    if profile.tac:
+        args += number("--max-tac", profile.max_tac) + number("--warn-tac", profile.warn_tac)
     args += number("--small-text-pt", profile.small_text_pt) + number("--min-dpi", profile.min_dpi)
     args += number("--warn-dpi", profile.warn_dpi) + number("--max-dpi", profile.max_dpi)
     args += number("--max-stretch-pct", profile.max_stretch_pct) + number("--min-text-pt", profile.min_text_pt)
@@ -121,9 +125,47 @@ def exemption(path: pathlib.PurePath, exemptions: collections.abc.Mapping[str, s
     (:meth:`pathlib.PurePath.full_match`). The first matching glob wins.
     """
     for glob, reason in exemptions.items():
-        if path.full_match(glob) or path.full_match(f"**/{glob}"):
+        if _full_match(path, glob) or _full_match(path, f"**/{glob}"):
             return reason
     return None
+
+
+def _full_match(path: pathlib.PurePath, glob: str) -> bool:
+    """:meth:`pathlib.PurePath.full_match` (Python 3.13) for 3.11 and 3.12.
+
+    ``**`` as a whole segment spans any number of segments, ``*`` and ``?`` stay within one, ``[...]`` is a class;
+    case is ignored on Windows, as there.
+    """
+    if os.name == "nt":
+        glob = glob.replace("\\", "/")
+    segments = glob.split("/")
+    regex = ""
+    for i, segment in enumerate(segments):
+        last = i == len(segments) - 1
+        if segment == "**":
+            regex += ".*" if last else "(?:.+/)?"
+        else:
+            regex += _segment_regex(segment) + ("" if last else "/")
+    return re.fullmatch(regex, path.as_posix(), re.IGNORECASE if os.name == "nt" else 0) is not None
+
+
+def _segment_regex(segment: str) -> str:
+    out, i = "", 0
+    while i < len(segment):
+        char = segment[i]
+        close = segment.find("]", i + 2) if char == "[" else -1
+        if char == "*":
+            out += "[^/]*"
+        elif char == "?":
+            out += "[^/]"
+        elif close != -1:
+            body = segment[i + 1 : close].replace("\\", "\\\\")
+            out += "[" + ("^" + body[1:] if body.startswith("!") else body.replace("^", "\\^", 1)) + "]"
+            i = close
+        else:
+            out += re.escape(char)
+        i += 1
+    return out
 
 
 async def verify_files(
@@ -171,7 +213,7 @@ def expand_targets(
             targets += sorted(
                 p
                 for p in path.glob("**/*.pdf")
-                if p.is_file() and not any(p.relative_to(path).full_match(g) for g in patterns)
+                if p.is_file() and not any(_full_match(p.relative_to(path), g) for g in patterns)
             )
         else:
             targets.append(path)

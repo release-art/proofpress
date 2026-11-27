@@ -251,6 +251,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `stream.eol` | Stream data is followed by an end of line before endstream | iso-32000-2:7.3.8.1 | warning | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `stream.filter` | Every stream names filters ISO 32000 defines | iso-32000-2:7.4.1 | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `content.damaged` | Every content stream can be read to its end | iso-32000-2:7.8.2, iso-32000-2:8.9.7 | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
+| `content.limit` | Every content stream stays within proof-pdf's safety limits |  | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `content.operator` | Undefined operators appear only inside BX and EX | iso-32000-2:7.8.2 | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `content.compatibility` | BX and EX pair up | iso-32000-2:7.8.2 | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `page.media-box` | Every page has a MediaBox, its own or inherited | iso-32000-2:7.7.3.3 | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |

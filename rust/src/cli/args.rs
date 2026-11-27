@@ -118,6 +118,22 @@ pub(crate) struct Verify {
     pub(crate) legacy_text: LegacyText,
 }
 
+impl Verify {
+    /// The first option set for an opt-in layer that is off, as (option, the layer's switch, the layer). The tool
+    /// paths and `--timeout` are left out: a shared config names them once for runs with and without the layers.
+    pub(crate) fn idle(&self, set: impl Fn(&str) -> bool) -> Option<(&'static str, &'static str, &'static str)> {
+        let l = &self.layers;
+        [
+            ("flavour", l.flavour.is_some() && !l.pdfa, "pdfa", "PDF/A"),
+            ("max-tac", l.max_tac.is_some() && !l.tac, "tac", "total ink"),
+            ("warn-tac", l.warn_tac.is_some() && !l.tac, "tac", "total ink"),
+        ]
+        .into_iter()
+        .find(|(option, idle, _, _)| *idle && set(option))
+        .map(|(option, _, switch, layer)| (option, switch, layer))
+    }
+}
+
 /// Which layers run: the PDF/X level, PDF/A and peak ink.
 #[derive(Debug, Default, Args)]
 pub(crate) struct Layers {

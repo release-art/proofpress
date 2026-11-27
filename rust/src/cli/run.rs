@@ -89,6 +89,11 @@ impl Tool {
 
 /// The plan `verify`'s options describe.
 pub(crate) fn plan(o: &Verify) -> Result<Plan, Usage> {
+    if let Some((option, switch, layer)) = o.idle(|_| true) {
+        return Err(Usage(format!(
+            "--{option} needs --{switch}: {layer} is opt-in since 0.4.0"
+        )));
+    }
     let colour_mode = o.inks.colour_mode.unwrap_or_default();
     let max_tac = o.layers.max_tac.unwrap_or(300.0);
     if let Some(warn) = o.layers.warn_tac.filter(|w| *w >= max_tac) {

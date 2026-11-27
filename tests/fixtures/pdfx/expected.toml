@@ -457,6 +457,10 @@ expect = { "content.damaged" = "an inline JPEG with no end-of-image marker and n
 levels = ["x4"]
 expect = { "content.damaged" = "an unterminated string in the page content (ISO 32000-2 7.8.2)", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)" }
 
+[x4-content-limit]
+levels = ["x4"]
+expect = { "content.limit" = "4,097 q in a row, more graphics states saved at once than the reader's limit", "x4.pdf-reference.conforms" = "the same error, as not valid PDF (6.1.1)", "x4.limits.graphics" = "the states saved up to the limit, 4,096, nested over 28 deep (6.25)" }
+
 [x4-ri-unknown]
 levels = ["x4"]
 expect = { "x4.intent.known-values" = "/Vivid ri (6.23)" }

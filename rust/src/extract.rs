@@ -225,6 +225,7 @@ pub fn recover(bytes: &[u8], images: bool, vector: bool) -> Result<Recovered, St
         // warnings are about how the file is written, not what can be read from it.
         .filter(|f| f.severity == Severity::Error || f.check == OBJECT_DANGLING_REFERENCE)
         .chain(contents::damaged(&doc, &Settings::from(Level::Print)))
+        .chain(contents::limit(&doc, &Settings::from(Level::Print)))
         .map(|f| format!("{}: {}", f.check.id, f.message))
         .collect();
     out.facts.pages = pages(&doc);

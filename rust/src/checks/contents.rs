@@ -10,8 +10,8 @@ use super::walk::dicts;
 use crate::content::{self, At, Content, Item, OPERATORS, Problem};
 use crate::document::{Document, Object};
 use crate::findings::{
-    CONTENT_COMPATIBILITY, CONTENT_DAMAGED, CONTENT_OPERATOR, Check, Finding, Location, X4_CONTENT_KNOWN_OPERATORS,
-    X4_CONTENT_NO_BX_EX, X4_INTENT_KNOWN_VALUES,
+    CONTENT_COMPATIBILITY, CONTENT_DAMAGED, CONTENT_LIMIT, CONTENT_OPERATOR, Check, Finding, Location,
+    X4_CONTENT_KNOWN_OPERATORS, X4_CONTENT_NO_BX_EX, X4_INTENT_KNOWN_VALUES,
 };
 use crate::graphics;
 use crate::pipeline::Limits;
@@ -128,7 +128,9 @@ pub(crate) fn damaged(doc: &Document, _: &Settings) -> Vec<Finding> {
                 ),
                 Problem::InlineDict => ("an inline image dictionary that is malformed".to_owned(), "8.9.7"),
                 Problem::NoEi => ("an inline image not followed by EI".to_owned(), "8.9.7"),
-                Problem::UnknownOperator(_) | Problem::Compatibility => continue,
+                Problem::UnknownOperator(_) | Problem::Compatibility | Problem::SavedStates | Problem::Operands => {
+                    continue;
+                }
             };
             out.push(read.finding(
                 CONTENT_DAMAGED,
@@ -136,6 +138,24 @@ pub(crate) fn damaged(doc: &Document, _: &Settings) -> Vec<Finding> {
                 format!("{what}; the rest of the stream is not checked"),
                 clause,
             ));
+        }
+    }
+    out
+}
+
+/// Every content stream stays within the reader's limits; past one, the rest of the stream is a gap.
+pub(crate) fn limit(doc: &Document, _: &Settings) -> Vec<Finding> {
+    let limits = Limits::default();
+    let mut out = Vec::new();
+    for read in contents(doc) {
+        for (at, problem) in &read.content.problems {
+            let what = match problem {
+                Problem::SavedStates => format!("more than {} graphics states saved by q at once", limits.saved_states),
+                Problem::Operands => format!("more than {} operands before one operator", limits.operands),
+                _ => continue,
+            };
+            let message = format!("{what}; the rest of the stream is not checked");
+            out.push(Finding::new(CONTENT_LIMIT, message).at(read.at(*at)));
         }
     }
     out
@@ -266,8 +286,9 @@ mod tests {
     use crate::document::test_pdf::classic;
     use crate::findings::Level;
 
-    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 6] = [
+    const RUNS: [fn(&Document, &Settings) -> Vec<Finding>; 7] = [
         damaged,
+        limit,
         operator,
         compatibility,
         known_operators,
@@ -463,6 +484,37 @@ mod tests {
                 "an inline image whose /L is 3 but whose data is 1 bytes; the rest of the stream is not checked",
                 "an inline image dictionary that is malformed; the rest of the stream is not checked",
                 "an inline image not followed by EI; the rest of the stream is not checked",
+            ]
+        );
+    }
+
+    #[test]
+    fn content_past_a_limit_is_a_gap() {
+        let limits = Limits::default();
+        let (saved, operands) = (
+            stream(&"q ".repeat(limits.saved_states + 2)),
+            stream(&format!("{}n", "0 ".repeat(limits.operands + 1))),
+        );
+        let objects: [(u32, &[u8]); 6] = [
+            (1, b"<< /Pages 2 0 R >>"),
+            (2, b"<< /Type /Pages /Kids [3 0 R 4 0 R] >>"),
+            (3, b"<< /Type /Page /Contents 5 0 R >>"),
+            (4, b"<< /Type /Page /Contents 6 0 R >>"),
+            (5, &saved),
+            (6, &operands),
+        ];
+        assert_eq!(
+            found(&objects),
+            [
+                (
+                    "content.limit",
+                    "more than 4096 graphics states saved by q at once; the rest of the stream is not checked"
+                        .to_owned()
+                ),
+                (
+                    "content.limit",
+                    "more than 4096 operands before one operator; the rest of the stream is not checked".to_owned()
+                ),
             ]
         );
     }
