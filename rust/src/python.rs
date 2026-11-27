@@ -105,12 +105,13 @@ fn render(py: Python<'_>, data: &[u8], dpi: f64, guides: bool, safe_mm: Option<f
 }
 
 /// What `extract` recovers from the PDF `data` that needs no content walk: page boxes, document information and XMP,
-/// font programs and ICC profiles with the output intents, as JSON, with the recovered files' bytes the JSON indexes.
+/// font programs and ICC profiles with the output intents, and with `images` every image written out, as JSON, with the recovered files' bytes the JSON indexes.
 /// Raises `UnreadablePdfError` for a file that cannot be read.
 #[pyfunction]
-fn extract(py: Python<'_>, data: &[u8]) -> PyResult<(String, Vec<Vec<u8>>)> {
+#[pyo3(signature = (data, images = false))]
+fn extract(py: Python<'_>, data: &[u8], images: bool) -> PyResult<(String, Vec<Vec<u8>>)> {
     let recovered = py
-        .detach(|| crate::extract::recover(data))
+        .detach(|| crate::extract::recover(data, images))
         .map_err(UnreadablePdfError::new_err)?;
     serde_json::to_string(&recovered.facts)
         .map(|facts| (facts, recovered.blobs))

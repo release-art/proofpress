@@ -43,7 +43,6 @@ from ._internal.spaces import (
     CMYK,
     GRAY,
     RGB,
-    classify_colour_space,
     reachable as _objects,
 )
 from ._internal.vector import INVISIBLE, Group, artwork
@@ -201,13 +200,13 @@ def extract_pdf(
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     failures: list[str] = []
-    raw, blobs = _core.extract(path.read_bytes())
+    raw, blobs = _core.extract(path.read_bytes(), "images" in kinds)
     core = _CoreFacts(json.loads(raw), blobs)
     # What the core could not read is missing from everything below, so say so.
     failures += [f"reading the file: {problem}" for problem in core.facts["damage"]]
     with pikepdf.open(path) as pdf:
         tagged = tagged_reader.read(pdf)
-        recovered = _Recovery(pdf, out_dir, failures, vector_text, tagged)
+        recovered = _Recovery(pdf, out_dir, failures, vector_text, tagged, core)
         for facts, page in zip(core.facts["pages"], pdf.pages, strict=False):
             recovered.page(facts, page, "images" in kinds, "vector" in kinds, gap_pt, max_fraction)
         if "images" in kinds:
@@ -255,6 +254,7 @@ class _Recovery:
         failures: list[str],
         vector_text: bool = True,
         tagged: tagged_reader.Tagged | None = None,
+        core: "_CoreFacts | None" = None,
     ) -> None:
         self.pdf, self.out, self.failures = pdf, out_dir, failures
         self.vector_text = vector_text
@@ -266,7 +266,9 @@ class _Recovery:
         self.artwork_colours: dict[str, float] = {}  # colour -> area of the vector artwork painted in it
         self.pages: list[dict[str, typing.Any]] = []
         self._by_key: dict[typing.Any, Asset] = {}  # the same image or artwork placed again adds a placement
-        self._masks: set[tuple[int, int]] = set()  # soft masks, saved beside the image they belong to
+        self._masks: set[int] = set()  # soft masks' object numbers, saved beside the image they belong to
+        self.core = core
+        self._images = {image["num"]: image for image in core.facts["images"]} if core else {}
         self._font_pages: dict[str, set[int]] = {}
 
     def page(  # noqa: PLR0913 -- the page's facts, its walk, and the options of both
@@ -360,49 +362,42 @@ class _Recovery:
 
     def _image(self, number: int, obj: pikepdf.Stream, placement: Placement, event: Paint) -> None:
         objnum = obj.objgen[0]
-        key = ("image", obj.objgen if objnum else id(obj))
-        asset = self._add(key, lambda: self._write_image(number, obj, objnum or len(self.assets)), placement)
+        key = ("image", objnum or id(obj))
+        asset = self._add(key, lambda: self._write_image(number, objnum, objnum or len(self.assets)), placement)
         self._annotate(asset, number, [event.mcid], event.artifact)
         if event.mcid is not None and event.bbox is not None:
             self.marked_boxes.append((number, event.mcid, event.bbox))
 
     def unplaced_images(self) -> None:
         """Images stored in the file that no page paints (left over in a form or resource dictionary)."""
-        for obj in _objects(self.pdf):
-            if (
-                isinstance(obj, pikepdf.Stream)
-                and str(obj.get("/Subtype")) == "/Image"
-                and obj.objgen not in self._masks | {(0, 0)}
-            ):
-                self._add(("image", obj.objgen), lambda obj=obj: self._write_image(0, obj, obj.objgen[0]))
+        for num in self._images:
+            if num not in self._masks:
+                self._add(("image", num), lambda num=num: self._write_image(0, num, num))
 
-    def _write_image(self, number: int, obj: pikepdf.Stream, serial: int) -> Asset | None:
-        stem = self.out / "images" / f"{f'p{number:03d}' if number else 'unplaced'}-im{serial}"
-        try:
-            stem.parent.mkdir(exist_ok=True)
-            image = pikepdf.PdfImage(obj)
-            written = pathlib.Path(image.extract_to(fileprefix=str(stem)))
-            mask = obj.get("/SMask")
-            if mask is not None:
-                self._masks.add(mask.objgen)
-                pikepdf.PdfImage(typing.cast(pikepdf.Stream, mask)).as_pil_image().save(
-                    stem.with_name(stem.name + ".mask.png")
-                )
-        except _ERRORS as exc:
-            self.failures.append(f"page {number}: image {serial}: {exc}")
+    def _write_image(self, number: int, num: int, serial: int) -> Asset | None:
+        """Write the image the core wrote out as object *num*, and its soft mask beside it."""
+        image = self._images.get(num)
+        data = self.core.blob(image["data"]) if image and self.core else "it cannot be read"
+        if isinstance(data, str) or image is None or self.core is None:
+            self.failures.append(f"page {number}: image {serial}: {data}")
             return None
+        stem = self.out / "images" / f"{f'p{number:03d}' if number else 'unplaced'}-im{serial}"
+        stem.parent.mkdir(exist_ok=True)
+        written = stem.with_name(f"{stem.name}.{image['extension']}")
+        written.write_bytes(data)
+        if image["mask"] is not None:
+            mask_num, extension, blob = image["mask"]
+            self._masks.add(mask_num)
+            mask = self.core.blob(blob)
+            if isinstance(mask, str):
+                self.failures.append(f"page {number}: image {serial}: soft mask: {mask}")
+            else:
+                stem.with_name(f"{stem.name}.mask.{extension}").write_bytes(mask)
         return Asset(
             "image",
             written.relative_to(self.out).as_posix(),
             [],
-            {
-                "pixels": [int(obj.get("/Width", 0)), int(obj.get("/Height", 0))],
-                "colour_space": classify_colour_space(obj.get("/ColorSpace"), None),
-                "bits": int(obj.get("/BitsPerComponent", 0)),
-                "filters": _filters(obj),
-                "stencil": bool(obj.get("/ImageMask", False)),
-                "soft_mask": mask is not None,
-            },
+            {key: image[key] for key in ("pixels", "colour_space", "bits", "filters", "stencil", "soft_mask")},
         )
 
     def _vector(self, number: int, page: pikepdf.Page, gap_pt: float, fraction: float, texts: list[Paint]) -> None:
@@ -828,13 +823,6 @@ def _palette(
         for colour, used in uses.items()
     ]
     return sorted(palette, key=lambda e: (-e["panel_area_pt2"] - e["artwork_area_pt2"], -e["text_chars"]))
-
-
-def _filters(obj: pikepdf.Object) -> list[str]:
-    value = obj.get("/Filter")
-    if value is None:
-        return []
-    return [str(f).lstrip("/") for f in (value if isinstance(value, pikepdf.Array) else [value])]
 
 
 def _slug(name: str) -> str:

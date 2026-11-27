@@ -118,6 +118,7 @@ record it as not conforming to that one rule).
 | 9 (part) | the inspect commit | `checks/inventory.rs` on the print walk and the contrast measure; `_core.inspect`; `proof_pdf.inventory` no longer uses pikepdf. Parity with the Python on the fixtures (339 identical, 5 damaged fixtures read strictly) and 10,475 test-db files (see Deviations) |
 | 9 (part) | the preview commit | `preview.rs` (feature `preview`): pages rendered by `hayro` over the MediaBox, guides from a pixel-space overlay PDF, panics caught per page; `_core.render`; `preview` and extract's review page no longer run Ghostscript; `_internal/proc.py` deleted |
 | 9 (part) | the extract A commit | `extract.rs`, `_core.extract`: pages (inherited `/CropBox` and `/Rotate`), information and XMP, font programs, ICC profiles and output intents, and the reader's damage, which `extract` now lists in `failures`; also the X-5g `/Ref` fix of another session (below) |
+| 9 (part) | the extract B commit | `extract/image.rs` (feature `extract`): images copied (JPEG, JPEG 2000, CCITT in a TIFF) or decoded to PNG or Deflate TIFF, JBIG2 with `hayro-jbig2`, soft masks as files of their own; extract no longer uses `pikepdf.PdfImage` |
 
 ## Register coverage
 
@@ -431,6 +432,18 @@ Oracle consultations:
   `/Pages` node, which qpdf pushes down to the pages before the Python walked them. Vector PDFs are compared without
   their `/ID`, which pikepdf writes at random. The parity script first ran with relative paths from a temporary
   directory, so every file failed on both sides and matched; the numbers above are from the corrected run.
+
+- Phase 9, `extract` slice B (images), against the Python as at `41b2ef1`, images compared by decoded pixels: on the
+  fixtures, Ghent, Altona and GWG Processing Steps (493 files) every image that kept its name has identical pixels; the
+  rest are the decided format changes (JPEG and JPEG 2000 copied where pikepdf composited a mask into a PNG, CMYK as
+  TIFF, soft masks in their own format) and 10 JPEG 2000 fixtures pikepdf could not open, now copied. On 13 more test-db
+  sets (3,408 files): 2,678 identical, 240 failing on both sides as before, 50 the Python failed on and the core writes
+  (41 `Separation` or `DeviceN` images that stopped the whole extraction, CCITT and ICC cases), and 195 different: 169
+  format changes only; 26 JBIG2 images, all pdf.js `bitmap-*` tests that encode one picture several ways, which
+  `hayro-jbig2` decodes to the same picture and `jbig2dec` did not; 11 whose images sit behind damaged objects the core
+  does not read (named in `failures`); and 6 with Lab images, now failures where pikepdf wrote a Lab TIFF. The first run
+  found two bugs, fixed: the CCITT TIFF header was two bytes short (the IFD's entry count), and a JBIG2 image took its
+  JBIG2 page's size instead of its own `/Width` and `/Height`.
 
 ## Owner requests
 

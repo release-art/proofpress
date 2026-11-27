@@ -6,10 +6,13 @@
 //! the catalog depth-first with each dictionary's values in key order and the last pushed visited first, as
 //! pikepdf walks them, so assets keep their order.
 
+mod image;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 
+use crate::common::family::{self, Family};
 use crate::common::icc;
 use crate::common::rect::rect;
 use crate::common::text;
@@ -32,6 +35,8 @@ pub struct Facts {
     fonts: Vec<FontProgram>,
     profiles: Vec<Profile>,
     output_intents: Vec<Intent>,
+    /// Every image `XObject` reachable from the catalog, written out, when images were asked for.
+    images: Vec<ImageFile>,
     /// What the reader found damaged or missing, each as `check: message`: the parts of the file nothing above
     /// could read.
     damage: Vec<String>,
@@ -95,6 +100,23 @@ struct Profile {
     description: Option<String>,
 }
 
+/// An image `XObject` written as a file, with what its dictionary says.
+#[derive(Debug, PartialEq, Serialize)]
+struct ImageFile {
+    num: u32,
+    /// The file's extension, without its dot, when it could be written.
+    extension: Option<&'static str>,
+    data: Blob,
+    /// Its soft mask's object number, file extension and file, when it has one.
+    mask: Option<(u32, Option<&'static str>, Blob)>,
+    pixels: [i64; 2],
+    colour_space: &'static str,
+    bits: i64,
+    filters: Vec<String>,
+    stencil: bool,
+    soft_mask: bool,
+}
+
 #[derive(Debug, PartialEq, Serialize)]
 struct Intent {
     subtype: Option<String>,
@@ -117,21 +139,23 @@ pub struct Recovered {
 impl Recovered {
     fn blob(&mut self, data: Option<Vec<u8>>, what: &str) -> Blob {
         match data {
-            Some(data) => {
-                self.blobs.push(data);
-                Blob::Data(self.blobs.len() - 1)
-            }
+            Some(data) => self.store(data),
             None => Blob::Error(format!("{what} cannot be read")),
         }
     }
+
+    fn store(&mut self, data: Vec<u8>) -> Blob {
+        self.blobs.push(data);
+        Blob::Data(self.blobs.len() - 1)
+    }
 }
 
-/// Read `bytes` and recover the facts above.
+/// Read `bytes` and recover the facts above, writing out every image when `images` is true.
 ///
 /// # Errors
 ///
 /// The reason a file cannot be read: its structure is too damaged, or it is encrypted.
-pub fn recover(bytes: &[u8]) -> Result<Recovered, String> {
+pub fn recover(bytes: &[u8], images: bool) -> Result<Recovered, String> {
     let doc = Document::open(bytes, &Limits::default()).map_err(|refusal| refusal.message)?;
     let mut out = Recovered::default();
     out.facts.pdf_version = String::from_utf8_lossy(doc.version()).into_owned();
@@ -151,7 +175,15 @@ pub fn recover(bytes: &[u8]) -> Result<Recovered, String> {
     }
     intents(&doc, &mut out);
     let mut fonts = BTreeSet::new();
-    reachable(&doc, |object| {
+    reachable(&doc, |num, object| {
+        if images
+            && let Some(num) = num
+            && let Some(dict) = doc.stream_dict(num)
+            && dict.get(b"Subtype").and_then(Object::name) == Some(b"Image")
+        {
+            let file = image_file(&doc, num, dict, &mut out);
+            out.facts.images.push(file);
+        }
         let Some(dict) = object.dict() else {
             if let Some([space, profile]) = object.array()
                 && space.name() == Some(b"ICCBased")
@@ -189,6 +221,47 @@ pub fn recover(bytes: &[u8]) -> Result<Recovered, String> {
         }
     });
     Ok(out)
+}
+
+/// Image `num` written out, with its soft mask and the facts its dictionary gives.
+fn image_file(doc: &Document, num: u32, dict: &Dict, out: &mut Recovered) -> ImageFile {
+    let (extension, data) = match image::write(doc, num) {
+        Ok((extension, data)) => (Some(extension), out.store(data)),
+        Err(why) => (None, Blob::Error(why)),
+    };
+    let smask = dict.get(b"SMask");
+    let mask = smask.and_then(reference).map(|mask| match image::write(doc, mask) {
+        Ok((extension, data)) => (mask, Some(extension), out.store(data)),
+        Err(why) => (mask, None, Blob::Error(why)),
+    });
+    let int = |key: &[u8]| {
+        dict.get(key)
+            .and_then(|v| doc.resolve(v))
+            .and_then(Object::integer)
+            .unwrap_or(0)
+    };
+    let filters = match dict.get(b"Filter").and_then(|f| doc.resolve(f)).map(|f| &f.value) {
+        Some(Value::Name(n)) => vec![String::from_utf8_lossy(n).into_owned()],
+        Some(Value::Array(items)) => items.iter().filter_map(|i| name(doc, i)).collect(),
+        _ => Vec::new(),
+    };
+    ImageFile {
+        num,
+        extension,
+        data,
+        mask,
+        pixels: [int(b"Width"), int(b"Height")],
+        colour_space: match family::classify(doc, dict.get(b"ColorSpace"), None) {
+            Family::Gray => "gray",
+            Family::Rgb => "rgb",
+            Family::Cmyk => "cmyk",
+            Family::Other => "other",
+        },
+        bits: int(b"BitsPerComponent"),
+        filters,
+        stencil: dict.get(b"ImageMask").and_then(|m| doc.resolve(m)).map(|m| &m.value) == Some(&Value::Bool(true)),
+        soft_mask: smask.is_some(),
+    }
 }
 
 /// The number `object` refers to, when it is a reference.
@@ -343,7 +416,7 @@ fn pdf_str(doc: &Document, object: &Object) -> Option<String> {
 /// Visit every object reachable from the catalog, depth-first: an indirect object once, a direct one each time it is
 /// met; a dictionary's values in key order (but its `/Parent`), and an array's items, pushed in order and visited last
 /// first.
-fn reachable<'a>(doc: &'a Document, mut visit: impl FnMut(&'a Object)) {
+fn reachable<'a>(doc: &'a Document, mut visit: impl FnMut(Option<u32>, &'a Object)) {
     let mut seen = BTreeSet::new();
     let mut stack: Vec<&Object> = doc.trailer().get(b"Root").into_iter().collect();
     while let Some(next) = stack.pop() {
@@ -353,7 +426,7 @@ fn reachable<'a>(doc: &'a Document, mut visit: impl FnMut(&'a Object)) {
             continue;
         }
         let Some(object) = doc.resolve(next) else { continue };
-        visit(object);
+        visit(reference(next), object);
         match &object.value {
             Value::Dict(dict) => {
                 let mut entries: Vec<_> = dict.entries.iter().filter(|(k, _)| k != b"Parent").collect();
@@ -385,7 +458,11 @@ mod tests {
     /// A file of `objects` (numbered as given; 1 is the catalog) with `trailer` besides its size and root.
     fn file(objects: &[(u32, Vec<u8>)], trailer: &str) -> Recovered {
         let refs: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
-        recover(&classic(&refs, &format!("<< /Size SIZE /Root 1 0 R {trailer} >>"))).unwrap()
+        recover(
+            &classic(&refs, &format!("<< /Size SIZE /Root 1 0 R {trailer} >>")),
+            true,
+        )
+        .unwrap()
     }
 
     fn json(recovered: &Recovered) -> Json {
@@ -561,7 +638,94 @@ mod tests {
     }
 
     #[test]
+    fn images_are_written_with_their_soft_masks_when_asked_for() {
+        let objects = [
+            (
+                1,
+                b"<< /Type /Catalog /Images [2 0 R 3 0 R 4 0 R 7 0 R 8 0 R] /Mask 5 0 R >>".to_vec(),
+            ),
+            (
+                7,
+                stream("/Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB", &[1, 2, 3]),
+            ),
+            (
+                8,
+                stream(
+                    "/Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceCMYK /BitsPerComponent 3",
+                    &[0],
+                ),
+            ),
+            (
+                2,
+                stream(
+                    "/Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /SMask 5 0 R",
+                    &[7],
+                ),
+            ),
+            (
+                3,
+                stream(
+                    "/Subtype /Image /Width 1 /Height 1 /ImageMask true /Filter [/DCTDecode] /SMask 6 0 R",
+                    b"jpeg",
+                ),
+            ),
+            (
+                4,
+                stream("/Subtype /Image /Filter /DCTDecode /ColorSpace /Lab", b"jpeg"),
+            ),
+            (
+                5,
+                stream(
+                    "/Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8",
+                    &[9],
+                ),
+            ),
+            (6, b"(not a stream)".to_vec()),
+        ];
+        let refs: Vec<(u32, &[u8])> = objects.iter().map(|(n, b)| (*n, b.as_slice())).collect();
+        let bytes = classic(&refs, "<< /Size SIZE /Root 1 0 R >>");
+        assert_eq!(json(&recover(&bytes, false).unwrap())["images"], json!([]));
+        let recovered = recover(&bytes, true).unwrap();
+        let images = json(&recovered)["images"].clone();
+        let summary: Vec<Json> = images
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| {
+                json!([
+                    i["num"],
+                    i["extension"],
+                    i["mask"],
+                    i["colour_space"],
+                    i["filters"],
+                    i["stencil"]
+                ])
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                json!([5, "png", null, "gray", [], false]),
+                json!([8, null, null, "cmyk", [], false]),
+                json!([7, "png", null, "rgb", [], false]),
+                json!([4, "jpg", null, "other", ["DCTDecode"], false]),
+                json!([3, "jpg", [6, null, {"error": "it is not a stream that can be read"}], "other", ["DCTDecode"], true]),
+                json!([2, "png", [5, "png", {"data": 5}], "gray", [], false]),
+            ]
+        );
+        assert_eq!(
+            (&images[5]["pixels"], &images[5]["bits"], &images[5]["soft_mask"]),
+            (&json!([1, 1]), &json!(8), &json!(true))
+        );
+        assert_eq!(&recovered.blobs[2], b"jpeg");
+        assert_eq!(
+            images[1]["data"],
+            json!({"error": "its /BitsPerComponent is not 1, 2, 4, 8 or 16"})
+        );
+    }
+
+    #[test]
     fn a_file_that_cannot_be_read_is_refused() {
-        assert!(recover(b"not a pdf").is_err());
+        assert!(recover(b"not a pdf", false).is_err());
     }
 }
