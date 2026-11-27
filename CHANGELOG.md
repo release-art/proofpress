@@ -7,139 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-The checks and every command's PDF work now run in a Rust core; pikepdf and Pillow are no longer dependencies.
-What existing users will notice, most important first (the entries below give the details):
+## [0.4.0] - 2026-11-27
 
-- **PDF/A (veraPDF) and total ink (Ghostscript) are opt-in**, with `--pdfa` and `--tac` (`Profile.pdfa`,
-  `Profile.tac`), so a bare `verify` needs no external tool. A CI job that relies on either must now turn it on.
-- **The whole of PDF/X is checked**, not only the page boxes, `/Trapped` and identity: PDF/X-4 by default, another
-  level with `--pdfx x4p|x5g|x5pg|x5n`, none with `--no-pdfx`. The PDF/X findings have new ids, `x4.*` and `x5.*`;
-  the four old ones (`pdfx-intent`, `trapped`, `pdfx-xmp`, `trimbox`) are recorded as aliases in `rust/checks.toml`.
-- **PDF/X-1a and PDF/X-3 levels:** `--pdfx x1a-2001|x3-2002|x1a-2003|x3-2003` (`Profile.pdfx_level`), and without
-  `--pdfx` a file whose Info claims one of these levels is verified at it (the JSON report's new `level` says which;
-  the text report adds "as PDF/X-3:2002" and the summary says "PDF/X as claimed"). Every rule of ISO 15930-1, -3, -4
-  and -6 is checked or recorded as not checkable: the X-4 rules these levels share, and their own (`x13.*`, `x1a.*`,
-  `x3.*`) on Info identification and `/Trapped`, the output intent and colour, transparency, the file structure,
-  filters, image depth and optional content of these older PDF versions, file specifications, page boxes,
-  annotations, viewer preferences and font licences. A PDF/X-5 target claiming one of these levels is verified at it,
-  no longer reported as not evaluated.
-- **`/Trapped` is judged in the XMP** (`pdf:Trapped`), where ISO 15930-7 6.9 puts it; an Info `/Trapped` must agree.
-- **Damaged files are read strictly.** A file that pikepdf repaired silently now fails, with the reason; an encrypted
-  file fails, even with an empty password. A damaged object or stream no longer stops the whole file: the rest is
-  checked, and the checks that needed the damaged part report "not evaluated", which fails the file.
-- **Each check reports a status** (pass, fail, not evaluated) in the JSON, which also gains a per-check summary.
-- **A form XObject without `/Resources` uses the page's resources** (ISO 32000-2 7.8.3), not the enclosing form's,
-  so nested forms can resolve names differently.
-- **Previews are rendered by `hayro`** instead of Ghostscript, so pixels shift slightly on colour-managed files.
-- **`crop_page`, `extract_pdf` and `preview` raise the core's `UnreadablePdfError`** for a file they cannot read, never
-  a `pikepdf.PdfError`.
-- **Total ink counts each spot colour as one ink**, so jobs with spots can read lower (or, where a spot overprints
-  process ink, higher) than before.
+proof-pdf now runs on a core written in Rust: every check, and the PDF reading and writing of every command. pikepdf and
+Pillow are no longer dependencies, `verify` is also a standalone program, and the PDF/X checks cover the standards in
+full. Check ids, options and config keys keep their spelling unless listed below; every check is in
+[rust/CHECKS.md](rust/CHECKS.md).
+
+### Changed
+
+- **PDF/A (veraPDF) and total ink (Ghostscript) are opt-in**, with `--pdfa` and `--tac` (`Profile.pdfa`, `Profile.tac`),
+  so a bare `verify` needs no external tool. A CI job that relies on either must turn it on.
+- **PDF/X is checked in full**, not only the page boxes, `/Trapped` and identity: PDF/X-4 by default, or
+  `--pdfx x4p|x5g|x5pg|x5n|x1a-2001|x3-2002|x1a-2003|x3-2003` (ISO 15930-1, -3, -4, -6, -7, -8). A file whose Info
+  claims X-1a or X-3 is verified at that level. The findings have new ids (`x4.*`, `x5.*`, `x13.*`, `x1a.*`, `x3.*`);
+  the old `pdfx-intent`, `trapped`, `pdfx-xmp` and `trimbox` are aliases. At X-4, `/Trapped` is judged in the XMP.
+- **Files are read strictly.** A damaged file that pikepdf repaired silently now fails, with the reason; an encrypted
+  file fails, even with an empty password. A damaged part leaves the checks that need it "not evaluated", which fails
+  the file, and the rest are still checked.
+- **Reports:** each check has a status (pass, fail, not evaluated); the JSON carries `findings`, `checks` and the PDF/X
+  `level` it verified at. A timeout exits 3, a usage error 64.
+- **Total ink counts each spot colour as one ink at its tint** (Ghostscript's `tiffsep`), so jobs with spots can read
+  lower, or higher where a spot overprints process ink.
+- In a CMYK job, an `ICCBased` space using the output intent's own profile is an `icc-profile` error (ISO 15930-7
+  6.4.3.3); a different CMYK profile no longer warns.
+- A form XObject without `/Resources` uses the page's resources (ISO 32000-2 7.8.3), not the enclosing form's.
+- `preview` renders with `hayro` instead of Ghostscript, so pixels shift slightly on colour-managed files. `extract`
+  copies JPEG, JPEG 2000 and CCITT images as stored and writes soft masks as files of their own. `crop_page`,
+  `extract_pdf`, `inspect_pdf` and `preview` raise the core's `UnreadablePdfError`, never a pikepdf error.
 
 ### Added
 
 - Standalone `proof-pdf` downloads (the Rust `verify`, no Python needed) for macOS arm64, Linux x86-64 and arm64 and
-  Windows x64 on each GitHub release, signed with Sigstore, and installable with `brew install release-art/tap/proof-pdf`
-  or `scoop install release-art/proof-pdf`.
-- The README's check counts and its list of print checks are generated from `rust/checks.toml`, and a test fails while they are stale.
-
-### Changed
-
-- pikepdf and Pillow are no longer dependencies: every PDF the package reads or writes goes through the Rust core. `extract` reads spot colours there too, and `extract --previews` draws each image's thumbnail by rendering it alone, so a thumbnail shows the image as the page does (its decode array, colour space and mask applied, on white) and an image Pillow could not open still gets one. `extract_pdf` raises only `proof_pdf.inventory.UnreadablePdfError` for a file it cannot read, never a `pikepdf.PdfError`.
-- `extract` reads the structure tree, form fields, links, annotations, outline, page labels, layers and attachments through the Rust core, and writes vector artwork with its writer: each piece draws as before, though its bytes and `digest` differ, and the 47 test files whose artwork pikepdf could not copy (`copy_foreign` on a direct object) now extract. A destination's real coordinates and zeros are now kept (they were dropped, leaving the other numbers out of place), a `GoToR` or `Launch` file is given by its name rather than its file specification printed whole, vector pieces show the text the page walk reads (as the text output does), a string with a byte PDFDocEncoding leaves undefined no longer loses its other characters, UTF-16 text that is not well formed is read as far as it goes, and a field hierarchy that loops ends instead of recursing.
-- `extract` writes images through the Rust core: JPEG, JPEG 2000 and CCITT images are always copied as stored, even with a mask, and a soft mask keeps its own format (`.mask.jpg` for a JPEG mask); other images come out as PNG, or TIFF for CMYK, pixel for pixel as before where pikepdf wrote them, but never with a mask composited in. JPEG 2000 images pikepdf could not open are now copied, JBIG2 needs no `jbig2dec`, and images in `Separation` or `DeviceN` no longer stop the whole extraction.
-- `extract` reads the pages' boxes, the document information and XMP packet, the font programs, the ICC profiles and the output intents through the Rust core. A file the core cannot read is reported as "cannot open". An inherited `/CropBox` or `/Rotate` is now reported (they were read from the page alone), a profile's description comes from its own `desc` tag (so an ICC v5 profile Pillow cannot open is still named), PDF 2.0's UTF-8 text strings are decoded, and a font whose name is not UTF-8 no longer stops the extraction.
-- `preview` renders in-process with `hayro` instead of Ghostscript, so it needs no external tool, and so do `extract --previews`' page renders and vector thumbnails. Pixels shift slightly against Ghostscript, most on colour-managed files; the whole MediaBox is still rendered, but anything outside the CropBox is left blank, as a viewer shows it. The guides now turn with a rotated page. A file `hayro` cannot read raises `proof_pdf.preview.UnreadablePdfError`. `preview_file` drops its `gs_bin` and `timeout` arguments, `extract_pdf` its `gs_bin`; `GhostscriptError`, `gs_available`, `PageBoxes` and `page_boxes` are gone. The commands still accept `--gs` and `--timeout` (and their config keys), hidden and unused, so existing scripts keep working. `extract` reports a file the core cannot read as "cannot open", as it does a file pikepdf cannot open.
-- `inspect` runs in the Rust core, on the same walk as `verify`: identical facts on 9,463 of 9,705 comparable corpus files, every difference explained (the core reads damaged files strictly, names fonts whose names are not UTF-8, and counts a few glyphs pikepdf misattributed). `inspect_pdf` raises `proof_pdf.inventory.UnreadablePdfError` instead of `pikepdf.PdfError`. A page with no MediaBox reports none rather than Letter, and a `--proof-profile` that is not an ICC profile is reported as the contrast error instead of failing.
-- `crop` runs in the Rust core, on a writer of our own: the piece's streams are copied as they are, so it renders
-  pixel for pixel as before (586 of 586 comparable files). `crop_page` raises `proof_pdf.crop.UnreadablePdfError` instead of
-  `pikepdf.PdfError` for a file that cannot be read, and now also for a page that needs objects the file holds damaged,
-  which pikepdf repaired silently. An Identity `/Crypt` filter, which no reader applies outside encryption, is dropped.
-- PDF/X-5g and X-5pg (`--pdfx x5g|x5pg`, ISO 15930-8) are checked: every inherited X-4 and X-4p row, the version, the
-  reference XObject proxies and their XMP, and, for the file set, every target: read beside the container (or embedded),
-  compared with its reference's `/ID` and XMP identifiers, checked for its page, printing condition and optional
-  content, and verified at the level it claims, with loops and nesting caught. `--target-versions accept|reject`
-  (config `target-versions`) decides whether a target of another version passes.
-- PDF/X-5n (`--pdfx x5n`, ISO 15930-8 clause 7) is checked: the n-colorant output intent (an xCLR `/ProfileCS`, a
-  `/ColorantTable` equal to the external ISO 15076-1 profile's colorant table, which may be embedded in the URL file
-  specification), device spaces only for the colorants they stand for and never `DeviceRGB`, `DeviceN` attributes, a
-  blending space on pages with transparency, and TrapNet appearances. Every PDF/X-4, X-4p and X-5 requirement is now
-  checked or recorded as not checkable.
-- A finding can now point into another file of a file set (`"file"` in its JSON chain).
-- PDF/X-4p (`--pdfx x4p`, ISO 15930-7 Annex A) is checked in full: the PDF/X intent's `/DestOutputProfileRef` and
-  its entries, and, for the file set, the external profile it names. The profile is looked for at the reference's
-  `/URLs` that are files on this computer (relative ones beside the PDF); nothing is fetched over a network. The file
-  whose MD5 is the `/CheckSum` is the profile; it must match the reference's name, colour space and version and meet
-  6.4.2.1. `--file-alone` (config `file-alone = true`) verifies a file without the files it refers to: the rows that
-  need them are then not evaluated. 19 fixtures `x4p-*`.
-  - Under PDF/X-4p the X-4 rows that read the printing condition's colour space take it from the external profile, or
-    from `/ProfileCS`; 6.4.3.3 compares four-colour profiles with the external one, and without it still fails one
-    whose MD5 is the `/CheckSum`. URL file specifications in `/URLs` need no `/EF`.
-
-- `proof-pdf verify` is now the Rust core's command; the Python `verify` passes its arguments straight through. Every
-  option and config key keeps its spelling; `--no-pdfa`, `--colour`, `--fonts` and `--missing-glyphs` are still
-  accepted. What changes:
-  - The whole of PDF/X-4 is checked by default (`--pdfx x4`): 125 rows of ISO 15930-7 instead of the page boxes,
-    `/Trapped` and identity. `--pdfx x4p|x5g|x5pg|x5n` selects another level; `--no-pdfx` and `pdfx = false` still turn
-    it off. A level whose rows are not all written yet (X-4p, the X-5 levels) cannot pass: those rows are reported as
-    "not evaluated, not written yet".
-  - PDF/A (veraPDF) and total ink (Ghostscript) run only when asked, with `--pdfa` and `--tac`; `Profile.pdfa` and the
-    new `Profile.tac` default to `False`. A timeout exits 3; a usage error exits 64.
-  - `--json` records always carry `findings` and `checks`; a finding's severity is `"error"` or `"warning"`.
-  - Checks that could not be judged are listed under the file as "not evaluated", one line per reason, and fail it.
-  - Config files may set `schema = 1` (a later schema is refused) and `extends` another profile.
-  - `verify_file` and `verify_files` keep their signatures; they now call the core.
-
-- The print checks that read the PDF now run in the Rust core: placement (`outside-media`, `xobject-missing`,
-  `artwork-bleed`, `outside-bleed`), inks (`overprint`, `white-overprint`, `rich-black`, `k-only-text`), page geometry,
-  the colour mode (`blend-space`, `spot-ink`, `spot-definition`, `colour-space`, `rgb-only`, `gray-only`,
-  `icc-profile`), image resolution and text (`missing-glyph`, `font-embedded`, `font-type3`, `text-size`, `hairline`,
-  `safe-area`, `contrast`). On 10,013 test files their findings and messages match the Python's except where the
-  Python read the PDF wrongly:
-  - A file the core refuses, or reads with damaged parts left out, fails the checks it could not judge ("could not be
-    checked"); the Python checked whatever pikepdf had repaired.
-  - A form starts from the graphics state of the `Do` that paints it, colour and overprint included (ISO 32000-2
-    8.10.1), and a form without `/Resources` uses the page's (7.8.3).
-  - An `/XObject` entry that is not a stream is missing, not an image.
-  - Sampled PDF functions interpolate between their samples (7.10.2) where the Python took the nearest one.
-  - CMYK JPEG and JPEG 2000 images are decoded in the core (`zune-jpeg`, `hayro-jpeg2000`), and colours are converted
-    to L\*a\*b\* with LittleCMS 2.20 (`lcms2`, linked statically).
-- The package contains a compiled Rust core (`proof_pdf._internal._core`), built with maturin, so releases ship a wheel
-  per platform (macOS arm64, Linux x86-64 and arm64, manylinux, Windows x64) and installing from source needs Rust.
-- Total ink (`tac`) counts each spot colour as one ink at its tint, measured with Ghostscript's `tiffsep` (one plate per
-  ink) instead of `tiff32nc`, which converted spots to their CMYK alternate and dropped a spot overprinting process ink.
-  Jobs with spot colours can read lower than before (a spot whose alternate was a CMYK mix), or higher (a spot
-  overprinting process ink now adds to it). New fixture `spot-overprint`.
-- In a CMYK job, a CMYK `ICCBased` colour space that uses the output intent's own profile (the same stream, or the
-  same MD5 as ICC.1 7.2.18 computes it) is now an `icc-profile` error, as ISO 15930-7 6.4.3.3 requires. The old warning
-  for a CMYK profile *different* from the intent's is gone: PDF/X-4 allows that. Both Altona test files now raise it:
-  they remap a DeviceCMYK image through a DefaultCMYK that is the intent profile, and pdfToolbox fails them for it too.
-- The PDF/X `trapped` check reads `pdf:Trapped` from the document XMP, where ISO 15930-7 6.9 puts it. A file that sets
-  `/Trapped` only in the Info dictionary now fails; an Info `/Trapped` is still read, and must agree with the XMP value
-  (6.10.2). The test fixtures declare `pdf:Trapped` in their PDF/A extension schema, since PDF/A-2 does not predefine it.
+  Windows x64 on each GitHub release, signed with Sigstore: `brew install release-art/tap/proof-pdf` or
+  `scoop install release-art/proof-pdf`.
+- PDF/X file sets: an X-4p file is verified with its external profile and an X-5 file with its targets, found on this
+  computer, never over the network (`--file-alone` to verify a file alone, `--target-versions accept|reject`).
+- Config files may set `schema = 1` and `extends` another profile.
 
 ### Removed
 
-- `proof_pdf._internal.verapdf` (and `VeraPdfError`), `_internal.colour`, `_internal.ported` and `_internal.pdfx`:
-  the Rust command does their work.
-- The print checks `bleedbox` and `boxes`: PDF/X-4's `x4.boxes.*` rows and the new `page.media-box` replace them.
-
-- `--pdfx-version`, `Profile.pdfx_version`, `PdfxVersion` and the config key `pdfx-version`: x1a and x3 had no checks, so
-  selecting them could only fail. The x4 rule table is unchanged; `pdfx/COVERAGE.md` and its generator are gone too.
+- pikepdf and Pillow as runtime dependencies. Wheels ship per platform; installing from source needs Rust.
+- `--pdfx-version` (`Profile.pdfx_version`, config `pdfx-version`): use `--pdfx`.
+- The print checks `bleedbox` and `boxes`, replaced by `x4.boxes.*` and `page.media-box`.
+- `preview_file`'s `gs_bin` and `timeout`, `extract_pdf`'s `gs_bin`, `GhostscriptError`, `gs_available`, `PageBoxes`,
+  `page_boxes`, and `proof_pdf._internal.verapdf`. `--gs` and `--timeout` are still accepted, and ignored.
 
 ### Fixed
 
-- A page with no MediaBox, its own or inherited, now fails (`page.media-box`, ISO 32000-2 7.7.3.3, and 6.1.1 at
-  PDF/X-4). New fixture `x4-no-media-box`.
-- An empty FlateDecode stream (zero bytes, as qpdf writes it) is read as empty, not as damaged.
-
-- A page that paints an image or form that is not there no longer passes: a `Do` whose name resolves to no XObject is
-  an error, `xobject-missing` (a missing resource, a non-stream, or a reference to an object the file does not have).
-- A password-protected PDF no longer crashes `verify`, `inspect`, `extract` or `crop`: it is reported as a file that cannot
-  be opened, like a corrupt one. pikepdf's `PasswordError` is not a `PdfError`, so it escaped.
-- `--allow-k-only` no longer passes a CMYK JPEG that prints full C, M and Y. The check read Pillow's pixels, which undo the
-  inversion of Adobe CMYK JPEGs; a PDF reader leaves that to `/Decode`, so a JPEG without `/Decode [1 0 ...]` prints
-  inverted. The samples are now judged as Ghostscript prints them.
+- A page with no MediaBox fails (`page.media-box`).
+- A page that paints an image or form that is not there fails (`xobject-missing`).
+- A password-protected PDF is reported as unreadable instead of crashing.
+- `--allow-k-only` judges CMYK JPEG samples as a printer reads them, so an inverted Adobe CMYK JPEG no longer passes.
+- An empty Flate stream reads as empty, not as damaged.
 
 ## [0.3.8] - 2026-11-06
 
@@ -380,7 +300,8 @@ First release.
 - Weekly Docker image builds, with `:latest`, `:tl2025` and a `:<version>` tag per release. Each image records its
   commit, and `proof-pdf --version` shows it.
 
-[Unreleased]: https://github.com/release-art/proofpress/compare/v0.3.8...HEAD
+[Unreleased]: https://github.com/release-art/proofpress/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/release-art/proofpress/compare/v0.3.8...v0.4.0
 [0.3.8]: https://github.com/release-art/proofpress/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/release-art/proofpress/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/release-art/proofpress/compare/v0.3.5...v0.3.6
