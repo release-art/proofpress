@@ -177,9 +177,10 @@ lock-free `OnceLock` per slot. We need neither, because open already reads every
   objects that need each other, are caught there by an ordinary "currently loading" set. A lazy `OnceLock` cache would deadlock or
   panic on the same input, since re-entering a `OnceLock` from its own initialiser is an error.
 - **After open the table is immutable:** a plain `Vec` indexed by object number, `Sync` with no locks.
-- **Decoded stream data is not cached.** Each check decodes what it needs, so memory stays bounded. Derived data (typed views, page
-  summaries) may sit in a `OnceLock` each, as hayro does, since it needs nothing that is still loading.
-  The cost is decoding a stream again when several checks read it; cache per stream only if profiling shows that matters.
+- **Decoded stream data is cached on first request,** up to a byte budget per document (256 MiB), behind a `Mutex` that is not held
+  while decoding: profiling showed checks re-inflating the same ICC profile at every colour-space use (decision log, 2026-11-27).
+  Past the budget a stream is decoded afresh each time, so memory stays bounded. Derived data (typed views, page summaries) may
+  sit in a `OnceLock` each, as hayro does, since it needs nothing that is still loading.
 
 **Ownership, and the boundary with Python.** A `#[pyclass]` cannot have lifetime parameters, and since PyO3 0.23 it must be `Sync`
 for free-threaded Python. So the core holds handles, not borrows, as pikepdf does over qpdf:

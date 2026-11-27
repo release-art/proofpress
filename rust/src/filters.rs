@@ -81,7 +81,7 @@ pub(crate) enum Damage {
 }
 
 /// The decoded data, or `Encoded` when an image filter stops the chain: `data` is then what precedes that filter.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Decoded {
     /// Every filter was applied.
     Plain(Vec<u8>),

@@ -5,6 +5,7 @@
 //! exist reads as null (7.3.10), and the walk records why.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Mutex, PoisonError};
 
 use crate::file::{self, Entry, ObjectDamage, Refusal, Xref};
 use crate::filters::Decoded;
@@ -86,6 +87,16 @@ struct ObjectStream {
     first: usize,
 }
 
+/// Bytes of decoded stream data one document keeps for reuse; past it, a stream is decoded afresh on each request.
+const CACHE_BYTES: usize = 256 << 20;
+
+/// Streams decoded so far, by object number (`None`: it cannot be decoded), and the bytes they hold.
+#[derive(Default)]
+struct Cache {
+    streams: BTreeMap<u32, Option<Decoded>>,
+    bytes: usize,
+}
+
 /// An open document: the file's cross-reference and every object reachable from its trailer.
 pub struct Document {
     file: Vec<u8>,
@@ -95,6 +106,7 @@ pub struct Document {
     notes: Vec<(Buffer, Note)>,
     dangling: Vec<(u32, u16, Dangling)>,
     limits: Limits,
+    cache: Mutex<Cache>,
 }
 
 impl Document {
@@ -113,6 +125,7 @@ impl Document {
             notes: Vec::new(),
             dangling: Vec::new(),
             limits: *limits,
+            cache: Mutex::default(),
         };
         let mut stack: Vec<(u32, u16)> = Vec::new();
         for (_, value) in doc.xref.trailer.entries.iter().rev() {
@@ -219,7 +232,27 @@ impl Document {
             .filter(|data| crate::filters::dct_len(data).is_some())
     }
 
+    /// Stream `num` decoded, from the cache when an earlier request decoded it. The lock is not held while decoding, so
+    /// two threads may decode the same stream once each; the result is the same.
     fn decoded(&self, num: u32) -> Option<Decoded> {
+        let cache = || self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(hit) = cache().streams.get(&num) {
+            return hit.clone();
+        }
+        let decoded = self.decode(num);
+        let size = match &decoded {
+            Some(Decoded::Plain(data) | Decoded::Encoded(data)) => data.len(),
+            None => 0,
+        };
+        let mut cache = cache();
+        if cache.bytes + size <= CACHE_BYTES {
+            cache.bytes += size;
+            cache.streams.insert(num, decoded.clone());
+        }
+        decoded
+    }
+
+    fn decode(&self, num: u32) -> Option<Decoded> {
         let Some(Slot::Loaded {
             object: Object {
                 value: Value::Dict(dict),
@@ -616,6 +649,27 @@ mod tests {
         assert_eq!(doc.stream_data(6), None, "not a stream");
         assert_eq!(doc.stream_data(9), None, "not read");
         assert_eq!(doc.trailer().get(b"Size").and_then(Object::integer), Some(8));
+        let cache = doc.cache.lock().unwrap();
+        assert_eq!(cache.streams.get(&4), Some(&None), "a failure is kept too");
+        assert_eq!(cache.bytes, 6, "hi and JPEG");
+    }
+
+    #[test]
+    fn a_full_cache_decodes_afresh() {
+        let doc = open(&classic(
+            &[
+                (1, b"<< /A 2 0 R >>"),
+                (2, b"<< /Length 5 /Filter /ASCIIHexDecode >>\nstream\n6869>\nendstream"),
+            ],
+            "<< /Size SIZE /Root 1 0 R >>",
+        ));
+        doc.cache.lock().unwrap().bytes = CACHE_BYTES - 1;
+        assert_eq!(doc.stream_data(2).as_deref(), Some(b"hi".as_slice()));
+        assert_eq!(doc.stream_data(2).as_deref(), Some(b"hi".as_slice()));
+        assert!(
+            doc.cache.lock().unwrap().streams.is_empty(),
+            "over the budget, nothing is kept"
+        );
     }
 
     #[test]

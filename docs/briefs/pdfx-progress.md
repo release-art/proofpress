@@ -517,11 +517,16 @@ Oracle consultations:
 - **Release:** push `dev/crabify`, then run the Release workflow by hand (Actions, "Release", a plain version such
   as 0.0.1): it builds and checks every wheel and the sdist and publishes nothing. Only then tag. The local dry run
   passed on macOS arm64; Linux, Windows and the manylinux wheels are proved only in CI.
-- **Speed, an open item:** five corpus files (web PDFs, not print jobs) take 48 to 202 seconds and time out in the
-  corpus run's 60 seconds. Each check that reads the pages walks them again (about 20 walks per `verify`), and the
-  reader decodes a stream afresh each time it is asked. Walking once per file, or caching decoded content streams
-  within a file, would fix it; either is a design change to the tiers, so it waits for a decision. The Python
-  grouping of vector artwork (`_clusters`) is the same story for `extract`.
+- **Speed, an open item (narrowed 2026-11-27):** five corpus files (web PDFs, not print jobs) took 48 to 202 seconds and
+  timed out in the corpus run's 60 seconds. Profiling showed most of the time re-inflating the same ICC profile at each
+  colour-space use, once per check that walks the pages. A `Document` now keeps the streams it decodes (up to 256 MiB;
+  decision log, 2026-11-27); one walk per file stays undone. Four of the five now finish alone in 5 to 13 seconds. The full
+  corpus run (test-db `results/pdfx/results-20261127T114523Z.tsv`) took 7,900 seconds summed over files, against 9,564,
+  with one timeout and no verdict changed but those four. **Left:** test-db's `loc-gov-1000` file `HH5OITTKV27J…` (86
+  seconds alone) is not a decoding problem. Its first page has a `/ColorSpace` resource dictionary of 38,037 entries and
+  about 51,000 inline images, each naming one of them; `Dict::get` is a linear scan, so every walk does about 10⁹ key
+  comparisons. An indexed lookup for large dictionaries in the syntax tier would fix it, without the single walk. The
+  Python grouping of vector artwork (`_clusters`) is the same story for `extract`.
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.
