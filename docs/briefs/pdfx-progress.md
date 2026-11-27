@@ -524,13 +524,14 @@ Oracle consultations:
   - The fifth (test-db `loc-gov-1000`, `HH5OITTKV27J…`) has a 38,037-entry `/ColorSpace` dictionary and about 51,000 inline
     images naming its entries, and `Dict::get` scanned. Dictionaries of 16 or more entries now keep a key index: 86 seconds
     became 3.
-  - Corpus run (test-db `results/pdfx/results-20261127T120138Z.tsv`): 0 timeouts, no mismatch, and no verdict changed but
-    the five former timeouts. Summed per-file seconds: 9,564 before, 7,900 after the cache, 8,276 after the index. These are
-    wall times under parallel load (load average about 23 during the last run), so the last two differ by noise.
-  - **Still slowest:** the two Altona technical2 files, at about 54 seconds under load and 38 alone, unchanged throughout.
-    Their time is in `x4.spot.colorants-match`, which has LittleCMS build a colour transform again for each comparison.
-    Caching transforms would be the fix. The Python grouping of vector artwork (`_clusters`) is the same story for
-    `extract`.
+  - The two Altona technical2 files took 38 seconds alone: `x4.spot.colorants-match` had LittleCMS build a colour
+    transform for every colorant, tint and side. The check now builds each once, by the profile it goes through
+    (`Source` in `checks/spots.rs`): 0.9 seconds.
+  - Corpus run (test-db `results/pdfx/results-20261127T121604Z.tsv`): 0 timeouts, no mismatch, and no verdict changed but
+    the five former timeouts. Summed per-file seconds: 9,564 before, 7,900 after the cache, 8,276 after the index, 8,056
+    after the transforms. These are wall times under parallel load (load average about 20 to 23 during the last runs), so
+    they move with the machine; the slowest file now takes 34 seconds under load (`cc-main` 2734264, 13 alone). The
+    Python grouping of vector artwork (`_clusters`) is the same story for `extract`.
 - **Register note:** test-db's `docs/pdfx/x4-register.md` (untracked there, so left alone) gives
   `x4.spot.consistent-definition` the scope "all reachable"; by the decision of 2026-11-25 it is print elements only.
 - **0.3:** write to admin@gwg.org asking to use the Ghent Output Suite and the Processing Steps suite in public CI.

@@ -400,11 +400,23 @@ enum Measure {
     Cmyk(Model),
 }
 
-impl Measure {
-    /// How `alternate` is measured: `DeviceCMYK` through the PDF/X output intent's profile, gray as the K plate through
-    /// it too (else through sRGB, as RGB is), `ICCBased` RGB and CMYK through their own profile; `None` for anything
-    /// else.
-    fn of(doc: &Document, alternate: &Object, intent: Option<&[u8]>) -> Option<Self> {
+/// What an alternate space is measured through, as [`Measure::of`] reads it: the key under which one check builds each
+/// [`Measure`] once, since building a `LittleCMS` transform costs far more than using it.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Source {
+    Lab,
+    Gray,
+    Rgb,
+    Cmyk,
+    /// An `ICCBased` space, by its profile stream's object number.
+    Icc(u32),
+}
+
+/// The measures one check has built, by source; `None` where a profile does not load or convert.
+type Measures = BTreeMap<Source, Option<Measure>>;
+
+impl Source {
+    fn of(doc: &Document, alternate: &Object) -> Option<Self> {
         let space = doc.resolve(alternate)?;
         let head = match &space.value {
             Value::Array(items) => items.first().and_then(|h| doc.resolve(h)).and_then(Object::name),
@@ -412,22 +424,49 @@ impl Measure {
         };
         match head? {
             b"Lab" => Some(Self::Lab),
-            b"DeviceGray" => Model::absolute(intent, None).map(Self::Gray),
-            b"DeviceRGB" => Model::absolute(None, None).map(Self::Rgb),
-            b"DeviceCMYK" => intent.and_then(|i| Model::absolute(Some(i), None)).map(Self::Cmyk),
-            b"ICCBased" => {
-                let profile = match space.array().and_then(|s| s.get(1)).map(|p| &p.value) {
-                    Some(Value::Reference(num, _)) => doc.stream_data(*num).zip(doc.stream_dict(*num)),
-                    _ => None,
-                };
-                let (data, dict) = profile?;
+            b"DeviceGray" => Some(Self::Gray),
+            b"DeviceRGB" => Some(Self::Rgb),
+            b"DeviceCMYK" => Some(Self::Cmyk),
+            b"ICCBased" => match space.array().and_then(|s| s.get(1)).map(|p| &p.value) {
+                Some(Value::Reference(num, _)) => Some(Self::Icc(*num)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
+impl Measure {
+    /// How `alternate` is measured: `DeviceCMYK` through the PDF/X output intent's profile, gray as the K plate through
+    /// it too (else through sRGB, as RGB is), `ICCBased` RGB and CMYK through their own profile; `None` for anything
+    /// else. Built once per source in `measures`.
+    fn of<'m>(
+        doc: &Document,
+        alternate: &Object,
+        intent: Option<&[u8]>,
+        measures: &'m mut Measures,
+    ) -> Option<&'m Self> {
+        let source = Source::of(doc, alternate)?;
+        measures
+            .entry(source)
+            .or_insert_with(|| Self::build(doc, source, intent))
+            .as_ref()
+    }
+
+    fn build(doc: &Document, source: Source, intent: Option<&[u8]>) -> Option<Self> {
+        match source {
+            Source::Lab => Some(Self::Lab),
+            Source::Gray => Model::absolute(intent, None).map(Self::Gray),
+            Source::Rgb => Model::absolute(None, None).map(Self::Rgb),
+            Source::Cmyk => intent.and_then(|i| Model::absolute(Some(i), None)).map(Self::Cmyk),
+            Source::Icc(num) => {
+                let (data, dict) = doc.stream_data(num).zip(doc.stream_dict(num))?;
                 match dict.get(b"N").and_then(|n| doc.resolve(n)).map(|n| &n.value) {
                     Some(Value::Integer(3)) => Model::absolute(None, Some(&data)).map(Self::Rgb),
                     Some(Value::Integer(4)) => Model::absolute(Some(&data), None).map(Self::Cmyk),
                     _ => None,
                 }
             }
-            _ => None,
         }
     }
 
@@ -453,6 +492,7 @@ fn colorant_differs(
     separation: &[Object],
     tint: f64,
     intent: Option<&[u8]>,
+    measures: &mut Measures,
 ) -> Option<String> {
     let (items, at, count) = device_n;
     let unevaluated = "could not be evaluated, so their consistency was not checked".to_owned();
@@ -467,8 +507,8 @@ fn colorant_differs(
         return Some(unevaluated);
     };
     let percent = tint * 100.0;
-    let measured = |space: &Object, values: &[f64]| Measure::of(doc, space, intent)?.lab(values);
-    match (measured(alternate, &one), measured(other, &two)) {
+    let mut lab_of = |space: &Object, values: &[f64]| Measure::of(doc, space, intent, measures)?.lab(values);
+    match (lab_of(alternate, &one), lab_of(other, &two)) {
         (Some(a), Some(b)) => {
             let delta = lab::ciede2000(a, b);
             (delta > COLORANTS_DELTA_E).then(|| format!("are {delta:.1} ΔE00 apart at {percent:.0}% tint"))
@@ -488,6 +528,7 @@ fn colorant_differs(
 /// not CMYK, where "no ink" is not zero.
 pub(super) fn colorants_match(doc: &Document, _: &Settings) -> Vec<Finding> {
     let intent = intent::profile_stream(doc).map(|(_, data)| data);
+    let mut measures = Measures::new();
     let mut out = Vec::new();
     for (items, frames) in used_device_n(doc) {
         let (names, attributes) = names_and_attributes(doc, &items);
@@ -512,7 +553,14 @@ pub(super) fn colorants_match(doc: &Document, _: &Settings) -> Vec<Finding> {
                 continue;
             };
             let differs = TINTS.iter().find_map(|tint| {
-                colorant_differs(doc, (&items, at, names.len()), separation, *tint, intent.as_deref())
+                colorant_differs(
+                    doc,
+                    (&items, at, names.len()),
+                    separation,
+                    *tint,
+                    intent.as_deref(),
+                    &mut measures,
+                )
             });
             if let Some(how) = differs {
                 let message = format!(
