@@ -31,6 +31,7 @@ mod targets;
 mod text;
 mod transparency;
 mod walk;
+mod x13;
 mod x4;
 mod x4p;
 mod x5g;
@@ -268,6 +269,13 @@ const RUNS: &[(&Check, Run)] = &[
     (f::X13_TRANSPARENCY_SMASK, transparency::smask),
     (f::X13_TRANSPARENCY_EXTGSTATE_VALUES, transparency::extgstate_values),
     (f::X13_TRANSPARENCY_NO_GROUP, transparency::no_group),
+    (f::X13_STRUCTURE_XREF_TABLE, x13::xref_table),
+    (f::X1A_FILTER_LISTED_2001, x13::listed_2001),
+    (f::X13_FILTER_LISTED, x13::listed),
+    (f::X13_FILTER_NO_JBIG2, x13::no_jbig2),
+    (f::X13_IMAGE_BIT_DEPTH, x13::bit_depth),
+    (f::X13_OC_HIDES_PRINT, x13::oc_hides_print),
+    (f::X13_OC_PRESENT, x13::oc_present),
     (f::X13_TRAPPED_PRESENT, info::trapped_present),
     (f::X13_TRAPPED_TRUE_OR_FALSE, info::trapped_true_or_false),
     (f::X13_TRAPPED_TRAPNET_IMPLIES_TRUE, annots::x13_trapnet_implies_true),

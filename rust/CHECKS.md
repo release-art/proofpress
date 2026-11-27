@@ -256,7 +256,7 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `page.media-box` | Every page has a MediaBox, its own or inherited | iso-32000-2:7.7.3.3 | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `object.damaged` | Every object reachable from the trailer can be read | iso-32000-2:7.3, iso-32000-2:7.3.8.1, iso-32000-2:7.3.10, iso-32000-2:7.5.7 | error | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
 | `object.dangling-reference` | References point at objects that exist | iso-32000-2:7.3.10 | warning | x4, x4p, x5g, x5pg, x5n, x1a-2001, x3-2002, x1a-2003, x3-2003, print | implemented |
-| `x13.structure.xref-table` | Cross-reference tables only: no cross-reference or object streams | iso-15930-1:6.2, iso-15930-3:6.1, iso-15930-4:6.1, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
+| `x13.structure.xref-table` | Cross-reference tables only: no cross-reference or object streams | iso-15930-1:6.2, iso-15930-3:6.1, iso-15930-4:6.1, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
 | `x13.output-intent.icc-name-needs-registry` | An ICC registry identifier comes with the ICC RegistryName | iso-15930-1:6.3.2, iso-15930-3:6.2.2 | error | x1a-2001, x3-2002 | implemented |
 | `x13.output-intent.dest-profile-by-registry` | A condition the ICC registry does not name embeds its output profile | iso-15930-4:6.2.2, iso-15930-6:6.2.2 | error | x1a-2003, x3-2003 | implemented |
 | `x13.output-intent.dest-profile-by-icc-name` | An identifier that is not an ICC registry name comes with an output profile | iso-15930-1:6.3.2, iso-15930-3:6.2.2 | error | x1a-2001, x3-2002 | implemented |
@@ -273,12 +273,12 @@ Generated from `rust/checks.toml` by `rust/build.rs`; `cargo test` fails while t
 | `x13.font.embedding-permitted` | Embedded fonts permit embedding | iso-15930-1:6.4, iso-15930-3:6.3, iso-15930-4:6.3, iso-15930-6:6.3 | warning | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
 | `x13.filespec.absent` | No file specifications | iso-15930-3:6.15, iso-15930-4:6.4, iso-15930-6:6.4 | error | x3-2002, x1a-2003, x3-2003 | todo |
 | `x1a.filespec.embedded-file` | No embedded files | iso-15930-1:6.2, iso-15930-1:6.5 | warning | x1a-2001 | todo |
-| `x1a.filter.listed-2001` | Only the filters PDF/X-1a:2001 lists, each on the kind of data it allows | iso-15930-1:6.8 | error | x1a-2001 | todo |
-| `x13.filter.no-jbig2` | JBIG2 compression is not used | iso-15930-3:6.4, iso-15930-4:6.5, iso-15930-6:6.5 | error | x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.filter.listed` | Only filters the level's PDF Reference defines | iso-15930-3:6.4, iso-15930-4:6.5, iso-15930-6:6.5 | error | x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.image.bit-depth` | Image samples have 1, 2, 4 or 8 bits | iso-15930-1:6.2, iso-15930-3:6.1, iso-15930-4:6.1, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.oc.hides-print` | Optional content cannot hide print content | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-4:5, iso-15930-4:6.1, iso-15930-6:5, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
-| `x13.oc.present` | Optional content is present, always on | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-4:5, iso-15930-4:6.1, iso-15930-6:5, iso-15930-6:6.1 | warning | x1a-2001, x3-2002, x1a-2003, x3-2003 | todo |
+| `x1a.filter.listed-2001` | Only the filters PDF/X-1a:2001 lists, each on the kind of data it allows | iso-15930-1:6.8 | error | x1a-2001 | implemented |
+| `x13.filter.no-jbig2` | JBIG2 compression is not used | iso-15930-3:6.4, iso-15930-4:6.5, iso-15930-6:6.5 | error | x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.filter.listed` | Only filters the level's PDF Reference defines | iso-15930-3:6.4, iso-15930-4:6.5, iso-15930-6:6.5 | error | x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.image.bit-depth` | Image samples have 1, 2, 4 or 8 bits | iso-15930-1:6.2, iso-15930-3:6.1, iso-15930-4:6.1, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.oc.hides-print` | Optional content cannot hide print content | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-4:5, iso-15930-4:6.1, iso-15930-6:5, iso-15930-6:6.1 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
+| `x13.oc.present` | Optional content is present, always on | iso-15930-1:5, iso-15930-1:6.2, iso-15930-3:5, iso-15930-3:6.1, iso-15930-4:5, iso-15930-4:6.1, iso-15930-6:5, iso-15930-6:6.1 | warning | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
 | `x13.trapped.present` | Info has /Trapped | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
 | `x13.trapped.true-or-false` | Info /Trapped is True or False | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |
 | `x13.trapped.trapnet-implies-true` | A TrapNet annotation needs Info /Trapped True | iso-15930-1:6.9, iso-15930-3:6.5, iso-15930-4:6.6, iso-15930-6:6.6 | error | x1a-2001, x3-2002, x1a-2003, x3-2003 | implemented |

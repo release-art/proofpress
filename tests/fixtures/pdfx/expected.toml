@@ -1378,3 +1378,37 @@ expect = {}
 [x13-page-group]
 levels = ["x1a-2003"]
 expect = {}
+
+# ---- Older levels: data structure and compression, L-Q2 and L-Q4 (task 2.3).
+[x13-object-streams]
+levels = ["x3-2002"]
+expect = { "x13.structure.xref-table" = "written with a cross-reference stream and object streams (L-Q2, 15930-3 6.1)" }
+
+[x1a-content-lzw]
+levels = ["x1a-2001"]
+expect = { "x1a.filter.listed-2001" = "the page content is LZW-encoded (15930-1 6.8)" }
+
+# ASCII85 is an encoding, not compression: allowed at X-1a:2001 (Q18).
+[x1a-content-ascii85]
+levels = ["x1a-2001"]
+expect = {}
+
+[x13-jpx-image]
+levels = ["x1a-2003"]
+expect = { "x13.filter.listed" = "an image under JPXDecode, a PDF 1.5 filter (L-Q4, 15930-4 6.5)" }
+
+[x13-jbig2-image]
+levels = ["x3-2003"]
+expect = { "x13.filter.no-jbig2" = "an image under JBIG2Decode (15930-6 6.5)" }
+
+[x13-image-16-bit]
+levels = ["x3-2002"]
+expect = { "x13.image.bit-depth" = "an image of 16 bits per sample, a PDF 1.5 depth (L-Q4)" }
+
+[x13-oc-off]
+levels = ["x1a-2003"]
+expect = { "x13.oc.hides-print" = "optional content whose default configuration turns its groups off (L-Q4)" }
+
+[x13-oc-on]
+levels = ["x3-2003"]
+expect = { "x13.oc.present" = "optional content, always on (L-Q4, a warning)" }

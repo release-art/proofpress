@@ -2229,7 +2229,7 @@ title = "Cross-reference tables only: no cross-reference or object streams"
 clauses = ["iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.output-intent.icc-name-needs-registry"
@@ -2365,7 +2365,7 @@ title = "Only the filters PDF/X-1a:2001 lists, each on the kind of data it allow
 clauses = ["iso-15930-1:6.8"]
 severity = "error"
 applies = ["x1a-2001"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.filter.no-jbig2"
@@ -2373,7 +2373,7 @@ title = "JBIG2 compression is not used"
 clauses = ["iso-15930-3:6.4", "iso-15930-4:6.5", "iso-15930-6:6.5"]
 severity = "error"
 applies = ["x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.filter.listed"
@@ -2381,7 +2381,7 @@ title = "Only filters the level's PDF Reference defines"
 clauses = ["iso-15930-3:6.4", "iso-15930-4:6.5", "iso-15930-6:6.5"]
 severity = "error"
 applies = ["x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.image.bit-depth"
@@ -2389,7 +2389,7 @@ title = "Image samples have 1, 2, 4 or 8 bits"
 clauses = ["iso-15930-1:6.2", "iso-15930-3:6.1", "iso-15930-4:6.1", "iso-15930-6:6.1"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.oc.hides-print"
@@ -2397,7 +2397,7 @@ title = "Optional content cannot hide print content"
 clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-4:5", "iso-15930-4:6.1", "iso-15930-6:5", "iso-15930-6:6.1"]
 severity = "error"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.oc.present"
@@ -2405,7 +2405,7 @@ title = "Optional content is present, always on"
 clauses = ["iso-15930-1:5", "iso-15930-1:6.2", "iso-15930-3:5", "iso-15930-3:6.1", "iso-15930-4:5", "iso-15930-4:6.1", "iso-15930-6:5", "iso-15930-6:6.1"]
 severity = "warning"
 applies = ["x1a-2001", "x3-2002", "x1a-2003", "x3-2003"]
-status = "todo"
+status = "implemented"
 
 [[check]]
 id = "x13.trapped.present"

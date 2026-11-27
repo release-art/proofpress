@@ -24,7 +24,7 @@ const STANDARD_FILTERS: &[&[u8]] = &[
 const MAX_OBJECTS: usize = 8_388_607;
 
 /// Every stream's filter names, with the stream's object number.
-fn stream_filters(doc: &Document) -> Vec<(u32, Vec<u8>)> {
+pub(super) fn stream_filters(doc: &Document) -> Vec<(u32, Vec<u8>)> {
     let mut out = Vec::new();
     for (num, object, stream, _) in doc.objects() {
         let (Some(dict), Some(_)) = (object.dict(), stream) else {

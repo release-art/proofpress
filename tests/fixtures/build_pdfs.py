@@ -14,6 +14,7 @@ dates, title and document IDs of ISO 15930-7, 6.10. Their ICC profile is generat
 """
 
 import argparse
+import base64
 import hashlib
 import io
 import pathlib
@@ -2025,6 +2026,45 @@ def _older_transparency_fixtures() -> dict[str, pikepdf.Pdf]:
     }
 
 
+# Fixtures written with object streams and a cross-reference stream; every other fixture has neither.
+OBJECT_STREAMS = {"x13-object-streams"}
+
+
+def _older_filter_fixtures() -> dict[str, pikepdf.Pdf]:
+    """The negatives of the older levels' data-structure and compression rows, with L-Q2 and L-Q4 (expected.toml says
+    what each raises), and what they allow."""
+    name = pikepdf.Name
+    content = GOOD_X4_CONTENT
+
+    def page(level: str, filters: list[str], data: bytes) -> pikepdf.Pdf:
+        return _older(level, base=_x4_content(filters, data))
+
+    def image_bits(pdf: pikepdf.Pdf) -> pikepdf.Pdf:
+        image = _image(pdf, width=1, height=1, space=name.DeviceCMYK, components=8)
+        image["/BitsPerComponent"] = 16
+        _resource(pdf, "XObject", image)
+        return pdf
+
+    def oc(default: pikepdf.Dictionary) -> pikepdf.Pdf:
+        pdf = _x4_good()
+        _with_oc(pdf, default)
+        return pdf
+
+    return {
+        "x13-object-streams": _older("x3-2002"),
+        "x1a-content-lzw": page("x1a-2001", ["LZWDecode"], _lzw(content)),
+        "x1a-content-ascii85": page("x1a-2001", ["ASCII85Decode"], base64.a85encode(content, adobe=True)[2:]),
+        "x13-jpx-image": _older("x1a-2003", base=_x4_jpx(_jpx([8] * 4, [12]))),
+        "x13-jbig2-image": _older(
+            "x3-2003",
+            base=_x4_jpx(b"\x00\x00\x00\x01\x30\x00\x01\x00\x00\x00\x13" + bytes(5), space=False, codec="JBIG2Decode"),
+        ),
+        "x13-image-16-bit": _older("x3-2002", base=image_bits(_x4_good())),
+        "x13-oc-off": _older("x1a-2003", base=oc(pikepdf.Dictionary(Name=pikepdf.String("Print"), BaseState=name.OFF))),
+        "x13-oc-on": _older("x3-2003", base=oc(pikepdf.Dictionary(Name=pikepdf.String("Print")))),
+    }
+
+
 def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
     good = build()
     a5 = {
@@ -2118,6 +2158,7 @@ def fixtures() -> dict[str, pikepdf.Pdf | bytes]:
         **_older_fixtures(),
         **_older_colour_fixtures(),
         **_older_transparency_fixtures(),
+        **_older_filter_fixtures(),
         **_x5_targets(),
         **_x5n_fixtures(),
         **_print_fixtures(),
@@ -2134,12 +2175,13 @@ def render() -> dict[str, bytes]:
         for name, pdf in fixtures().items():
             path = scratch / f"{name}.pdf"
             assert isinstance(pdf, pikepdf.Pdf)
+            streams = pikepdf.ObjectStreamMode.generate if name in OBJECT_STREAMS else pikepdf.ObjectStreamMode.disable
             pdf.save(
                 path,
                 deterministic_id=True,
                 min_version="1.7",
                 compress_streams=False,
-                object_stream_mode=pikepdf.ObjectStreamMode.disable,
+                object_stream_mode=streams,
             )
             out[name] = path.read_bytes()
         out["corrupt"] = out["good"][: len(out["good"]) // 2]  # truncated mid-file
