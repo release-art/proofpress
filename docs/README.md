@@ -7,6 +7,7 @@ so nothing is said twice.
 |---|---|
 | [`briefs/rust-port.md`](briefs/rust-port.md) | **The plan**: moving the core to Rust on a parser of our own. Decisions, stages, the parity gate, Python bugs to fix first, and a backlog of checks. It wins wherever documents disagree |
 | [`briefs/pdfx-plan.md`](briefs/pdfx-plan.md) | **The implementation plan** to a feature-complete PDF/X verifier (X-4, X-4p, X-5g, X-5pg, X-5n): phases 0-10 with tasks, the register rows each owns, test material and done criteria. The requirement registers it cites are private, in `proof-pdf-test-db/docs/pdfx/` |
+| [`briefs/pdfx-1a-3-plan.md`](briefs/pdfx-1a-3-plan.md) | The follow-on plan for PDF/X-1a:2001, X-3:2002, X-1a:2003 and X-3:2003 (ISO 15930-1, -3, -4, -6): what carries over from X-4, the new rules, ten interpretation questions with proposed defaults, phases 0-3. Starts after `pdfx-plan.md` phase 10; [`briefs/pdfx-1a-3-run.md`](briefs/pdfx-1a-3-run.md) is its unattended init prompt |
 | [`briefs/pdfx-run.md`](briefs/pdfx-run.md) | The init prompt for an agent that carries out the plan unattended: what it may decide, the no-hacks rules, when it must stop and ask, and a one-run exception that lets it commit |
 | [`notes/rust-architecture.md`](notes/rust-architecture.md) | **The architecture** of the Rust engine: tiers, the listener pipeline, events, damage and findings |
 | [`notes/rust-feasibility.md`](notes/rust-feasibility.md) | **The feasibility summary** for planning: what is proven and how well, a module-by-module map, gotchas, risks and decision points |
