@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The README's check counts and its list of print checks are generated from `rust/checks.toml`, and a test fails while they are stale.
+
 ### Changed
 
 - pikepdf and Pillow are no longer dependencies: every PDF the package reads or writes goes through the Rust core. `extract` reads spot colours there too, and `extract --previews` draws each image's thumbnail by rendering it alone, so a thumbnail shows the image as the page does (its decode array, colour space and mask applied, on white) and an image Pillow could not open still gets one. `extract_pdf` raises only `proof_pdf.inventory.UnreadablePdfError` for a file it cannot read, never a `pikepdf.PdfError`.

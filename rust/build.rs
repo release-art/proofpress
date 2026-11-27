@@ -56,6 +56,7 @@ fn main() {
     let out = PathBuf::from(env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
     fs::write(out.join("checks.rs"), code(&file.check)).expect("OUT_DIR is writable");
     fs::write(out.join("CHECKS.md"), markdown(&file.check)).expect("OUT_DIR is writable");
+    fs::write(out.join("README-checks.md"), readme(&file.check)).expect("OUT_DIR is writable");
 }
 
 /// The clause numbers held per standard: `clauses/<standard>.txt`, one number per line.
@@ -185,6 +186,46 @@ fn code(checks: &[Entry]) -> String {
         "/// Every check, in the order of `rust/checks.toml`.\npub const ALL: &[&Check] = &[{}];",
         all.join(", ")
     );
+    out
+}
+
+/// The README's section on checks: how many each level has, then every house print check.
+fn readme(checks: &[Entry]) -> String {
+    let mut out = String::from(
+        "Generated from `rust/checks.toml`; every check, with its clauses, is in [rust/CHECKS.md](rust/CHECKS.md).\n\n\
+         | Level | Implemented | Not yet | Not checkable (skip) |\n|---|---|---|---|\n",
+    );
+    for (level, name) in [
+        ("x4", "PDF/X-4"),
+        ("x4p", "PDF/X-4p"),
+        ("x5g", "PDF/X-5g"),
+        ("x5pg", "PDF/X-5pg"),
+        ("x5n", "PDF/X-5n"),
+        ("print", "Print checks"),
+    ] {
+        let of = |status: &str| {
+            checks
+                .iter()
+                .filter(|c| c.applies.iter().any(|a| a == level) && c.status == status)
+                .count()
+        };
+        let _ = writeln!(
+            out,
+            "| {name} | {} | {} | {} |",
+            of("implemented"),
+            of("todo"),
+            of("skip")
+        );
+    }
+    out.push_str("\nThe print checks:\n\n| Id | What it checks | Severity |\n|---|---|---|\n");
+    for c in checks.iter().filter(|c| c.applies.iter().any(|a| a == "print")) {
+        let note = match (&c.reason, &c.tool) {
+            (Some(reason), _) => format!(" (not checked: {reason})"),
+            (None, Some(tool)) => format!(" (by {tool})"),
+            (None, None) => String::new(),
+        };
+        let _ = writeln!(out, "| `{}` | {}{note} | {} |", c.id, c.title, c.severity);
+    }
     out
 }
 

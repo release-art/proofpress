@@ -99,6 +99,9 @@ pub struct Check {
 /// The Markdown listing of every check, as `rust/CHECKS.md` must hold it.
 pub const CHECKS_MD: &str = include_str!(concat!(env!("OUT_DIR"), "/CHECKS.md"));
 
+/// The README's section on checks, between its `<!-- checks -->` and `<!-- /checks -->` markers.
+pub const README_CHECKS: &str = include_str!(concat!(env!("OUT_DIR"), "/README-checks.md"));
+
 include!(concat!(env!("OUT_DIR"), "/checks.rs"));
 
 impl Serialize for Clause {
@@ -315,6 +318,20 @@ mod tests {
             [Level::X4, Level::X4p, Level::X5g, Level::X5pg, Level::X5n, Level::Print].map(Some)
         );
         assert_eq!(Level::from_name("x3"), None);
+    }
+
+    #[test]
+    fn the_readme_check_section_is_current() {
+        let readme = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../README.md")).unwrap_or_default();
+        let section = readme
+            .split_once("<!-- checks -->\n")
+            .and_then(|(_, rest)| rest.split_once("<!-- /checks -->"))
+            .map(|(section, _)| section);
+        assert_eq!(
+            section,
+            Some(README_CHECKS),
+            "README.md's check section is stale: run bin/rust/check.sh --fix"
+        );
     }
 
     #[test]

@@ -18,8 +18,9 @@ Open-source pieces of a print-on-demand pipeline, extracted from production use.
 `verify` runs four layers, each of which can be switched off:
 
 - **PDF/A** with [veraPDF](https://verapdf.org) (`--flavour 2b` by default; `--no-pdfa` to skip).
-- **PDF/X-4 structure**: page boxes, `/Trapped`, the `GTS_PDFX` output intent and the XMP version key (`--no-pdfx`). The rules live in
-  `proof_pdf/_internal/pdfx/x4.py`.
+- **PDF/X**: every requirement of ISO 15930-7 (PDF/X-4, X-4p) and ISO 15930-8 (PDF/X-5g, X-5pg, X-5n) that a file can be
+  judged on, from the output intent and metadata to fonts, colour, transparency and referenced files (`--pdfx x4` by
+  default, another level with `--pdfx x4p|x5g|x5pg|x5n`, `--no-pdfx` to skip). The counts are under [Checks](#checks).
 - **Geometry**: trim and bleed against the finished size you expect. Runs only when `--trim-mm` is given (`--bleed-mm`, `--tolerance-mm`).
   For a book interior, `--binding-bleed-mm 0` (with `--binding left|right`, the bound edge of page 1; it alternates page by page) expects no bleed on the binding edge,
   so the sheet is wider by the outer bleed only; the centring check follows the asymmetry. Equal bleed on every side behaves as before.
@@ -78,6 +79,84 @@ A job's config file works from Python too. `proof_pdf.load_profile(path=None, *,
 map, and `jobs`, `timeout` and the tool names. A file the CLI would reject raises `proof_pdf.ConfigError`. Pass those to
 `core.expand_targets` and `core.verify_files`, so the CLI and your code share one definition. `core.missing_tools(profile)` names the
 tools the profile needs (veraPDF for PDF/A, Ghostscript for colour) that are not on `PATH`, so a caller can fail early with one message.
+
+### Checks
+
+<!-- checks -->
+Generated from `rust/checks.toml`; every check, with its clauses, is in [rust/CHECKS.md](rust/CHECKS.md).
+
+| Level | Implemented | Not yet | Not checkable (skip) |
+|---|---|---|---|
+| PDF/X-4 | 145 | 0 | 5 |
+| PDF/X-4p | 155 | 0 | 5 |
+| PDF/X-5g | 159 | 0 | 25 |
+| PDF/X-5pg | 169 | 0 | 25 |
+| PDF/X-5n | 159 | 0 | 24 |
+| Print checks | 54 | 0 | 4 |
+
+The print checks:
+
+| Id | What it checks | Severity |
+|---|---|---|
+| `tac` | Peak total ink stays under the limit (by Ghostscript) | error |
+| `overprint` | Overprint is used on purpose | warning |
+| `white-overprint` | White is never set to overprint | error |
+| `colour-space` | Colour spaces suit the job's colour mode | error |
+| `rgb-only` | An RGB job paints only RGB | error |
+| `gray-only` | A gray job paints only gray | error |
+| `k-only-text` | Text is 100% black only | error |
+| `rich-black` | Small text is not in rich black | warning |
+| `spot-ink` | Spot inks are on the allowed list | error |
+| `spot-definition` | A spot ink has one definition | error |
+| `icc-profile` | Embedded ICC profiles are sound and suit the job | error |
+| `blend-space` | Transparency declares its blend space | error |
+| `image-dpi` | Images meet the resolution floor | error |
+| `image-dpi-max` | Images do not exceed the resolution ceiling | warning |
+| `image-stretch` | Images are not stretched unevenly | warning |
+| `text-size` | Text meets the size floor | error |
+| `hairline` | Strokes meet the width floor | error |
+| `contrast` | Text contrasts with its background | error |
+| `safe-area` | Text stays inside the safe area | error |
+| `missing-glyph` | Text shows no missing glyphs | error |
+| `font-embedded` | Fonts are embedded | error |
+| `font-type3` | Type 3 fonts are reported | warning |
+| `geometry` | Pages are the expected trim size | error |
+| `bleed` | Pages carry the expected bleed | error |
+| `centring` | The trim is centred in the bleed | error |
+| `artwork-bleed` | Artwork reaches into the bleed | error |
+| `outside-bleed` | Nothing is painted beyond the bleed | error |
+| `outside-media` | Nothing is painted wholly off the page | warning |
+| `xobject-missing` | Painted XObjects exist | error |
+| `bleedbox` | Pages with a trim have a BleedBox (not checked: Replaced by the x4.boxes rows (a BleedBox inside the MediaBox) and the geometry checks' bleed) | error |
+| `boxes` | Each page has a MediaBox (not checked: Replaced by page.media-box and the x4.boxes rows) | error |
+| `page-size` | Pages share one size | error |
+| `page-count` | The page count fits the rule | error |
+| `page-rotate` | Pages are not rotated | warning |
+| `output-condition` | The output intent names the expected condition | error |
+| `pdfa` | veraPDF passes the PDF/A flavour (by veraPDF) | error |
+| `structure` | The file can be read (not checked: Not a check: whether the file could be read is the report's own structure and verdict) | error |
+| `internal` | The engine itself failed on this file (not checked: Raised when a check panics, which is always a bug in proof-pdf: no file is meant to trigger it, so it has no fixtures; unit tests cover it) | error |
+| `file.header` | The file starts with a %PDF- header in its first 1024 bytes | error |
+| `file.header-offset` | The header is at the very start of the file | warning |
+| `file.startxref` | The file ends with startxref and the offset of its cross-reference | error |
+| `file.xref` | Every cross-reference section can be read | error |
+| `file.trailer` | The trailer names the document catalog | error |
+| `file.encrypted` | The file is not encrypted | error |
+| `file.eof` | The file ends with %%EOF and nothing after it | warning |
+| `file.limit` | The file stays within proof-pdf's safety limits | error |
+| `syntax.hex-digits` | Hex strings have an even number of digits | warning |
+| `syntax.octal-escape` | Octal escapes in strings stay within one byte | warning |
+| `syntax.name-escape` | Escapes in names are two hex digits, never 00 | error |
+| `syntax.duplicate-key` | No dictionary gives a key twice | warning |
+| `stream.eol` | Stream data is followed by an end of line before endstream | warning |
+| `stream.filter` | Every stream names filters ISO 32000 defines | error |
+| `content.damaged` | Every content stream can be read to its end | error |
+| `content.operator` | Undefined operators appear only inside BX and EX | error |
+| `content.compatibility` | BX and EX pair up | error |
+| `page.media-box` | Every page has a MediaBox, its own or inherited | error |
+| `object.damaged` | Every object reachable from the trailer can be read | error |
+| `object.dangling-reference` | References point at objects that exist | warning |
+<!-- /checks -->
 
 ### Proofing
 
