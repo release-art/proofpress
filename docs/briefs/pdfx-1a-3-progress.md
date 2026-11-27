@@ -46,7 +46,7 @@ content and 16-bit images from L-Q4, and the X-1a:2001 embedded-file warning) ar
 | Gate | Last result |
 |---|---|
 | `bin/rust/check.sh` | green, 2026-11-27, phase 3 (100% lines, regions, functions) |
-| `bin/docker/test.sh` | green at the end of phase 2, 2026-11-27: 965 passed |
+| `bin/docker/test.sh` | green at the end of phase 3, 2026-11-27: 965 passed |
 | `bin/suites/pdfx.sh` | phase 3, 2026-11-27: 122 files (39 X-4, 83 X-1a/X-3), 122 accepted, 0 problems |
 | Python (ruff, pyright, pytest) | green, 2026-11-27, phase 3: 966 passed |
 
@@ -117,8 +117,7 @@ X-1a:2001 (stop questions).
 - pdfToolbox and the corpus: see "Corpus and oracle". 83 of 85 verdicts agree; the rest, and every fixture disagreement,
   classified with the oracle.
 - `bin/suites/pdfx.sh` now runs each expected file at its own level: 122 files, 0 problems.
-- Gates: `bin/rust/check.sh` green at 100%; Python 966 passed; Docker green at the end of phase 2 (965) and re-run after
-  this phase (see Gates).
+- Gates: `bin/rust/check.sh` green at 100%; Python 966 passed; Docker green at the end of phase 3 (965).
 - Departures: none beyond those logged in the decision log.
 
 ### Phase 2 (the new rules), finished 2026-11-27
